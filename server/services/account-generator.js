@@ -5,7 +5,7 @@ import * as dashboardApi from './dashboard-api.js';
 import { logger } from './logger.js';
 import { taskSupervisor } from './task-supervisor.js';
 import { USER_AGENT, OR_BASE } from '../config.js';
-import { getJwtExpiry } from './clerk-auth.js';
+import { getJwtExpiry, openRouterDashboardDeviceCookies } from './clerk-auth.js';
 
 const GENERATOR_TTL_MS = 2 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 45 * 1000;
@@ -152,8 +152,16 @@ async function finalizeOtpSubmission(task, otpCode) {
       taskSupervisor.updateTask(task.taskId, { status: 'extracting_session' });
       const cookies = await context.cookies('https://openrouter.ai');
       const sessionCookie = cookies.find(cookie => cookie.name === '__session')?.value;
-      const clientCookie = cookies.find(cookie => cookie.name === '__client_uat')?.value;
       if (!sessionCookie) throw new Error('Signup succeeded but could not extract __session cookie');
+
+      // Build a cookie jar string from all Playwright cookies for proper serialization
+      const cookieJarString = cookies
+        .filter(c => c.value && c.value.trim() !== '')
+        .map(c => `${c.name}=${c.value}`)
+        .join('; ');
+
+      // Serialize ALL device cookies (Clerk + Cloudflare) using same logic as clerk-auth.js
+      const allDeviceCookies = openRouterDashboardDeviceCookies(cookieJarString);
 
       taskSupervisor.updateTask(task.taskId, { status: 'saving_local_profile' });
       const accountAlias = task.metadata.email.split('@')[0];
@@ -169,7 +177,7 @@ async function finalizeOtpSubmission(task, otpCode) {
         task.ownerUserId,
         newAccount.id,
         sessionCookie,
-        clientCookie,
+        allDeviceCookies,
         getJwtExpiry(sessionCookie),
       );
 

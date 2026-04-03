@@ -18,6 +18,9 @@ import {
   NeedSecondFactorError,
   openRouterDashboardDeviceCookies,
   openRouterPlaywrightDeviceCookies,
+  areCloudflareCookiesExpired,
+  extractCloudflareCookieExpirations,
+  mergeCloudflareCookieExpirations,
 } from './clerk-auth.js';
 import * as store from './store.js';
 import { getCredits } from './openrouter.js';
@@ -42,6 +45,33 @@ const OR_HOSTNAME = (() => {
  * NOTE: OpenRouter management keys use 'sk-or-v1-' prefix, NOT 'sk-or-mgmt-'
  */
 const MGMT_KEY_RE = /sk-or-v1-[A-Za-z0-9_.-]+/;
+
+/**
+ * Response body cache to prevent race conditions when multiple waitForResponse
+ * predicates try to read the same response stream. Playwright response bodies
+ * can only be read once - subsequent reads return empty string.
+ * Using WeakMap keyed by response object allows automatic cleanup.
+ */
+const responseBodyCache = new WeakMap();
+
+/**
+ * Get response body text with caching to avoid stream consumption race conditions.
+ * Multiple waitForResponse predicates may try to read the same response;
+ * this ensures the body is only read once and cached for subsequent access.
+ *
+ * @param {import('playwright').Response} response - Playwright response object
+ * @returns {Promise<string>} Response body text
+ */
+async function getCachedResponseText(response) {
+  // Check if already cached
+  if (responseBodyCache.has(response)) {
+    return responseBodyCache.get(response);
+  }
+  // Read and cache the body
+  const body = await response.text();
+  responseBodyCache.set(response, body);
+  return body;
+}
 
 function provisionNetworkLogEnabled() {
   return config.HYDRA_PROVISION_NETWORK_LOG || provisionDebugArtifactsEnabled();
@@ -353,7 +383,14 @@ export async function ensureSession(userId, accountId) {
   const account = await store.getAccountWithKey(userId, accountId);
   const session = await store.getAccountSession(userId, accountId);
 
-  if (session.sessionCookie) {
+  // Check if Cloudflare cookies are expired or expiring soon
+  const cfCookiesNeedRefresh = areCloudflareCookiesExpired(
+    session.clientCookie,
+    session.cfCookieExpirations,
+  );
+
+  // If CF cookies are valid and session is valid, return early
+  if (!cfCookiesNeedRefresh && session.sessionCookie) {
     const derivedExpiry = store.resolveEffectiveSessionExpiry(
       { sessionExpiry: session.sessionExpiry },
       session.sessionCookie,
@@ -372,12 +409,51 @@ export async function ensureSession(userId, accountId) {
     }
   }
 
+  // Try to refresh if CF cookies need refresh OR we have a client cookie but no valid session
   if (session.clientCookie) {
     const refreshed = await refreshSession(session.clientCookie);
     if (refreshed) {
       const cc = refreshed.clientCookie ?? session.clientCookie;
-      await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, cc, refreshed.sessionExpiry);
+      // Extract and merge new CF cookie expirations from the refresh response
+      const newCfExpirations = extractCloudflareCookieExpirations(refreshed.setCookieLines || []);
+      const mergedCfExpirations = mergeCloudflareCookieExpirations(
+        session.cfCookieExpirations,
+        newCfExpirations,
+      );
+      await store.updateAccountSession(
+        userId,
+        accountId,
+        refreshed.sessionCookie,
+        cc,
+        refreshed.sessionExpiry,
+        { cfCookieExpirations: mergedCfExpirations },
+      );
       return { sessionCookie: refreshed.sessionCookie, clientCookie: cc };
+    }
+  }
+
+  // Proactive CF cookie refresh: if CF cookies are expiring soon but session is still valid,
+  // try to refresh them using credentials before they actually expire
+  if (cfCookiesNeedRefresh && account.email && account.password && account.authMethod === 'password') {
+    try {
+      const fresh = await signInWithPassword(account.email, account.password);
+      // Extract CF cookie expirations from the fresh login response
+      const newCfExpirations = extractCloudflareCookieExpirations(fresh.setCookieLines || []);
+      await store.updateAccountSession(
+        userId,
+        accountId,
+        fresh.sessionCookie,
+        fresh.clientCookie,
+        fresh.sessionExpiry,
+        { cfCookieExpirations: newCfExpirations },
+      );
+      return { sessionCookie: fresh.sessionCookie, clientCookie: fresh.clientCookie };
+    } catch (err) {
+      // If proactive refresh fails due to 2FA, fall through to validateSession check
+      if (!(err instanceof NeedSecondFactorError)) {
+        // Log the error but continue - session validation might still work
+        console.warn(`[ensureSession] Proactive CF cookie refresh failed: ${err.message}`);
+      }
     }
   }
 
@@ -399,7 +475,15 @@ export async function ensureSession(userId, accountId) {
   if (account.email && account.password && account.authMethod === 'password') {
     try {
       const fresh = await signInWithPassword(account.email, account.password);
-      await store.updateAccountSession(userId, accountId, fresh.sessionCookie, fresh.clientCookie, fresh.sessionExpiry);
+      const newCfExpirations = extractCloudflareCookieExpirations(fresh.setCookieLines || []);
+      await store.updateAccountSession(
+        userId,
+        accountId,
+        fresh.sessionCookie,
+        fresh.clientCookie,
+        fresh.sessionExpiry,
+        { cfCookieExpirations: newCfExpirations },
+      );
       return { sessionCookie: fresh.sessionCookie, clientCookie: fresh.clientCookie };
     } catch (err) {
       if (err instanceof NeedSecondFactorError) {
@@ -464,6 +548,310 @@ export async function preflightRedeemAccounts(userId, accountIds) {
   return { ready, blocked, allReady: blocked.length === 0 };
 }
 
+/**
+ * Detect if a content-type indicates HTML response.
+ * Handles variations: text/html, application/xhtml+xml, and case-insensitive matching.
+ * @param {string} contentType - The Content-Type header value
+ * @returns {boolean} true if content-type indicates HTML
+ */
+function isHtmlContentType(contentType) {
+  if (!contentType || typeof contentType !== 'string') return false;
+  const normalized = contentType.toLowerCase().trim();
+  // Check for HTML variations
+  if (normalized.includes('text/html')) return true;
+  if (normalized.includes('application/xhtml')) return true;
+  if (normalized.includes('application/xhtml+xml')) return true;
+  // Check for common HTML indicators in malformed responses
+  if (normalized.startsWith('text/') && normalized.includes('html')) return true;
+  return false;
+}
+
+/**
+ * Check if stored clientCookie contains Cloudflare cookies.
+ * Accounts created BEFORE the Cloudflare cookie fix lack these cookies.
+ * @param {string} clientCookie - The stored client cookie string
+ * @returns {boolean} true if Cloudflare cookies are present
+ */
+function hasCloudflareCookies(clientCookie) {
+  if (!clientCookie || typeof clientCookie !== 'string') return false;
+  const lower = clientCookie.toLowerCase();
+  // Check for key Cloudflare cookies
+  return lower.includes('__cf_bm=') || lower.includes('_cfuvid=') || lower.includes('cf_clearance=');
+}
+
+/**
+ * Migration tracking: per-process memory-only flag to avoid repeated migration attempts.
+ * Maps accountId -> boolean (true if migration already attempted this process).
+ */
+const migrationAttempted = new Set();
+
+/**
+ * Migrate an account to capture Cloudflare cookies.
+ * Called when tRPC returns HTML and the account lacks CF cookies.
+ * Forces a re-login to capture fresh cookies including Cloudflare ones.
+ *
+ * @param {string} userId
+ * @param {string} accountId
+ * @param {string} sessionCookie - Current session cookie
+ * @param {string} clientCookie - Current client cookie
+ * @returns {{ sessionCookie, clientCookie, migrated: boolean, message? }}
+ */
+async function migrateAccountForCloudflareCookies(userId, accountId, sessionCookie, clientCookie) {
+  // Prevent repeated migration attempts in the same process
+  if (migrationAttempted.has(accountId)) {
+    return { sessionCookie, clientCookie, migrated: false, message: 'Migration already attempted in this process' };
+  }
+
+  // Check if already has CF cookies - no migration needed
+  if (hasCloudflareCookies(clientCookie)) {
+    return { sessionCookie, clientCookie, migrated: false };
+  }
+
+  migrationAttempted.add(accountId);
+
+  console.error(`[dashboard-api] Cloudflare cookie migration triggered for account ${accountId}`);
+
+  // Get account credentials
+  const account = await store.getAccountWithKey(userId, accountId);
+
+  // Only password accounts can auto-migrate without user interaction
+  if (!account.email || !account.password || account.authMethod !== 'password') {
+    console.error(`[dashboard-api] Cannot auto-migrate account ${accountId}: no password credentials available`);
+    return {
+      sessionCookie,
+      clientCookie,
+      migrated: false,
+      message: 'Account requires manual re-login to capture Cloudflare cookies (no stored password)',
+    };
+  }
+
+  try {
+    console.error(`[dashboard-api] Re-authenticating account ${accountId} to capture Cloudflare cookies...`);
+
+    // Force re-login - this will capture fresh cookies including Cloudflare ones
+    const fresh = await signInWithPassword(account.email, account.password);
+
+    // Validate that we now have Cloudflare cookies
+    if (!hasCloudflareCookies(fresh.clientCookie)) {
+      console.warn(`[dashboard-api] Re-login completed but Cloudflare cookies still not present for ${accountId}`);
+      // Still use the fresh session - it might work even without explicit CF cookies
+    } else {
+      console.error(`[dashboard-api] Successfully captured Cloudflare cookies for account ${accountId}`);
+    }
+
+    // Update stored session with fresh cookies
+    await store.updateAccountSession(
+      userId,
+      accountId,
+      fresh.sessionCookie,
+      fresh.clientCookie,
+      fresh.sessionExpiry,
+    );
+
+    return {
+      sessionCookie: fresh.sessionCookie,
+      clientCookie: fresh.clientCookie,
+      migrated: true,
+    };
+  } catch (err) {
+    console.error(`[dashboard-api] Migration failed for account ${accountId}: ${err.message}`);
+
+    if (err instanceof NeedSecondFactorError) {
+      return {
+        sessionCookie,
+        clientCookie,
+        migrated: false,
+        message: 'Account requires two-factor authentication for migration. Please complete 2FA setup.',
+      };
+    }
+
+    return {
+      sessionCookie,
+      clientCookie,
+      migrated: false,
+      message: `Migration failed: ${err.message}`,
+    };
+  }
+}
+
+/**
+ * Safely extract response text with size limits and error handling.
+ * Prevents memory issues with large responses and handles stream errors.
+ * @param {Response} res - Fetch Response object
+ * @param {number} maxLength - Maximum characters to read (default: 50000)
+ * @returns {Promise<{text: string, truncated: boolean, error: string|null}>}
+ */
+async function safeResponseText(res, maxLength = 50000) {
+  try {
+    // Check content-length header first if available
+    const contentLength = res.headers.get('content-length');
+    if (contentLength) {
+      const length = parseInt(contentLength, 10);
+      if (!isNaN(length) && length > maxLength * 2) {
+        // Response is too large, likely not JSON - return early
+        return {
+          text: '',
+          truncated: true,
+          error: `Response too large (${length} bytes), exceeds safe limit`,
+        };
+      }
+    }
+
+    const text = await res.text();
+    if (text.length > maxLength) {
+      return {
+        text: text.slice(0, maxLength),
+        truncated: true,
+        error: null,
+      };
+    }
+    return { text, truncated: false, error: null };
+  } catch (err) {
+    return {
+      text: '',
+      truncated: false,
+      error: `Failed to read response body: ${err.message}`,
+    };
+  }
+}
+
+/**
+ * Sanitize HTML for error messages - removes scripts, limits length, preserves structure.
+ * @param {string} html - Raw HTML string
+ * @param {number} maxLength - Maximum length for preview
+ * @returns {string} Sanitized HTML preview
+ */
+function sanitizeHtmlPreview(html, maxLength = 2000) {
+  if (!html || typeof html !== 'string') return '(empty response)';
+  // Remove script tags and their contents
+  let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '[SCRIPT-REMOVED]');
+  // Remove style tags and their contents
+  sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '[STYLE-REMOVED]');
+  // Remove event handlers
+  sanitized = sanitized.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
+  sanitized = sanitized.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
+  // Limit length
+  if (sanitized.length > maxLength) {
+    sanitized = sanitized.slice(0, maxLength) + '...[truncated]';
+  }
+  // Normalize whitespace
+  return sanitized.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Safely parse JSON with detailed error context.
+ * @param {string} text - JSON string to parse
+ * @param {object} context - Context for error messages
+ * @returns {object} Parsed data
+ * @throws {Error} With detailed context if parsing fails
+ */
+function safeJsonParse(text, context = {}) {
+  if (!text || typeof text !== 'string') {
+    const err = new Error(`Empty or non-string response body${context.route ? ` for ${context.route}` : ''}`);
+    err.isParseError = true;
+    err.context = context;
+    throw err;
+  }
+
+  // Check for obvious HTML patterns before parsing
+  const trimmed = text.trim();
+  if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<!doctype')) {
+    const err = new Error(context.route
+      ? `tRPC route ${context.route} returned HTML (DOCTYPE detected) — likely auth failed or Cloudflare challenge`
+      : 'Response is HTML (DOCTYPE detected), not JSON');
+    err.isHtml = true;
+    err.isParseError = true;
+    err.httpStatus = context.status;
+    err.status = context.status;
+    err.responsePreview = sanitizeHtmlPreview(text, 1000);
+    throw err;
+  }
+  if (trimmed.startsWith('<html') || trimmed.startsWith('<HTML')) {
+    const err = new Error(context.route
+      ? `tRPC route ${context.route} returned HTML (<html> tag detected) — likely auth failed or Cloudflare challenge`
+      : 'Response is HTML (<html> tag detected), not JSON');
+    err.isHtml = true;
+    err.isParseError = true;
+    err.httpStatus = context.status;
+    err.status = context.status;
+    err.responsePreview = sanitizeHtmlPreview(text, 1000);
+    throw err;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (parseErr) {
+    // Provide context about what we tried to parse
+    const preview = text.length > 200 ? `${text.slice(0, 200)}...[length:${text.length}]` : text;
+    const err = new Error(context.route
+      ? `tRPC route ${context.route} returned invalid JSON: ${parseErr.message}. Preview: ${preview}`
+      : `Invalid JSON response: ${parseErr.message}. Preview: ${preview}`);
+    err.isParseError = true;
+    err.originalError = parseErr;
+    err.httpStatus = context.status;
+    err.status = context.status;
+    err.responsePreview = preview;
+    throw err;
+  }
+}
+
+/**
+ * Extract key info from an HTML error response for debugging.
+ * Looks for common patterns like Cloudflare challenge, error pages, etc.
+ * @param {string} html - HTML response body
+ * @returns {object} Extracted info
+ */
+function extractHtmlErrorInfo(html) {
+  const info = {
+    looksLikeCloudflare: false,
+    looksLikeLoginPage: false,
+    looksLikeErrorPage: false,
+    title: null,
+    hints: [],
+  };
+
+  if (!html || typeof html !== 'string') return info;
+
+  const lower = html.toLowerCase();
+
+  // Cloudflare indicators
+  if (lower.includes('cf-browser-verification') || lower.includes('cf-challenge')) {
+    info.looksLikeCloudflare = true;
+    info.hints.push('Cloudflare challenge page detected');
+  }
+  if (lower.includes('__cf_bm') || lower.includes('cf_clearance')) {
+    info.looksLikeCloudflare = true;
+    info.hints.push('Cloudflare cookie references found');
+  }
+  if (lower.includes('checking your browser') || lower.includes('just a moment')) {
+    info.looksLikeCloudflare = true;
+    info.hints.push('Cloudflare browser check page');
+  }
+
+  // Login/auth indicators
+  if (lower.includes('sign in') || lower.includes('login') || lower.includes('log in')) {
+    info.looksLikeLoginPage = true;
+    info.hints.push('Login page detected');
+  }
+  if (lower.includes('auth') || lower.includes('clerk') || lower.includes('session')) {
+    info.looksLikeLoginPage = true;
+    info.hints.push('Auth-related content detected');
+  }
+
+  // Generic error indicators
+  if (lower.includes('error') || lower.includes('forbidden') || lower.includes('unauthorized')) {
+    info.looksLikeErrorPage = true;
+  }
+
+  // Try to extract title
+  const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+  if (titleMatch) {
+    info.title = titleMatch[1].trim();
+  }
+
+  return info;
+}
+
 /** Headers merged after defaults; use to override Referer per surface (e.g. redeem vs management keys). */
 async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrides = {}) {
   const url = `${OR_BASE}/api/trpc/${route}?batch=1`;
@@ -476,15 +864,70 @@ async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrid
   });
 
   const contentType = res.headers.get('content-type') || '';
-  if (contentType.includes('text/html')) {
-    const err = new Error(`tRPC route ${route} returned HTML — likely wrong format or auth failed`);
+
+  // Hardened: Use robust HTML content-type detection
+  if (isHtmlContentType(contentType)) {
+    // Read the response body for debugging (even though it's HTML)
+    const { text: htmlBody, truncated, error: readError } = await safeResponseText(res, 25000);
+    const htmlInfo = extractHtmlErrorInfo(htmlBody);
+
+    let message = `tRPC route ${route} returned HTML (content-type: ${contentType}) — likely wrong format or auth failed`;
+
+    // Enhance error message with detected patterns
+    if (htmlInfo.looksLikeCloudflare) {
+      message += '. Cloudflare challenge detected - may need Cloudflare cookies (__cf_bm, cf_clearance)';
+    }
+    if (htmlInfo.looksLikeLoginPage) {
+      message += '. Login page detected - session may be invalid';
+    }
+    if (htmlInfo.title) {
+      message += `. Page title: "${htmlInfo.title}"`;
+    }
+
+    const err = new Error(message);
     err.isHtml = true;
-    err.httpStatus = res.status;  // Fixed: was err.status, should be err.httpStatus
-    err.status = res.status;      // Keep for backwards compatibility
+    err.httpStatus = res.status;
+    err.status = res.status;
+    err.contentType = contentType;
+    err.responsePreview = sanitizeHtmlPreview(htmlBody, 1500);
+    err.truncated = truncated;
+    err.readError = readError;
+    err.htmlInfo = htmlInfo;
+
+    // Log detailed info for debugging (but only in debug mode to avoid log spam)
+    if (provisionStepLogEnabled()) {
+      console.error(`[dashboard-api] trpcCall HTML response details:`, {
+        route,
+        status: res.status,
+        contentType,
+        title: htmlInfo.title,
+        truncated,
+        readError,
+        hints: htmlInfo.hints,
+        preview: err.responsePreview.slice(0, 500),
+      });
+    }
+
     throw err;
   }
 
-  const data = await res.json();
+  // Hardened: Safely extract response text first, then parse JSON
+  const { text: responseText, truncated, error: readError } = await safeResponseText(res, 50000);
+
+  if (readError) {
+    const err = new Error(`tRPC route ${route} failed to read response: ${readError}`);
+    err.httpStatus = res.status;
+    err.status = res.status;
+    err.readError = readError;
+    throw err;
+  }
+
+  if (truncated) {
+    console.warn(`[dashboard-api] tRPC route ${route} response was truncated (exceeded size limit)`);
+  }
+
+  // Hardened: Use safe JSON parsing with context
+  const data = safeJsonParse(responseText, { route, status: res.status });
 
   const toTrpcError = (errorPayload) => {
     const inner = errorPayload?.json ?? errorPayload;
@@ -530,6 +973,44 @@ async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrid
   }
 
   return data;
+}
+
+/**
+ * Wrapper around trpcCall that handles Cloudflare cookie migration.
+ * When tRPC returns HTML (indicating auth/Cloudflare issues) and the account lacks CF cookies,
+ * attempts to migrate the account by re-authenticating to capture fresh cookies.
+ *
+ * @param {string} route - tRPC route
+ * @param {object} input - Request body
+ * @param {string} sessionCookie - Current session cookie
+ * @param {string} clientCookie - Current client cookie
+ * @param {object} headerOverrides - Header overrides
+ * @param {object} context - Context with userId and accountId for migration
+ * @returns {Promise<any>} - tRPC result
+ */
+async function trpcCallWithMigration(route, input, sessionCookie, clientCookie, headerOverrides = {}, context = {}) {
+  try {
+    return await trpcCall(route, input, sessionCookie, clientCookie, headerOverrides);
+  } catch (err) {
+    // Check if this is an HTML error that might be due to missing Cloudflare cookies
+    if (err.isHtml && !hasCloudflareCookies(clientCookie)) {
+      const { userId, accountId } = context;
+      if (userId && accountId) {
+        console.error(`[dashboard-api] HTML response without CF cookies - attempting migration for ${accountId}`);
+        const migration = await migrateAccountForCloudflareCookies(userId, accountId, sessionCookie, clientCookie);
+
+        if (migration.migrated) {
+          console.error(`[dashboard-api] Migration succeeded, retrying tRPC with fresh cookies`);
+          // Retry with fresh cookies from migration
+          return await trpcCall(route, input, migration.sessionCookie, migration.clientCookie, headerOverrides);
+        } else {
+          console.error(`[dashboard-api] Migration not possible: ${migration.message || 'unknown reason'}`);
+        }
+      }
+    }
+    // Re-throw original error if migration didn't help or wasn't possible
+    throw err;
+  }
 }
 
 /** Stop redeem / other flows when the session or account is clearly blocked (no point retrying). */
@@ -583,6 +1064,26 @@ export function classifyRedeemFailure(rawMessage, err = {}) {
     return { errorCode: REDEEM_ERROR_CODES.SESSION, message: msg };
   }
 
+  // Hardened: Handle HTML responses from tRPC/body parsing
+  if (tc === 'HTML_RESPONSE' || err.isHtml) {
+    // HTML response indicates session/auth issue or Cloudflare challenge
+    if (http === 401 || http === 403 || http === 200) {
+      return {
+        errorCode: REDEEM_ERROR_CODES.SESSION,
+        message: msg || 'Received HTML response instead of JSON - authentication or Cloudflare challenge issue',
+      };
+    }
+    return { errorCode: REDEEM_ERROR_CODES.UPSTREAM, message: msg };
+  }
+
+  // Hardened: Handle JSON parse errors
+  if (tc === 'JSON_PARSE_ERROR' || err.isParseError) {
+    return {
+      errorCode: REDEEM_ERROR_CODES.UPSTREAM,
+      message: msg || 'Invalid JSON response from server',
+    };
+  }
+
   if (
     /\bsession\b/i.test(msg) &&
     /\b(expired|log in|login|credentials|re-auth|reauth|unauthorized|forbidden)\b/i.test(msg)
@@ -624,7 +1125,19 @@ function redeemFailurePayload(source, err) {
  * trying more candidates and server Playwright — a valid session may succeed in the browser.
  */
 function shouldAbortProvisioning(err) {
+  // Hardened: Handle HTML responses (likely auth/Cloudflare issues)
   if (err.isHtml && (err.status === 401 || err.status === 403)) return true;
+  // Hardened: Handle HTML responses even with 200 status (Cloudflare challenges often return 200)
+  if (err.isHtml && err.httpStatus === 200) {
+    // Check if it looks like a Cloudflare challenge
+    if (err.htmlInfo?.looksLikeCloudflare) return true;
+    // Check if it looks like a login page
+    if (err.htmlInfo?.looksLikeLoginPage) return true;
+  }
+  // Hardened: Handle trpcCodes that indicate permanent failures
+  if (err.trpcCode === 'HTML_RESPONSE' || err.trpcCode === 'OVERSIZED_RESPONSE') {
+    return true;
+  }
   if ([401, 403, 423, 429].includes(err.httpStatus)) return true;
   return false;
 }
@@ -642,12 +1155,15 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     { keyName },
   ];
 
+  // Context for Cloudflare cookie migration
+  const migrationContext = { userId, accountId };
+
   let lastTrpcRouteAttempted = null;
   if (endpoint) {
     lastTrpcRouteAttempted = endpoint.route;
     for (const input of mgmtKeyPayloads) {
       try {
-        const result = await trpcCall(endpoint.route, input, sessionCookie, clientCookie);
+        const result = await trpcCallWithMigration(endpoint.route, input, sessionCookie, clientCookie, {}, migrationContext);
         const picked =
           result?.key ??
           result?.managementKey ??
@@ -693,7 +1209,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     for (const input of mgmtKeyPayloads) {
       try {
         console.error(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
-        const result = await trpcCall(route, input, sessionCookie, clientCookie);
+        const result = await trpcCallWithMigration(route, input, sessionCookie, clientCookie, {}, migrationContext);
         console.error(`[dashboard-api] tRPC route ${route} result:`, { hasResult: !!result, keys: Object.keys(result || {}) });
         const key =
           result?.key ??
@@ -1033,9 +1549,9 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
             line += `\npathname: ${new URL(u).pathname}`;
           }
           // Note: We intentionally do NOT log response body here.
-          // Response bodies are streams - once consumed by response.text(), they become empty
-          // for other handlers. The waitForResponse predicates need to consume the body
-          // to extract the management key. Debug body content is captured via tracing instead.
+          // Response bodies are now cached via getCachedResponseText() to prevent race conditions
+          // where multiple handlers consume the same stream. The waitForResponse predicates
+          // need the body to extract the management key. Debug body content is captured via tracing instead.
           line += '\n---';
           networkLogLines.push(line);
         } catch {
@@ -1077,7 +1593,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
             : '';
           const pathname = new URL(url).pathname;
           try {
-            const body = await response.text();
+            const body = await getCachedResponseText(response);
             const key = extractManagementKeyFromResponseBody(body);
             if (!key) {
               const parsed = parseTrpcRedeemHttpBody(body, response.status());
@@ -1392,15 +1908,64 @@ const REDEEM_TRPC_HEADERS = { Referer: `${OR_ORIGIN}/redeem` };
 
 const UI_FEEDBACK_MAX = 500;
 
-/** Parse tRPC batch or single JSON from a browser HTTP response (same rules as trpcCall). */
+/**
+ * Parse tRPC batch or single JSON from a browser HTTP response (same rules as trpcCall).
+ * Hardened: Detects HTML responses and provides detailed error context.
+ */
 function parseTrpcRedeemHttpBody(bodyText, httpStatus = 200) {
   if (!bodyText || typeof bodyText !== 'string') return { kind: 'unparseable' };
+
+  // Hardened: Check for HTML patterns before attempting JSON parse
+  const trimmed = bodyText.trim();
+  if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<!doctype') ||
+      trimmed.startsWith('<html') || trimmed.startsWith('<HTML')) {
+    const htmlInfo = extractHtmlErrorInfo(bodyText);
+    const err = {
+      message: `Response is HTML, not JSON (status: ${httpStatus})${htmlInfo.title ? ` - Title: "${htmlInfo.title}"` : ''}`,
+      trpcCode: 'HTML_RESPONSE',
+      httpStatus,
+      isHtml: true,
+      htmlInfo,
+    };
+    // Add diagnostic hints
+    if (htmlInfo.looksLikeCloudflare) {
+      err.message += '. Cloudflare challenge detected - may need Cloudflare cookies';
+    } else if (htmlInfo.looksLikeLoginPage) {
+      err.message += '. Login page detected - session may be invalid';
+    }
+    return { kind: 'error', err };
+  }
+
+  // Hardened: Safe JSON parse with size check
+  if (bodyText.length > 100000) {
+    // Response too large, likely not valid tRPC JSON
+    return {
+      kind: 'error',
+      err: {
+        message: `Response body too large (${bodyText.length} chars), exceeds safe parsing limit`,
+        trpcCode: 'OVERSIZED_RESPONSE',
+        httpStatus,
+      },
+    };
+  }
+
   let data;
   try {
     data = JSON.parse(bodyText);
-  } catch {
-    return { kind: 'unparseable' };
+  } catch (parseErr) {
+    // Hardened: Provide preview of what failed to parse
+    const preview = bodyText.length > 150 ? `${bodyText.slice(0, 150)}...[length:${bodyText.length}]` : bodyText;
+    return {
+      kind: 'error',
+      err: {
+        message: `Invalid JSON: ${parseErr.message}. Preview: ${preview}`,
+        trpcCode: 'JSON_PARSE_ERROR',
+        httpStatus,
+        isParseError: true,
+      },
+    };
   }
+
   const toErr = (errorPayload) => {
     const inner = errorPayload?.json ?? errorPayload;
     const msg =
@@ -1498,10 +2063,14 @@ function trpcResponsePredicateForRedeemCode(response, code) {
 /** Order: tRPC (fast, bulk-friendly) then Playwright (UI parity, discovery). Browser is fallback, not default. */
 export async function redeemCode(userId, accountId, code) {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
+
+  // Context for Cloudflare cookie migration
+  const migrationContext = { userId, accountId };
+
   const endpoints = await store.getDiscoveredEndpoints();
   if (endpoints.redeemCode) {
     try {
-      const result = await trpcCall(endpoints.redeemCode.route, { code }, sessionCookie, clientCookie, REDEEM_TRPC_HEADERS);
+      const result = await trpcCallWithMigration(endpoints.redeemCode.route, { code }, sessionCookie, clientCookie, REDEEM_TRPC_HEADERS, migrationContext);
       if (result !== undefined) {
         await store.saveDiscoveredEndpoints({ redeemCode: { ...endpoints.redeemCode, lastUsed: new Date().toISOString() } });
         return { success: true, result, source: 'trpc-cached' };
@@ -1517,7 +2086,7 @@ export async function redeemCode(userId, accountId, code) {
   const candidates = ['credits.redeemCode', 'credits.redeem', 'credits.applyCode', 'voucher.redeem', 'code.redeem', 'promo.redeem', 'account.redeem'];
   for (const route of candidates) {
     try {
-      const result = await trpcCall(route, { code }, sessionCookie, clientCookie, REDEEM_TRPC_HEADERS);
+      const result = await trpcCallWithMigration(route, { code }, sessionCookie, clientCookie, REDEEM_TRPC_HEADERS, migrationContext);
       if (result !== undefined && result !== null) {
         await store.saveDiscoveredEndpoints({ redeemCode: { route, discoveredAt: new Date().toISOString() } });
         return { success: true, result, source: `trpc-${route}` };
@@ -1762,7 +2331,28 @@ export async function getUserProfile(sessionCookie, clientCookie) {
   });
   if (res.ok) {
     const ct = res.headers.get('content-type') || '';
-    if (ct.includes('application/json')) return res.json();
+    // Hardened: Use the same robust content-type checking as trpcCall
+    if (isHtmlContentType(ct)) {
+      // HTML response when expecting JSON - auth likely failed
+      const { text: htmlBody } = await safeResponseText(res, 5000);
+      const htmlInfo = extractHtmlErrorInfo(htmlBody);
+      console.error('[dashboard-api] getUserProfile received HTML response:', {
+        status: res.status,
+        contentType: ct,
+        title: htmlInfo.title,
+        hints: htmlInfo.hints,
+      });
+      // Fall through to tRPC fallback
+    } else if (ct.includes('application/json')) {
+      try {
+        // Hardened: Safe JSON parsing
+        const { text } = await safeResponseText(res, 50000);
+        return safeJsonParse(text, { route: 'api/auth/me', status: res.status });
+      } catch (parseErr) {
+        console.error('[dashboard-api] getUserProfile JSON parse error:', parseErr.message);
+        // Fall through to tRPC fallback
+      }
+    }
   }
 
   try {

@@ -277,9 +277,11 @@ export async function deleteAccount(userId, id) {
  * @param {string|null|undefined} sessionCookie - JWT or empty; `null` clears; `undefined` with `preserveSessionToken` leaves vault token unchanged
  * @param {object} [options]
  * @param {boolean} [options.preserveSessionToken] - If true, do not write `sessionToken` (e.g. OTP start: refresh device cookie only)
+ * @param {Record<string, number>} [options.cfCookieExpirations] - Cloudflare cookie expiration timestamps {cookieName: timestampMs}
  */
 export async function updateAccountSession(userId, id, sessionCookie, clientCookie, sessionExpiry, options = {}) {
   const preserveSessionToken = options.preserveSessionToken === true;
+  const cfCookieExpirations = options.cfCookieExpirations;
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
 
@@ -294,6 +296,11 @@ export async function updateAccountSession(userId, id, sessionCookie, clientCook
     } else if (sessionExpiry !== null) {
       config.sessionExpiry = sessionExpiry;
     }
+  }
+
+  // Store Cloudflare cookie expirations if provided
+  if (cfCookieExpirations && typeof cfCookieExpirations === 'object') {
+    config.cfCookieExpirations = { ...(config.cfCookieExpirations || {}), ...cfCookieExpirations };
   }
 
   const data = { config: encryptConfig(config) };
@@ -319,6 +326,7 @@ export async function getAccountSession(userId, id) {
     sessionCookie: readSessionToken(account),
     clientCookie: config.clientCookie,
     sessionExpiry: config.sessionExpiry,
+    cfCookieExpirations: config.cfCookieExpirations || {},
   };
 }
 

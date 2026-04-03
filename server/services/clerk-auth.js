@@ -16,6 +16,151 @@ import { URL } from 'node:url';
 import { USER_AGENT, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
 import { logger } from './logger.js';
 
+// =============================================================================
+// COOKIE SECURITY VALIDATION
+// =============================================================================
+/** Maximum size limits for cookie security */
+const COOKIE_LIMITS = {
+  MAX_COOKIE_NAME_LENGTH: 128,      // RFC 6265 recommends short names
+  MAX_COOKIE_VALUE_LENGTH: 4096,     // Most browsers limit individual cookies
+  MAX_TOTAL_HEADER_SIZE: 8192,       // Conservative header size limit
+  MAX_COOKIE_COUNT: 50,              // Prevent DoS via cookie flooding
+};
+/**
+ * Validates cookie name according to RFC 6265 and security best practices.
+ * Allowed: alphanumeric, hyphen, underscore, dot. No control chars, no semicolons.
+ * @param {string} name - Cookie name to validate
+ * @returns {boolean} True if valid, false otherwise
+ */
+function isValidCookieName(name) {
+  if (!name || typeof name !== 'string') return false;
+  if (name.length === 0 || name.length > COOKIE_LIMITS.MAX_COOKIE_NAME_LENGTH) return false;
+  
+  // Check for control characters (0x00-0x1F, 0x7F)
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i);
+    if (code <= 0x1F || code === 0x7F) return false;
+  }
+  
+  // RFC 6265 token characters + underscore and dot (common extensions)
+  // Allowed: A-Z a-z 0-9 !#$%&'*+-.^_`|~
+  const validToken = /^[A-Za-z0-9!#$%&'*+\-._^`|~]+$/;
+  return validToken.test(name);
+}
+/**
+ * Encodes cookie value to prevent header injection attacks.
+ * Rejects values containing control chars, semicolons, commas, newlines.
+ * @param {string} value - Cookie value to encode/validate
+ * @returns {string|null} Encoded value or null if invalid
+ */
+function encodeCookieValue(value) {
+  if (value == null) return '';
+  const str = String(value);
+  
+  if (str.length > COOKIE_LIMITS.MAX_COOKIE_VALUE_LENGTH) {
+    logger.warn(`[COOKIE_SECURITY] Cookie value exceeds max length (${str.length} > ${COOKIE_LIMITS.MAX_COOKIE_VALUE_LENGTH})`);
+    return null;
+  }
+  
+  // Check for dangerous characters that could enable header injection
+  // Semicolon: could terminate cookie and start new directive
+  // Newlines (CR/LF): HTTP header injection vectors
+  // Null byte: string termination attacks
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const code = str.charCodeAt(i);
+    
+    // Reject control characters (0x00-0x1F except tab 0x09), DEL (0x7F)
+    if ((code <= 0x1F && code !== 0x09) || code === 0x7F) {
+      logger.warn(`[COOKIE_SECURITY] Rejecting cookie value with control char (0x${code.toString(16)})`);
+      return null;
+    }
+    
+    // Reject semicolons (could inject new cookie attributes)
+    if (char === ';') {
+      logger.warn('[COOKIE_SECURITY] Rejecting cookie value containing semicolon');
+      return null;
+    }
+    
+    // Reject newlines (HTTP header injection)
+    if (char === '\n' || char === '\r') {
+      logger.warn('[COOKIE_SECURITY] Rejecting cookie value containing newline (CR/LF injection attempt)');
+      return null;
+    }
+    
+    // Reject null bytes
+    if (code === 0x00) {
+      logger.warn('[COOKIE_SECURITY] Rejecting cookie value with null byte');
+      return null;
+    }
+  }
+  
+  return str;
+}
+/**
+ * Validates an entire cookie jar object for security compliance.
+ * @param {object} jar - Cookie jar object {name: value}
+ * @returns {{valid: boolean, jar: object, errors: string[]}} Validation result
+ */
+function validateCookieJar(jar) {
+  const errors = [];
+  const validatedJar = {};
+  
+  if (!jar || typeof jar !== 'object') {
+    errors.push('Invalid jar: not an object');
+    return { valid: false, jar: {}, errors };
+  }
+  
+  const entries = Object.entries(jar);
+  
+  if (entries.length > COOKIE_LIMITS.MAX_COOKIE_COUNT) {
+    errors.push(`Too many cookies (${entries.length} > ${COOKIE_LIMITS.MAX_COOKIE_COUNT})`);
+    return { valid: false, jar: {}, errors };
+  }
+  
+  for (const [name, value] of entries) {
+    // Validate name
+    if (!isValidCookieName(name)) {
+      errors.push(`Invalid cookie name: "${name.slice(0, 32)}"`);
+      continue;
+    }
+    
+    // Validate/encode value
+    const encodedValue = encodeCookieValue(value);
+    if (encodedValue === null) {
+      errors.push(`Invalid cookie value for "${name}": contains dangerous characters`);
+      continue;
+    }
+    
+    validatedJar[name] = encodedValue;
+  }
+  
+  const valid = errors.length === 0 || Object.keys(validatedJar).length > 0;
+  return { valid, jar: validatedJar, errors };
+}
+/**
+ * Calculates total size of serialized cookie header for size limit checking.
+ * @param {string} cookieHeader - The serialized cookie string
+ * @returns {number} Byte length
+ */
+function getCookieHeaderSize(cookieHeader) {
+  if (!cookieHeader) return 0;
+  return Buffer.byteLength(cookieHeader, 'utf8');
+}
+/**
+ * Validates that serialized cookie header does not exceed size limits.
+ * @param {string} cookieHeader - The serialized cookie string
+ * @returns {{valid: boolean, size: number}} Validation result
+ */
+function validateCookieHeaderSize(cookieHeader) {
+  const size = getCookieHeaderSize(cookieHeader);
+  if (size > COOKIE_LIMITS.MAX_TOTAL_HEADER_SIZE) {
+    logger.warn(`[COOKIE_SECURITY] Cookie header size exceeds limit (${size} > ${COOKIE_LIMITS.MAX_TOTAL_HEADER_SIZE})`);
+    return { valid: false, size };
+  }
+  return { valid: true, size };
+}
+// =============================================================================
 /** Thrown when password first factor succeeds but Clerk requires a second factor (e.g. TOTP). */
 export class NeedSecondFactorError extends Error {
   constructor(signInId, clientCookie) {
@@ -40,6 +185,131 @@ function parseCookies(setCookieHeaders) {
     result[name] = value;
   }
   return result;
+}
+
+/**
+ * Parse cookie expiration from Set-Cookie header attributes.
+ * Extracts Expires and Max-Age attributes to calculate expiration timestamp.
+ * @param {string} setCookieHeader - Raw Set-Cookie header string
+ * @returns {number|null} Expiration timestamp in milliseconds, or null if no expiration
+ */
+function parseCookieExpiration(setCookieHeader) {
+  if (!setCookieHeader || typeof setCookieHeader !== 'string') return null;
+
+  const parts = setCookieHeader.split(';').map(p => p.trim());
+
+  // Check for Max-Age first (takes precedence)
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    if (lower.startsWith('max-age=')) {
+      const maxAge = parseInt(part.slice(8), 10);
+      if (!isNaN(maxAge) && maxAge > 0) {
+        return Date.now() + (maxAge * 1000);
+      }
+      // Negative or zero Max-Age means session cookie (expires immediately)
+      return null;
+    }
+  }
+
+  // Check for Expires attribute
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    if (lower.startsWith('expires=')) {
+      const expiresStr = part.slice(8);
+      const expiresDate = new Date(expiresStr);
+      if (!isNaN(expiresDate.getTime())) {
+        return expiresDate.getTime();
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Parse all Cloudflare cookies with their expiration timestamps from Set-Cookie headers.
+ * @param {string[]} setCookieHeaders - Array of Set-Cookie header strings
+ * @returns {Record<string, {value: string, expires: number|null}>} Object mapping cookie names to {value, expires}
+ */
+function parseCloudflareCookiesWithExpiration(setCookieHeaders) {
+  if (!setCookieHeaders || !Array.isArray(setCookieHeaders)) return {};
+
+  const result = {};
+  for (const raw of setCookieHeaders) {
+    const [pair] = raw.split(';');
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx < 0) continue;
+
+    const name = pair.slice(0, eqIdx).trim();
+    if (!isCloudflareCookieName(name)) continue;
+
+    const value = pair.slice(eqIdx + 1).trim();
+    const expires = parseCookieExpiration(raw);
+
+    result[name] = { value, expires };
+  }
+  return result;
+}
+
+/** Time window before expiration to trigger proactive refresh (15 minutes) */
+export const CF_COOKIE_EXPIRING_SOON_MS = 15 * 60 * 1000;
+
+/**
+ * Check if Cloudflare cookies in the stored jar are expired or expiring soon.
+ * @param {string} storedCookieJar - The stored client cookie string
+ * @param {Record<string, number>} cfCookieExpirations - Object mapping CF cookie names to expiration timestamps
+ * @returns {{expired: boolean, expiringSoon: boolean, details: Record<string, {expired: boolean, expiringSoon: boolean, expiresIn: number|null}>}}
+ */
+export function checkCloudflareCookieExpiration(storedCookieJar, cfCookieExpirations = {}) {
+  const jar = parseAllDeviceCookies(storedCookieJar);
+  const now = Date.now();
+  const details = {};
+  let anyExpired = false;
+  let anyExpiringSoon = false;
+
+  // Key CF cookies to check
+  const cfCookieNames = ['__cf_bm', '_cfuvid', 'cf_clearance'];
+
+  for (const name of cfCookieNames) {
+    const hasCookie = !!jar[name];
+    const expiration = cfCookieExpirations?.[name];
+
+    if (!hasCookie) {
+      details[name] = { expired: true, expiringSoon: true, expiresIn: null, missing: true };
+      anyExpired = true;
+      continue;
+    }
+
+    if (!expiration) {
+      // Cookie exists but no expiration info - treat as expiring soon to be safe
+      details[name] = { expired: false, expiringSoon: true, expiresIn: null, missing: false };
+      anyExpiringSoon = true;
+      continue;
+    }
+
+    const expiresIn = expiration - now;
+    const expired = expiresIn <= 0;
+    const expiringSoon = expiresIn <= CF_COOKIE_EXPIRING_SOON_MS;
+
+    details[name] = { expired, expiringSoon, expiresIn, expiresAt: expiration, missing: false };
+
+    if (expired) anyExpired = true;
+    if (expiringSoon) anyExpiringSoon = true;
+  }
+
+  return { expired: anyExpired, expiringSoon: anyExpiringSoon, details };
+}
+
+/**
+ * Quick check if Cloudflare cookies need refresh (missing, expired, or expiring soon).
+ * This is the primary helper for ensureSession() to decide if CF cookies are usable.
+ * @param {string} storedCookieJar - The stored client cookie string
+ * @param {Record<string, number>} cfCookieExpirations - Stored expiration timestamps
+ * @returns {boolean} true if CF cookies need refresh
+ */
+export function areCloudflareCookiesExpired(storedCookieJar, cfCookieExpirations = {}) {
+  const check = checkCloudflareCookieExpiration(storedCookieJar, cfCookieExpirations);
+  return check.expired || check.expiringSoon;
 }
 
 /** Clerk / OpenRouter device cookies we persist and replay on FAPI (not __session). */
@@ -77,20 +347,54 @@ function mergeDeviceCookiesFromParsed(into, parsed, filterFn = isClerkDeviceCook
 
 /**
  * Parse vault `clientCookie`: legacy single token (treated as __client), or `__client=a; __client_uat=b`.
+ * 
+ * SECURITY: Validates cookie names and rejects dangerous values during parsing.
  * @returns {Record<string, string>}
  */
 export function parseClerkDeviceCookieJar(stored) {
   const t = stored != null ? String(stored).trim() : '';
   if (!t || t === 'undefined') return {};
+  
+  // Check for potential injection attacks in the raw input
+  if (t.includes('\n') || t.includes('\r')) {
+    logger.error('[COOKIE_SECURITY] parseClerkDeviceCookieJar: rejecting cookie string containing newlines (possible header injection)');
+    return {};
+  }
+  
+  if (t.includes('\x00')) {
+    logger.error('[COOKIE_SECURITY] parseClerkDeviceCookieJar: rejecting cookie string containing null bytes');
+    return {};
+  }
+  
+  // Legacy single token format (no semicolon)
   if (!t.includes(';')) {
+    // Validate the single token value
+    if (t.includes(';') || t.includes('\n') || t.includes('\r')) {
+      logger.error('[COOKIE_SECURITY] parseClerkDeviceCookieJar: rejecting invalid legacy token with dangerous characters');
+      return {};
+    }
     return { __client: t };
   }
+  
   const jar = {};
   for (const part of t.split(';')) {
     const eq = part.indexOf('=');
     if (eq < 0) continue;
     const k = part.slice(0, eq).trim();
     const v = part.slice(eq + 1).trim();
+    
+    // Validate name
+    if (!isValidCookieName(k)) {
+      logger.warn(`[COOKIE_SECURITY] parseClerkDeviceCookieJar: skipping invalid cookie name "${k.slice(0, 32)}"`);
+      continue;
+    }
+    
+    // Check value for injection attempts
+    if (v.includes('\n') || v.includes('\r') || v.includes(';')) {
+      logger.warn(`[COOKIE_SECURITY] parseClerkDeviceCookieJar: skipping cookie "${k}" with dangerous characters in value`);
+      continue;
+    }
+    
     if (isClerkDeviceCookieName(k) && v) jar[k] = v;
   }
   return Object.keys(jar).length ? jar : { __client: t };
@@ -99,17 +403,46 @@ export function parseClerkDeviceCookieJar(stored) {
 /**
  * Parse ALL device cookies from stored string (Clerk + Cloudflare + any others).
  * This preserves all cookies needed for dashboard access, not just Clerk ones.
+ * 
+ * SECURITY: Validates cookie names and rejects dangerous values during parsing.
  * @returns {Record<string, string>}
  */
 function parseAllDeviceCookies(stored) {
   const t = stored != null ? String(stored).trim() : '';
   if (!t || t === 'undefined') return {};
+  
+  // Check for potential injection attacks in the raw input
+  // Look for newlines that could indicate HTTP header injection
+  if (t.includes('\n') || t.includes('\r')) {
+    logger.error('[COOKIE_SECURITY] parseAllDeviceCookies: rejecting cookie string containing newlines (possible header injection)');
+    return {};
+  }
+  
+  // Check for null bytes
+  if (t.includes('\x00')) {
+    logger.error('[COOKIE_SECURITY] parseAllDeviceCookies: rejecting cookie string containing null bytes');
+    return {};
+  }
+  
   const jar = {};
   for (const part of t.split(';')) {
     const eq = part.indexOf('=');
     if (eq < 0) continue;
     const k = part.slice(0, eq).trim();
     const v = part.slice(eq + 1).trim();
+    
+    // Validate name - reject invalid names
+    if (!isValidCookieName(k)) {
+      logger.warn(`[COOKIE_SECURITY] parseAllDeviceCookies: skipping invalid cookie name "${k.slice(0, 32)}"`);
+      continue;
+    }
+    
+    // Check value for obvious injection attempts
+    if (v.includes('\n') || v.includes('\r') || v.includes(';')) {
+      logger.warn(`[COOKIE_SECURITY] parseAllDeviceCookies: skipping cookie "${k}" with dangerous characters in value`);
+      continue;
+    }
+    
     // Preserve ALL non-empty cookies except __session (handled separately)
     if (k && v && k !== '__session') jar[k] = v;
   }
@@ -118,53 +451,164 @@ function parseAllDeviceCookies(stored) {
 
 /**
  * Cookie header value for Clerk FAPI (clerk.openrouter.ai): Clerk device cookies only, sorted.
+ * 
+ * SECURITY: Validates cookie names and values to prevent header injection.
+ * Rejects cookies with control chars, semicolons, or newlines.
  */
 export function clerkFapiDeviceCookieHeader(stored) {
   const jar = parseClerkDeviceCookieJar(stored);
-  const keys = Object.keys(jar).filter((k) => isClerkDeviceCookieName(k) && jar[k]).sort();
+  
+  // Validate the jar for security
+  const validation = validateCookieJar(jar);
+  if (!validation.valid && validation.errors.length > 0) {
+    logger.warn(`[COOKIE_SECURITY] clerkFapiDeviceCookieHeader validation errors: ${validation.errors.join(', ')}`);
+  }
+  const validJar = validation.valid ? jar : validation.jar;
+  
+  const keys = Object.keys(validJar).filter((k) => isClerkDeviceCookieName(k) && validJar[k]).sort();
   if (!keys.length) return '';
-  return keys.map((k) => `${k}=${jar[k]}`).join('; ');
+  
+  // Build cookie string with validated/encoded values
+  const parts = [];
+  for (const k of keys) {
+    const encodedValue = encodeCookieValue(validJar[k]);
+    if (encodedValue !== null) {
+      parts.push(`${k}=${encodedValue}`);
+    }
+  }
+  
+  const result = parts.join('; ');
+  
+  // Check total header size
+  const sizeCheck = validateCookieHeaderSize(result);
+  if (!sizeCheck.valid) {
+    logger.error(`[COOKIE_SECURITY] clerkFapiDeviceCookieHeader: total header size exceeds limit (${sizeCheck.size} bytes)`);
+    // Return minimal essential cookie as fallback
+    const client = encodeCookieValue(validJar.__client);
+    const uat = encodeCookieValue(validJar.__client_uat);
+    if (uat) return `__client_uat=${uat}`;
+    if (client) return `__client=${client}`;
+    return '';
+  }
+  
+  return result;
 }
 
 /**
  * Device cookie fragment for openrouter.ai dashboard tRPC (after __session).
  * Includes ALL device cookies: Clerk + Cloudflare (cf_bm, cfuvid, cf_clearance).
+ * 
+ * SECURITY: Validates cookie names and values to prevent header injection.
+ * Rejects cookies with control chars, semicolons, or newlines.
  */
 export function openRouterDashboardDeviceCookies(stored) {
   const jar = parseAllDeviceCookies(stored);
+  
+  // Validate the jar for security
+  const validation = validateCookieJar(jar);
+  if (!validation.valid && validation.errors.length > 0) {
+    logger.warn(`[COOKIE_SECURITY] openRouterDashboardDeviceCookies validation errors: ${validation.errors.join(', ')}`);
+  }
+  const validJar = validation.valid ? jar : validation.jar;
+  
   const out = [];
-  const uat = jar.__client_uat;
-  const client = jar.__client;
-  const legacySingle = Object.keys(jar).length === 1 && client && !uat;
-  if (uat) out.push(`__client_uat=${uat}`);
-  else if (legacySingle) out.push(`__client_uat=${client}`);
-  if (client && client !== uat) out.push(`__client=${client}`);
-  for (const k of Object.keys(jar).sort()) {
+  const uat = validJar.__client_uat;
+  const client = validJar.__client;
+  const legacySingle = Object.keys(validJar).length === 1 && client && !uat;
+  
+  // Validate and encode values before adding
+  const encodedUat = uat ? encodeCookieValue(uat) : null;
+  const encodedClient = client ? encodeCookieValue(client) : null;
+  
+  if (encodedUat) out.push(`__client_uat=${encodedUat}`);
+  else if (legacySingle && encodedClient) out.push(`__client_uat=${encodedClient}`);
+  if (encodedClient && encodedClient !== encodedUat) out.push(`__client=${encodedClient}`);
+  
+  for (const k of Object.keys(validJar).sort()) {
     // Skip already-added Clerk cookies to avoid duplicates
     if (k === '__client' || k === '__client_uat') continue;
     // Include both Clerk cookies AND Cloudflare cookies
-    if (isDashboardDeviceCookieName(k)) out.push(`${k}=${jar[k]}`);
+    if (isDashboardDeviceCookieName(k)) {
+      const encoded = encodeCookieValue(validJar[k]);
+      if (encoded !== null) {
+        out.push(`${k}=${encoded}`);
+      }
+    }
   }
-  return out.join('; ');
+  
+  const result = out.join('; ');
+  
+  // Check total header size
+  const sizeCheck = validateCookieHeaderSize(result);
+  if (!sizeCheck.valid) {
+    logger.error(`[COOKIE_SECURITY] openRouterDashboardDeviceCookies: total header size exceeds limit (${sizeCheck.size} bytes)`);
+    // Return minimal essential cookies as fallback
+    if (encodedClient || encodedUat) {
+      const minimal = encodedUat ? `__client_uat=${encodedUat}` : `__client=${encodedClient}`;
+      return minimal;
+    }
+    return '';
+  }
+  
+  return result;
 }
 
-/** Playwright cookie injection for openrouter.ai - includes ALL device cookies. */
+/**
+ * Playwright cookie injection for openrouter.ai - includes ALL device cookies.
+ * 
+ * SECURITY: Validates cookie names and values to prevent header injection.
+ * Rejects cookies with control chars, semicolons, or newlines in names/values.
+ */
 export function openRouterPlaywrightDeviceCookies(stored) {
   const jar = parseAllDeviceCookies(stored);
-  const list = [];
-  const uat = jar.__client_uat ?? (Object.keys(jar).length === 1 && jar.__client ? jar.__client : null);
-  if (uat) list.push({ name: '__client_uat', value: uat, domain: 'openrouter.ai', path: '/' });
-  if (jar.__client && jar.__client !== uat) {
-    list.push({ name: '__client', value: jar.__client, domain: 'openrouter.ai', path: '/' });
+  
+  // Validate the jar for security
+  const validation = validateCookieJar(jar);
+  if (!validation.valid && validation.errors.length > 0) {
+    logger.warn(`[COOKIE_SECURITY] openRouterPlaywrightDeviceCookies validation errors: ${validation.errors.join(', ')}`);
   }
-  for (const k of Object.keys(jar)) {
+  const validJar = validation.valid ? jar : validation.jar;
+  
+  const list = [];
+  const uat = validJar.__client_uat ?? (Object.keys(validJar).length === 1 && validJar.__client ? validJar.__client : null);
+  const client = validJar.__client;
+  
+  // Validate and encode values before adding
+  const encodedUat = uat ? encodeCookieValue(uat) : null;
+  const encodedClient = client ? encodeCookieValue(client) : null;
+  
+  // Validate cookie names (Playwright will use these in browser context)
+  if (encodedUat && isValidCookieName('__client_uat')) {
+    list.push({ name: '__client_uat', value: encodedUat, domain: 'openrouter.ai', path: '/' });
+  }
+  if (encodedClient && encodedClient !== encodedUat && isValidCookieName('__client')) {
+    list.push({ name: '__client', value: encodedClient, domain: 'openrouter.ai', path: '/' });
+  }
+  
+  for (const k of Object.keys(validJar)) {
     // Skip already-added Clerk cookies to avoid duplicates
     if (k === '__client' || k === '__client_uat') continue;
     // Include ALL dashboard cookies (Clerk + Cloudflare)
     if (isDashboardDeviceCookieName(k)) {
-      list.push({ name: k, value: jar[k], domain: 'openrouter.ai', path: '/' });
+      // Validate both name and value before adding to Playwright
+      if (isValidCookieName(k)) {
+        const encoded = encodeCookieValue(validJar[k]);
+        if (encoded !== null) {
+          list.push({ name: k, value: encoded, domain: 'openrouter.ai', path: '/' });
+        }
+      } else {
+        logger.warn(`[COOKIE_SECURITY] Skipping invalid cookie name for Playwright: "${k.slice(0, 32)}"`);
+      }
     }
   }
+  
+  // Check for excessive cookie count (DoS protection)
+  if (list.length > COOKIE_LIMITS.MAX_COOKIE_COUNT) {
+    logger.error(`[COOKIE_SECURITY] Too many cookies for Playwright (${list.length} > ${COOKIE_LIMITS.MAX_COOKIE_COUNT}), truncating to essential cookies only`);
+    // Return only essential Clerk cookies
+    return list.filter(c => c.name === '__client' || c.name === '__client_uat');
+  }
+  
   return list;
 }
 
@@ -176,12 +620,48 @@ function mergeDeviceJar(priorJar, lines, filterFn = isClerkDeviceCookieName) {
 
 /**
  * Persist device jar: single __client only stays legacy string; multiple keys → `a=b; c=d`.
+ * 
+ * SECURITY: Validates cookie names and values to prevent header injection.
  */
 function serializeClerkDeviceCookieJar(jar) {
-  const keys = Object.keys(jar).filter((k) => isClerkDeviceCookieName(k) && jar[k]).sort();
+  // Validate the entire jar first
+  const validation = validateCookieJar(jar);
+  if (!validation.valid) {
+    if (validation.errors.length > 0) {
+      logger.warn(`[COOKIE_SECURITY] serializeClerkDeviceCookieJar validation errors: ${validation.errors.join(', ')}`);
+    }
+    // If no valid cookies remain, return empty string
+    if (Object.keys(validation.jar).length === 0) return '';
+  }
+  
+  const validJar = validation.jar;
+  const keys = Object.keys(validJar).filter((k) => isClerkDeviceCookieName(k) && validJar[k]).sort();
   if (!keys.length) return '';
-  if (keys.length === 1 && keys[0] === '__client') return jar.__client;
-  return keys.map((k) => `${k}=${jar[k]}`).join('; ');
+  if (keys.length === 1 && keys[0] === '__client') return validJar.__client;
+  
+  // Build cookie string with validated/encoded values
+  const parts = [];
+  for (const k of keys) {
+    const encodedValue = encodeCookieValue(validJar[k]);
+    if (encodedValue !== null) {
+      parts.push(`${k}=${encodedValue}`);
+    }
+  }
+  
+  const result = parts.join('; ');
+  
+  // Check total header size
+  const sizeCheck = validateCookieHeaderSize(result);
+  if (!sizeCheck.valid) {
+    logger.error(`[COOKIE_SECURITY] serializeClerkDeviceCookieJar: total header size exceeds limit, returning truncated cookies`);
+    // Return just the __client cookie if available as fallback
+    if (validJar.__client && encodeCookieValue(validJar.__client) !== null) {
+      return validJar.__client;
+    }
+    return '';
+  }
+  
+  return result;
 }
 
 /**
@@ -207,14 +687,97 @@ function clientCookieAfterSetCookieLines(prior, setCookieLines) {
 }
 
 /**
+ * Extract Cloudflare cookie expirations from Set-Cookie headers.
+ * Returns an object mapping cookie names to expiration timestamps.
+ * @param {string[]} setCookieLines - Array of Set-Cookie header strings
+ * @returns {Record<string, number>} Object mapping CF cookie names to expiration timestamps (ms)
+ */
+export function extractCloudflareCookieExpirations(setCookieLines) {
+  if (!setCookieLines || !Array.isArray(setCookieLines)) return {};
+
+  const expirations = {};
+  for (const raw of setCookieLines) {
+    const [pair] = raw.split(';');
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx < 0) continue;
+
+    const name = pair.slice(0, eqIdx).trim();
+    if (!isCloudflareCookieName(name)) continue;
+
+    const expires = parseCookieExpiration(raw);
+    if (expires) {
+      expirations[name] = expires;
+    }
+  }
+
+  return expirations;
+}
+
+/**
+ * Merge new Cloudflare cookie expirations into existing expirations object.
+ * Only updates timestamps for cookies that are present in the new response.
+ * @param {Record<string, number>} existing - Existing CF cookie expirations
+ * @param {Record<string, number>} incoming - New CF cookie expirations from Set-Cookie
+ * @returns {Record<string, number>} Merged expirations object
+ */
+export function mergeCloudflareCookieExpirations(existing, incoming) {
+  const merged = { ...(existing || {}) };
+
+  for (const [name, expires] of Object.entries(incoming || {})) {
+    if (isCloudflareCookieName(name)) {
+      merged[name] = expires;
+    }
+  }
+
+  return merged;
+}
+
+/**
  * Serialize all device cookies for storage (Clerk + Cloudflare).
  * Single __client only stays legacy string; multiple keys → `a=b; c=d`.
+ * 
+ * SECURITY: Validates cookie names and values to prevent header injection.
+ * Rejects cookies with control chars, semicolons, or newlines.
  */
 function serializeAllDeviceCookies(jar) {
-  const keys = Object.keys(jar).filter((k) => isDashboardDeviceCookieName(k) && jar[k]).sort();
+  // Validate the entire jar first
+  const validation = validateCookieJar(jar);
+  if (!validation.valid) {
+    if (validation.errors.length > 0) {
+      logger.warn(`[COOKIE_SECURITY] serializeAllDeviceCookies validation errors: ${validation.errors.join(', ')}`);
+    }
+    // If no valid cookies remain, return empty string
+    if (Object.keys(validation.jar).length === 0) return '';
+  }
+  
+  const validJar = validation.jar;
+  const keys = Object.keys(validJar).filter((k) => isDashboardDeviceCookieName(k) && validJar[k]).sort();
   if (!keys.length) return '';
-  if (keys.length === 1 && keys[0] === '__client') return jar.__client;
-  return keys.map((k) => `${k}=${jar[k]}`).join('; ');
+  if (keys.length === 1 && keys[0] === '__client') return validJar.__client;
+  
+  // Build cookie string with validated/encoded values
+  const parts = [];
+  for (const k of keys) {
+    const encodedValue = encodeCookieValue(validJar[k]);
+    if (encodedValue !== null) {
+      parts.push(`${k}=${encodedValue}`);
+    }
+  }
+  
+  const result = parts.join('; ');
+  
+  // Check total header size
+  const sizeCheck = validateCookieHeaderSize(result);
+  if (!sizeCheck.valid) {
+    logger.error(`[COOKIE_SECURITY] serializeAllDeviceCookies: total header size exceeds limit, returning truncated cookies`);
+    // Return just the __client cookie if available as fallback
+    if (validJar.__client && encodeCookieValue(validJar.__client) !== null) {
+      return validJar.__client;
+    }
+    return '';
+  }
+  
+  return result;
 }
 
 function sessionCookieFromSetCookieLines(setCookieLines) {
@@ -652,9 +1215,11 @@ const GET_CLIENT_RETRY_MS_OTP = 500;
 
 /**
  * GET /v1/client with optional retries; merges __client from Set-Cookie; extracts __session or embedded JWT.
+ * @returns {{ sessionCookie, clientCookie, sessionExpiry, setCookieLines } | null}
  */
 async function clerkGetClientSession(clientCookie, { debugPhase = 'client', maxAttempts = 1, retryMs = 150 } = {}) {
   let cc = clientCookie;
+  let lastSetCookieLines = [];
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const { statusCode, data, setCookieLines } = await clerkHttpsJson('GET', 'client?_clerk_js_version=5.0.0', {
       cookieClient: cc,
@@ -666,10 +1231,11 @@ async function clerkGetClientSession(clientCookie, { debugPhase = 'client', maxA
     logClerkDebugGetClient(`${debugPhase} attempt ${attempt}/${maxAttempts}`, { statusCode, data, setCookieLines });
     logClerkDebugSignInSessionHints(`${debugPhase} GET /client`, data.response || data.client?.sign_in);
 
+    lastSetCookieLines = setCookieLines || [];
     cc = clientCookieAfterSetCookieLines(cc, setCookieLines);
     let sessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
     if (!sessionCookie) sessionCookie = sessionJwtFromClerkClientPayload(data);
-    if (sessionCookie) return { sessionCookie, clientCookie: cc, sessionExpiry: getJwtExpiry(sessionCookie) };
+    if (sessionCookie) return { sessionCookie, clientCookie: cc, sessionExpiry: getJwtExpiry(sessionCookie), setCookieLines: lastSetCookieLines };
     if (attempt < maxAttempts) await sleepMs(retryMs);
   }
   return null;
@@ -693,11 +1259,15 @@ async function getSessionToken(signInId, clientCookie, debugPhase = 'fallback', 
 /**
  * After attempt_first_factor / attempt_second_factor with status=complete: cookies, embedded JWT,
  * optional POST .../sessions/{id}/touch (browser setActive parity), then GET /client fallback.
+ * @returns {{ sessionCookie, clientCookie, sessionExpiry, setCookieLines } | null}
  */
 async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, clientCookieIn, signInId, debugLabel) {
   let cc = clientCookieAfterSetCookieLines(clientCookieIn, setCookieLines);
   let sessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
   if (!sessionCookie) sessionCookie = sessionJwtFromClerkClientPayload(attemptData);
+
+  // Accumulate all Set-Cookie lines throughout the flow
+  let allSetCookieLines = [...(setCookieLines || [])];
 
   const result = attemptData.response || attemptData.client?.sign_in;
   logClerkDebugSignInSessionHints(`${debugLabel} after attempt`, result);
@@ -722,13 +1292,23 @@ async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, 
         const n = setCookieNamesForDebug(touch.setCookieLines);
         logger.info(`[CLERK_DEBUG_OTP] ${debugLabel} touch Set-Cookie names: ${n.join(', ') || '(none)'}`);
       }
+      // Add touch Set-Cookie lines to accumulated list
+      if (touch.setCookieLines) {
+        allSetCookieLines = [...allSetCookieLines, ...touch.setCookieLines];
+      }
     } catch (err) {
       logger.warn(`[CLERK] session touch (${debugLabel}) failed: ${err.message}`);
     }
   }
 
-  if (!sessionCookie) return getSessionToken(signInId, cc, debugLabel);
-  return { sessionCookie, clientCookie: cc, sessionExpiry: getJwtExpiry(sessionCookie) };
+  if (!sessionCookie) {
+    const tokenResult = await getSessionToken(signInId, cc, debugLabel);
+    if (tokenResult?.setCookieLines) {
+      allSetCookieLines = [...allSetCookieLines, ...tokenResult.setCookieLines];
+    }
+    return tokenResult ? { ...tokenResult, setCookieLines: allSetCookieLines } : null;
+  }
+  return { sessionCookie, clientCookie: cc, sessionExpiry: getJwtExpiry(sessionCookie), setCookieLines: allSetCookieLines };
 }
 
 /**
