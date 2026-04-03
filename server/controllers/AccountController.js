@@ -293,33 +293,36 @@ export class AccountController extends BaseController {
       await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry);
       await store.updateAccountLastSync(req.user.id, req.params.id);
 
-      // Auto-provision management key in background if none exists yet.
-      // Fire-and-forget: OTP response is already sent; provisioning can take up to 30s (Playwright path).
+      // OTP sessions are SHORT-LIVED (1 min). Must provision SYNCHRONOUSLY before session expires.
       const userId = req.user.id;
       const accountId = req.params.id;
       let autoProvision = 'skipped';
+      let provisionResult = null;
       try {
         const acct = await store.getAccountWithKey(userId, accountId);
         if (!acct.managementKey) {
           autoProvision = 'started';
-          setImmediate(async () => {
-            try {
-              const result = await dashboardApi.createManagementKey(userId, accountId);
-              if (result?.key) {
-                logger.info(`[ACCOUNT] Auto-provisioned management key after OTP (account=${accountId})`);
-              } else {
-                logger.warn(`[ACCOUNT] Auto-provision after OTP got no key (account=${accountId}): ${result?.message || 'unknown'}`);
-              }
-            } catch (provErr) {
-              logger.warn(`[ACCOUNT] Auto-provision after OTP failed (account=${accountId}): ${provErr.message}`);
-            }
-          });
+          // SYNCHRONOUS - OTP sessions expire too fast for background processing
+          provisionResult = await dashboardApi.createManagementKey(userId, accountId);
+          if (provisionResult?.key) {
+            autoProvision = 'completed';
+            logger.info(`[ACCOUNT] Auto-provisioned management key after OTP (account=${accountId})`);
+          } else {
+            autoProvision = 'failed';
+            logger.warn(`[ACCOUNT] Auto-provision after OTP got no key (account=${accountId}): ${provisionResult?.message || 'unknown'}`);
+          }
         }
       } catch (checkErr) {
-        logger.warn(`[ACCOUNT] Auto-provision pre-check failed (account=${accountId}): ${checkErr.message}`);
+        autoProvision = 'error';
+        logger.warn(`[ACCOUNT] Auto-provision after OTP failed (account=${accountId}): ${checkErr.message}`);
       }
 
-      return this.success(res, { sessionExpiry: session.sessionExpiry, status: 'active', autoProvision });
+      return this.success(res, { 
+        sessionExpiry: session.sessionExpiry, 
+        status: 'active', 
+        autoProvision,
+        managementKey: provisionResult?.key ? true : false
+      });
     } catch (err) {
       logger.warn(`[ACCOUNT] verifyOTP failed (account=${req.params.id}): ${err.message}`);
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());

@@ -15,69 +15,72 @@ import https from 'node:https';
 import { URL } from 'node:url';
 import { USER_AGENT, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
 import { logger } from './logger.js';
-/**
- * Validates an entire cookie jar object for security compliance.
- * @param {object} jar - Cookie jar object {name: value}
- * @returns {{valid: boolean, jar: object, errors: string[]}} Validation result
- */
+
+// =============================================================================
+// COOKIE SECURITY LIMITS (minimal defaults)
+// =============================================================================
+const COOKIE_LIMITS = {
+  MAX_COOKIE_NAME_LENGTH: 128,
+  MAX_COOKIE_VALUE_LENGTH: 4096,
+  MAX_TOTAL_HEADER_SIZE: 8192,
+  MAX_COOKIE_COUNT: 50,
+};
+
+function isValidCookieName(name) {
+  if (!name || typeof name !== 'string') return false;
+  if (name.length === 0 || name.length > COOKIE_LIMITS.MAX_COOKIE_NAME_LENGTH) return false;
+  const validToken = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
+  return validToken.test(name);
+}
+
+function encodeCookieValue(value) {
+  if (value == null) return '';
+  const str = String(value);
+  if (str.length > COOKIE_LIMITS.MAX_COOKIE_VALUE_LENGTH) return null;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const code = str.charCodeAt(i);
+    if ((code <= 0x1F && code !== 0x09) || code === 0x7F || char === ';' || char === '\n' || char === '\r' || code === 0x00) {
+      return null;
+    }
+  }
+  return str;
+}
+
 function validateCookieJar(jar) {
   const errors = [];
   const validatedJar = {};
-  
   if (!jar || typeof jar !== 'object') {
-    errors.push('Invalid jar: not an object');
-    return { valid: false, jar: {}, errors };
+    return { valid: true, jar: {}, errors: [] };
   }
-  
-  const entries = Object.entries(jar);
-  
-  if (entries.length > COOKIE_LIMITS.MAX_COOKIE_COUNT) {
-    errors.push(`Too many cookies (${entries.length} > ${COOKIE_LIMITS.MAX_COOKIE_COUNT})`);
-    return { valid: false, jar: {}, errors };
-  }
-  
-  for (const [name, value] of entries) {
-    // Validate name
+  for (const [name, value] of Object.entries(jar)) {
     if (!isValidCookieName(name)) {
-      errors.push(`Invalid cookie name: "${name.slice(0, 32)}"`);
+      errors.push(`Invalid name: ${name.slice(0, 20)}`);
       continue;
     }
-    
-    // Validate/encode value
-    const encodedValue = encodeCookieValue(value);
-    if (encodedValue === null) {
-      errors.push(`Invalid cookie value for "${name}": contains dangerous characters`);
+    const encoded = encodeCookieValue(value);
+    if (encoded === null) {
+      errors.push(`Invalid value: ${name}`);
       continue;
     }
-    
-    validatedJar[name] = encodedValue;
+    validatedJar[name] = encoded;
   }
-  
-  const valid = errors.length === 0 || Object.keys(validatedJar).length > 0;
-  return { valid, jar: validatedJar, errors };
+  return { valid: errors.length === 0, jar: validatedJar, errors };
 }
-/**
- * Calculates total size of serialized cookie header for size limit checking.
- * @param {string} cookieHeader - The serialized cookie string
- * @returns {number} Byte length
- */
+
 function getCookieHeaderSize(cookieHeader) {
   if (!cookieHeader) return 0;
   return Buffer.byteLength(cookieHeader, 'utf8');
 }
-/**
- * Validates that serialized cookie header does not exceed size limits.
- * @param {string} cookieHeader - The serialized cookie string
- * @returns {{valid: boolean, size: number}} Validation result
- */
+
 function validateCookieHeaderSize(cookieHeader) {
   const size = getCookieHeaderSize(cookieHeader);
   if (size > COOKIE_LIMITS.MAX_TOTAL_HEADER_SIZE) {
-    logger.warn(`[COOKIE_SECURITY] Cookie header size exceeds limit (${size} > ${COOKIE_LIMITS.MAX_TOTAL_HEADER_SIZE})`);
     return { valid: false, size };
   }
   return { valid: true, size };
 }
+
 // =============================================================================
 /** Thrown when password first factor succeeds but Clerk requires a second factor (e.g. TOTP). */
 export class NeedSecondFactorError extends Error {
@@ -822,14 +825,18 @@ function logClerkDebugSignInSessionHints(label, result) {
  * @param {{ cookieClient?: string, extraHeaders?: Record<string, string>, body?: string }} opts
  */
 function clerkHttpsJson(method, pathAndQuery, opts = {}) {
-  const { cookieClient, extraHeaders = {}, body } = opts;
+  const { cookieClient, sessionCookie, extraHeaders = {}, body } = opts;
   const url = new URL(pathAndQuery.replace(/^\//, ''), `${CLERK_BASE}/`);
   const headers = {
     'User-Agent': USER_AGENT,
     ...extraHeaders,
   };
   const deviceCookie = cookieClient ? clerkFapiDeviceCookieHeader(cookieClient) : '';
-  if (deviceCookie) headers['Cookie'] = deviceCookie;
+  // Include session cookie for refresh (even if expired - Clerk uses it to identify the session)
+  const cookieHeader = sessionCookie 
+    ? `__session=${sessionCookie}${deviceCookie ? `; ${deviceCookie}` : ''}`
+    : deviceCookie;
+  if (cookieHeader) headers['Cookie'] = cookieHeader;
   const bodyStr = body != null ? body : undefined;
   if (bodyStr !== undefined) {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
@@ -1133,27 +1140,31 @@ const GET_CLIENT_RETRY_MS_OTP = 500;
 
 /**
  * GET /v1/client with optional retries; merges __client from Set-Cookie; extracts __session or embedded JWT.
+ * @param {string} clientCookie - The __client cookie
+ * @param {string} [sessionCookie] - Optional __session cookie (needed for refresh even if expired)
+ * @param {{ debugPhase?: string, maxAttempts?: number, retryMs?: number }} [opts]
  * @returns {{ sessionCookie, clientCookie, sessionExpiry, setCookieLines } | null}
  */
-async function clerkGetClientSession(clientCookie, { debugPhase = 'client', maxAttempts = 1, retryMs = 150 } = {}) {
+async function clerkGetClientSession(clientCookie, sessionCookie, { debugPhase = 'client', maxAttempts = 1, retryMs = 150 } = {}) {
   let cc = clientCookie;
   let lastSetCookieLines = [];
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const { statusCode, data, setCookieLines } = await clerkHttpsJson('GET', 'client?_clerk_js_version=5.0.0', {
       cookieClient: cc,
-    extraHeaders: {
-      Origin: CLERK_ORIGIN,
-      Referer: CLERK_REFERER,
-    },
+      sessionCookie, // Pass session for refresh
+      extraHeaders: {
+        Origin: CLERK_ORIGIN,
+        Referer: CLERK_REFERER,
+      },
     });
     logClerkDebugGetClient(`${debugPhase} attempt ${attempt}/${maxAttempts}`, { statusCode, data, setCookieLines });
     logClerkDebugSignInSessionHints(`${debugPhase} GET /client`, data.response || data.client?.sign_in);
 
     lastSetCookieLines = setCookieLines || [];
     cc = clientCookieAfterSetCookieLines(cc, setCookieLines);
-    let sessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
-    if (!sessionCookie) sessionCookie = sessionJwtFromClerkClientPayload(data);
-    if (sessionCookie) return { sessionCookie, clientCookie: cc, sessionExpiry: getJwtExpiry(sessionCookie), setCookieLines: lastSetCookieLines };
+    let newSessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
+    if (!newSessionCookie) newSessionCookie = sessionJwtFromClerkClientPayload(data);
+    if (newSessionCookie) return { sessionCookie: newSessionCookie, clientCookie: cc, sessionExpiry: getJwtExpiry(newSessionCookie), setCookieLines: lastSetCookieLines };
     if (attempt < maxAttempts) await sleepMs(retryMs);
   }
   return null;
@@ -1360,15 +1371,17 @@ export async function completeSecondFactor(signInId, totpCode, clientCookie) {
 }
 
 /**
- * Refresh a session using the existing __client cookie.
+ * Refresh a session using the existing __client cookie and (optionally) expired __session.
  * Avoids a full re-login if the session has expired but client cookie is still valid.
+ * The expired __session is used by Clerk to identify which session to refresh.
  *
  * @param {string} clientCookie
+ * @param {string} [sessionCookie] - Optional expired __session cookie (highly recommended for refresh)
  * @returns {{ sessionCookie, clientCookie, sessionExpiry } | null}
  */
-export async function refreshSession(clientCookie) {
+export async function refreshSession(clientCookie, sessionCookie) {
   try {
-    return await clerkGetClientSession(clientCookie, {
+    return await clerkGetClientSession(clientCookie, sessionCookie, {
       debugPhase: 'refresh',
       maxAttempts: GET_CLIENT_MAX_ATTEMPTS,
       retryMs: GET_CLIENT_RETRY_MS,
@@ -1394,7 +1407,9 @@ export function isSessionValid(sessionExpiry) {
   if (!sessionExpiry) return false;
   const expiry = new Date(sessionExpiry).getTime();
   const now = Date.now();
-  return expiry - now > SESSION_EXPIRING_SOON_MS;
+  // Session is valid if it has ANY time remaining (not just >10 min)
+  // The SESSION_EXPIRING_SOON_MS threshold is for UI warnings, not validity
+  return expiry > now;
 }
 
 /**

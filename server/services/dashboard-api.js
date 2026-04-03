@@ -358,6 +358,54 @@ async function captureProvisionDebugArtifacts(page, accountId) {
   }
 }
 
+/**
+ * Get a fresh JWT from Clerk /client endpoint.
+ * OTP sessions have short-lived JWTs (60s) but the session itself is long-lived.
+ * We need to get a fresh JWT from /client before making API calls.
+ * @param {string} sessionCookie - Current session JWT (may be expired)
+ * @param {string} clientCookie - Client cookie with __client and Cloudflare cookies
+ * @returns {Promise<string|null>} Fresh JWT or null if refresh failed
+ */
+async function getFreshJwt(sessionCookie, clientCookie) {
+  try {
+    const cookieHeader = `__session=${sessionCookie}; ${clientCookie}`;
+    const url = 'https://clerk.openrouter.ai/v1/client?_clerk_js_version=5.0.0';
+    
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Cookie': cookieHeader,
+        'Origin': 'https://openrouter.ai',
+        'Referer': 'https://openrouter.ai/',
+        'User-Agent': USER_AGENT,
+      },
+    });
+    
+    if (!res.ok) {
+      console.error(`[getFreshJwt] /client returned ${res.status}`);
+      return null;
+    }
+    
+    const data = await res.json();
+    const session = data?.response?.sessions?.[0] || data?.client?.sessions?.[0];
+    
+    if (session?.last_active_token?.jwt) {
+      return session.last_active_token.jwt;
+    }
+    
+    // Fallback: try to get JWT from session object itself
+    if (session?.jwt) {
+      return session.jwt;
+    }
+    
+    console.error('[getFreshJwt] No JWT in /client response');
+    return null;
+  } catch (err) {
+    console.error(`[getFreshJwt] Error: ${err.message}`);
+    return null;
+  }
+}
+
 function dashboardHeaders(sessionCookie, clientCookie, extra = {}) {
   const device = clientCookie ? openRouterDashboardDeviceCookies(clientCookie) : '';
   const cookieHeader = `__session=${sessionCookie}${device ? `; ${device}` : ''}`;
@@ -403,7 +451,7 @@ export async function ensureSession(userId, accountId) {
       
       if (expiryMs - nowMs < ONE_HOUR && session.clientCookie) {
         console.log(`[ensureSession] Short-lived session detected (${Math.round((expiryMs - nowMs)/1000)}s), attempting refresh`);
-        const refreshed = await refreshSession(session.clientCookie);
+        const refreshed = await refreshSession(session.clientCookie, session.sessionCookie);
         if (refreshed) {
           const refreshedExpiryMs = new Date(refreshed.sessionExpiry).getTime();
           if (refreshedExpiryMs - nowMs > ONE_HOUR) {
@@ -435,7 +483,7 @@ export async function ensureSession(userId, accountId) {
 
   // Try to refresh if CF cookies need refresh OR we have a client cookie but no valid session
   if (session.clientCookie) {
-    const refreshed = await refreshSession(session.clientCookie);
+    const refreshed = await refreshSession(session.clientCookie, session.sessionCookie);
     if (refreshed) {
       const cc = refreshed.clientCookie ?? session.clientCookie;
       // Extract and merge new CF cookie expirations from the refresh response
@@ -889,12 +937,20 @@ function extractHtmlErrorInfo(html) {
 
 /** Headers merged after defaults; use to override Referer per surface (e.g. redeem vs management keys). */
 async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrides = {}) {
+  // Get fresh JWT before making tRPC call - OTP sessions have 60s JWTs
+  const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+  const jwtToUse = freshJwt || sessionCookie; // Fallback to original if refresh failed
+  
+  if (provisionStepLogEnabled()) {
+    console.error(`[trpcCall] Using ${freshJwt ? 'fresh' : 'original'} JWT for route ${route}`);
+  }
+  
   const url = `${OR_BASE}/api/trpc/${route}?batch=1`;
   const body = JSON.stringify({ '0': { json: input } });
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: dashboardHeaders(sessionCookie, clientCookie, headerOverrides),
+    headers: dashboardHeaders(jwtToUse, clientCookie, headerOverrides),
     body,
   });
 
@@ -1177,6 +1233,83 @@ function shouldAbortProvisioning(err) {
   return false;
 }
 
+/**
+ * Try to create management key via REST API using session JWT as Bearer token.
+ * Fallback when tRPC fails with HTML responses.
+ * @param {string} sessionCookie - Session JWT
+ * @param {string} clientCookie - Client cookies
+ * @param {string} keyName - Name for the new key
+ * @returns {Promise<{key?: string, error?: string}>}
+ */
+async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
+  try {
+    // Get fresh JWT first
+    const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+    const jwtToUse = freshJwt || sessionCookie;
+    
+    // Try various REST endpoints that might work
+    const endpoints = [
+      { url: `${OR_BASE}/api/v1/management-keys`, method: 'POST', body: { name: keyName } },
+      { url: `${OR_BASE}/api/v1/keys`, method: 'POST', body: { name: keyName, type: 'management' } },
+      { url: `${OR_BASE}/api/management/keys`, method: 'POST', body: { name: keyName } },
+      { url: `${OR_BASE}/api/keys/management`, method: 'POST', body: { name: keyName } },
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.error(`[tryRestApiCreateKey] Trying ${endpoint.method} ${endpoint.url}`);
+        
+        const res = await fetch(endpoint.url, {
+          method: endpoint.method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToUse}`,
+            'Cookie': clientCookie,
+            'Origin': OR_ORIGIN,
+            'User-Agent': USER_AGENT,
+          },
+          body: JSON.stringify(endpoint.body),
+        });
+        
+        if (!res.ok) {
+          console.error(`[tryRestApiCreateKey] ${endpoint.url} returned ${res.status}`);
+          continue;
+        }
+        
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          console.error(`[tryRestApiCreateKey] ${endpoint.url} returned non-JSON: ${contentType}`);
+          continue;
+        }
+        
+        const data = await res.json();
+        
+        // Look for key in response
+        const key =
+          data?.key ??
+          data?.managementKey ??
+          data?.apiKey ??
+          data?.secret ??
+          data?.token ??
+          data?.data?.key ??
+          data?.data?.managementKey;
+        
+        if (key && key.startsWith('sk-or-v1-')) {
+          console.error(`[tryRestApiCreateKey] Success with ${endpoint.url}`);
+          return { key };
+        }
+      } catch (err) {
+        console.error(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
+      }
+    }
+    
+    return { error: 'All REST endpoints failed' };
+  } catch (err) {
+    console.error(`[tryRestApiCreateKey] Fatal error: ${err.message}`);
+    return { error: err.message };
+  }
+}
+
 export async function createManagementKey(userId, accountId, keyName = 'Hydra Auto Key') {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
   logProvisionOpenRouterBase(accountId, sessionCookie);
@@ -1274,7 +1407,19 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   }
 
   console.error(
-    `[dashboard-api] All tRPC routes exhausted, falling back to browser UI automation (Chromium). Last error: ${lastTrpcError?.message || 'none'}`,
+    `[dashboard-api] All tRPC routes exhausted, trying REST API fallback. Last error: ${lastTrpcError?.message || 'none'}`,
+  );
+
+  // Try REST API with session JWT as Bearer token
+  const restResult = await tryRestApiCreateKey(sessionCookie, clientCookie, keyName);
+  if (restResult?.key) {
+    console.error(`[dashboard-api] Success via REST API`);
+    await persistProvisionedManagementKey(userId, accountId, restResult.key, 'rest-api');
+    return { key: restResult.key, source: 'rest-api' };
+  }
+
+  console.error(
+    `[dashboard-api] REST API failed, falling back to browser UI automation (Chromium).`,
   );
 
   if (config.HYDRA_PROVISION_SERVER_ACTION_REPLAY) {
@@ -1293,11 +1438,19 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
 
 /** H2: Replay vault session + Clerk device cookies on openrouter.ai. Third-party cookies (e.g. CF) are not in the vault — if tRPC returns 403, re-login in Hydra to refresh. */
 async function playwrightCookiesForOpenRouter(sessionCookie, clientCookie) {
+  // Get fresh JWT before setting cookies - OTP sessions have short-lived JWTs (60s)
+  const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+  const jwtToUse = freshJwt || sessionCookie;
+  
+  if (freshJwt && provisionStepLogEnabled()) {
+    console.error(`[playwrightCookiesForOpenRouter] Using fresh JWT for session`);
+  }
+  
   const base = openRouterPlaywrightDeviceCookies(clientCookie).map((c) => ({
     ...c,
     domain: OR_HOSTNAME,
   }));
-  return [{ name: '__session', value: sessionCookie, domain: OR_HOSTNAME, path: '/' }, ...base];
+  return [{ name: '__session', value: jwtToUse, domain: OR_HOSTNAME, path: '/' }, ...base];
 }
 
 /**

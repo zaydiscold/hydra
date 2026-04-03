@@ -82,19 +82,91 @@ async function launchSignupFlow(task) {
       taskSupervisor.attachResources(task.taskId, { browser, context, page });
 
       taskSupervisor.updateTask(task.taskId, { status: 'navigating_signup' });
-      await page.goto(`${OR_BASE}/login?intent=signup`, {
-        waitUntil: 'networkidle',
+      // Use /sign-up directly (OpenRouter changed from /login?intent=signup)
+      await page.goto(`${OR_BASE}/sign-up`, {
+        waitUntil: 'domcontentloaded',
         timeout: STARTUP_TIMEOUT_MS,
       });
+      
+      // Wait for Next.js/React to hydrate and Clerk to render
+      taskSupervisor.updateTask(task.taskId, { status: 'waiting_for_page_hydrate' });
+      await page.waitForTimeout(3000);
+      
+      // Wait for any form element to appear
+      await page.waitForFunction(() => {
+        const hasInput = document.querySelector('input[type="email"], input[name="identifier"], input[name="emailAddress"], .cl-formFieldInput');
+        const hasButton = document.querySelector('button[type="submit"], button.cl-formButtonPrimary');
+        return hasInput || hasButton;
+      }, { timeout: STARTUP_TIMEOUT_MS });
 
       taskSupervisor.updateTask(task.taskId, { status: 'entering_email' });
-      const emailInput = page.locator('input[type="email"], input[name="emailAddress"]').first();
-      await emailInput.waitFor({ state: 'visible', timeout: STARTUP_TIMEOUT_MS });
+      
+      // Try multiple email input selectors (OpenRouter/Clerk may vary)
+      const emailSelectors = [
+        'input[type="email"]',
+        'input[name="emailAddress"]',
+        'input[name="identifier"]',
+        'input[id*="email" i]',
+        'input[placeholder*="email" i]',
+        'input[autocomplete="email"]',
+        '.cl-formFieldInput[type="email"]',
+        'input[class*="email" i]',
+      ];
+      
+      let emailInput = null;
+      for (const selector of emailSelectors) {
+        const locator = page.locator(selector).first();
+        try {
+          await locator.waitFor({ state: 'visible', timeout: 5000 });
+          emailInput = locator;
+          logger.info(`[Account Generator] Found email input using: ${selector}`);
+          break;
+        } catch (e) {
+          // Try next selector
+        }
+      }
+      
+      if (!emailInput) {
+        // Dump page HTML for debugging
+        const html = await page.content().catch(() => 'failed to get HTML');
+        logger.error(`[Account Generator] Could not find email input. Page HTML snippet: ${html.slice(0, 2000)}`);
+        throw new Error('Could not find email input field - page may have changed');
+      }
+      
       await emailInput.fill(task.metadata.email);
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1500);
 
-      const continueBtn = page.locator('button:has-text("Continue"), button[type="submit"], button.cl-formButtonPrimary').first();
-      await continueBtn.click();
+      // Try multiple continue button selectors
+      const continueSelectors = [
+        'button:has-text("Continue")',
+        'button[type="submit"]',
+        'button.cl-formButtonPrimary',
+        'button:has-text("Sign up")',
+        'button:has-text("Next")',
+        'button.cl-button',
+        'button[class*="primary" i]',
+      ];
+      
+      let clicked = false;
+      for (const selector of continueSelectors) {
+        const btn = page.locator(selector).first();
+        try {
+          if (await btn.isVisible({ timeout: 2000 })) {
+            await btn.click();
+            logger.info(`[Account Generator] Clicked continue using: ${selector}`);
+            clicked = true;
+            break;
+          }
+        } catch (e) {
+          // Try next
+        }
+      }
+      
+      if (!clicked) {
+        // Try pressing Enter as fallback
+        await emailInput.press('Enter');
+        logger.info('[Account Generator] Used Enter key fallback');
+      }
 
       taskSupervisor.updateTask(task.taskId, { status: 'waiting_for_otp_screen' });
       await page.waitForFunction(() => {
@@ -177,8 +249,8 @@ async function finalizeOtpSubmission(task, otpCode) {
         // Wait for Clerk propagation (OTP sessions take 2-4 seconds to propagate)
         await new Promise(r => setTimeout(r, 3000));
         
-        // Try to refresh using the client cookie to get a proper session
-        const refreshed = await refreshSession(allDeviceCookies);
+        // Try to refresh using the client cookie AND expired session to get a proper session
+        const refreshed = await refreshSession(allDeviceCookies, sessionCookie);
         if (refreshed && refreshed.sessionCookie) {
           const refreshedExpiryMs = new Date(refreshed.sessionExpiry).getTime();
           if (refreshedExpiryMs - nowMs > ONE_HOUR) {
