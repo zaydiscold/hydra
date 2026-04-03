@@ -5,7 +5,7 @@ import * as dashboardApi from './dashboard-api.js';
 import { logger } from './logger.js';
 import { taskSupervisor } from './task-supervisor.js';
 import { USER_AGENT, OR_BASE } from '../config.js';
-import { getJwtExpiry, openRouterDashboardDeviceCookies } from './clerk-auth.js';
+import { getJwtExpiry, openRouterDashboardDeviceCookies, refreshSession } from './clerk-auth.js';
 
 const GENERATOR_TTL_MS = 2 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 45 * 1000;
@@ -151,7 +151,7 @@ async function finalizeOtpSubmission(task, otpCode) {
 
       taskSupervisor.updateTask(task.taskId, { status: 'extracting_session' });
       const cookies = await context.cookies('https://openrouter.ai');
-      const sessionCookie = cookies.find(cookie => cookie.name === '__session')?.value;
+      let sessionCookie = cookies.find(cookie => cookie.name === '__session')?.value;
       if (!sessionCookie) throw new Error('Signup succeeded but could not extract __session cookie');
 
       // Build a cookie jar string from all Playwright cookies for proper serialization
@@ -162,6 +162,35 @@ async function finalizeOtpSubmission(task, otpCode) {
 
       // Serialize ALL device cookies (Clerk + Cloudflare) using same logic as clerk-auth.js
       const allDeviceCookies = openRouterDashboardDeviceCookies(cookieJarString);
+
+      // OTP-created sessions can have very short initial expiry (1-5 minutes).
+      // Wait for Clerk propagation and try to get a proper long-lived session.
+      const initialExpiry = getJwtExpiry(sessionCookie);
+      const initialExpiryMs = new Date(initialExpiry).getTime();
+      const nowMs = Date.now();
+      const ONE_HOUR = 60 * 60 * 1000;
+      
+      if (initialExpiryMs - nowMs < ONE_HOUR) {
+        taskSupervisor.updateTask(task.taskId, { status: 'activating_long_lived_session' });
+        logger.info(`[Account Generator] Short-lived session detected (${Math.round((initialExpiryMs - nowMs)/1000)}s), activating long-lived session...`);
+        
+        // Wait for Clerk propagation (OTP sessions take 2-4 seconds to propagate)
+        await new Promise(r => setTimeout(r, 3000));
+        
+        // Try to refresh using the client cookie to get a proper session
+        const refreshed = await refreshSession(allDeviceCookies);
+        if (refreshed && refreshed.sessionCookie) {
+          const refreshedExpiryMs = new Date(refreshed.sessionExpiry).getTime();
+          if (refreshedExpiryMs - nowMs > ONE_HOUR) {
+            logger.info(`[Account Generator] Got long-lived session (${Math.round((refreshedExpiryMs - nowMs)/1000/60)}min)`);
+            sessionCookie = refreshed.sessionCookie;
+          } else {
+            logger.warn(`[Account Generator] Refreshed session still short-lived (${Math.round((refreshedExpiryMs - nowMs)/1000)}s)`);
+          }
+        } else {
+          logger.warn('[Account Generator] Could not refresh to long-lived session');
+        }
+      }
 
       taskSupervisor.updateTask(task.taskId, { status: 'saving_local_profile' });
       const accountAlias = task.metadata.email.split('@')[0];

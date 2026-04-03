@@ -15,88 +15,6 @@ import https from 'node:https';
 import { URL } from 'node:url';
 import { USER_AGENT, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
 import { logger } from './logger.js';
-
-// =============================================================================
-// COOKIE SECURITY VALIDATION
-// =============================================================================
-/** Maximum size limits for cookie security */
-const COOKIE_LIMITS = {
-  MAX_COOKIE_NAME_LENGTH: 128,      // RFC 6265 recommends short names
-  MAX_COOKIE_VALUE_LENGTH: 4096,     // Most browsers limit individual cookies
-  MAX_TOTAL_HEADER_SIZE: 8192,       // Conservative header size limit
-  MAX_COOKIE_COUNT: 50,              // Prevent DoS via cookie flooding
-};
-/**
- * Validates cookie name according to RFC 6265 and security best practices.
- * Allowed: alphanumeric, hyphen, underscore, dot. No control chars, no semicolons.
- * @param {string} name - Cookie name to validate
- * @returns {boolean} True if valid, false otherwise
- */
-function isValidCookieName(name) {
-  if (!name || typeof name !== 'string') return false;
-  if (name.length === 0 || name.length > COOKIE_LIMITS.MAX_COOKIE_NAME_LENGTH) return false;
-  
-  // Check for control characters (0x00-0x1F, 0x7F)
-  for (let i = 0; i < name.length; i++) {
-    const code = name.charCodeAt(i);
-    if (code <= 0x1F || code === 0x7F) return false;
-  }
-  
-  // RFC 6265 token characters + underscore and dot (common extensions)
-  // Allowed: A-Z a-z 0-9 !#$%&'*+-.^_`|~
-  const validToken = /^[A-Za-z0-9!#$%&'*+\-._^`|~]+$/;
-  return validToken.test(name);
-}
-/**
- * Encodes cookie value to prevent header injection attacks.
- * Rejects values containing control chars, semicolons, commas, newlines.
- * @param {string} value - Cookie value to encode/validate
- * @returns {string|null} Encoded value or null if invalid
- */
-function encodeCookieValue(value) {
-  if (value == null) return '';
-  const str = String(value);
-  
-  if (str.length > COOKIE_LIMITS.MAX_COOKIE_VALUE_LENGTH) {
-    logger.warn(`[COOKIE_SECURITY] Cookie value exceeds max length (${str.length} > ${COOKIE_LIMITS.MAX_COOKIE_VALUE_LENGTH})`);
-    return null;
-  }
-  
-  // Check for dangerous characters that could enable header injection
-  // Semicolon: could terminate cookie and start new directive
-  // Newlines (CR/LF): HTTP header injection vectors
-  // Null byte: string termination attacks
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    const code = str.charCodeAt(i);
-    
-    // Reject control characters (0x00-0x1F except tab 0x09), DEL (0x7F)
-    if ((code <= 0x1F && code !== 0x09) || code === 0x7F) {
-      logger.warn(`[COOKIE_SECURITY] Rejecting cookie value with control char (0x${code.toString(16)})`);
-      return null;
-    }
-    
-    // Reject semicolons (could inject new cookie attributes)
-    if (char === ';') {
-      logger.warn('[COOKIE_SECURITY] Rejecting cookie value containing semicolon');
-      return null;
-    }
-    
-    // Reject newlines (HTTP header injection)
-    if (char === '\n' || char === '\r') {
-      logger.warn('[COOKIE_SECURITY] Rejecting cookie value containing newline (CR/LF injection attempt)');
-      return null;
-    }
-    
-    // Reject null bytes
-    if (code === 0x00) {
-      logger.warn('[COOKIE_SECURITY] Rejecting cookie value with null byte');
-      return null;
-    }
-  }
-  
-  return str;
-}
 /**
  * Validates an entire cookie jar object for security compliance.
  * @param {object} jar - Cookie jar object {name: value}
@@ -251,8 +169,8 @@ function parseCloudflareCookiesWithExpiration(setCookieHeaders) {
   return result;
 }
 
-/** Time window before expiration to trigger proactive refresh (15 minutes) */
-export const CF_COOKIE_EXPIRING_SOON_MS = 15 * 60 * 1000;
+/** Time window before expiration to trigger proactive refresh (6 hours) */
+export const CF_COOKIE_EXPIRING_SOON_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Check if Cloudflare cookies in the stored jar are expired or expiring soon.

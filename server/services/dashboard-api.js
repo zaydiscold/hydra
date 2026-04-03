@@ -396,6 +396,30 @@ export async function ensureSession(userId, accountId) {
       session.sessionCookie,
     );
     if (isSessionValid(derivedExpiry)) {
+      // Check if this is a short-lived session (< 1 hour) - try to get a longer one
+      const expiryMs = new Date(derivedExpiry).getTime();
+      const nowMs = Date.now();
+      const ONE_HOUR = 60 * 60 * 1000;
+      
+      if (expiryMs - nowMs < ONE_HOUR && session.clientCookie) {
+        console.log(`[ensureSession] Short-lived session detected (${Math.round((expiryMs - nowMs)/1000)}s), attempting refresh`);
+        const refreshed = await refreshSession(session.clientCookie);
+        if (refreshed) {
+          const refreshedExpiryMs = new Date(refreshed.sessionExpiry).getTime();
+          if (refreshedExpiryMs - nowMs > ONE_HOUR) {
+            console.log(`[ensureSession] Upgraded to long-lived session (${Math.round((refreshedExpiryMs - nowMs)/1000/60)}min)`);
+            await store.updateAccountSession(
+              userId,
+              accountId,
+              refreshed.sessionCookie,
+              refreshed.clientCookie,
+              refreshed.sessionExpiry,
+            );
+            return { sessionCookie: refreshed.sessionCookie, clientCookie: refreshed.clientCookie };
+          }
+        }
+      }
+      
       if (!session.sessionExpiry && derivedExpiry) {
         await store.updateAccountSession(
           userId,
@@ -493,6 +517,17 @@ export async function ensureSession(userId, accountId) {
       }
       throw err;
     }
+  }
+
+  // OTP accounts: session expired and no password - need re-authentication via email code
+  if (account.authMethod === 'otp' || (account.email && !account.password)) {
+    const err = new Error(
+      `Session expired for OTP account ${accountId}. Email verification required. Open the account on the Hydra dashboard and click "Refresh Session" to receive a new verification code.`
+    );
+    err.code = 'OTP_REAUTH_REQUIRED';
+    err.accountId = accountId;
+    err.email = account.email;
+    throw err;
   }
 
   throw new Error(`Session expired for account ${accountId} and no credentials available for re-auth. Please log in again.`);
