@@ -38,8 +38,10 @@ const OR_HOSTNAME = (() => {
   }
 })();
 
-/** Management key material in tRPC JSON or page text (OpenRouter prefix). */
-const MGMT_KEY_RE = /sk-or-mgmt-[A-Za-z0-9_.-]+/;
+/** Management key material in tRPC JSON or page text (OpenRouter prefix).
+ * NOTE: OpenRouter management keys use 'sk-or-v1-' prefix, NOT 'sk-or-mgmt-'
+ */
+const MGMT_KEY_RE = /sk-or-v1-[A-Za-z0-9_.-]+/;
 
 function provisionNetworkLogEnabled() {
   return config.HYDRA_PROVISION_NETWORK_LOG || provisionDebugArtifactsEnabled();
@@ -51,7 +53,7 @@ function truncateForLog(s, max = 2000) {
 }
 
 /**
- * Extract sk-or-mgmt-* from raw tRPC response text: regex first, then JSON batch / result shapes.
+ * Extract sk-or-v1-* (management key) from raw tRPC response text: regex first, then JSON batch / result shapes.
  */
 function findManagementKeyDeep(value, depth = 0) {
   if (depth > 14 || value === null || value === undefined) return null;
@@ -75,7 +77,7 @@ function findManagementKeyDeep(value, depth = 0) {
     value.token ??
     value.management_key ??
     value.api_key;
-  if (typeof direct === 'string' && direct.startsWith('sk-or-mgmt-')) return direct;
+  if (typeof direct === 'string' && direct.startsWith('sk-or-v1-')) return direct;
   for (const v of Object.values(value)) {
     const k = findManagementKeyDeep(v, depth + 1);
     if (k) return k;
@@ -100,7 +102,7 @@ function extractManagementKeyFromResponseBody(body) {
         d.token ??
         d.management_key ??
         d.api_key;
-      return typeof key === 'string' && key.startsWith('sk-or-mgmt-') ? key : null;
+      return typeof key === 'string' && key.startsWith('sk-or-v1-') ? key : null;
     };
     if (Array.isArray(data)) {
       for (const item of data) {
@@ -123,8 +125,8 @@ function extractManagementKeyFromResponseBody(body) {
 }
 
 async function persistProvisionedManagementKey(userId, accountId, key, source = 'unknown') {
-  if (!key || typeof key !== 'string' || !key.startsWith('sk-or-mgmt-')) {
-    const err = new Error('Provisioning returned an invalid management key format');
+  if (!key || typeof key !== 'string' || !key.startsWith('sk-or-v1-')) {
+    const err = new Error('Provisioning returned an invalid management key format (expected sk-or-v1-*)');
     err.code = 'PROVISION_INVALID_KEY_FORMAT';
     err.source = source;
     throw err;
@@ -224,7 +226,7 @@ function redactSensitiveForProvisionLog(s, max = 480) {
 const PROVISION_DEBUG_DIR_BASENAME = 'hydra-provision-debug';
 
 /**
- * Thrown when Hydra exhausts tRPC (and optional hooks) and browser automation without capturing `sk-or-mgmt-…`.
+ * Thrown when Hydra exhausts tRPC (and optional hooks) and browser automation without capturing `sk-or-v1-…`.
  * Match `err.code === 'PROVISION_KEY_NOT_CAPTURED'`. `legacyCode` is a historical API alias only.
  */
 export class ProvisionKeyNotCapturedError extends Error {
@@ -328,9 +330,17 @@ async function captureProvisionDebugArtifacts(page, accountId) {
 
 function dashboardHeaders(sessionCookie, clientCookie, extra = {}) {
   const device = clientCookie ? openRouterDashboardDeviceCookies(clientCookie) : '';
+  const cookieHeader = `__session=${sessionCookie}${device ? `; ${device}` : ''}`;
+
+  // Debug logging: show which cookies are being sent (redacted for security)
+  if (provisionStepLogEnabled()) {
+    const cookieNames = cookieHeader.split(';').map(c => c.split('=')[0].trim()).join(', ');
+    console.error(`[dashboard-api] tRPC cookies sent: ${cookieNames}`);
+  }
+
   return {
     'Content-Type': 'application/json',
-    'Cookie': `__session=${sessionCookie}${device ? `; ${device}` : ''}`,
+    'Cookie': cookieHeader,
     'User-Agent': USER_AGENT,
     'Origin': OR_ORIGIN,
     'Referer': `${OR_ORIGIN}/settings/management-keys`,
@@ -469,7 +479,8 @@ async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrid
   if (contentType.includes('text/html')) {
     const err = new Error(`tRPC route ${route} returned HTML — likely wrong format or auth failed`);
     err.isHtml = true;
-    err.status = res.status;
+    err.httpStatus = res.status;  // Fixed: was err.status, should be err.httpStatus
+    err.status = res.status;      // Keep for backwards compatibility
     throw err;
   }
 
@@ -647,7 +658,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
           result?.api_key;
         if (picked) {
           const key = picked;
-          if (!key.startsWith('sk-or-mgmt-')) {
+          if (!key.startsWith('sk-or-v1-')) {
             throw new Error('tRPC returned a non-management key for management key creation.');
           }
           await persistProvisionedManagementKey(userId, accountId, key, 'trpc-cached');
@@ -692,7 +703,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
           result?.token ??
           result?.management_key ??
           result?.api_key;
-        if (key && key.startsWith('sk-or-mgmt-')) {
+        if (key && key.startsWith('sk-or-v1-')) {
           console.error(`[dashboard-api] Success via tRPC route: ${route}`);
           await store.saveDiscoveredEndpoints({ createManagementKey: { route, discoveredAt: new Date().toISOString() } });
           await persistProvisionedManagementKey(userId, accountId, key, `trpc-${route}`);

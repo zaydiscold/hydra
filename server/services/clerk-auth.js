@@ -51,10 +51,24 @@ function isClerkDeviceCookieName(name) {
   return false;
 }
 
-function mergeDeviceCookiesFromParsed(into, parsed) {
+/** Cloudflare cookies required for openrouter.ai dashboard access (anti-bot/challenge). */
+function isCloudflareCookieName(name) {
+  if (!name || typeof name !== 'string') return false;
+  if (name === '__cf_bm') return true;      // Bot management cookie
+  if (name === '_cfuvid') return true;      // Unique visitor ID
+  if (name === 'cf_clearance') return true;  // Challenge clearance token
+  return false;
+}
+
+/** All device cookies needed for dashboard (Clerk + Cloudflare). */
+function isDashboardDeviceCookieName(name) {
+  return isClerkDeviceCookieName(name) || isCloudflareCookieName(name);
+}
+
+function mergeDeviceCookiesFromParsed(into, parsed, filterFn = isClerkDeviceCookieName) {
   if (!parsed || typeof parsed !== 'object') return into;
   for (const [k, v] of Object.entries(parsed)) {
-    if (!isClerkDeviceCookieName(k)) continue;
+    if (!filterFn(k)) continue;
     const s = v != null ? String(v).trim() : '';
     if (s !== '') into[k] = s;
   }
@@ -83,7 +97,27 @@ export function parseClerkDeviceCookieJar(stored) {
 }
 
 /**
- * Cookie header value for Clerk FAPI (clerk.openrouter.ai): all device cookies, sorted.
+ * Parse ALL device cookies from stored string (Clerk + Cloudflare + any others).
+ * This preserves all cookies needed for dashboard access, not just Clerk ones.
+ * @returns {Record<string, string>}
+ */
+function parseAllDeviceCookies(stored) {
+  const t = stored != null ? String(stored).trim() : '';
+  if (!t || t === 'undefined') return {};
+  const jar = {};
+  for (const part of t.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    const k = part.slice(0, eq).trim();
+    const v = part.slice(eq + 1).trim();
+    // Preserve ALL non-empty cookies except __session (handled separately)
+    if (k && v && k !== '__session') jar[k] = v;
+  }
+  return jar;
+}
+
+/**
+ * Cookie header value for Clerk FAPI (clerk.openrouter.ai): Clerk device cookies only, sorted.
  */
 export function clerkFapiDeviceCookieHeader(stored) {
   const jar = parseClerkDeviceCookieJar(stored);
@@ -94,10 +128,10 @@ export function clerkFapiDeviceCookieHeader(stored) {
 
 /**
  * Device cookie fragment for openrouter.ai dashboard tRPC (after __session).
- * Legacy: a single stored token was sent only as __client_uat.
+ * Includes ALL device cookies: Clerk + Cloudflare (cf_bm, cfuvid, cf_clearance).
  */
 export function openRouterDashboardDeviceCookies(stored) {
-  const jar = parseClerkDeviceCookieJar(stored);
+  const jar = parseAllDeviceCookies(stored);
   const out = [];
   const uat = jar.__client_uat;
   const client = jar.__client;
@@ -106,14 +140,15 @@ export function openRouterDashboardDeviceCookies(stored) {
   else if (legacySingle) out.push(`__client_uat=${client}`);
   if (client && client !== uat) out.push(`__client=${client}`);
   for (const k of Object.keys(jar).sort()) {
-    if (k.startsWith('__client_uat_')) out.push(`${k}=${jar[k]}`);
+    // Include both Clerk cookies AND Cloudflare cookies
+    if (isDashboardDeviceCookieName(k)) out.push(`${k}=${jar[k]}`);
   }
   return out.join('; ');
 }
 
-/** Playwright cookie injection for openrouter.ai */
+/** Playwright cookie injection for openrouter.ai - includes ALL device cookies. */
 export function openRouterPlaywrightDeviceCookies(stored) {
-  const jar = parseClerkDeviceCookieJar(stored);
+  const jar = parseAllDeviceCookies(stored);
   const list = [];
   const uat = jar.__client_uat ?? (Object.keys(jar).length === 1 && jar.__client ? jar.__client : null);
   if (uat) list.push({ name: '__client_uat', value: uat, domain: 'openrouter.ai', path: '/' });
@@ -121,7 +156,8 @@ export function openRouterPlaywrightDeviceCookies(stored) {
     list.push({ name: '__client', value: jar.__client, domain: 'openrouter.ai', path: '/' });
   }
   for (const k of Object.keys(jar)) {
-    if (k.startsWith('__client_uat_')) {
+    // Include ALL dashboard cookies (Clerk + Cloudflare)
+    if (isDashboardDeviceCookieName(k)) {
       list.push({ name: k, value: jar[k], domain: 'openrouter.ai', path: '/' });
     }
   }
@@ -156,12 +192,25 @@ function getSetCookieHeaderLines(headers) {
   return raw ? [raw] : [];
 }
 
-/** Merge Clerk device cookies from Set-Cookie into stored jar (survives OTP / touch). */
+/** Merge ALL device cookies from Set-Cookie into stored jar (survives OTP / touch). */
 function clientCookieAfterSetCookieLines(prior, setCookieLines) {
-  const jar = parseClerkDeviceCookieJar(prior);
-  const merged = mergeDeviceJar(jar, setCookieLines);
-  const s = serializeClerkDeviceCookieJar(merged);
+  // Use parseAllDeviceCookies to preserve ALL cookies (Clerk + Cloudflare)
+  const jar = parseAllDeviceCookies(prior);
+  // Merge using dashboard filter to include Cloudflare cookies from Set-Cookie
+  const merged = mergeDeviceJar(jar, setCookieLines, isDashboardDeviceCookieName);
+  const s = serializeAllDeviceCookies(merged);
   return s || prior;
+}
+
+/**
+ * Serialize all device cookies for storage (Clerk + Cloudflare).
+ * Single __client only stays legacy string; multiple keys → `a=b; c=d`.
+ */
+function serializeAllDeviceCookies(jar) {
+  const keys = Object.keys(jar).filter((k) => isDashboardDeviceCookieName(k) && jar[k]).sort();
+  if (!keys.length) return '';
+  if (keys.length === 1 && keys[0] === '__client') return jar.__client;
+  return keys.map((k) => `${k}=${jar[k]}`).join('; ');
 }
 
 function sessionCookieFromSetCookieLines(setCookieLines) {

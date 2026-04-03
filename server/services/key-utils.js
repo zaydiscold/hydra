@@ -1,9 +1,8 @@
 export function classifyOpenRouterKey(key) {
   if (!key || typeof key !== 'string') return 'unknown';
   const trimmed = key.trim();
-  if (trimmed.startsWith('sk-or-mgmt-')) return 'management';
-  if (trimmed.startsWith('sk-or-v1-')) return 'standard';
-  if (trimmed.startsWith('sk-or-')) return 'unknown';
+  if (trimmed.startsWith('sk-or-v1-')) return 'management';
+  if (trimmed.startsWith('sk-or-')) return 'standard';
   return 'unknown';
 }
 
