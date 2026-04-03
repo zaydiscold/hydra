@@ -140,6 +140,8 @@ export function openRouterDashboardDeviceCookies(stored) {
   else if (legacySingle) out.push(`__client_uat=${client}`);
   if (client && client !== uat) out.push(`__client=${client}`);
   for (const k of Object.keys(jar).sort()) {
+    // Skip already-added Clerk cookies to avoid duplicates
+    if (k === '__client' || k === '__client_uat') continue;
     // Include both Clerk cookies AND Cloudflare cookies
     if (isDashboardDeviceCookieName(k)) out.push(`${k}=${jar[k]}`);
   }
@@ -156,6 +158,8 @@ export function openRouterPlaywrightDeviceCookies(stored) {
     list.push({ name: '__client', value: jar.__client, domain: 'openrouter.ai', path: '/' });
   }
   for (const k of Object.keys(jar)) {
+    // Skip already-added Clerk cookies to avoid duplicates
+    if (k === '__client' || k === '__client_uat') continue;
     // Include ALL dashboard cookies (Clerk + Cloudflare)
     if (isDashboardDeviceCookieName(k)) {
       list.push({ name: k, value: jar[k], domain: 'openrouter.ai', path: '/' });
@@ -164,9 +168,9 @@ export function openRouterPlaywrightDeviceCookies(stored) {
   return list;
 }
 
-function mergeDeviceJar(priorJar, lines) {
+function mergeDeviceJar(priorJar, lines, filterFn = isClerkDeviceCookieName) {
   const next = { ...priorJar };
-  mergeDeviceCookiesFromParsed(next, parseCookies(lines));
+  mergeDeviceCookiesFromParsed(next, parseCookies(lines), filterFn);
   return next;
 }
 
