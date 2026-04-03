@@ -1,10 +1,28 @@
 const API = '/api';
 
-/** Appends server-provided Clerk debug hint (when CLERK_DEBUG_OTP=1) for inline UI copy. */
+/** Formats structured `details` from provision and similar API errors (no secrets). */
+export function formatProvisionDetailsAppendix(details) {
+  if (!details || typeof details !== 'object') return '';
+  const lines = [];
+  if (details.stage) lines.push(`Stage: ${details.stage}`);
+  if (details.connectMode) lines.push(`Browser: ${details.connectMode}`);
+  if (details.trpcLastError) lines.push(`Last tRPC (HTTP phase): ${details.trpcLastError}`);
+  if (details.trpcBusinessMessage) lines.push(`Dashboard mutation error: ${details.trpcBusinessMessage}`);
+  if (details.createClicked != null) lines.push(`Create control clicked: ${details.createClicked}`);
+  if (details.fallbacksExhausted) lines.push(`Fallbacks: ${details.fallbacksExhausted}`);
+  if (details.debugDir) lines.push(`Artifacts: ${details.debugDir}`);
+  return lines.length ? lines.join('\n') : '';
+}
+
+/** Appends server `hint`, Clerk debug hint (CLERK_DEBUG_OTP), and structured `details`. */
 export function formatApiErrorMessage(err) {
   if (!err?.message) return 'Request failed';
-  const hint = err.clerkDebugHint;
-  return hint ? `${err.message}\n\n${hint}` : err.message;
+  const parts = [err.message];
+  if (err.hint) parts.push(err.hint);
+  if (err.clerkDebugHint) parts.push(err.clerkDebugHint);
+  const detailBlock = formatProvisionDetailsAppendix(err.details);
+  if (detailBlock) parts.push(detailBlock);
+  return parts.join('\n\n');
 }
 
 /** Shown when fetch fails in Vite dev — starts API + UI together. */
@@ -73,6 +91,10 @@ async function request(path, options = {}) {
       const msg = data?.error || `Request failed (${res.status})`;
       const err = new Error(msg);
       if (data?.code) err.code = data.code;
+      if (data?.hint) err.hint = data.hint;
+      if (data?.details != null) err.details = data.details;
+      if (data?.legacyCode) err.legacyCode = data.legacyCode;
+      if (data?.debugDir) err.debugDir = data.debugDir;
       if (data?.clerkDebugOtp && data?.clerkDebugHint) {
         err.clerkDebugHint = data.clerkDebugHint;
       }

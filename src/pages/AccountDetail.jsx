@@ -183,7 +183,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     } finally {
       setLoading(false);
     }
-  }, [resolvedAccountId, addToast]);
+  }, [resolvedAccountId]);
 
   const fetchMeta = useCallback(async () => {
     if (!resolvedAccountId) return;
@@ -293,7 +293,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
       await fetchMeta();
       await fetchSnapshot();
     } catch (err) {
-      addToast(`Provision failed: ${err.message}`, 'error');
+      addToast(`Provision failed: ${api.formatApiErrorMessage(err)}`, 'error');
     }
     setActionLoading((p) => ({ ...p, __provision: false }));
   }

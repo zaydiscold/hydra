@@ -31,12 +31,24 @@ const configSchema = z.object({
   CLERK_REFERER: z.string().url().default('https://openrouter.ai/sign-in'),
   /** Run server-side Playwright with a visible browser (local debugging). */
   HYDRA_PLAYWRIGHT_HEADED: z.boolean().default(false),
+  /** Optional Playwright browser channel, e.g. `chrome` for system Chrome (less bot friction than bundled Chromium). */
+  HYDRA_PLAYWRIGHT_CHANNEL: z.string().min(1).optional(),
+  /**
+   * Chrome DevTools endpoint for Playwright `connectOverCDP` (e.g. `http://127.0.0.1:9222` or the `webSocketDebuggerUrl` from `/json/version`).
+   * When set, Hydra does not launch bundled Chromium for provision.
+   */
+  HYDRA_PLAYWRIGHT_CDP_ENDPOINT: z.string().min(1).optional(),
   /** Save screenshots on management-key provision failure (also on in development). */
   HYDRA_PROVISION_DEBUG: z.boolean().default(false),
   /** Log OpenRouter POST URLs + postData + status during management-key Playwright (no response bodies). */
   HYDRA_PROVISION_NETWORK_LOG: z.boolean().default(false),
   /** Extra step-level stderr logs during management-key Playwright (goto, click, fill milestones). */
   HYDRA_PROVISION_VERBOSE: z.boolean().default(false),
+  /**
+   * Reserved: when OpenRouter uses Server Actions for create, operators may enable after capturing URL/body.
+   * Currently logs a pointer to docs only — no replay is implemented until capture-derived wiring exists.
+   */
+  HYDRA_PROVISION_SERVER_ACTION_REPLAY: z.boolean().default(false),
 });
 
 let parsedConfig;
@@ -57,9 +69,12 @@ try {
     CLERK_ORIGIN: process.env.CLERK_ORIGIN,
     CLERK_REFERER: process.env.CLERK_REFERER,
     HYDRA_PLAYWRIGHT_HEADED: parseBoolean(process.env.HYDRA_PLAYWRIGHT_HEADED),
+    HYDRA_PLAYWRIGHT_CHANNEL: process.env.HYDRA_PLAYWRIGHT_CHANNEL?.trim() || undefined,
+    HYDRA_PLAYWRIGHT_CDP_ENDPOINT: process.env.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim() || undefined,
     HYDRA_PROVISION_DEBUG: parseBoolean(process.env.HYDRA_PROVISION_DEBUG),
     HYDRA_PROVISION_NETWORK_LOG: parseBoolean(process.env.HYDRA_PROVISION_NETWORK_LOG),
     HYDRA_PROVISION_VERBOSE: parseBoolean(process.env.HYDRA_PROVISION_VERBOSE),
+    HYDRA_PROVISION_SERVER_ACTION_REPLAY: parseBoolean(process.env.HYDRA_PROVISION_SERVER_ACTION_REPLAY),
   });
 } catch (err) {
   console.error('Invalid environment variables:', err.issues ?? err.errors ?? err);

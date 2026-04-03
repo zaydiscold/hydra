@@ -78,4 +78,4 @@ The backend is a Node.js Express server that manages the local SQLite database v
 - `npm start` uses `launch.js` to bootstrap the production-style server flow and serves the built client from `dist/`.
 - For a deeper explanation of how routes, services, proxying, and aggregation interact, read `ARCHITECTURE_DEEP_DIVE.md`.
 - For CLIProxyAPI / LiteLLM comparison, sidecar ports, and gateway synthesis, read `CLIPROXYAPI_GATEWAY_SYNTHESIS.md`.
-- For management-key provisioning (tRPC vs server Playwright, operator capture playbook, env debug flags), read `MANAGEMENT_KEY_PROVISION_AUTOMATION.md`.
+- For management-key provisioning (tRPC vs server Playwright, operator capture playbook, env debug flags, **live curl verification gate**), read `MANAGEMENT_KEY_PROVISION_AUTOMATION.md`.

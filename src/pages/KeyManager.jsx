@@ -391,7 +391,7 @@ export default function KeyManager({ addToast }) {
       const row = list?.find((a) => a.id === accountId);
       fetchAccountBalance(row);
     } catch (err) {
-      addToast(`Provision failed: ${err.message}`, 'error');
+      addToast(`Provision failed: ${api.formatApiErrorMessage(err)}`, 'error');
     }
     setProvisioningIds((prev) => {
       const s = new Set(prev);

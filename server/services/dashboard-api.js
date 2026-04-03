@@ -56,7 +56,7 @@ function truncateForLog(s, max = 2000) {
 function findManagementKeyDeep(value, depth = 0) {
   if (depth > 14 || value === null || value === undefined) return null;
   if (typeof value === 'string') {
-    const m = value.match(MGMT_KEY_RE);
+    const m = value.normalize('NFC').match(MGMT_KEY_RE);
     return m ? m[0] : null;
   }
   if (typeof value !== 'object') return null;
@@ -85,6 +85,7 @@ function findManagementKeyDeep(value, depth = 0) {
 
 function extractManagementKeyFromResponseBody(body) {
   if (!body || typeof body !== 'string') return null;
+  body = body.normalize('NFC');
   const reMatch = body.match(MGMT_KEY_RE);
   if (reMatch) return reMatch[0];
   try {
@@ -172,7 +173,7 @@ function provisionDebugArtifactsEnabled() {
 }
 
 function provisionStepLogEnabled() {
-  return config.HYDRA_PROVISION_VERBOSE || config.HYDRA_PROVISION_DEBUG;
+  return config.NODE_ENV === 'development' || config.HYDRA_PROVISION_VERBOSE || config.HYDRA_PROVISION_DEBUG;
 }
 
 function provisionStepLog(accountId, message, extra = undefined) {
@@ -181,11 +182,103 @@ function provisionStepLog(accountId, message, extra = undefined) {
   else console.error(`[dashboard-api] provision[${accountId}] ${message}`);
 }
 
+/** Decode JWT payload (no signature verify) — for OR_BASE vs session sanity checks only. */
+function decodeJwtPayloadUnsafe(jwt) {
+  if (!jwt || typeof jwt !== 'string') return null;
+  try {
+    const parts = jwt.split('.');
+    if (parts.length < 2) return null;
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** H8: Log OR_BASE / origin and warn on hostname drift; log unexpected JWT iss when verbose. */
+function logProvisionOpenRouterBase(accountId, sessionCookie) {
+  provisionStepLog(accountId, 'Provision OR_BASE', { OR_BASE, OR_ORIGIN, OR_HOSTNAME });
+  try {
+    const u = new URL(OR_BASE);
+    if (u.hostname !== 'openrouter.ai' && u.hostname !== 'www.openrouter.ai') {
+      console.warn(
+        `[dashboard-api] OR_BASE hostname is "${u.hostname}" — production OpenRouter is openrouter.ai; wrong OR_BASE breaks cookies and tRPC.`,
+      );
+    }
+  } catch {
+    console.warn('[dashboard-api] OR_BASE is not a valid URL — check .env');
+  }
+  if (!provisionStepLogEnabled()) return;
+  const p = decodeJwtPayloadUnsafe(sessionCookie);
+  if (p && typeof p.iss === 'string' && p.iss && !/openrouter|clerk\.openrouter/i.test(p.iss)) {
+    provisionStepLog(accountId, 'Session JWT iss looks unexpected vs OpenRouter', { iss: p.iss });
+  }
+}
+
 /** Strip key-like material from stderr previews (management + standard key prefixes). */
 function redactSensitiveForProvisionLog(s, max = 480) {
   if (!s || typeof s !== 'string') return '';
   const clipped = s.length > max ? `${s.slice(0, max)}…` : s;
   return clipped.replace(/sk-or-[a-z0-9_.-]{8,}/gi, '[REDACTED]');
+}
+
+const PROVISION_DEBUG_DIR_BASENAME = 'hydra-provision-debug';
+
+/**
+ * Thrown when Hydra exhausts tRPC (and optional hooks) and browser automation without capturing `sk-or-mgmt-…`.
+ * `legacyCode` matches the historical API code for clients that still check `PROVISION_PLAYWRIGHT_EXTRACT`.
+ */
+export class ProvisionKeyNotCapturedError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = 'ProvisionKeyNotCapturedError';
+    this.code = 'PROVISION_KEY_NOT_CAPTURED';
+    /** @deprecated Prefer `code === PROVISION_KEY_NOT_CAPTURED`. */
+    this.legacyCode = 'PROVISION_PLAYWRIGHT_EXTRACT';
+    this.provisionDetails = sanitizeProvisionDetailsForClient(details);
+  }
+}
+
+function sanitizeProvisionDetailsForClient(d) {
+  const out = {
+    stage: d.stage,
+    createClicked: d.createClicked,
+    fallbacksExhausted: d.fallbacksExhausted,
+    debugDir: d.debugDir,
+    connectMode: d.connectMode,
+  };
+  if (d.trpcLastError) {
+    out.trpcLastError = redactSensitiveForProvisionLog(String(d.trpcLastError), 400);
+  }
+  if (d.trpcBusinessMessage) {
+    out.trpcBusinessMessage = redactSensitiveForProvisionLog(String(d.trpcBusinessMessage), 400);
+  }
+  if (d.trpcBusinessCode != null) out.trpcBusinessCode = d.trpcBusinessCode;
+  if (d.trpcLastHttp != null) out.trpcLastHttp = d.trpcLastHttp;
+  if (d.trpcLastCode != null) out.trpcLastCode = d.trpcLastCode;
+  return out;
+}
+
+function summarizeTrpcFailure(err) {
+  if (!err) return {};
+  return {
+    trpcLastError: err.message,
+    trpcLastCode: err.trpcCode,
+    trpcLastHttp: err.httpStatus,
+  };
+}
+
+/**
+ * Placeholder for Next.js Server Action replay when dashboard create no longer hits `/api/trpc/*`.
+ * Enable with HYDRA_PROVISION_SERVER_ACTION_REPLAY=1 after capturing `Next-Action` + body via
+ * `scripts/capture-mgmt-key-network.mjs` — wire the fetch here; until then this always returns null.
+ */
+async function tryManagementKeyServerActionReplay(_sessionCookie, _clientCookie, _keyName) {
+  console.warn(
+    '[dashboard-api] HYDRA_PROVISION_SERVER_ACTION_REPLAY is set but Server Action replay is not implemented yet. ' +
+      'Capture POST /settings/management-keys (and Next-Action headers) with scripts/capture-mgmt-key-network.mjs, ' +
+      'then add a minimal fetch replay in dashboard-api.js — see docs/MANAGEMENT_KEY_PROVISION_AUTOMATION.md',
+  );
+  return null;
 }
 
 async function captureProvisionDebugArtifacts(page, accountId) {
@@ -518,6 +611,7 @@ function shouldAbortProvisioning(err) {
 
 export async function createManagementKey(userId, accountId, keyName = 'Hydra Auto Key') {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
+  logProvisionOpenRouterBase(accountId, sessionCookie);
   const endpoints = await store.getDiscoveredEndpoints();
   const endpoint = endpoints.createManagementKey;
 
@@ -525,6 +619,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     { name: keyName },
     { label: keyName },
     { title: keyName },
+    { keyName },
   ];
 
   if (endpoint) {
@@ -566,6 +661,9 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     'management.createKey',
     'apiKeys.createManagement',
     'apiKeys.createManagementKey',
+    'settings.managementKeys.create',
+    'dashboard.managementKeys.create',
+    'management.managementKeys.create',
   ];
   let lastTrpcError = null;
   for (const route of candidates) {
@@ -602,15 +700,58 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   }
 
   console.error(`[dashboard-api] All tRPC routes exhausted, falling back to Playwright. Last error: ${lastTrpcError?.message || 'none'}`);
-  return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName);
+
+  if (config.HYDRA_PROVISION_SERVER_ACTION_REPLAY) {
+    const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName);
+    if (fromSa) {
+      await persistProvisionedManagementKey(userId, accountId, fromSa, 'server-action-replay');
+      return { key: fromSa, source: 'server-action-replay' };
+    }
+  }
+
+  return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, summarizeTrpcFailure(lastTrpcError));
 }
 
+/** H2: Replay vault session + Clerk device cookies on openrouter.ai. Third-party cookies (e.g. CF) are not in the vault — if tRPC returns 403, re-login in Hydra to refresh. */
 async function playwrightCookiesForOpenRouter(sessionCookie, clientCookie) {
   const base = openRouterPlaywrightDeviceCookies(clientCookie).map((c) => ({
     ...c,
     domain: OR_HOSTNAME,
   }));
   return [{ name: '__session', value: sessionCookie, domain: OR_HOSTNAME, path: '/' }, ...base];
+}
+
+/**
+ * Cookie banners / Headless UI overlays sit in #headlessui-portal-root and intercept clicks on the
+ * main "Create" button (capture + provision both hit this in headless).
+ */
+async function dismissOpenRouterBlockingOverlays(page, accountId) {
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(180);
+  }
+  const dismissButtons = [
+    page.getByRole('button', { name: /accept all cookies/i }),
+    page.getByRole('button', { name: /accept all/i }),
+    page.getByRole('button', { name: /^accept$/i }),
+    page.getByRole('button', { name: /i agree/i }),
+    page.getByRole('button', { name: /^got it$/i }),
+    page.getByRole('button', { name: /^ok$/i }),
+    page.getByRole('button', { name: /^close$/i }),
+    page.getByRole('button', { name: /no thanks/i }),
+    page.locator('#headlessui-portal-root button').filter({ hasText: /accept|agree|got it|close|ok/i }).first(),
+  ];
+  for (const loc of dismissButtons) {
+    try {
+      if (await loc.isVisible({ timeout: 400 }).catch(() => false)) {
+        await loc.click({ timeout: 2000 }).catch(() => {});
+        provisionStepLog(accountId, 'dismissOpenRouterBlockingOverlays: clicked dismiss-like control');
+        await page.waitForTimeout(350);
+      }
+    } catch {
+      void 0;
+    }
+  }
 }
 
 async function clickFirstVisibleCreateControl(page) {
@@ -783,7 +924,11 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   // Try role-based Save first, then broader submit/fallback
   const saveBtn = scope.getByRole('button', { name: /^save$/i });
   if (await saveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await saveBtn.click();
+    try {
+      await saveBtn.click();
+    } catch {
+      await saveBtn.click({ force: true });
+    }
     return;
   }
   const submit = scope.locator(
@@ -802,10 +947,31 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   }
 }
 
-async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName) {
-  const { chromium } = await import('playwright');
+/** H1: Reduce headless automation signals; optional system Chrome via HYDRA_PLAYWRIGHT_CHANNEL. */
+function playwrightProvisionLaunchOptions() {
   const headless = !config.HYDRA_PLAYWRIGHT_HEADED;
-  const browser = await chromium.launch({ headless });
+  /** @type {import('playwright').LaunchOptions} */
+  const opts = { headless };
+  if (config.HYDRA_PLAYWRIGHT_CHANNEL) {
+    opts.channel = config.HYDRA_PLAYWRIGHT_CHANNEL;
+  }
+  if (headless) {
+    opts.args = ['--disable-blink-features=AutomationControlled', '--disable-dev-shm-usage'];
+  }
+  return opts;
+}
+
+async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, trpcPhaseSummary = {}) {
+  const { chromium } = await import('playwright');
+  const cdpUrl = config.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim();
+  let connectMode = 'launch';
+  const browser = cdpUrl
+    ? await (async () => {
+        provisionStepLog(accountId, 'Playwright connectOverCDP', { endpoint: cdpUrl });
+        connectMode = 'cdp';
+        return chromium.connectOverCDP(cdpUrl);
+      })()
+    : await chromium.launch(playwrightProvisionLaunchOptions());
   let page;
   let context;
   let capturedKey = null;
@@ -862,9 +1028,13 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       provisionStepLog(accountId, 'after goto management-keys', { url: page.url(), title });
     }
 
+    await dismissOpenRouterBlockingOverlays(page, accountId);
+
     /** Set after a matching response is parsed — persist outside the predicate to avoid store I/O in the waiter. */
     let capturedFromWait = null;
     let discoveredRouteFromWait = null;
+    /** H10: Last tRPC error from a create-mutation response (no key in body) — surfaced on final failure. */
+    let lastProvisionTrpcBusinessError = null;
 
     /** Register before Create/fill so POSTs from open flow + Save are not missed. */
     const provisionKeyWait = page
@@ -881,6 +1051,20 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           try {
             const body = await response.text();
             const key = extractManagementKeyFromResponseBody(body);
+            if (!key) {
+              const parsed = parseTrpcRedeemHttpBody(body, response.status());
+              if (
+                parsed.kind === 'error' &&
+                (isTrpc ? trpcPathLooksLikeManagementKeyCreate(rawPath) : /settings|management|key/i.test(pathname))
+              ) {
+                lastProvisionTrpcBusinessError = parsed.err;
+                provisionStepLog(accountId, 'tRPC error in provision-related POST (no key in body)', {
+                  message: parsed.err.message,
+                  trpcCode: parsed.err.trpcCode,
+                  path: rawPath || pathname,
+                });
+              }
+            }
             if (provisionDebugArtifactsEnabled()) {
               if (isTrpc) {
                 if (!key && trpcPathLooksLikeManagementKeyCreate(rawPath)) {
@@ -974,7 +1158,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       const codeOrPre = page.locator('code, pre').filter({ hasText: MGMT_KEY_RE }).first();
       if (await codeOrPre.isVisible({ timeout: 3000 }).catch(() => false)) {
         const blockText = await codeOrPre.innerText().catch(() => '');
-        const m = blockText?.match(MGMT_KEY_RE);
+        const m = blockText?.normalize('NFC').match(MGMT_KEY_RE);
         if (m) {
           capturedKey = m[0];
           provisionStepLog(accountId, 'Found key in code/pre element');
@@ -985,7 +1169,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     // Fallback 3: scan page textContent (catches text nodes, but NOT input .value)
     if (!capturedKey) {
       const pageText = await page.textContent('body');
-      const match = pageText?.match(MGMT_KEY_RE);
+      const match = pageText?.normalize('NFC').match(MGMT_KEY_RE);
       if (match) capturedKey = match[0];
       if (capturedKey) provisionStepLog(accountId, 'Found key in page textContent');
     }
@@ -1034,7 +1218,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       const dialog = managementDialog(page);
       if (await dialog.isVisible({ timeout: 1000 }).catch(() => false)) {
         const dialogText = await dialog.innerText().catch(() => '');
-        const match = dialogText?.match(MGMT_KEY_RE);
+        const match = dialogText?.normalize('NFC').match(MGMT_KEY_RE);
         if (match) {
           capturedKey = match[0];
           provisionStepLog(accountId, 'Found key in dialog innerText');
@@ -1050,11 +1234,29 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
         try {
           const text = await navigator.clipboard.readText();
           const re = new RegExp(pattern);
-          const m = text.match(re);
+          const m = text.normalize('NFC').match(re);
           return m ? m[0] : null;
         } catch { return null; }
       }, mgmtKeyPattern).catch(() => null);
       if (capturedKey) provisionStepLog(accountId, 'Found key in clipboard');
+    }
+
+    // Fallback 6b: H5 — key only in an iframe (rare)
+    if (!capturedKey) {
+      for (const frame of page.frames()) {
+        if (frame === page.mainFrame()) continue;
+        try {
+          const ft = await frame.evaluate(() => document.body?.innerText || '').catch(() => '');
+          const m = ft.normalize('NFC').match(MGMT_KEY_RE);
+          if (m) {
+            capturedKey = m[0];
+            provisionStepLog(accountId, 'Found key in child frame innerText');
+            break;
+          }
+        } catch {
+          void 0;
+        }
+      }
     }
 
     // Fallback 7: if still no key, log ALL visible input values and dialog text for post-mortem
@@ -1084,7 +1286,28 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           .catch(() => '');
         console.error('[dashboard-api] provision: page innerText preview', { accountId, preview: redactSensitiveForProvisionLog(fullPageInner, 2000) });
       }
-      throw new Error('Could not extract management key via Playwright');
+      const extra =
+        lastProvisionTrpcBusinessError?.message != null
+          ? ` Last tRPC error: ${lastProvisionTrpcBusinessError.message}${
+              lastProvisionTrpcBusinessError.trpcCode != null
+                ? ` (code: ${String(lastProvisionTrpcBusinessError.trpcCode)})`
+                : ''
+            }.`
+          : '';
+      const debugDir = join(tmpdir(), PROVISION_DEBUG_DIR_BASENAME);
+      throw new ProvisionKeyNotCapturedError(`Could not extract management key via Playwright.${extra}`, {
+        stage: 'playwright',
+        trpcLastError: trpcPhaseSummary.trpcLastError,
+        trpcLastCode: trpcPhaseSummary.trpcLastCode,
+        trpcLastHttp: trpcPhaseSummary.trpcLastHttp,
+        trpcBusinessMessage: lastProvisionTrpcBusinessError?.message,
+        trpcBusinessCode: lastProvisionTrpcBusinessError?.trpcCode,
+        createClicked: clicked,
+        fallbacksExhausted:
+          'waitForResponse, copy/reveal UI, getByText, code/pre, body text, input evaluate, dialog, clipboard, iframes',
+        debugDir,
+        connectMode,
+      });
     }
 
     if (traceStarted && context) {

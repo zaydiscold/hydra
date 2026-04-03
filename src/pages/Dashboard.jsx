@@ -354,7 +354,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
       fetchDashboard(true);
     } catch (err) {
       console.error('[DASHBOARD] Provision failed:', err.message);
-      addToast(`Provision failed: ${err.message}`, 'error');
+      addToast(`Provision failed: ${api.formatApiErrorMessage(err)}`, 'error');
     }
     setProvisioningIds(prev => { const s = new Set(prev); s.delete(accountId); return s; });
   }

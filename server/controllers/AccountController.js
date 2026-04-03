@@ -5,6 +5,7 @@ import * as store from '../services/store.js';
 import * as openrouter from '../services/openrouter.js';
 import * as clerkAuth from '../services/clerk-auth.js';
 import * as dashboardApi from '../services/dashboard-api.js';
+import { ProvisionKeyNotCapturedError } from '../services/dashboard-api.js';
 import { assertManagementKey } from '../services/key-utils.js';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { logger } from '../services/logger.js';
@@ -366,11 +367,23 @@ export class AccountController extends BaseController {
       }
       return this.success(res, result);
     } catch (err) {
+      if (err instanceof ProvisionKeyNotCapturedError || err?.code === 'PROVISION_KEY_NOT_CAPTURED') {
+        const debugDir = err.provisionDetails?.debugDir ?? join(tmpdir(), 'hydra-provision-debug');
+        return this.error(res, err.message, err.status || 500, err.code || 'PROVISION_KEY_NOT_CAPTURED', {
+          hint:
+            'Direct tRPC was tried first; automation did not capture a management key. For operator logs set HYDRA_PROVISION_VERBOSE=1 or HYDRA_PROVISION_DEBUG=1.',
+          details: err.provisionDetails,
+          legacyCode: err.legacyCode ?? 'PROVISION_PLAYWRIGHT_EXTRACT',
+          debugDir,
+        });
+      }
       const msg = err?.message || String(err);
       if (msg.includes('Could not extract management key via Playwright')) {
         const debugDir = join(tmpdir(), 'hydra-provision-debug');
-        return this.error(res, msg, err.status || 500, 'PROVISION_PLAYWRIGHT_EXTRACT', {
+        return this.error(res, msg, err.status || 500, 'PROVISION_KEY_NOT_CAPTURED', {
           hint: `Check server stderr and ${debugDir} (screenshots, provision-network-*.log, provision-trace-*.zip when HYDRA_PROVISION_DEBUG=1).`,
+          legacyCode: 'PROVISION_PLAYWRIGHT_EXTRACT',
+          details: { stage: 'playwright', debugDir },
         });
       }
       return this.error(res, msg, err.status || 500);

@@ -92,8 +92,54 @@ function truncateForLog(s, max = 2000) {
   return s.length > max ? `${s.slice(0, max)}…[truncated]` : s;
 }
 
+/** Keep in sync with server/services/dashboard-api.js — cookie/consent overlays block headless clicks. */
+async function dismissOpenRouterBlockingOverlays(page) {
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(180);
+  }
+  const dismissButtons = [
+    page.getByRole('button', { name: /accept all cookies/i }),
+    page.getByRole('button', { name: /accept all/i }),
+    page.getByRole('button', { name: /^accept$/i }),
+    page.getByRole('button', { name: /i agree/i }),
+    page.getByRole('button', { name: /^got it$/i }),
+    page.getByRole('button', { name: /^ok$/i }),
+    page.getByRole('button', { name: /^close$/i }),
+    page.getByRole('button', { name: /no thanks/i }),
+    page.locator('#headlessui-portal-root button').filter({ hasText: /accept|agree|got it|close|ok/i }).first(),
+  ];
+  for (const loc of dismissButtons) {
+    try {
+      if (await loc.isVisible({ timeout: 400 }).catch(() => false)) {
+        await loc.click({ timeout: 2000 }).catch(() => {});
+        await page.waitForTimeout(350);
+      }
+    } catch {
+      void 0;
+    }
+  }
+}
+
+/** Mirror dashboard-api.js — prefer Create in main so portals do not steal the click. */
 async function clickFirstVisibleCreateControl(page) {
-  const roleCandidates = [/^create$/i, /create management key/i, /add key/i, /new key/i, /create key/i, /^new$/i, /^generate$/i];
+  const main = page.locator('main, [role="main"]').first();
+  if (await main.isVisible({ timeout: 800 }).catch(() => false)) {
+    const mainCreate = main.getByRole('button', { name: /^create$/i });
+    if (await mainCreate.first().isVisible({ timeout: 800 }).catch(() => false)) {
+      await mainCreate.first().click();
+      return true;
+    }
+  }
+  const roleCandidates = [
+    /^create$/i,
+    /create management key/i,
+    /add key/i,
+    /new key/i,
+    /create key/i,
+    /^new$/i,
+    /^generate$/i,
+  ];
   for (const name of roleCandidates) {
     const btn = page.getByRole('button', { name });
     if (await btn.first().isVisible({ timeout: 800 }).catch(() => false)) {
@@ -117,34 +163,80 @@ async function clickFirstVisibleCreateControl(page) {
   return false;
 }
 
+function managementDialog(page) {
+  return page
+    .locator(
+      [
+        '#headlessui-portal-root [role="dialog"]',
+        '[role="dialog"]',
+        '[aria-modal="true"]',
+        '[data-state="open"]',
+        'dialog[open]',
+        'div[class*="modal"]',
+        'div[class*="dialog"]',
+        'div[class*="overlay"]',
+      ].join(', '),
+    )
+    .first();
+}
+
+/** Mirror dashboard-api.js fillManagementKeyNameAndSubmit (no provisionStepLog). */
 async function fillManagementKeyNameAndSubmit(page, keyName) {
-  const nameByRole = page.getByRole('textbox', { name: /^name$/i });
-  const nameByPlaceholder = page.locator(
+  const dialog = managementDialog(page);
+  const inDialog = await dialog.isVisible({ timeout: 2500 }).catch(() => false);
+  const scope = inDialog ? dialog : page;
+
+  const nameByRole = scope.getByRole('textbox', { name: /^name$/i });
+  const nameByRoleAlt = scope.getByRole('textbox', { name: /name/i });
+  const nameByPlaceholder = scope.locator(
     'input[placeholder*="Management Key" i], input[placeholder*="name" i], input[placeholder*="Name"], input[name="name"], input[aria-label*="name" i]',
   );
-  const nameInput = (await nameByRole.isVisible({ timeout: 2000 }).catch(() => false))
-    ? nameByRole
-    : nameByPlaceholder.first();
+  const nameByFallback = scope
+    .locator('input[type="text"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])')
+    .first();
+
+  let nameInput;
+  if (await nameByRole.isVisible({ timeout: 1500 }).catch(() => false)) {
+    nameInput = nameByRole;
+  } else if (await nameByRoleAlt.isVisible({ timeout: 1500 }).catch(() => false)) {
+    nameInput = nameByRoleAlt;
+  } else if (await nameByPlaceholder.first().isVisible({ timeout: 1500 }).catch(() => false)) {
+    nameInput = nameByPlaceholder.first();
+  } else {
+    nameInput = nameByFallback;
+  }
   const nameVisible = await nameInput.isVisible({ timeout: 4000 }).catch(() => false);
   if (!nameVisible) {
     throw new Error('Management key form: Name field not visible after opening the create flow.');
   }
   await nameInput.click();
-  await nameInput.fill(keyName);
+  await nameInput.clear();
+  await nameInput.fill('');
+  await page.waitForTimeout(100);
+  await nameInput.pressSequentially(keyName, { delay: 40 });
+  await page.waitForTimeout(300);
 
-  const saveBtn = page.getByRole('button', { name: /^save$/i });
+  const saveBtn = scope.getByRole('button', { name: /^save$/i });
   if (await saveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await saveBtn.click();
+    try {
+      await saveBtn.click();
+    } catch {
+      await saveBtn.click({ force: true });
+    }
     return;
   }
-  const submit = page.locator(
+  const submit = scope.locator(
     'button[type="submit"], button:has-text("Save"), button:has-text("Confirm"), button:has-text("Generate"), button:has-text("Create")',
   );
   const altVisible = await submit.first().isVisible({ timeout: 2000 }).catch(() => false);
   if (!altVisible) {
     throw new Error('Management key form: Save (or fallback submit) button not visible.');
   }
-  await submit.first().click();
+  try {
+    await submit.first().click();
+  } catch {
+    await submit.first().click({ force: true });
+  }
 }
 
 async function main() {
@@ -189,8 +281,18 @@ async function main() {
         if (req.method() !== 'POST') return;
         const u = response.url();
         if (!u.startsWith(OR_ORIGIN)) return;
+        if (/analytics|sentry|segment|datadog|fullstory|hotjar|clarity|googletagmanager|doubleclick/i.test(u)) {
+          return;
+        }
+        const h = req.headers();
+        const nextAction = h['next-action'] || h['Next-Action'] || '';
+        const contentType = h['content-type'] || h['Content-Type'] || '';
         const postData = truncateForLog(req.postData() || '', 2000);
-        const block = `${new Date().toISOString()} POST ${response.status()} ${u}\npostData: ${postData || '(empty)'}\n---`;
+        const extra =
+          nextAction || contentType
+            ? `\nheaders: content-type=${contentType || '(none)'} next-action=${nextAction ? `${String(nextAction).slice(0, 80)}…` : '(none)'}`
+            : '';
+        const block = `${new Date().toISOString()} POST ${response.status()} ${u}\npostData: ${postData || '(empty)'}${extra}\n---`;
         logLine(block);
       } catch {
         void 0;
@@ -205,6 +307,8 @@ async function main() {
       timeout: 60000,
     });
     await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => {});
+
+    await dismissOpenRouterBlockingOverlays(page);
 
     const clicked = await clickFirstVisibleCreateControl(page);
     if (!clicked) console.error('[capture] No Create control matched; continuing.');

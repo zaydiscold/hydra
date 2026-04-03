@@ -47,7 +47,9 @@ All of these return HTTP 200 (rather than 404), confirming they are registered r
 | `management.createManagementKey` | Alternate naming | 🟡 tried |
 | `apiKeys.createManagement` | Alternate naming | 🟡 tried in Hydra candidates |
 
-Hydra’s `createManagementKey()` in `server/services/dashboard-api.js` tries these in order after the cached route (if any). It also tries **`{ name }`** and **`{ label }`** payloads per route when replaying tRPC.
+Hydra’s `createManagementKey()` in `server/services/dashboard-api.js` tries these in order after the cached route (if any). It also tries **`{ name }`**, **`{ label }`**, **`{ title }`**, and **`{ keyName }`** payloads per route when replaying tRPC. Additional **speculative** candidates (verify with **`scripts/capture-mgmt-key-network.mjs`** if OpenRouter renames routers): **`settings.managementKeys.create`**, **`dashboard.managementKeys.create`**, **`management.managementKeys.create`**.
+
+**Mandatory when drift is suspected:** run **`HYDRA_PLAYWRIGHT_HEADED=1 node scripts/capture-mgmt-key-network.mjs`** with a live **`HYDRA_CAPTURE_OR_SESSION`**, create one key manually, then paste the real **`POST`** URL + redacted body into the *Management keys — captured network* section below so `trpcCall` and the candidate list stay aligned.
 
 ---
 
@@ -209,6 +211,19 @@ Inspect `/_next/static/chunks/*.js` for tRPC router definitions and mutation sch
 | **Query** | e.g. `batch=1` |
 | **Body (sanitized)** | e.g. `{ "0": { "json": { "name": "…" } } }` — redact tokens; note if the field is `label` instead of `name` |
 | **Notes** | e.g. batched path `managementKeys.create,managementKeys.list` → Hydra normalizes to one procedure for cache |
+
+### 2026-04-03 — Live capture (Hydra vault session, headless Playwright)
+
+**Source:** `scripts/capture-mgmt-key-network.mjs` with real `HYDRA_CAPTURE_OR_SESSION` + optional `HYDRA_CAPTURE_OR_CLIENT` (same shape as vault `clientCookie`).
+
+| Field | Value |
+|--------|--------|
+| **Captured** | 2026-04-03 |
+| **tRPC create POST** | **None observed** in the capture window before UI automation timed out — no `POST …/api/trpc/…?batch=1` tied to opening **Create → Name → Save**. |
+| **App-route POST** | **`POST https://openrouter.ai/settings/management-keys`** — HTTP **200**, **`postData` empty or `[]`** (typical **Next.js RSC / Server Actions**; not JSON tRPC batch bodies). |
+| **Headers (when present)** | Standalone capture logs **`content-type`** and truncated **`next-action`** (if any) for same-origin POSTs — use for future **`HYDRA_PROVISION_SERVER_ACTION_REPLAY`** wiring. |
+| **Playwright failure mode** | **`locator.click: Timeout`** — **`#headlessui-portal-root`** overlay (e.g. cookie/consent) **intercepted pointer events** on the main **Create** control. **Mitigation:** `dismissOpenRouterBlockingOverlays` in **`server/services/dashboard-api.js`** and the capture script (Escape + dismiss-like buttons) before clicking **Create**. |
+| **Hydra strategy** | Unchanged: **`trpcCall`** first (still valid if OpenRouter serves tRPC from other tabs or later navigation); **Playwright** after; optional **`tryManagementKeyServerActionReplay`** once **`Next-Action`** + body are captured. |
 
 ---
 

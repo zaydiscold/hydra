@@ -179,13 +179,13 @@ export default function BulkAuthWizard({ addToast }) {
           );
           appendLog(`export key captured → ${current.email}`);
         }
-      } catch (_fetchErr) {
+      } catch {
         // non-fatal — user can still use "Fetch provisioned keys" button later
       }
     } catch (err) {
       setLocalError(api.formatApiErrorMessage(err));
       setErrorCopyCommand(err.hydraCopyCommand ?? '');
-      addToast?.(err.message, 'error');
+      addToast?.(api.formatApiErrorMessage(err), 'error');
     }
     setBusy(false);
   }
@@ -213,7 +213,7 @@ export default function BulkAuthWizard({ addToast }) {
           missing++;
           appendLog(`no key stored yet → ${item.email}`);
         }
-      } catch (_err) {
+      } catch {
         missing++;
         appendLog(`fetch failed → ${item.email}`);
       }
