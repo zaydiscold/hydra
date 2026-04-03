@@ -538,17 +538,25 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     'management.createManagementKey',
     'apiKeys.createManagement',
   ];
+  let lastTrpcError = null;
   for (const route of candidates) {
     for (const input of mgmtKeyPayloads) {
       try {
+        console.error(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
         const result = await trpcCall(route, input, sessionCookie, clientCookie);
+        console.error(`[dashboard-api] tRPC route ${route} result:`, { hasResult: !!result, keys: Object.keys(result || {}) });
         const key = result?.key || result?.managementKey || result?.apiKey;
         if (key && key.startsWith('sk-or-mgmt-')) {
+          console.error(`[dashboard-api] Success via tRPC route: ${route}`);
           await store.saveDiscoveredEndpoints({ createManagementKey: { route, discoveredAt: new Date().toISOString() } });
           await persistProvisionedManagementKey(userId, accountId, key, `trpc-${route}`);
           return { key, source: `trpc-${route}` };
         }
+        // No key returned - route exists but wrong payload or unexpected response shape
+        console.error(`[dashboard-api] tRPC route ${route} returned result but no management key`);
       } catch (err) {
+        lastTrpcError = err;
+        console.error(`[dashboard-api] tRPC route ${route} failed: ${err.message} (httpStatus: ${err.httpStatus}, trpcCode: ${err.trpcCode})`);
         if (shouldAbortProvisioning(err)) {
           return { success: false, message: err.message, source: `trpc-${route}` };
         }
@@ -557,6 +565,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     }
   }
 
+  console.error(`[dashboard-api] All tRPC routes exhausted, falling back to Playwright. Last error: ${lastTrpcError?.message || 'none'}`);
   return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName);
 }
 
@@ -603,7 +612,17 @@ async function clickFirstVisibleCreateControl(page) {
 }
 
 function managementDialog(page) {
-  return page.locator('#headlessui-portal-root [role="dialog"], [role="dialog"]').first();
+  // Broader modal detection for various UI frameworks (HeadlessUI, Radix, Ariakit, custom)
+  return page.locator([
+    '#headlessui-portal-root [role="dialog"]',
+    '[role="dialog"]',
+    '[aria-modal="true"]',
+    '[data-state="open"]',
+    'dialog[open]',
+    'div[class*="modal"]',
+    'div[class*="dialog"]',
+    'div[class*="overlay"]'
+  ].join(', ')).first();
 }
 
 function trpcPathLooksLikeManagementKeyCreate(pathSegment) {
@@ -721,13 +740,10 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           if (u.includes('/api/trpc/')) {
             line += `\npathname: ${new URL(u).pathname}`;
           }
-          // Log full response body in debug mode so we can see what OR actually returns
-          if (provisionDebugArtifactsEnabled()) {
-            try {
-              const body = await response.text();
-              line += `\nresponseBody: ${redactSensitiveForProvisionLog(body, 1200)}`;
-            } catch { void 0; }
-          }
+          // Note: We intentionally do NOT log response body here.
+          // Response bodies are streams - once consumed by response.text(), they become empty
+          // for other handlers. The waitForResponse predicates need to consume the body
+          // to extract the management key. Debug body content is captured via tracing instead.
           line += '\n---';
           networkLogLines.push(line);
         } catch {
@@ -897,7 +913,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           }
         }
         return null;
-      }, 'sk-or-mgmt-[A-Za-z0-9_.\\-]+').catch(() => null);
+      }, MGMT_KEY_RE.source).catch(() => null);
       if (capturedKey) provisionStepLog(accountId, 'Found key via DOM evaluate() input scan');
     }
 
@@ -915,14 +931,17 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     }
 
     // Fallback 5: try clipboard API (some UIs auto-copy the key on creation)
+    // Note: This rarely works in headless mode due to clipboard permissions, but try anyway.
     if (!capturedKey) {
-      capturedKey = await page.evaluate(async () => {
+      const mgmtKeyPattern = MGMT_KEY_RE.source;
+      capturedKey = await page.evaluate(async (pattern) => {
         try {
           const text = await navigator.clipboard.readText();
-          const m = text.match(/sk-or-mgmt-[A-Za-z0-9_.\\-]+/);
+          const re = new RegExp(pattern);
+          const m = text.match(re);
           return m ? m[0] : null;
         } catch { return null; }
-      }).catch(() => null);
+      }, mgmtKeyPattern).catch(() => null);
       if (capturedKey) provisionStepLog(accountId, 'Found key in clipboard');
     }
 

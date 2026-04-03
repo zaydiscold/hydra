@@ -37,10 +37,10 @@ function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed) {
   if (!hasSession) return 'none';
 
   const effective = resolveEffectiveSessionExpiry(config, sessionTokenPlain);
-  if (!effective) return 'active';
+  if (!effective) return 'unknown';
 
   const expiryMs = new Date(effective).getTime();
-  if (Number.isNaN(expiryMs)) return 'active';
+  if (Number.isNaN(expiryMs)) return 'unknown';
   const now = Date.now();
   if (expiryMs <= now) return 'expired';
   if (expiryMs - now <= SESSION_EXPIRING_SOON_MS) return 'expiring';
