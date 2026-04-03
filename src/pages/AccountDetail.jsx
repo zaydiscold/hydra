@@ -289,7 +289,8 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         throw new Error(res?.data?.message || 'Provisioning did not return a management key');
       }
       const source = res.data.source;
-      addToast(`Management key provisioned${source ? ` via ${source}` : ''}`, 'success');
+      const via = source ? api.formatProvisionSourceForUi(source) : '';
+      addToast(`Management key provisioned${via ? ` via ${via}` : ''}`, 'success');
       await fetchMeta();
       await fetchSnapshot();
     } catch (err) {

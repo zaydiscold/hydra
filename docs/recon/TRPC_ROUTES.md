@@ -10,7 +10,15 @@ The tRPC endpoints live at `/api/trpc/{route}` and require:
 2. Proper tRPC batch request format
 3. Correct Content-Type headers
 
-**These are NOT publicly documented.** We discovered them through URL probing and will need to intercept actual dashboard network calls (via Playwright or Chrome DevTools MCP) to capture the exact request/response shapes.
+**These are NOT publicly documented.** We discovered them through URL probing and will need to intercept actual dashboard network calls (via headed capture, Chrome DevTools, or IDE browser) to capture the exact request/response shapes.
+
+### User-facing errors vs recon terminology
+
+Hydra’s **API** and **toasts** describe provision as **HTTP (tRPC) first**, then **browser UI automation** when replay fails. **`details.stage`** uses values like **`browser_ui`** (not “Playwright MCP”). The server still uses the **`playwright` npm package** to drive Chromium; **`source: playwright`** on success is unchanged for compatibility, while the SPA may display **`browser-ui`**. **`legacyCode` `PROVISION_PLAYWRIGHT_EXTRACT`** on **`PROVISION_KEY_NOT_CAPTURED`** is a **historical** constant for older clients only.
+
+### Evidence-driven updates (Track A)
+
+Do **not** guess new `trpcCall` batch shapes or comma-separated `/api/trpc/a.b,c.d` URLs without a **redacted** line from **`scripts/capture-mgmt-key-network.mjs`** (live **`__session`** / client jar). Paste findings into the *Management keys — captured network* section below and align **`dashboard-api.js`** candidates + **`trpcCall`** with that evidence.
 
 ---
 
@@ -185,7 +193,7 @@ Inspect `/_next/static/chunks/*.js` for tRPC router definitions and mutation sch
 
 ## Management keys — captured network (operator paste)
 
-**Purpose:** When headless provision fails with “Could not extract management key via Playwright”, capture the **real** wire format from the same stack Hydra uses (Playwright in Node), then paste a **sanitized** summary here so `trpcCall` candidates and Playwright waiters stay aligned.
+**Purpose:** When provision fails with **`PROVISION_KEY_NOT_CAPTURED`** (message e.g. “Could not capture management key after HTTP (tRPC) and browser UI automation”), capture the **real** wire format from the same stack Hydra uses (Chromium via **`playwright` in Node**), then paste a **sanitized** summary here so `trpcCall` candidates and browser waiters stay aligned.
 
 ### How to capture
 

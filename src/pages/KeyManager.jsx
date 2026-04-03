@@ -386,7 +386,7 @@ export default function KeyManager({ addToast }) {
       if (!res?.data?.key) {
         throw new Error(res?.data?.message || 'Provisioning did not return a management key');
       }
-      addToast(`Management key provisioned via ${res.data.source}`, 'success');
+      addToast(`Management key provisioned via ${api.formatProvisionSourceForUi(res.data.source)}`, 'success');
       const list = await fetchAccounts();
       const row = list?.find((a) => a.id === accountId);
       fetchAccountBalance(row);

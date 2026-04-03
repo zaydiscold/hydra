@@ -27,21 +27,28 @@ import {
 } from './components/Icons';
 
 function ToastContainer({ toasts, onDismiss }) {
-  // Uses key animation to trigger toast-shrink CSS over 4s
   return (
     <div className="toast-container">
-      {toasts.map((t) => (
-        <div key={t.id} className={`toast toast-${t.type}`} onClick={() => onDismiss(t.id)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {t.type === 'success' && '[SUCCESS] '}
-            {t.type === 'error' && '[ERROR] '}
-            {t.type === 'info' && '[INFO] '}
-            {t.type === 'warning' && '[WARN] '}
-            <span>{t.message}</span>
+      {toasts.map((t) => {
+        const durationMs = t.durationMs ?? (t.type === 'error' ? 10000 : 4000);
+        const tag =
+          t.type === 'success'
+            ? '[SUCCESS] '
+            : t.type === 'error'
+              ? '[ERROR] '
+              : t.type === 'info'
+                ? '[INFO] '
+                : '[WARN] ';
+        return (
+          <div key={t.id} className={`toast toast-${t.type}`} onClick={() => onDismiss(t.id)}>
+            <div className={`toast-inner toast-inner-${t.type}`}>
+              <span className="toast-tag">{tag}</span>
+              <span className="toast-message">{t.message}</span>
+            </div>
+            <div className="toast-progress" style={{ animationDuration: `${durationMs}ms` }} />
           </div>
-          <div className="toast-progress" style={{ animationDuration: '4000ms' }} />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -297,7 +304,8 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const addToast = useCallback((message, type = 'info') => {
+  const addToast = useCallback((message, type = 'info', options = {}) => {
+    const durationMs = options.durationMs ?? (type === 'error' ? 10000 : 4000);
     const toastKey = `${type}:${message}`;
     const now = Date.now();
     const lastShownAt = recentToastsRef.current.get(toastKey) ?? 0;
@@ -312,8 +320,8 @@ export default function App() {
     }, 2000);
 
     const id = `${now}-${Math.random().toString(36).slice(2, 8)}`;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+    setToasts((prev) => [...prev, { id, message, type, durationMs }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), durationMs);
   }, []);
 
   const dismissToast = useCallback((id) => {

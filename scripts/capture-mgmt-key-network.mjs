@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Standalone Playwright capture for OpenRouter management-key creation traffic.
+ * Standalone browser (Playwright-driven) capture for OpenRouter management-key creation traffic.
  * Does not load Hydra server config (no DATABASE_URL). Uses env only.
  *
  * Required:

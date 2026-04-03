@@ -185,10 +185,12 @@ Implementation:
 
 - `AccountController.provision()` and `provisionAll()` call `dashboardApi.createManagementKey()`.
 - `server/services/dashboard-api.js` first tries to reuse a valid session.
-- If it has one, it attempts cached tRPC discovery, then a list of candidate tRPC routes, then Playwright fallback.
+- If it has one, it attempts cached tRPC discovery, then a list of candidate tRPC routes, then optional Server Action stub (when enabled), then **browser UI automation** (Chromium via the **`playwright`** npm package).
 - When a management key is found, it is written back into the local encrypted account config with `store.updateAccountManagementKey()`.
 
-**No clipboard in the automation path:** Provisioning does **not** click OpenRouter’s “Copy to clipboard” control. The implementation reads the secret from **tRPC JSON** or from **network/DOM text** inside server-side Playwright (`server/services/dashboard-api.js`). Assistant or operator browsers used only to **document** selectors (`docs/recon/TRPC_ROUTES.md`) do **not** persist keys into the vault.
+**No clipboard in the automation path:** Provisioning does **not** click OpenRouter’s “Copy to clipboard” control. The implementation reads the secret from **tRPC JSON** or from **network/DOM text** inside server-side browser automation (`server/services/dashboard-api.js`). Assistant or operator browsers used only to **document** selectors (`docs/recon/TRPC_ROUTES.md`) do **not** persist keys into the vault.
+
+**Errors:** If no `sk-or-mgmt-…` is captured, the API returns **`PROVISION_KEY_NOT_CAPTURED`** with **`details.stage`** such as **`browser_ui`**, **`phasesTried`**, **`trpcLastRoute`**, etc. **`legacyCode` `PROVISION_PLAYWRIGHT_EXTRACT`** is a historical alias only.
 
 **Manual paste path:** Operators can still set or replace a management key with **`PATCH /api/accounts/:id`** (`AccountController.updateAccount`). The Key Manager modal **`PasteManagementKeyModal`** adds a client-side **`sk-or-`** prefix check; the server uses non-empty validation plus **`openrouter.getCredits()`** (see **`docs/API_REFERENCE.md`**).
 

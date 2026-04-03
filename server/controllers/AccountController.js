@@ -371,19 +371,22 @@ export class AccountController extends BaseController {
         const debugDir = err.provisionDetails?.debugDir ?? join(tmpdir(), 'hydra-provision-debug');
         return this.error(res, err.message, err.status || 500, err.code || 'PROVISION_KEY_NOT_CAPTURED', {
           hint:
-            'Direct tRPC was tried first; automation did not capture a management key. For operator logs set HYDRA_PROVISION_VERBOSE=1 or HYDRA_PROVISION_DEBUG=1.',
+            'Hydra tried dashboard tRPC over HTTP first, then browser UI automation if needed. For stderr step logs use HYDRA_PROVISION_VERBOSE=1; for screenshots/traces/network POST lines use HYDRA_PROVISION_DEBUG=1 and HYDRA_PROVISION_NETWORK_LOG=1. When routes drift, capture live POSTs with scripts/capture-mgmt-key-network.mjs (see docs/recon/TRPC_ROUTES.md).',
           details: err.provisionDetails,
           legacyCode: err.legacyCode ?? 'PROVISION_PLAYWRIGHT_EXTRACT',
           debugDir,
         });
       }
       const msg = err?.message || String(err);
-      if (msg.includes('Could not extract management key via Playwright')) {
+      if (
+        msg.includes('Could not extract management key via Playwright') ||
+        /Could not capture management key after HTTP/i.test(msg)
+      ) {
         const debugDir = join(tmpdir(), 'hydra-provision-debug');
         return this.error(res, msg, err.status || 500, 'PROVISION_KEY_NOT_CAPTURED', {
-          hint: `Check server stderr and ${debugDir} (screenshots, provision-network-*.log, provision-trace-*.zip when HYDRA_PROVISION_DEBUG=1).`,
+          hint: `Check server stderr and ${debugDir} (screenshots, provision-network-*.log, provision-trace-*.zip when HYDRA_PROVISION_DEBUG=1). For route drift run scripts/capture-mgmt-key-network.mjs and update docs/recon/TRPC_ROUTES.md (redacted).`,
           legacyCode: 'PROVISION_PLAYWRIGHT_EXTRACT',
-          details: { stage: 'playwright', debugDir },
+          details: { stage: 'browser_ui', debugDir },
         });
       }
       return this.error(res, msg, err.status || 500);

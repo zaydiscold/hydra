@@ -1,13 +1,30 @@
 const API = '/api';
 
+/** Map API `source` to UI label (API may still return `playwright` for browser automation). */
+export function formatProvisionSourceForUi(source) {
+  if (source === 'playwright') return 'browser-ui';
+  return source ?? '';
+}
+
 /** Formats structured `details` from provision and similar API errors (no secrets). */
 export function formatProvisionDetailsAppendix(details) {
   if (!details || typeof details !== 'object') return '';
   const lines = [];
   if (details.stage) lines.push(`Stage: ${details.stage}`);
+  if (Array.isArray(details.phasesTried) && details.phasesTried.length) {
+    lines.push(`Phases tried: ${details.phasesTried.join(' → ')}`);
+  }
+  if (details.trpcLastRoute) lines.push(`Last tRPC route (HTTP): ${details.trpcLastRoute}`);
+  if (details.trpcLastHttp != null || details.trpcLastCode != null) {
+    lines.push(
+      `Last tRPC HTTP: ${details.trpcLastHttp ?? '—'}${details.trpcLastCode != null ? ` (code ${details.trpcLastCode})` : ''}`,
+    );
+  }
   if (details.connectMode) lines.push(`Browser: ${details.connectMode}`);
+  if (details.pageUrlAtFailure) lines.push(`Page URL at failure: ${details.pageUrlAtFailure}`);
   if (details.trpcLastError) lines.push(`Last tRPC (HTTP phase): ${details.trpcLastError}`);
   if (details.trpcBusinessMessage) lines.push(`Dashboard mutation error: ${details.trpcBusinessMessage}`);
+  if (details.trpcBusinessCode != null) lines.push(`Dashboard mutation code: ${details.trpcBusinessCode}`);
   if (details.createClicked != null) lines.push(`Create control clicked: ${details.createClicked}`);
   if (details.fallbacksExhausted) lines.push(`Fallbacks: ${details.fallbacksExhausted}`);
   if (details.debugDir) lines.push(`Artifacts: ${details.debugDir}`);

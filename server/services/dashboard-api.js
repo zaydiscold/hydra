@@ -160,7 +160,7 @@ async function writeProvisionNetworkLog(accountId, lines) {
     const dir = join(tmpdir(), 'hydra-provision-debug');
     await mkdir(dir, { recursive: true });
     const file = join(dir, `provision-network-${accountId}-${Date.now()}.log`);
-    const header = `# Hydra provision network log — ${new Date().toISOString()} — accountId=${accountId}\n# POST URL, status, postData only (no response bodies — avoids consuming Playwright response streams).\n\n`;
+    const header = `# Hydra provision network log — ${new Date().toISOString()} — accountId=${accountId}\n# POST URL, status, postData only (no response bodies — avoids double-consuming response streams in the browser listener).\n\n`;
     await appendFile(file, header + lines.join('\n'), 'utf8');
     console.error(`[dashboard-api] Provision network log written: ${file}`);
   } catch (err) {
@@ -225,14 +225,14 @@ const PROVISION_DEBUG_DIR_BASENAME = 'hydra-provision-debug';
 
 /**
  * Thrown when Hydra exhausts tRPC (and optional hooks) and browser automation without capturing `sk-or-mgmt-…`.
- * `legacyCode` matches the historical API code for clients that still check `PROVISION_PLAYWRIGHT_EXTRACT`.
+ * Match `err.code === 'PROVISION_KEY_NOT_CAPTURED'`. `legacyCode` is a historical API alias only.
  */
 export class ProvisionKeyNotCapturedError extends Error {
   constructor(message, details = {}) {
     super(message);
     this.name = 'ProvisionKeyNotCapturedError';
     this.code = 'PROVISION_KEY_NOT_CAPTURED';
-    /** @deprecated Prefer `code === PROVISION_KEY_NOT_CAPTURED`. */
+    /** @deprecated Historical constant for older clients; not specific to any one browser library. */
     this.legacyCode = 'PROVISION_PLAYWRIGHT_EXTRACT';
     this.provisionDetails = sanitizeProvisionDetailsForClient(details);
   }
@@ -246,6 +246,15 @@ function sanitizeProvisionDetailsForClient(d) {
     debugDir: d.debugDir,
     connectMode: d.connectMode,
   };
+  if (Array.isArray(d.phasesTried)) {
+    out.phasesTried = d.phasesTried.filter((x) => typeof x === 'string').slice(0, 12);
+  }
+  if (d.trpcLastRoute != null && String(d.trpcLastRoute).trim()) {
+    out.trpcLastRoute = redactSensitiveForProvisionLog(String(d.trpcLastRoute).trim(), 160);
+  }
+  if (d.pageUrlAtFailure != null && String(d.pageUrlAtFailure).trim()) {
+    out.pageUrlAtFailure = redactSensitiveForProvisionLog(String(d.pageUrlAtFailure).trim(), 220);
+  }
   if (d.trpcLastError) {
     out.trpcLastError = redactSensitiveForProvisionLog(String(d.trpcLastError), 400);
   }
@@ -296,7 +305,7 @@ async function captureProvisionDebugArtifacts(page, accountId) {
   } catch {
     void 0;
   }
-  console.error('[dashboard-api] Management key Playwright failure context', {
+  console.error('[dashboard-api] provision browser-ui failure context', {
     accountId,
     url,
     title,
@@ -622,7 +631,9 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     { keyName },
   ];
 
+  let lastTrpcRouteAttempted = null;
   if (endpoint) {
+    lastTrpcRouteAttempted = endpoint.route;
     for (const input of mgmtKeyPayloads) {
       try {
         const result = await trpcCall(endpoint.route, input, sessionCookie, clientCookie);
@@ -667,6 +678,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   ];
   let lastTrpcError = null;
   for (const route of candidates) {
+    lastTrpcRouteAttempted = route;
     for (const input of mgmtKeyPayloads) {
       try {
         console.error(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
@@ -699,7 +711,9 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     }
   }
 
-  console.error(`[dashboard-api] All tRPC routes exhausted, falling back to Playwright. Last error: ${lastTrpcError?.message || 'none'}`);
+  console.error(
+    `[dashboard-api] All tRPC routes exhausted, falling back to browser UI automation (Chromium). Last error: ${lastTrpcError?.message || 'none'}`,
+  );
 
   if (config.HYDRA_PROVISION_SERVER_ACTION_REPLAY) {
     const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName);
@@ -709,7 +723,10 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     }
   }
 
-  return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, summarizeTrpcFailure(lastTrpcError));
+  return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, {
+    ...summarizeTrpcFailure(lastTrpcError),
+    trpcLastRoute: lastTrpcRouteAttempted,
+  });
 }
 
 /** H2: Replay vault session + Clerk device cookies on openrouter.ai. Third-party cookies (e.g. CF) are not in the vault — if tRPC returns 403, re-login in Hydra to refresh. */
@@ -967,7 +984,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
   let connectMode = 'launch';
   const browser = cdpUrl
     ? await (async () => {
-        provisionStepLog(accountId, 'Playwright connectOverCDP', { endpoint: cdpUrl });
+        provisionStepLog(accountId, 'browser connectOverCDP', { endpoint: cdpUrl });
         connectMode = 'cdp';
         return chromium.connectOverCDP(cdpUrl);
       })()
@@ -1288,26 +1305,41 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       }
       const extra =
         lastProvisionTrpcBusinessError?.message != null
-          ? ` Last tRPC error: ${lastProvisionTrpcBusinessError.message}${
+          ? ` Last dashboard POST error (during UI flow): ${lastProvisionTrpcBusinessError.message}${
               lastProvisionTrpcBusinessError.trpcCode != null
                 ? ` (code: ${String(lastProvisionTrpcBusinessError.trpcCode)})`
                 : ''
             }.`
           : '';
+      const phasesTried = ['trpc_http'];
+      if (config.HYDRA_PROVISION_SERVER_ACTION_REPLAY) phasesTried.push('server_action_replay_attempted');
+      phasesTried.push('browser_ui');
+      let pageUrlAtFailure = '';
+      try {
+        pageUrlAtFailure = page.url() || '';
+      } catch {
+        void 0;
+      }
       const debugDir = join(tmpdir(), PROVISION_DEBUG_DIR_BASENAME);
-      throw new ProvisionKeyNotCapturedError(`Could not extract management key via Playwright.${extra}`, {
-        stage: 'playwright',
-        trpcLastError: trpcPhaseSummary.trpcLastError,
-        trpcLastCode: trpcPhaseSummary.trpcLastCode,
-        trpcLastHttp: trpcPhaseSummary.trpcLastHttp,
-        trpcBusinessMessage: lastProvisionTrpcBusinessError?.message,
-        trpcBusinessCode: lastProvisionTrpcBusinessError?.trpcCode,
-        createClicked: clicked,
-        fallbacksExhausted:
-          'waitForResponse, copy/reveal UI, getByText, code/pre, body text, input evaluate, dialog, clipboard, iframes',
-        debugDir,
-        connectMode,
-      });
+      throw new ProvisionKeyNotCapturedError(
+        `Could not capture management key after HTTP (tRPC) and browser UI automation.${extra}`,
+        {
+          stage: 'browser_ui',
+          phasesTried,
+          trpcLastError: trpcPhaseSummary.trpcLastError,
+          trpcLastCode: trpcPhaseSummary.trpcLastCode,
+          trpcLastHttp: trpcPhaseSummary.trpcLastHttp,
+          trpcLastRoute: trpcPhaseSummary.trpcLastRoute,
+          trpcBusinessMessage: lastProvisionTrpcBusinessError?.message,
+          trpcBusinessCode: lastProvisionTrpcBusinessError?.trpcCode,
+          createClicked: clicked,
+          fallbacksExhausted:
+            'waitForResponse, copy/reveal UI, getByText, code/pre, body text, input evaluate, dialog, clipboard, iframes',
+          debugDir,
+          connectMode,
+          pageUrlAtFailure,
+        },
+      );
     }
 
     if (traceStarted && context) {
@@ -1324,14 +1356,18 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
         await mkdir(dir, { recursive: true });
         const zip = join(dir, `provision-trace-${accountId}-${Date.now()}.zip`);
         await context.tracing.stop({ path: zip });
-        console.error('[dashboard-api] Provision Playwright trace saved', { accountId, path: zip });
+        console.error('[dashboard-api] Provision browser-ui trace saved', { accountId, path: zip });
       } catch (te) {
         console.error('[dashboard-api] Could not save provision trace:', te.message);
       }
       traceStarted = false;
     }
     const extractFail =
-      err && typeof err.message === 'string' && err.message.includes('Could not extract management key via Playwright');
+      err instanceof ProvisionKeyNotCapturedError ||
+      (err &&
+        typeof err.message === 'string' &&
+        (/Could not capture management key after HTTP/i.test(err.message) ||
+          err.message.includes('Could not extract management key via Playwright')));
     if (extractFail && page) {
       await captureProvisionDebugArtifacts(page, accountId).catch(() => {});
     }
