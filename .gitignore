@@ -31,6 +31,9 @@ auth.json
 *.sqlite
 prisma/dev.db
 
+# Cursor hook runtime state (local; changes every session)
+.cursor/hooks/state/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
