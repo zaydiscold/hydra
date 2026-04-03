@@ -1,0 +1,210 @@
+const API = '/api';
+
+/** Appends server-provided Clerk debug hint (when CLERK_DEBUG_OTP=1) for inline UI copy. */
+export function formatApiErrorMessage(err) {
+  if (!err?.message) return 'Request failed';
+  const hint = err.clerkDebugHint;
+  return hint ? `${err.message}\n\n${hint}` : err.message;
+}
+
+/** Shown when fetch fails in Vite dev — starts API + UI together. */
+export const HYDRA_DEV_START_COMMAND = 'npm run dev';
+/** API only (if UI is already served elsewhere). */
+export const HYDRA_DEV_API_ONLY_COMMAND = 'npm run server';
+
+function getToken() {
+  return localStorage.getItem('hydra_token') || '';
+}
+
+let activeRequests = 0;
+let handledAuthFailure = false;
+function updateLoadingState() {
+  window.dispatchEvent(new CustomEvent('hydra-loading', { detail: { active: activeRequests > 0 } }));
+}
+
+async function request(path, options = {}) {
+  const { method = 'GET', body, skipAuth = false, signal, keepalive = false } = options;
+  const headers = { 'Content-Type': 'application/json' };
+  if (!skipAuth) {
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  }
+  const fetchOptions = { method, headers, signal, keepalive };
+  if (body) fetchOptions.body = JSON.stringify(body);
+
+  activeRequests++;
+  updateLoadingState();
+
+  try {
+    let res;
+    try {
+      res = await fetch(`${API}${path}`, fetchOptions);
+    } catch {
+      const dev = import.meta.env.DEV;
+      const msg = dev
+        ? 'Hydra API unreachable — the Express backend is not running. From the project folder run npm run dev (starts API + UI together) or npm run server for the API only, then refresh.'
+        : 'Hydra API unavailable. Check that the local server is running.';
+      const err = new Error(msg);
+      if (dev) err.hydraCopyCommand = HYDRA_DEV_START_COMMAND;
+      throw err;
+    }
+    
+    if (res.status === 401) {
+      // Never reload on intentional auth endpoints - they handle errors in the UI
+      if (path.startsWith('/auth/')) {
+        let errMsg = 'Invalid credentials';
+        try { const d = await res.clone().json(); errMsg = d?.error || errMsg; } catch (err) { void err; }
+        throw new Error(errMsg);
+      }
+      clearToken();
+      if (!handledAuthFailure) {
+        handledAuthFailure = true;
+        window.location.reload();
+      }
+      return;
+    }
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error('Hydra API returned an invalid response.');
+    }
+    if (!res.ok) {
+      const msg = data?.error || `Request failed (${res.status})`;
+      const err = new Error(msg);
+      if (data?.code) err.code = data.code;
+      if (data?.clerkDebugOtp && data?.clerkDebugHint) {
+        err.clerkDebugHint = data.clerkDebugHint;
+      }
+      throw err;
+    }
+    if (res.status === 202 && data?.requiresTwoFactor) {
+      const e = new Error('NEEDS_2FA');
+      e.requiresTwoFactor = true;
+      if (data.signInId) e.signInId = data.signInId;
+      throw e;
+    }
+    return data;
+  } finally {
+    activeRequests--;
+    updateLoadingState();
+  }
+}
+
+
+// Auth
+export const getAuthStatus = () => request('/auth/status');
+export const setupPassword = (password) =>
+  request('/auth/setup', { method: 'POST', body: { password }, skipAuth: true });
+export const login = (password) =>
+  request('/auth/login', { method: 'POST', body: { password }, skipAuth: true });
+export const logout = () => request('/auth/logout', { method: 'POST' });
+export const changePassword = (currentPassword, newPassword) =>
+  request('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
+export const nukeApp = () => request('/auth/nuke', { method: 'POST', skipAuth: true });
+export const shutdownServer = () => request('/shutdown', { method: 'POST' });
+
+export function saveToken(token) {
+  handledAuthFailure = false;
+  localStorage.setItem('hydra_token', token);
+}
+export function clearToken() {
+  localStorage.removeItem('hydra_token');
+}
+export function hasToken() {
+  return !!getToken();
+}
+
+// Dashboard
+export const getDashboard = () => request('/dashboard');
+export const refreshDashboard = () => request('/dashboard');
+
+// Accounts
+export const getAccounts = () => request('/accounts');
+export const addAccount = (alias, managementKey) =>
+  request('/accounts', { method: 'POST', body: { alias, managementKey } });
+export const addAccountWithCredentials = (alias, email, password, authMethod) =>
+  request('/accounts/with-credentials', { method: 'POST', body: { alias, email, password, authMethod } });
+export const bulkAddAccounts = (lines) =>
+  request('/accounts/bulk', { method: 'POST', body: { lines } });
+/** Create OTP-only vault rows from emails only (Bulk Auth wizard). */
+export const bulkOtpStubs = (emails) =>
+  request('/accounts/bulk-otp-stubs', { method: 'POST', body: { emails } });
+export const updateAccount = (id, updates) =>
+  request(`/accounts/${id}`, { method: 'PATCH', body: updates });
+export const deleteAccount = (id) => request(`/accounts/${id}`, { method: 'DELETE' });
+export const getAccountSnapshot = (id) => request(`/accounts/${id}/snapshot`);
+
+// Auth flows
+export const detectAuthMethod = (id) =>
+  request(`/accounts/${id}/detect-auth`, { method: 'POST' });
+export const loginAccount = (id, password) =>
+  request(`/accounts/${id}/login`, { method: 'POST', body: { password } });
+export const startOTP = (id, email) =>
+  request(`/accounts/${id}/otp/start`, { method: 'POST', body: { email } });
+export const verifyOTP = (id, signInId, code, options = {}) =>
+  request(`/accounts/${id}/otp/verify`, {
+    method: 'POST',
+    body: { ...options, signInId, code },
+  });
+export const refreshSession = (id) =>
+  request(`/accounts/${id}/refresh`, { method: 'POST' });
+export const getSessionStatus = (id) => request(`/accounts/${id}/session-status`);
+
+// Provisioning
+export const provisionManagementKey = (id, keyName) =>
+  request(`/accounts/${id}/provision`, { method: 'POST', body: { keyName } });
+export const provisionAll = () =>
+  request('/accounts/provision-all', { method: 'POST' });
+
+// Keys
+export const getKeys = (accountId) => request(`/accounts/${accountId}/keys`);
+export const createKey = (accountId, data) =>
+  request(`/accounts/${accountId}/keys`, { method: 'POST', body: data });
+export const updateKey = (accountId, hash, updates) =>
+  request(`/accounts/${accountId}/keys/${hash}`, { method: 'PATCH', body: updates });
+export const deleteKey = (accountId, hash) =>
+  request(`/accounts/${accountId}/keys/${hash}`, { method: 'DELETE' });
+
+// Code Redemption
+export const redeemCode = (accountId, code) =>
+  request('/codes/redeem', { method: 'POST', body: { accountId, code } });
+export const bulkRedeemCode = (accountIds, code) =>
+  request('/codes/bulk', { method: 'POST', body: { accountIds, code } });
+export const bulkMatrixRedeem = (assignments) =>
+  request('/codes/bulk-matrix', { method: 'POST', body: { assignments } });
+export const preflightRedeemAccounts = (accountIds) =>
+  request('/codes/preflight', { method: 'POST', body: { accountIds } });
+export const getDiscoveredEndpoints = () => request('/codes/endpoints');
+
+// Generator
+export const startGeneratorJob = (emailTemplate, password, count) => 
+  request('/generator/start', { method: 'POST', body: { emailTemplate, password, count } });
+export const getGeneratorJobStatus = (taskId, signal) => 
+  request(`/generator/status/${taskId}`, { signal });
+export const heartbeatGeneratorJob = (taskId, signal) =>
+  request(`/generator/${taskId}/heartbeat`, { method: 'POST', signal });
+export const submitGeneratorOtp = (taskId, otp) => 
+  request(`/generator/verify/${taskId}`, { method: 'POST', body: { otp } });
+export const cleanupGeneratorJob = (taskId, reason = 'cancelled', options = {}) => 
+  request(`/generator/${taskId}`, { method: 'DELETE', body: { reason }, ...options });
+
+// Pool Manager
+export const getPoolData = () => request('/pool');
+export const getPoolStatus = () => request('/pool/status');
+export const getMasterKey = () => request('/pool/master-key');
+export const getNetworkInfo = () => request('/pool/network');
+export const reloadPool = () => request('/pool/reload', { method: 'POST' });
+export const toggleKeyPooled = (hash, isPooled) =>
+  request(`/pool/key/${hash}`, { method: 'PATCH', body: { isPooled } });
+export const toggleAccountPooled = (accountId, isPooled) =>
+  request(`/pool/account/${accountId}/toggle`, { method: 'POST', body: { isPooled } });
+export const registerKeyString = (hash, keyString) =>
+  request(`/pool/key/${hash}/register`, { method: 'POST', body: { keyString } });
+export const refreshModels = () => request('/pool/models/refresh', { method: 'POST' });
+export const getTraffic = () => request('/pool/traffic');
+
+// System
+export const getSystemTasks = () => request('/system/tasks');
+export const cancelSystemTask = (taskId, reason = 'operator_cancelled') => request(`/system/tasks/${taskId}/cancel`, { method: 'POST', body: { reason } });
+export const getSystemHealth = () => request('/system/health');

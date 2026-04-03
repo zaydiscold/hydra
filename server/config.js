@@ -1,0 +1,78 @@
+import process from 'node:process';
+import 'dotenv/config';
+import { z } from 'zod';
+
+function parseBoolean(value) {
+  if (value === undefined) return false;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
+const optionalHexSecret = z
+  .string()
+  .regex(/^[0-9a-fA-F]{64}$/, 'must be a 64-character hex string')
+  .optional();
+
+const configSchema = z.object({
+  PORT: z.coerce.number().default(3001),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  JWT_SECRET: z.string().min(1, 'JWT_SECRET is required').default('hydra-dev-secret-unsafe'),
+  /** Master lock-screen JWT lifetime (jsonwebtoken `expiresIn`, e.g. 8h, 7d, 30d). */
+  HYDRA_MASTER_JWT_TTL: z.string().min(1).max(48).default('30d'),
+  LOCAL_STORAGE_KEY: optionalHexSecret,
+  VAULT_KEY: optionalHexSecret,
+  HYDRA_PROXY_SECRET: optionalHexSecret,
+  HYDRA_RESET_LEGACY_STORAGE: z.boolean().default(false),
+  RATE_LIMIT_WINDOW: z.coerce.number().default(15 * 60 * 1000),
+  RATE_LIMIT_MAX: z.coerce.number().default(100),
+  OR_BASE: z.string().url().default('https://openrouter.ai'),
+  /** Browser-parity headers for Clerk FAPI (OpenRouter dashboard origin). */
+  CLERK_ORIGIN: z.string().url().default('https://openrouter.ai'),
+  CLERK_REFERER: z.string().url().default('https://openrouter.ai/sign-in'),
+  /** Run server-side Playwright with a visible browser (local debugging). */
+  HYDRA_PLAYWRIGHT_HEADED: z.boolean().default(false),
+  /** Save screenshots on management-key provision failure (also on in development). */
+  HYDRA_PROVISION_DEBUG: z.boolean().default(false),
+  /** Log OpenRouter POST URLs + postData + status during management-key Playwright (no response bodies). */
+  HYDRA_PROVISION_NETWORK_LOG: z.boolean().default(false),
+  /** Extra step-level stderr logs during management-key Playwright (goto, click, fill milestones). */
+  HYDRA_PROVISION_VERBOSE: z.boolean().default(false),
+});
+
+let parsedConfig;
+try {
+  parsedConfig = configSchema.parse({
+    PORT: process.env.PORT,
+    NODE_ENV: process.env.NODE_ENV,
+    DATABASE_URL: process.env.DATABASE_URL,
+    JWT_SECRET: process.env.JWT_SECRET,
+    HYDRA_MASTER_JWT_TTL: process.env.HYDRA_MASTER_JWT_TTL,
+    LOCAL_STORAGE_KEY: process.env.LOCAL_STORAGE_KEY,
+    VAULT_KEY: process.env.VAULT_KEY,
+    HYDRA_PROXY_SECRET: process.env.HYDRA_PROXY_SECRET,
+    HYDRA_RESET_LEGACY_STORAGE: parseBoolean(process.env.HYDRA_RESET_LEGACY_STORAGE),
+    RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW,
+    RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX,
+    OR_BASE: process.env.OR_BASE,
+    CLERK_ORIGIN: process.env.CLERK_ORIGIN,
+    CLERK_REFERER: process.env.CLERK_REFERER,
+    HYDRA_PLAYWRIGHT_HEADED: parseBoolean(process.env.HYDRA_PLAYWRIGHT_HEADED),
+    HYDRA_PROVISION_DEBUG: parseBoolean(process.env.HYDRA_PROVISION_DEBUG),
+    HYDRA_PROVISION_NETWORK_LOG: parseBoolean(process.env.HYDRA_PROVISION_NETWORK_LOG),
+    HYDRA_PROVISION_VERBOSE: parseBoolean(process.env.HYDRA_PROVISION_VERBOSE),
+  });
+} catch (err) {
+  console.error('Invalid environment variables:', err.issues ?? err.errors ?? err);
+  process.exit(1);
+}
+
+export const config = parsedConfig;
+export const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
+export const CLERK_BASE = 'https://clerk.openrouter.ai/v1';
+export const OR_BASE = config.OR_BASE;
+export const CLERK_ORIGIN = config.CLERK_ORIGIN;
+export const CLERK_REFERER = config.CLERK_REFERER;
+
+export function validateConfig() {
+  return true;
+}

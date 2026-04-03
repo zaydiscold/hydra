@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  passwordHash String
+  tokenVersion Int       @default(0)
+  accounts     Account[]
+  createdAt    DateTime  @default(now())
+}
+
+model Account {
+  id           String    @id @default(uuid())
+  openRouterId String?
+  alias        String
+  sessionToken String    // Encrypted strings
+  config       String?   // Encrypted JSON
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keys         Key[]
+  createdAt    DateTime  @default(now())
+}
+
+model Key {
+  hash              String    @id // OpenRouter API Key Hash
+  key               String?   // Encrypted API key string
+  label             String
+  name              String
+  createdAt         DateTime  @default(now())
+  isProvisioningKey Boolean   @default(false)
+  disabled          Boolean   @default(false)
+  isPooled          Boolean   @default(false)
+  limit             Float?
+  limitRemaining    Float?
+  limitReset        String?
+  usage             Float?
+  usageMonthly      Float?
+  accountId         String
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  requestLogs       RequestLog[]
+}
+
+model Discovery {
+  id        String   @id @default("singleton")
+  data      String   // JSON string of discovered endpoints
+  updatedAt DateTime @updatedAt
+}
+
+model CachedModel {
+  id        String   @id
+  name      String
+  ctx       Int?
+  category  String?
+  ownedBy   String?
+  updatedAt DateTime @updatedAt
+}
+
+model RequestLog {
+  id               String   @id @default(uuid())
+  keyHash          String?
+  key              Key?     @relation(fields: [keyHash], references: [hash], onDelete: SetNull)
+  model            String
+  status           Int
+  latencyMs        Int
+  promptTokens     Int?
+  completionTokens Int?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([keyHash, createdAt])
+}

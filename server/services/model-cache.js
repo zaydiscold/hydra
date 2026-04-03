@@ -1,0 +1,78 @@
+import { OR_BASE, config } from '../config.js';
+import { prisma } from './db.js';
+
+const MODELS_PATH = '/api/v1/models';
+
+export function normalizeUpstreamModel(m) {
+  return {
+    id: m.id,
+    name: m.name ?? m.id,
+    ctx: m.context_length ?? null,
+    category: null,
+    ownedBy: m.architecture?.instructor ? 'instructor' : null,
+  };
+}
+
+/**
+ * Replace CachedModel rows with the upstream OpenRouter model list.
+ * @param {Array} models - items from OpenRouter `data` array
+ * @returns {number} rows written
+ */
+export async function upsertModelsFromUpstream(models) {
+  if (!Array.isArray(models) || models.length === 0) return 0;
+  const rows = models.map(normalizeUpstreamModel);
+  await prisma.$transaction([
+    prisma.cachedModel.deleteMany({}),
+    prisma.cachedModel.createMany({ data: rows }),
+  ]);
+  return rows.length;
+}
+
+function modelsReferer() {
+  const port = config.PORT ?? 3001;
+  return `http://localhost:${port}`;
+}
+
+/**
+ * GET OpenRouter /api/v1/models with a standard API key.
+ * @returns {{ ok: true, data: object[], raw: object } | { ok: false, status: number, data: null }}
+ */
+export async function fetchOpenRouterModelsList(apiKey) {
+  const res = await fetch(`${OR_BASE}${MODELS_PATH}`, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'HTTP-Referer': modelsReferer(),
+    },
+  });
+  if (!res.ok) {
+    return { ok: false, status: res.status, data: null, raw: null };
+  }
+  const raw = await res.json();
+  const list = Array.isArray(raw?.data) ? raw.data : [];
+  return { ok: true, status: res.status, data: list, raw };
+}
+
+/** OpenAI-style model object for clients reading from SQLite cache */
+export function cachedRowToClientModel(m) {
+  return {
+    id: m.id,
+    object: 'model',
+    created: 0,
+    owned_by: m.ownedBy || 'openrouter',
+    name: m.name,
+  };
+}
+
+export async function getModelCacheSummary() {
+  const [count, newest] = await Promise.all([
+    prisma.cachedModel.count(),
+    prisma.cachedModel.findFirst({
+      orderBy: { updatedAt: 'desc' },
+      select: { updatedAt: true },
+    }),
+  ]);
+  return {
+    count,
+    updatedAt: newest?.updatedAt?.toISOString() ?? null,
+  };
+}

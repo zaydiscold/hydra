@@ -1,0 +1,146 @@
+/**
+ * Rotation Manager — In-memory API key pool with circuit-breaker logic.
+ *
+ * Strategy: Weighted random by remaining balance (with round-robin fallback).
+ * Circuit breaker: 429 → 60s cooldown, 402 → 10min cooldown, 401 → permanent eviction.
+ */
+
+import { prisma } from './db.js';
+import { logger } from './logger.js';
+
+const COOLDOWN_429 = 60 * 1000;        // 1 min for rate-limits
+const COOLDOWN_402 = 10 * 60 * 1000;   // 10 min for credit-depleted keys
+
+class RotationManager {
+  constructor() {
+    /** @type {Array<{hash: string, keyString: string, name: string, accountAlias: string, accountId: string}>} */
+    this.pool = [];
+    this.index = 0;
+    /** @type {Map<string, number>} hash → expiry timestamp */
+    this.cooldowns = new Map();
+    this.loaded = false;
+    this.userId = null;
+  }
+
+  /** Called lazily on first request if pool was never initialized */
+  async ensureLoaded() {
+    if (this.loaded) return;
+    const user = await prisma.user.findFirst();
+    if (!user) return;
+    this.userId = user.id;
+    await this.reload();
+  }
+
+  /** Reload the pool from DB. Call after any pool toggle. */
+  async reload() {
+    if (!this.userId) {
+      const user = await prisma.user.findFirst();
+      if (!user) return;
+      this.userId = user.id;
+    }
+
+    // Lazy import to avoid circular require
+    const { getPooledKeys } = await import('./store.js');
+    const keys = await getPooledKeys(this.userId);
+
+    this.pool = keys;
+    this.index = 0;
+    this.loaded = true;
+    logger.info(`[POOL] Rotation pool reloaded: ${keys.length} active key(s)`);
+  }
+
+  /**
+   * Returns the next available key dynamically weighted by $ remaining.
+   * Keys with higher balances are statistically more likely to be picked.
+   * @returns {Promise<{hash: string, keyString: string, name: string, limitRemaining: number} | null>}
+   */
+  async getNextKey(excludedHashes = new Set()) {
+    await this.ensureLoaded();
+
+    if (this.pool.length === 0) return null;
+
+    const now = Date.now();
+    const available = this.pool.filter(k => {
+      const exp = this.cooldowns.get(k.hash);
+      const notExcluded = !excludedHashes.has(k.hash);
+      return (!exp || exp <= now) && notExcluded;
+    });
+
+    if (available.length === 0) return null;
+
+    // Default to strict round-robin if weighting logic fails or every key is broke
+    const fallbackRobin = () => {
+      const key = available[this.index % available.length];
+      this.index = (this.index + 1) % available.length;
+      return key;
+    };
+
+    // ── Weighted Selection ──
+    try {
+      // Map each key to a weight (min weight of 0.1 to avoid $0 keys starving completely)
+      let totalWeight = 0;
+      const weights = available.map(k => {
+        // If a key has no limit, treat it as very healthy (e.g. $50 default weight)
+        let weight = k.limitRemaining === null ? 50.0 : Math.max(0.1, Number(k.limitRemaining));
+        totalWeight += weight;
+        return { key: k, weight };
+      });
+
+      if (totalWeight <= 0) return fallbackRobin();
+
+      let random = Math.random() * totalWeight;
+      for (const item of weights) {
+        if (random < item.weight) return item.key;
+        random -= item.weight;
+      }
+    } catch {
+      // safe fallback
+    }
+
+    return fallbackRobin();
+  }
+
+  /** Apply a temporary cooldown to a key after a failed upstream request */
+  applyCooldown(hash, httpStatus) {
+    const duration = httpStatus === 402 ? COOLDOWN_402 : COOLDOWN_429;
+    this.cooldowns.set(hash, Date.now() + duration);
+    const label = httpStatus === 402 ? 'credit-depleted' : 'rate-limited';
+    logger.warn(`[POOL] Key ${hash.slice(0, 8)}… ${label} → cooling for ${duration / 1000}s`);
+  }
+
+  /** Permanently disable a revoked key (401) */
+  async evict(hash) {
+    try {
+      await prisma.key.update({
+        where: { hash },
+        data: { disabled: true, isPooled: false }
+      });
+    } catch (e) {
+      logger.error(`[POOL] Failed to evict ${hash.slice(0, 8)}: ${e.message}`);
+    }
+    this.pool = this.pool.filter(k => k.hash !== hash);
+    logger.warn(`[POOL] Key ${hash.slice(0, 8)}… permanently evicted (401 revoked)`);
+  }
+
+  /** Returns live stats for the Pool Manager UI */
+  getStatus() {
+    const now = Date.now();
+    const poolHashes = new Set(this.pool.map(k => k.hash));
+    const cooledHashes = [...this.cooldowns.entries()]
+      .filter(([hash, exp]) => poolHashes.has(hash) && exp > now)
+      .map(([h]) => h);
+
+    return {
+      totalPooled: this.pool.length,
+      activeCooldowns: cooledHashes.length,
+      available: Math.max(0, this.pool.length - cooledHashes.length),
+    };
+  }
+
+  async getStatusAsync() {
+    await this.ensureLoaded();
+    return this.getStatus();
+  }
+}
+
+export const rotationManager = new RotationManager();
