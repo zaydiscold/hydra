@@ -1222,12 +1222,13 @@ function shouldAbortProvisioning(err) {
   if (err.isHtml && err.httpStatus === 200) {
     // Check if it looks like a Cloudflare challenge
     if (err.htmlInfo?.looksLikeCloudflare) return true;
-    // Check if it looks like a login page
-    if (err.htmlInfo?.looksLikeLoginPage) return true;
+    // DON'T abort on login page - might be wrong endpoint, try others
+    // if (err.htmlInfo?.looksLikeLoginPage) return true;
   }
   // Hardened: Handle trpcCodes that indicate permanent failures
   if (err.trpcCode === 'HTML_RESPONSE' || err.trpcCode === 'OVERSIZED_RESPONSE') {
-    return true;
+    // Don't abort - try other routes or fallbacks
+    return false;
   }
   if ([401, 403, 423, 429].includes(err.httpStatus)) return true;
   return false;
