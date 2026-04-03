@@ -25,6 +25,7 @@ import { startPinger, stopPinger } from './services/health-pinger.js';
 import { startRequestLogRetention, stopRequestLogRetention } from './services/request-log-retention.js';
 import { taskSupervisor } from './services/task-supervisor.js';
 import { enforceLegacyStorageReset } from './services/legacy-storage.js';
+import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -136,6 +137,21 @@ async function bootstrap() {
     logger.info(`  🐉 Hydra Server live on port ${config.PORT}`);
     logger.info(`  Environment: ${config.NODE_ENV}`);
     logger.info(`  Network: http://0.0.0.0:${config.PORT}`);
+    try {
+      const hydraKey    = getMasterProxyKey();
+      const genericKey  = getGenericProxyKey();
+      const base        = `http://localhost:${config.PORT}/v1`;
+      logger.info('');
+      logger.info('  ┌─ Proxy Keys ──────────────────────────────────────────────────────────────┐');
+      logger.info(`  │  Hydra branded   : ${hydraKey}`);
+      logger.info(`  │  OpenAI-compat   : ${genericKey}`);
+      logger.info(`  │  Base URL        : ${base}`);
+      logger.info('  │  Use either key as "Authorization: Bearer <key>" in Cursor / any client.  │');
+      logger.info('  └───────────────────────────────────────────────────────────────────────────┘');
+      logger.info('');
+    } catch (keyErr) {
+      logger.warn(`  [PROXY] Could not derive proxy keys (vault not yet initialised?): ${keyErr.message}`);
+    }
   });
 }
 

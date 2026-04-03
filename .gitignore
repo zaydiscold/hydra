@@ -21,6 +21,7 @@ dist-ssr
 
 # Local Data Storage
 data/
+data/local-secrets.json
 vault.json
 auth.json
 

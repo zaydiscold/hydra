@@ -28,7 +28,11 @@ class DashboardController extends BaseController {
       let refreshedSessions = false;
       for (const account of accounts) {
         const meta = metaById.get(account.id);
-        if (meta?.sessionStatus !== 'expiring') continue;
+        // Refresh both 'expiring' (proactive) and 'expired' (reactive) sessions as long as a
+        // clientCookie exists — the __client device cookie can obtain a fresh __session JWT
+        // without a full re-login.
+        const needsRefresh = meta?.sessionStatus === 'expiring' || meta?.sessionStatus === 'expired';
+        if (!needsRefresh) continue;
         const cc = account.clientCookie?.trim();
         if (!cc || cc === 'undefined') continue;
         try {
@@ -43,6 +47,7 @@ class DashboardController extends BaseController {
               refreshed.sessionExpiry,
             );
             refreshedSessions = true;
+            logger.info(`[DASHBOARD] Session refreshed via clientCookie (account=${account.id}, was=${meta.sessionStatus})`);
           }
         } catch (err) {
           logger.warn(`[DASHBOARD] Proactive refresh failed (account=${account.id}): ${err.message}`);

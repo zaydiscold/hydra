@@ -67,8 +67,10 @@ Use this to confirm the OpenRouter **Create / Name / Save** automation and provi
 | Requirement | Where in code |
 |-------------|----------------|
 | Toolbar opens flow with **Create** first | `clickFirstVisibleCreateControl` — `roleCandidates` starts with **`/^create$/i`** |
+| Scope Name/Save to active HeadlessUI modal | `managementDialog` + `fillManagementKeyNameAndSubmit` uses `#headlessui-portal-root [role="dialog"]` (falls back to page if no dialog) |
 | Fill **Name** via a11y | `fillManagementKeyNameAndSubmit` — **`getByRole('textbox', { name: /^name$/i })`**, then placeholders including **`Management Key`** |
-| Submit with **Save**, not toolbar **Create** | **`getByRole('button', { name: /^save$/i })`** first; CSS fallback order ends with **`Create`** |
+| Submit with **Save**, not toolbar **Create** | **`getByRole('button', { name: /^save$/i })`** first within modal scope; CSS fallback order ends with **`Create`** |
+| Tolerate overlay pointer interception | `fillManagementKeyNameAndSubmit` retries submit with Playwright **`click({ force: true })`** fallback |
 | Load page **before** `waitForResponse` | `createManagementKeyViaPlaywright` — `goto` + `networkidle` + **Create** click **before** registering the tRPC listener |
 | Accept tRPC / RSC POST when response body contains the key | `waitForResponse` — if **`extractManagementKeyFromResponseBody`** finds **`sk-or-mgmt-`**, the match is accepted (no longer gated on **keyName** appearing in `postData`, which breaks batched/encoded bodies). Deep JSON walk for nested key fields. |
 | Persist route **outside** response predicate | `discoveredRouteFromWait` → **`saveDiscoveredEndpoints`** after **`await trpcKeyWait`** |

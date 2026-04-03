@@ -26,5 +26,6 @@ router.get('/:id/session-status', requireUnlocked, (req, res) => controller.getS
 router.patch('/:id', requireUnlocked, (req, res) => controller.updateAccount(req, res));
 router.delete('/:id', requireUnlocked, (req, res) => controller.deleteAccount(req, res));
 router.get('/:id/snapshot', requireUnlocked, (req, res) => controller.getSnapshot(req, res));
+router.get('/:id/management-key', requireUnlocked, (req, res) => controller.getManagementKey(req, res));
 
 export default router;

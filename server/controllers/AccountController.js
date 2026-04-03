@@ -292,7 +292,33 @@ export class AccountController extends BaseController {
       await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry);
       await store.updateAccountLastSync(req.user.id, req.params.id);
 
-      return this.success(res, { sessionExpiry: session.sessionExpiry, status: 'active' });
+      // Auto-provision management key in background if none exists yet.
+      // Fire-and-forget: OTP response is already sent; provisioning can take up to 30s (Playwright path).
+      const userId = req.user.id;
+      const accountId = req.params.id;
+      let autoProvision = 'skipped';
+      try {
+        const acct = await store.getAccountWithKey(userId, accountId);
+        if (!acct.managementKey) {
+          autoProvision = 'started';
+          setImmediate(async () => {
+            try {
+              const result = await dashboardApi.createManagementKey(userId, accountId);
+              if (result?.key) {
+                logger.info(`[ACCOUNT] Auto-provisioned management key after OTP (account=${accountId})`);
+              } else {
+                logger.warn(`[ACCOUNT] Auto-provision after OTP got no key (account=${accountId}): ${result?.message || 'unknown'}`);
+              }
+            } catch (provErr) {
+              logger.warn(`[ACCOUNT] Auto-provision after OTP failed (account=${accountId}): ${provErr.message}`);
+            }
+          });
+        }
+      } catch (checkErr) {
+        logger.warn(`[ACCOUNT] Auto-provision pre-check failed (account=${accountId}): ${checkErr.message}`);
+      }
+
+      return this.success(res, { sessionExpiry: session.sessionExpiry, status: 'active', autoProvision });
     } catch (err) {
       logger.warn(`[ACCOUNT] verifyOTP failed (account=${req.params.id}): ${err.message}`);
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
@@ -327,7 +353,8 @@ export class AccountController extends BaseController {
 
   async provision(req, res) {
     try {
-      const result = await dashboardApi.createManagementKey(req.user.id, req.params.id, req.body.keyName);
+      const keyName = req.body?.keyName;
+      const result = await dashboardApi.createManagementKey(req.user.id, req.params.id, keyName);
       if (result?.success === false) {
         return this.error(
           res,
@@ -420,6 +447,19 @@ export class AccountController extends BaseController {
     try {
       await store.deleteAccount(req.user.id, req.params.id);
       return this.success(res, { deleted: true });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
+  /** Return the stored management key for the account (for export / display purposes). */
+  async getManagementKey(req, res) {
+    try {
+      const account = await store.getAccountWithKey(req.user.id, req.params.id);
+      if (!account.managementKey) {
+        return this.error(res, 'No management key stored for this account. Provision one first.', 404);
+      }
+      return this.success(res, { managementKey: account.managementKey, email: account.email });
     } catch (err) {
       return this.error(res, err.message, err.status || 500);
     }

@@ -46,6 +46,7 @@ export default function BulkAuthWizard({ addToast }) {
   const [provisionEnabled, setProvisionEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
+  const [fetchingKeys, setFetchingKeys] = useState(false);
   const [localError, setLocalError] = useState('');
   const [errorCopyCommand, setErrorCopyCommand] = useState('');
 
@@ -87,6 +88,7 @@ export default function BulkAuthWizard({ addToast }) {
             email: row.account.email,
             verified: false,
             skipped: false,
+            managementKey: null,
           });
         } else {
           if (row.skipped === 'duplicate_email') dup += 1;
@@ -167,12 +169,62 @@ export default function BulkAuthWizard({ addToast }) {
       await api.provisionManagementKey(current.id, keyName.trim() || 'hydra-bulk');
       appendLog(`provisioned key → ${current.email}`);
       addToast?.('Management key saved', 'success');
+      // Immediately fetch and store the key so the export section can show it
+      try {
+        const keyRes = await api.getAccountManagementKey(current.id);
+        const mgmtKey = keyRes?.data?.managementKey ?? keyRes?.managementKey ?? null;
+        if (mgmtKey) {
+          setQueue((q) =>
+            q.map((item, i) => (i === currentIdx ? { ...item, managementKey: mgmtKey } : item)),
+          );
+          appendLog(`export key captured → ${current.email}`);
+        }
+      } catch (_fetchErr) {
+        // non-fatal — user can still use "Fetch provisioned keys" button later
+      }
     } catch (err) {
       setLocalError(api.formatApiErrorMessage(err));
       setErrorCopyCommand(err.hydraCopyCommand ?? '');
       addToast?.(err.message, 'error');
     }
     setBusy(false);
+  }
+
+  async function handleFetchKeys() {
+    const targets = queue.filter((item) => item.verified && !item.managementKey);
+    if (!targets.length) {
+      addToast?.('No verified accounts without a captured key', 'info');
+      return;
+    }
+    setFetchingKeys(true);
+    let fetched = 0;
+    let missing = 0;
+    for (const item of targets) {
+      try {
+        const res = await api.getAccountManagementKey(item.id);
+        const mgmtKey = res?.data?.managementKey ?? res?.managementKey ?? null;
+        if (mgmtKey) {
+          setQueue((q) =>
+            q.map((entry) => (entry.id === item.id ? { ...entry, managementKey: mgmtKey } : entry)),
+          );
+          fetched++;
+          appendLog(`key fetched → ${item.email}`);
+        } else {
+          missing++;
+          appendLog(`no key stored yet → ${item.email}`);
+        }
+      } catch (_err) {
+        missing++;
+        appendLog(`fetch failed → ${item.email}`);
+      }
+    }
+    addToast?.(
+      fetched
+        ? `Fetched ${fetched} key(s)${missing ? `, ${missing} not yet provisioned` : ''}`
+        : `${missing} account(s) have no management key yet — provision first`,
+      fetched ? 'success' : 'warning',
+    );
+    setFetchingKeys(false);
   }
 
   function handleSkipAccount() {
@@ -213,6 +265,7 @@ export default function BulkAuthWizard({ addToast }) {
             verified: false,
             skipped: false,
             fromExisting: true,
+            managementKey: null,
           });
         }
         mergedLen = merged.length;
@@ -478,6 +531,70 @@ export default function BulkAuthWizard({ addToast }) {
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {verifiedCount > 0 && (
+        <section className="card" style={{ marginBottom: 'var(--space-md)' }}>
+          <h2 style={{ fontSize: '1rem', marginBottom: 'var(--space-xs, 4px)' }}>3. Export credentials</h2>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-sm)' }}>
+            After verification Hydra auto-provisions a management key in the background. Click{' '}
+            <strong>Fetch provisioned keys</strong> to pull any that are ready, then copy the list below.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 'var(--space-sm)' }}>
+            <button
+              type="button"
+              data-testid="bulk-auth-fetch-keys"
+              className="btn btn-ghost"
+              onClick={() => void handleFetchKeys()}
+              disabled={fetchingKeys || busy}
+            >
+              {fetchingKeys ? 'Fetching…' : 'Fetch provisioned keys'}
+            </button>
+            <button
+              type="button"
+              data-testid="bulk-auth-copy-export"
+              className="btn btn-ghost"
+              onClick={() => {
+                const lines = queue
+                  .filter((item) => item.verified && item.managementKey)
+                  .map((item) => `${item.email}:${item.managementKey}`)
+                  .join('\n');
+                if (!lines) { addToast?.('No keys captured yet — fetch first', 'warning'); return; }
+                navigator.clipboard?.writeText(lines).then(
+                  () => addToast?.('Copied to clipboard', 'success'),
+                  () => addToast?.('Clipboard unavailable — select and copy manually', 'warning'),
+                );
+              }}
+              disabled={!queue.some((item) => item.verified && item.managementKey)}
+            >
+              Copy all to clipboard
+            </button>
+          </div>
+          <textarea
+            data-testid="bulk-auth-export-textarea"
+            className="form-input"
+            readOnly
+            rows={Math.min(Math.max(queue.filter((item) => item.verified).length, 3), 12)}
+            value={queue
+              .filter((item) => item.verified)
+              .map((item) =>
+                item.managementKey ? `${item.email}:${item.managementKey}` : `${item.email}:(no key yet)`,
+              )
+              .join('\n')}
+            spellCheck={false}
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+              minHeight: 80,
+              resize: 'vertical',
+            }}
+          />
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 6 }}>
+            {queue.filter((item) => item.verified && item.managementKey).length} / {verifiedCount} keys captured
+            {queue.some((item) => item.verified && !item.managementKey) ? ' — some pending (auto-provision runs in background, retry in a few seconds)' : ''}
+          </p>
         </section>
       )}
 

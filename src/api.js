@@ -134,6 +134,7 @@ export const updateAccount = (id, updates) =>
   request(`/accounts/${id}`, { method: 'PATCH', body: updates });
 export const deleteAccount = (id) => request(`/accounts/${id}`, { method: 'DELETE' });
 export const getAccountSnapshot = (id) => request(`/accounts/${id}/snapshot`);
+export const getAccountManagementKey = (id) => request(`/accounts/${id}/management-key`);
 
 // Auth flows
 export const detectAuthMethod = (id) =>

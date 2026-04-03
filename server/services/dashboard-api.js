@@ -107,6 +107,24 @@ function extractManagementKeyFromResponseBody(body) {
   return null;
 }
 
+async function persistProvisionedManagementKey(userId, accountId, key, source = 'unknown') {
+  if (!key || typeof key !== 'string' || !key.startsWith('sk-or-mgmt-')) {
+    const err = new Error('Provisioning returned an invalid management key format');
+    err.code = 'PROVISION_INVALID_KEY_FORMAT';
+    err.source = source;
+    throw err;
+  }
+
+  await store.updateAccountManagementKey(userId, accountId, key);
+  const saved = await store.getAccountWithKey(userId, accountId);
+  if (!saved?.managementKey || saved.managementKey !== key) {
+    const err = new Error('Management key was created but could not be persisted to account');
+    err.code = 'PROVISION_PERSIST_FAILED';
+    err.source = source;
+    throw err;
+  }
+}
+
 /**
  * Batched tRPC URLs use `/api/trpc/a.b,c.d` — persist a single procedure name for trpcCall replay.
  */
@@ -500,7 +518,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
           if (!key.startsWith('sk-or-mgmt-')) {
             throw new Error('tRPC returned a non-management key for management key creation.');
           }
-          await store.updateAccountManagementKey(userId, accountId, key);
+          await persistProvisionedManagementKey(userId, accountId, key, 'trpc-cached');
           return { key, source: 'trpc-cached' };
         }
       } catch (err) {
@@ -527,7 +545,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
         const key = result?.key || result?.managementKey || result?.apiKey;
         if (key && key.startsWith('sk-or-mgmt-')) {
           await store.saveDiscoveredEndpoints({ createManagementKey: { route, discoveredAt: new Date().toISOString() } });
-          await store.updateAccountManagementKey(userId, accountId, key);
+          await persistProvisionedManagementKey(userId, accountId, key, `trpc-${route}`);
           return { key, source: `trpc-${route}` };
         }
       } catch (err) {
@@ -584,6 +602,10 @@ async function clickFirstVisibleCreateControl(page) {
   return false;
 }
 
+function managementDialog(page) {
+  return page.locator('#headlessui-portal-root [role="dialog"], [role="dialog"]').first();
+}
+
 function trpcPathLooksLikeManagementKeyCreate(pathSegment) {
   if (!pathSegment) return false;
   const p = decodeURIComponent(pathSegment.split('?')[0] || '').toLowerCase();
@@ -592,29 +614,65 @@ function trpcPathLooksLikeManagementKeyCreate(pathSegment) {
   return /managementkeys?\.|mgmt.*\.create|\.createkey/.test(p);
 }
 
-async function fillManagementKeyNameAndSubmit(page, keyName) {
-  const nameByRole = page.getByRole('textbox', { name: /^name$/i });
-  const nameByPlaceholder = page.locator(
+async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
+  const dialog = managementDialog(page);
+  const inDialog = await dialog.isVisible({ timeout: 2500 }).catch(() => false);
+  const scope = inDialog ? dialog : page;
+
+  // Try role-based first (aria-label or accessible name matching "name"), then broader selectors
+  const nameByRole = scope.getByRole('textbox', { name: /^name$/i });
+  const nameByRoleAlt = scope.getByRole('textbox', { name: /name/i });
+  const nameByPlaceholder = scope.locator(
     'input[placeholder*="Management Key" i], input[placeholder*="name" i], input[placeholder*="Name"], input[name="name"], input[aria-label*="name" i]',
   );
-  const nameInput = (await nameByRole.isVisible({ timeout: 2000 }).catch(() => false))
-    ? nameByRole
-    : nameByPlaceholder.first();
+  // Fallback: any visible text input in the dialog (for UI variants with unlabeled inputs)
+  const nameByFallback = scope.locator('[role="dialog"] input[type="text"], [role="dialog"] input:not([type="hidden"])').first();
+
+  let nameInput;
+  if (await nameByRole.isVisible({ timeout: 1500 }).catch(() => false)) {
+    nameInput = nameByRole;
+  } else if (await nameByRoleAlt.isVisible({ timeout: 1500 }).catch(() => false)) {
+    nameInput = nameByRoleAlt;
+  } else if (await nameByPlaceholder.first().isVisible({ timeout: 1500 }).catch(() => false)) {
+    nameInput = nameByPlaceholder.first();
+  } else {
+    nameInput = nameByFallback;
+  }
   const nameVisible = await nameInput.isVisible({ timeout: 4000 }).catch(() => false);
   if (!nameVisible) {
+    // Log what inputs are actually visible in the dialog so we can debug
+    provisionStepLog(accountId, 'fillName: Name field not visible — logging all visible inputs in dialog');
+    const allInputs = await dialog.locator('input, [contenteditable="true"], [contenteditable]').all();
+    for (const inp of allInputs) {
+      const visible = await inp.isVisible().catch(() => false);
+      const tag = await inp.evaluate((el) => el.tagName + (el.id ? `#${el.id}` : '') + (el.className ? `.${el.className.split(' ').join('.')}` : '')).catch(() => '?');
+      const role = await inp.getAttribute('role').catch(() => null);
+      const type = await inp.getAttribute('type').catch(() => null);
+      const placeholder = await inp.getAttribute('placeholder').catch(() => null);
+      provisionStepLog(accountId, `  input: ${tag} role=${role} type=${type} placeholder=${placeholder} visible=${visible}`);
+    }
     throw new Error(
       'Management key form: Name field not visible after opening the create flow (check OpenRouter UI / selectors).',
     );
   }
+  provisionStepLog(accountId, `Found name input (trying to fill: "${keyName}")`);
   await nameInput.click();
-  await nameInput.fill(keyName);
+  // Triple-clear to handle pre-filled values and contenteditable inputs
+  await nameInput.clear();
+  await nameInput.fill('');
+  await page.waitForTimeout(100);
+  // Type character-by-character via keyboard events — most compatible with React controlled inputs
+  await nameInput.pressSequentially(keyName, { delay: 40 });
+  // Brief pause so React can process the keystrokes
+  await page.waitForTimeout(300);
 
-  const saveBtn = page.getByRole('button', { name: /^save$/i });
+  // Try role-based Save first, then broader submit/fallback
+  const saveBtn = scope.getByRole('button', { name: /^save$/i });
   if (await saveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     await saveBtn.click();
     return;
   }
-  const submit = page.locator(
+  const submit = scope.locator(
     'button[type="submit"], button:has-text("Save"), button:has-text("Confirm"), button:has-text("Generate"), button:has-text("Create")',
   );
   const altVisible = await submit.first().isVisible({ timeout: 2000 }).catch(() => false);
@@ -623,7 +681,13 @@ async function fillManagementKeyNameAndSubmit(page, keyName) {
       'Management key form: Save (or fallback submit) button not visible — cannot complete provisioning.',
     );
   }
-  await submit.first().click();
+  try {
+    await submit.first().click();
+  } catch {
+    await submit.first().click({ force: true });
+  }
+  // Also try pressing Enter in case the form responds to keyboard submission
+  await nameInput.press('Enter');
 }
 
 async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName) {
@@ -646,7 +710,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     page = await context.newPage();
 
     if (provisionNetworkLogEnabled()) {
-      page.on('response', (response) => {
+      page.on('response', async (response) => {
         try {
           const req = response.request();
           if (req.method() !== 'POST') return;
@@ -654,8 +718,15 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           if (!u.startsWith(OR_ORIGIN)) return;
           const postData = truncateForLog(req.postData() || '', 2000);
           let line = `${new Date().toISOString()} POST ${response.status()} ${u}\npostData: ${postData || '(empty)'}`;
-          if (provisionDebugArtifactsEnabled() && u.includes('/api/trpc/')) {
+          if (u.includes('/api/trpc/')) {
             line += `\npathname: ${new URL(u).pathname}`;
+          }
+          // Log full response body in debug mode so we can see what OR actually returns
+          if (provisionDebugArtifactsEnabled()) {
+            try {
+              const body = await response.text();
+              line += `\nresponseBody: ${redactSensitiveForProvisionLog(body, 1200)}`;
+            } catch { void 0; }
           }
           line += '\n---';
           networkLogLines.push(line);
@@ -764,7 +835,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       )
       .catch(() => null);
 
-    await fillManagementKeyNameAndSubmit(page, keyName);
+    await fillManagementKeyNameAndSubmit(page, keyName, accountId);
     provisionStepLog(accountId, 'after fill name and submit');
     await Promise.race([trpcKeyWait, rscKeyWait]);
     if (capturedFromWait) capturedKey = capturedFromWait;
@@ -778,18 +849,104 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       await writeProvisionNetworkLog(accountId, networkLogLines);
     }
 
+    // Fallback 1: wait for the key to appear as visible text anywhere on the page
     if (!capturedKey) {
       await page.getByText(MGMT_KEY_RE).first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(2000);
     }
 
+    // Fallback 2: scan page textContent (catches text nodes, but NOT input .value)
     if (!capturedKey) {
       const pageText = await page.textContent('body');
       const match = pageText?.match(MGMT_KEY_RE);
       if (match) capturedKey = match[0];
+      if (capturedKey) provisionStepLog(accountId, 'Found key in page textContent');
     }
 
+    // Fallback 3: scan ALL input/textarea .value properties via evaluate()
+    // page.textContent() does NOT include <input value="..."> — this is the critical gap.
     if (!capturedKey) {
+      capturedKey = await page.evaluate((keyPattern) => {
+        const re = new RegExp(keyPattern);
+        const selectors = [
+          'input[readonly]',
+          'input[type="text"]',
+          'input[type="password"]',
+          'input',
+          'textarea',
+          '[data-key]',
+          '[data-value]',
+          '[contenteditable]',
+        ];
+        for (const sel of selectors) {
+          for (const el of document.querySelectorAll(sel)) {
+            const candidates = [
+              el.value,
+              el.getAttribute('value'),
+              el.getAttribute('data-key'),
+              el.getAttribute('data-value'),
+              el.textContent,
+              el.innerText,
+            ];
+            for (const c of candidates) {
+              if (c) {
+                const m = String(c).match(re);
+                if (m) return m[0];
+              }
+            }
+          }
+        }
+        return null;
+      }, 'sk-or-mgmt-[A-Za-z0-9_.\\-]+').catch(() => null);
+      if (capturedKey) provisionStepLog(accountId, 'Found key via DOM evaluate() input scan');
+    }
+
+    // Fallback 4: look specifically in the dialog/modal that appeared after form submit
+    if (!capturedKey) {
+      const dialog = managementDialog(page);
+      if (await dialog.isVisible({ timeout: 1000 }).catch(() => false)) {
+        const dialogText = await dialog.innerText().catch(() => '');
+        const match = dialogText?.match(MGMT_KEY_RE);
+        if (match) {
+          capturedKey = match[0];
+          provisionStepLog(accountId, 'Found key in dialog innerText');
+        }
+      }
+    }
+
+    // Fallback 5: try clipboard API (some UIs auto-copy the key on creation)
+    if (!capturedKey) {
+      capturedKey = await page.evaluate(async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          const m = text.match(/sk-or-mgmt-[A-Za-z0-9_.\\-]+/);
+          return m ? m[0] : null;
+        } catch { return null; }
+      }).catch(() => null);
+      if (capturedKey) provisionStepLog(accountId, 'Found key in clipboard');
+    }
+
+    // Fallback 6: if still no key, log ALL visible input values and dialog text for post-mortem
+    if (!capturedKey) {
+      if (provisionDebugArtifactsEnabled()) {
+        const allInputValues = await page.evaluate(() => {
+          const result = [];
+          for (const el of document.querySelectorAll('input, textarea')) {
+            result.push({
+              tag: el.tagName,
+              type: el.type,
+              name: el.name,
+              placeholder: el.placeholder,
+              readOnly: el.readOnly,
+              value: el.value ? `${el.value.slice(0, 80)}…` : '(empty)',
+            });
+          }
+          return result;
+        }).catch(() => []);
+        console.error('[dashboard-api] provision: key not found — all input values in DOM', { accountId, inputs: allInputValues });
+        const fullPageInner = await page.evaluate(() => document.body?.innerText?.slice(0, 3000) || '').catch(() => '');
+        console.error('[dashboard-api] provision: page innerText preview', { accountId, preview: redactSensitiveForProvisionLog(fullPageInner, 2000) });
+      }
       throw new Error('Could not extract management key via Playwright');
     }
 
@@ -798,7 +955,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       traceStarted = false;
     }
 
-    await store.updateAccountManagementKey(userId, accountId, capturedKey);
+    await persistProvisionedManagementKey(userId, accountId, capturedKey, 'playwright');
     return { key: capturedKey, source: 'playwright' };
   } catch (err) {
     if (traceStarted && context) {

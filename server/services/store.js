@@ -179,7 +179,7 @@ export async function getAllAccountsWithKeys(userId) {
     } catch (err) {
       // Log and auto-purge accounts whose encrypted config is unreadable (stale secrets, schema mismatch)
       logger.error(`[STORE] Corrupt account detected (id=${account.id}, alias="${account.alias}") — purging: ${err.message}`);
-      prisma.account.delete({ where: { id: account.id } }).catch(() => {});
+      prisma.account.delete({ where: { id: account.id } }).catch(() => { });
       return [];
     }
   });
@@ -252,7 +252,7 @@ export async function updateAccount(userId, id, updates) {
 
   if (updates.password !== undefined && String(updates.password).length > 0) {
     config.password = updates.password;
-  } else if (updates.email !== undefined && updates.authMethod === 'otp') {
+  } else if (updates.email !== undefined && config.authMethod === 'otp') {
     config.password = null;
   }
 
@@ -508,6 +508,12 @@ export function getMasterProxyKey() {
   const hmac = createHmac('sha256', getProxyMasterSecret());
   hmac.update('hydra-master-proxy');
   return `sk-hydra-${hmac.digest('hex').slice(0, 32)}`;
+}
+
+export function getGenericProxyKey() {
+  const hmac = createHmac('sha256', getProxyMasterSecret());
+  hmac.update('hydra-generic-proxy');
+  return `sk-proj-${hmac.digest('hex').slice(0, 48)}`;
 }
 
 export async function syncKeysFromOpenRouter(userId, accountId, liveKeys) {

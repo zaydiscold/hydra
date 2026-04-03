@@ -593,6 +593,10 @@ export async function signInWithPassword(email, password) {
 const GET_CLIENT_MAX_ATTEMPTS = 3;
 const GET_CLIENT_RETRY_MS = 150;
 
+// OTP-specific constants: Clerk session propagation after OTP can take 2-4 seconds
+const GET_CLIENT_MAX_ATTEMPTS_OTP = 8;
+const GET_CLIENT_RETRY_MS_OTP = 500;
+
 /**
  * GET /v1/client with optional retries; merges __client from Set-Cookie; extracts __session or embedded JWT.
  */
@@ -621,13 +625,15 @@ async function clerkGetClientSession(clientCookie, { debugPhase = 'client', maxA
 /**
  * Some Clerk flows return the session object inline rather than in cookies.
  * Retries GET /client a few times when the first response has no session (timing / propagation).
+ * OTP/2FA paths use a longer window (8 × 500ms = 4s) since Clerk propagation is slower after email codes.
  */
-async function getSessionToken(signInId, clientCookie, debugPhase = 'fallback') {
+async function getSessionToken(signInId, clientCookie, debugPhase = 'fallback', { maxAttempts, retryMs } = {}) {
   const phase = `${debugPhase} signIn=${String(signInId).slice(0, 12)}…`;
+  const isOtpPath = /^(otp|2fa)\b/i.test(debugPhase);
   return clerkGetClientSession(clientCookie, {
     debugPhase: phase,
-    maxAttempts: GET_CLIENT_MAX_ATTEMPTS,
-    retryMs: GET_CLIENT_RETRY_MS,
+    maxAttempts: maxAttempts ?? (isOtpPath ? GET_CLIENT_MAX_ATTEMPTS_OTP : GET_CLIENT_MAX_ATTEMPTS),
+    retryMs: retryMs ?? (isOtpPath ? GET_CLIENT_RETRY_MS_OTP : GET_CLIENT_RETRY_MS),
   });
 }
 

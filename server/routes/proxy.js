@@ -17,7 +17,7 @@ import {
 import { prisma } from '../services/db.js';
 import { logger } from '../services/logger.js';
 import { rotationManager } from '../services/rotation-manager.js';
-import { getMasterProxyKey } from '../services/store.js';
+import { getMasterProxyKey, getGenericProxyKey } from '../services/store.js';
 
 const router = Router();
 const MAX_RETRIES = 3;
@@ -56,12 +56,13 @@ function sendHydraError(res, status, message, code, headerValue) {
 
 /** Validate the master proxy key against the vault-derived token */
 async function validateMasterKey(authHeader) {
-  if (!authHeader?.startsWith('Bearer sk-hydra-')) return false;
+  if (!authHeader?.startsWith('Bearer sk-')) return false;
   const provided = authHeader.slice(7).trim();
   if (!provided) return false;
 
-  const expected = getMasterProxyKey();
-  return provided === expected;
+  const expectedHydra = getMasterProxyKey();
+  const expectedGeneric = getGenericProxyKey();
+  return provided === expectedHydra || provided === expectedGeneric;
 }
 
 /** Asynchronously log proxy requests to the DB */
@@ -142,7 +143,7 @@ router.use(async (req, res) => {
   };
 
   // ── Failover loop ──
-  for (let attempt = 0; attempt < MAX_RETRIES; ) {
+  for (let attempt = 0; attempt < MAX_RETRIES;) {
     const keyEntry = await rotationManager.getNextKey(attempted);
 
     if (!keyEntry) {
