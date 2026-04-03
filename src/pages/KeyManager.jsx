@@ -260,7 +260,7 @@ export default function KeyManager({ addToast }) {
   }
 
   function copyKey(hash, value) {
-    navigator.clipboard.writeText(value || hash);
+    navigator.clipboard.writeText(value ?? hash);
     setCopiedKey(hash);
     setTimeout(() => setCopiedKey(null), 2000);
   }
@@ -708,6 +708,27 @@ export default function KeyManager({ addToast }) {
                     <tr key={key.hash}>
                       <td>
                         <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{key.name || '(unnamed)'}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 6px', marginTop: 2 }}>
+                          <span
+                            className="mono"
+                            style={{ fontSize: '0.6rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}
+                          >
+                            Key id
+                          </span>
+                          {key.hasKeyString && (
+                            <span
+                              style={{
+                                fontSize: '0.58rem',
+                                fontWeight: 700,
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
+                                color: 'var(--status-success)',
+                              }}
+                            >
+                              · in vault
+                            </span>
+                          )}
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
                           <span
                             className="mono"
@@ -720,7 +741,7 @@ export default function KeyManager({ addToast }) {
                           <button
                             className="btn btn-ghost"
                             style={{ padding: '1px 2px', minHeight: 'unset', opacity: 0.45 }}
-                            title={revealedKeys.has(key.hash) ? 'Hide' : 'Show'}
+                            title={revealedKeys.has(key.hash) ? 'Hide key id' : 'Show full key id'}
                             onClick={() => toggleReveal(key.hash)}
                           >
                             {revealedKeys.has(key.hash) ? <EyeOffIcon size={10} /> : <EyeIcon size={10} />}
@@ -728,12 +749,27 @@ export default function KeyManager({ addToast }) {
                           <button
                             className="btn btn-ghost"
                             style={{ padding: '1px 2px', minHeight: 'unset', opacity: 0.45 }}
-                            title="Copy"
-                            onClick={() => copyKey(key.hash, key.hash)}
+                            title={
+                              key.hasKeyString && key.plaintextKey
+                                ? 'Copy stored sk-or-v1 (same as Pool Manager)'
+                                : 'Copy key id only — not the API secret. Paste sk-or-v1 in Pool Manager to pool this key.'
+                            }
+                            onClick={() => copyKey(key.hash, key.hasKeyString && key.plaintextKey ? key.plaintextKey : key.hash)}
                           >
                             {copiedKey === key.hash ? <span style={{ fontSize: '0.6rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={10} />}
                           </button>
                         </div>
+                        {!key.hasKeyString && (
+                          <div style={{ fontSize: '0.62rem', color: 'var(--text-tertiary)', marginTop: 4, maxWidth: 420, lineHeight: 1.35 }}>
+                            OpenRouter does not return existing <span className="mono">sk-or-v1-…</span> secrets via the management API. Use{' '}
+                            <Link to="/pool" style={{ color: 'var(--accent-primary)' }}>Pool Manager</Link>
+                            {' '}→ <strong>Paste Key</strong>, or reveal/copy from{' '}
+                            <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>
+                              openrouter.ai/settings/keys
+                            </a>
+                            .
+                          </div>
+                        )}
                       </td>
                       <td><KeyStatusBadge enabled={!key.disabled} /></td>
                       <td className="mono" style={{ fontVariantNumeric: 'tabular-nums' }}>

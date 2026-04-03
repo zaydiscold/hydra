@@ -67,7 +67,14 @@ function findManagementKeyDeep(value, depth = 0) {
     }
     return null;
   }
-  const direct = value.key ?? value.managementKey ?? value.apiKey;
+  const direct =
+    value.key ??
+    value.managementKey ??
+    value.apiKey ??
+    value.secret ??
+    value.token ??
+    value.management_key ??
+    value.api_key;
   if (typeof direct === 'string' && direct.startsWith('sk-or-mgmt-')) return direct;
   for (const v of Object.values(value)) {
     const k = findManagementKeyDeep(v, depth + 1);
@@ -84,13 +91,20 @@ function extractManagementKeyFromResponseBody(body) {
     const data = JSON.parse(body);
     const fromPayload = (d) => {
       if (!d || typeof d !== 'object') return null;
-      const key = d.key ?? d.managementKey ?? d.apiKey;
+      const key =
+        d.key ??
+        d.managementKey ??
+        d.apiKey ??
+        d.secret ??
+        d.token ??
+        d.management_key ??
+        d.api_key;
       return typeof key === 'string' && key.startsWith('sk-or-mgmt-') ? key : null;
     };
     if (Array.isArray(data)) {
       for (const item of data) {
         const inner = item?.result?.data?.json ?? item?.result?.data ?? item?.result;
-        const k = fromPayload(inner);
+        const k = fromPayload(inner) ?? findManagementKeyDeep(item) ?? findManagementKeyDeep(inner);
         if (k) return k;
       }
     }
@@ -507,14 +521,26 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   const endpoints = await store.getDiscoveredEndpoints();
   const endpoint = endpoints.createManagementKey;
 
-  const mgmtKeyPayloads = [{ name: keyName }, { label: keyName }];
+  const mgmtKeyPayloads = [
+    { name: keyName },
+    { label: keyName },
+    { title: keyName },
+  ];
 
   if (endpoint) {
     for (const input of mgmtKeyPayloads) {
       try {
         const result = await trpcCall(endpoint.route, input, sessionCookie, clientCookie);
-        if (result?.key || result?.managementKey) {
-          const key = result.key || result.managementKey;
+        const picked =
+          result?.key ??
+          result?.managementKey ??
+          result?.apiKey ??
+          result?.secret ??
+          result?.token ??
+          result?.management_key ??
+          result?.api_key;
+        if (picked) {
+          const key = picked;
           if (!key.startsWith('sk-or-mgmt-')) {
             throw new Error('tRPC returned a non-management key for management key creation.');
           }
@@ -535,8 +561,11 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     'managementKey.create',
     'keys.createManagement',
     'managementKeys.createKey',
+    'managementKeys.createManagementKey',
     'management.createManagementKey',
+    'management.createKey',
     'apiKeys.createManagement',
+    'apiKeys.createManagementKey',
   ];
   let lastTrpcError = null;
   for (const route of candidates) {
@@ -545,7 +574,14 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
         console.error(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
         const result = await trpcCall(route, input, sessionCookie, clientCookie);
         console.error(`[dashboard-api] tRPC route ${route} result:`, { hasResult: !!result, keys: Object.keys(result || {}) });
-        const key = result?.key || result?.managementKey || result?.apiKey;
+        const key =
+          result?.key ??
+          result?.managementKey ??
+          result?.apiKey ??
+          result?.secret ??
+          result?.token ??
+          result?.management_key ??
+          result?.api_key;
         if (key && key.startsWith('sk-or-mgmt-')) {
           console.error(`[dashboard-api] Success via tRPC route: ${route}`);
           await store.saveDiscoveredEndpoints({ createManagementKey: { route, discoveredAt: new Date().toISOString() } });
@@ -578,6 +614,15 @@ async function playwrightCookiesForOpenRouter(sessionCookie, clientCookie) {
 }
 
 async function clickFirstVisibleCreateControl(page) {
+  /** Prefer Create inside main content so we do not hit unrelated Create buttons elsewhere. */
+  const main = page.locator('main, [role="main"]').first();
+  if (await main.isVisible({ timeout: 800 }).catch(() => false)) {
+    const mainCreate = main.getByRole('button', { name: /^create$/i });
+    if (await mainCreate.first().isVisible({ timeout: 800 }).catch(() => false)) {
+      await mainCreate.first().click();
+      return true;
+    }
+  }
   /** OpenRouter settings (2026-04): toolbar primary action is an exact "Create" button. */
   const roleCandidates = [
     /^create$/i,
@@ -633,6 +678,53 @@ function trpcPathLooksLikeManagementKeyCreate(pathSegment) {
   return /managementkeys?\.|mgmt.*\.create|\.createkey/.test(p);
 }
 
+/**
+ * OpenRouter often shows the raw key only after "Copy" (clipboard) or in a follow-up panel.
+ * Granting clipboard-read in context + clicking copy-like controls fixes many headless failures.
+ */
+async function tryCopyRevealManagementKeyUi(page, accountId) {
+  const copyLocators = [
+    page.getByRole('button', { name: /^copy$/i }),
+    page.getByRole('button', { name: /copy key/i }),
+    page.getByRole('button', { name: /copy to clipboard/i }),
+    page.getByRole('menuitem', { name: /copy/i }),
+    page.locator('button[aria-label*="copy" i]').first(),
+    page.locator('[data-testid*="copy" i]').first(),
+  ];
+  for (const loc of copyLocators) {
+    if (await loc.isVisible({ timeout: 500 }).catch(() => false)) {
+      await loc.click().catch(() => {});
+      provisionStepLog(accountId, 'Clicked copy-like control after provision submit');
+      await page.waitForTimeout(450);
+      const fromClip = await page
+        .evaluate(async (pattern) => {
+          try {
+            const text = await navigator.clipboard.readText();
+            const re = new RegExp(pattern);
+            const m = text.match(re);
+            return m ? m[0] : null;
+          } catch {
+            return null;
+          }
+        }, MGMT_KEY_RE.source)
+        .catch(() => null);
+      if (fromClip) return fromClip;
+    }
+  }
+  const revealLocators = [
+    page.getByRole('button', { name: /reveal|show key|show full/i }),
+    page.locator('button:has-text("Reveal")').first(),
+  ];
+  for (const loc of revealLocators) {
+    if (await loc.isVisible({ timeout: 500 }).catch(() => false)) {
+      await loc.click().catch(() => {});
+      provisionStepLog(accountId, 'Clicked reveal-like control after provision');
+      await page.waitForTimeout(400);
+    }
+  }
+  return null;
+}
+
 async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   const dialog = managementDialog(page);
   const inDialog = await dialog.isVisible({ timeout: 2500 }).catch(() => false);
@@ -644,8 +736,11 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   const nameByPlaceholder = scope.locator(
     'input[placeholder*="Management Key" i], input[placeholder*="name" i], input[placeholder*="Name"], input[name="name"], input[aria-label*="name" i]',
   );
-  // Fallback: any visible text input in the dialog (for UI variants with unlabeled inputs)
-  const nameByFallback = scope.locator('[role="dialog"] input[type="text"], [role="dialog"] input:not([type="hidden"])').first();
+  // Fallback: inputs inside scope. Do NOT nest [role="dialog"] when scope is already the dialog —
+  // a single modal has no descendant [role=dialog], so the old selector matched nothing.
+  const nameByFallback = scope
+    .locator('input[type="text"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])')
+    .first();
 
   let nameInput;
   if (await nameByRole.isVisible({ timeout: 1500 }).catch(() => false)) {
@@ -705,8 +800,6 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   } catch {
     await submit.first().click({ force: true });
   }
-  // Also try pressing Enter in case the form responds to keyboard submission
-  await nameInput.press('Enter');
 }
 
 async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName) {
@@ -722,6 +815,11 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
   try {
     context = await browser.newContext({ userAgent: USER_AGENT });
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
+    try {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: OR_ORIGIN });
+    } catch {
+      void 0;
+    }
     if (provisionDebugArtifactsEnabled()) {
       await context.tracing.start({ screenshots: true, snapshots: true });
       traceStarted = true;
@@ -764,6 +862,72 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       provisionStepLog(accountId, 'after goto management-keys', { url: page.url(), title });
     }
 
+    /** Set after a matching response is parsed — persist outside the predicate to avoid store I/O in the waiter. */
+    let capturedFromWait = null;
+    let discoveredRouteFromWait = null;
+
+    /** Register before Create/fill so POSTs from open flow + Save are not missed. */
+    const provisionKeyWait = page
+      .waitForResponse(
+        async (response) => {
+          const url = response.url();
+          if (!url.startsWith(OR_ORIGIN) || response.request().method() !== 'POST') return false;
+          if (/\.(png|jpe?g|gif|webp|svg|woff2?|ico|css|js)(\?|$)/i.test(url)) return false;
+          const isTrpc = url.includes('/api/trpc/');
+          const rawPath = isTrpc
+            ? new URL(url).pathname.split('/api/trpc/')[1]?.split('?')[0] ?? ''
+            : '';
+          const pathname = new URL(url).pathname;
+          try {
+            const body = await response.text();
+            const key = extractManagementKeyFromResponseBody(body);
+            if (provisionDebugArtifactsEnabled()) {
+              if (isTrpc) {
+                if (!key && trpcPathLooksLikeManagementKeyCreate(rawPath)) {
+                  console.error('[dashboard-api] provision tRPC mutation without extractable key', {
+                    accountId,
+                    status: response.status(),
+                    path: rawPath,
+                    preview: redactSensitiveForProvisionLog(body, 450),
+                  });
+                } else if (key) {
+                  console.error('[dashboard-api] provision tRPC response contains management key', {
+                    accountId,
+                    status: response.status(),
+                    path: rawPath,
+                  });
+                }
+              } else {
+                const looksRelevant = /settings|management|key|action|next/i.test(pathname);
+                if (!key && looksRelevant) {
+                  console.error('[dashboard-api] provision non-tRPC POST without extractable key', {
+                    accountId,
+                    status: response.status(),
+                    path: pathname,
+                    preview: redactSensitiveForProvisionLog(body, 450),
+                  });
+                } else if (key) {
+                  console.error('[dashboard-api] provision non-tRPC response contains management key', {
+                    accountId,
+                    path: pathname,
+                  });
+                }
+              }
+            }
+            if (!key) return false;
+            capturedFromWait = key;
+            if (isTrpc) {
+              discoveredRouteFromWait = normalizeDiscoveredCreateRoute(rawPath);
+            }
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 50000 },
+      )
+      .catch(() => null);
+
     const clicked = await clickFirstVisibleCreateControl(page);
     if (!clicked) {
       console.warn('[dashboard-api] No create/add control matched on management-keys; continuing');
@@ -771,90 +935,17 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     provisionStepLog(accountId, 'after create/add control click attempt', { clicked });
     await page.waitForTimeout(1200);
 
-    /** Set after a matching response is parsed — persist outside the predicate to avoid store I/O in the waiter. */
-    let capturedFromWait = null;
-    let discoveredRouteFromWait = null;
-
-    const trpcKeyWait = page
-      .waitForResponse(
-        async (response) => {
-          const url = response.url();
-          if (!url.includes('/api/trpc/') || response.request().method() !== 'POST') return false;
-          const rawPath = new URL(url).pathname.split('/api/trpc/')[1]?.split('?')[0] ?? '';
-          try {
-            const body = await response.text();
-            const key = extractManagementKeyFromResponseBody(body);
-            if (provisionDebugArtifactsEnabled()) {
-              if (!key && trpcPathLooksLikeManagementKeyCreate(rawPath)) {
-                console.error('[dashboard-api] provision tRPC mutation without extractable key', {
-                  accountId,
-                  status: response.status(),
-                  path: rawPath,
-                  preview: redactSensitiveForProvisionLog(body, 450),
-                });
-              } else if (key) {
-                console.error('[dashboard-api] provision tRPC response contains management key', {
-                  accountId,
-                  status: response.status(),
-                  path: rawPath,
-                });
-              }
-            }
-            if (!key) return false;
-            capturedFromWait = key;
-            discoveredRouteFromWait = normalizeDiscoveredCreateRoute(rawPath);
-            return true;
-          } catch {
-            return false;
-          }
-        },
-        { timeout: 35000 },
-      )
-      .catch(() => null);
-
-    /** Next.js Server Actions / RSC sometimes POST to app routes instead of `/api/trpc/`. */
-    const rscKeyWait = page
-      .waitForResponse(
-        async (response) => {
-          const url = response.url();
-          if (!url.startsWith(OR_ORIGIN) || response.request().method() !== 'POST') return false;
-          if (url.includes('/api/trpc/')) return false;
-          if (/\.(png|jpe?g|gif|webp|svg|woff2?|ico|css|js)(\?|$)/i.test(url)) return false;
-          const pathname = new URL(url).pathname;
-          try {
-            const body = await response.text();
-            const key = extractManagementKeyFromResponseBody(body);
-            if (provisionDebugArtifactsEnabled()) {
-              const looksRelevant = /settings|management|key|action|next/i.test(pathname);
-              if (!key && looksRelevant) {
-                console.error('[dashboard-api] provision non-tRPC POST without extractable key', {
-                  accountId,
-                  status: response.status(),
-                  path: pathname,
-                  preview: redactSensitiveForProvisionLog(body, 450),
-                });
-              } else if (key) {
-                console.error('[dashboard-api] provision non-tRPC response contains management key', {
-                  accountId,
-                  path: pathname,
-                });
-              }
-            }
-            if (!key) return false;
-            capturedFromWait = key;
-            return true;
-          } catch {
-            return false;
-          }
-        },
-        { timeout: 35000 },
-      )
-      .catch(() => null);
-
     await fillManagementKeyNameAndSubmit(page, keyName, accountId);
     provisionStepLog(accountId, 'after fill name and submit');
-    await Promise.race([trpcKeyWait, rscKeyWait]);
+    await provisionKeyWait;
     if (capturedFromWait) capturedKey = capturedFromWait;
+    if (!capturedKey) {
+      const fromCopyUi = await tryCopyRevealManagementKeyUi(page, accountId);
+      if (fromCopyUi) {
+        capturedKey = fromCopyUi;
+        provisionStepLog(accountId, 'Found key after copy/reveal UI step');
+      }
+    }
     if (discoveredRouteFromWait) {
       await store.saveDiscoveredEndpoints({
         createManagementKey: { route: discoveredRouteFromWait, discoveredAt: new Date().toISOString() },
@@ -867,11 +958,31 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
 
     // Fallback 1: wait for the key to appear as visible text anywhere on the page
     if (!capturedKey) {
-      await page.getByText(MGMT_KEY_RE).first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+      await page.getByText(MGMT_KEY_RE).first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
       await page.waitForTimeout(2000);
     }
+    if (!capturedKey) {
+      const lateCopy = await tryCopyRevealManagementKeyUi(page, accountId);
+      if (lateCopy) {
+        capturedKey = lateCopy;
+        provisionStepLog(accountId, 'Found key on delayed copy/reveal pass');
+      }
+    }
 
-    // Fallback 2: scan page textContent (catches text nodes, but NOT input .value)
+    // Fallback 2: <code>/<pre> (common for API keys)
+    if (!capturedKey) {
+      const codeOrPre = page.locator('code, pre').filter({ hasText: MGMT_KEY_RE }).first();
+      if (await codeOrPre.isVisible({ timeout: 3000 }).catch(() => false)) {
+        const blockText = await codeOrPre.innerText().catch(() => '');
+        const m = blockText?.match(MGMT_KEY_RE);
+        if (m) {
+          capturedKey = m[0];
+          provisionStepLog(accountId, 'Found key in code/pre element');
+        }
+      }
+    }
+
+    // Fallback 3: scan page textContent (catches text nodes, but NOT input .value)
     if (!capturedKey) {
       const pageText = await page.textContent('body');
       const match = pageText?.match(MGMT_KEY_RE);
@@ -879,10 +990,11 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       if (capturedKey) provisionStepLog(accountId, 'Found key in page textContent');
     }
 
-    // Fallback 3: scan ALL input/textarea .value properties via evaluate()
+    // Fallback 4: scan ALL input/textarea .value properties via evaluate()
     // page.textContent() does NOT include <input value="..."> — this is the critical gap.
     if (!capturedKey) {
       capturedKey = await page.evaluate((keyPattern) => {
+        /* eslint-disable no-undef -- Playwright page.evaluate runs in browser context */
         const re = new RegExp(keyPattern);
         const selectors = [
           'input[readonly]',
@@ -917,7 +1029,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       if (capturedKey) provisionStepLog(accountId, 'Found key via DOM evaluate() input scan');
     }
 
-    // Fallback 4: look specifically in the dialog/modal that appeared after form submit
+    // Fallback 5: look specifically in the dialog/modal that appeared after form submit
     if (!capturedKey) {
       const dialog = managementDialog(page);
       if (await dialog.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -930,7 +1042,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       }
     }
 
-    // Fallback 5: try clipboard API (some UIs auto-copy the key on creation)
+    // Fallback 6: try clipboard API (some UIs auto-copy the key on creation)
     // Note: This rarely works in headless mode due to clipboard permissions, but try anyway.
     if (!capturedKey) {
       const mgmtKeyPattern = MGMT_KEY_RE.source;
@@ -945,10 +1057,11 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       if (capturedKey) provisionStepLog(accountId, 'Found key in clipboard');
     }
 
-    // Fallback 6: if still no key, log ALL visible input values and dialog text for post-mortem
+    // Fallback 7: if still no key, log ALL visible input values and dialog text for post-mortem
     if (!capturedKey) {
       if (provisionDebugArtifactsEnabled()) {
         const allInputValues = await page.evaluate(() => {
+          /* eslint-disable no-undef -- Playwright page.evaluate runs in browser context */
           const result = [];
           for (const el of document.querySelectorAll('input, textarea')) {
             result.push({
@@ -963,7 +1076,12 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           return result;
         }).catch(() => []);
         console.error('[dashboard-api] provision: key not found — all input values in DOM', { accountId, inputs: allInputValues });
-        const fullPageInner = await page.evaluate(() => document.body?.innerText?.slice(0, 3000) || '').catch(() => '');
+        const fullPageInner = await page
+          .evaluate(() => {
+            /* eslint-disable no-undef -- Playwright page.evaluate runs in browser context */
+            return document.body?.innerText?.slice(0, 3000) || '';
+          })
+          .catch(() => '');
         console.error('[dashboard-api] provision: page innerText preview', { accountId, preview: redactSensitiveForProvisionLog(fullPageInner, 2000) });
       }
       throw new Error('Could not extract management key via Playwright');

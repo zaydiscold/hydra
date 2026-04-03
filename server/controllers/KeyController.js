@@ -29,8 +29,21 @@ class KeyController extends BaseController {
       } catch (err) {
         return this.error(res, err.message, 400);
       }
-      const keys = await openrouter.listKeys(account.managementKey);
-      return this.success(res, keys);
+      const liveKeysRaw = await openrouter.listKeys(account.managementKey);
+      const liveKeys = Array.isArray(liveKeysRaw) ? liveKeysRaw : [];
+      const localKeys = await store.getLocalKeys(req.user.id, account.id);
+      const localMap = new Map(localKeys.map((k) => [k.hash, k]));
+
+      const merged = liveKeys.map((k) => {
+        const local = localMap.get(k.hash);
+        const plain = typeof local?.key === 'string' && local.key.length > 0 ? local.key : null;
+        return {
+          ...k,
+          hasKeyString: !!plain,
+          plaintextKey: plain,
+        };
+      });
+      return this.success(res, merged);
     } catch (err) {
       const status = err.message === 'Account not found' ? 404 : 500;
       return this.error(res, err.message, status);

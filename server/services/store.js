@@ -473,10 +473,20 @@ export async function getLocalKeys(userId, accountId) {
     where: { accountId, account: { userId } },
   });
 
-  return keys.map((keyRecord) => ({
-    ...keyRecord,
-    key: keyRecord.key ? decrypt(keyRecord.key) : null,
-  }));
+  return keys.map((keyRecord) => {
+    let key = null;
+    if (keyRecord.key) {
+      try {
+        key = decrypt(keyRecord.key) || null;
+      } catch {
+        key = null;
+      }
+    }
+    return {
+      ...keyRecord,
+      key,
+    };
+  });
 }
 
 export async function registerKeyString(userId, hash, rawKeyString) {

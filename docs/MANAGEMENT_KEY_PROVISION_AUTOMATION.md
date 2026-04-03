@@ -66,16 +66,16 @@ Use this to confirm the OpenRouter **Create / Name / Save** automation and provi
 
 | Requirement | Where in code |
 |-------------|----------------|
-| Toolbar opens flow with **Create** first | `clickFirstVisibleCreateControl` — `roleCandidates` starts with **`/^create$/i`** |
+| Toolbar opens flow with **Create** first | `clickFirstVisibleCreateControl` — prefers **`main` / `[role="main"]`** exact **Create**, then `roleCandidates` starting with **`/^create$/i`** |
 | Scope Name/Save to active HeadlessUI modal | `managementDialog` + `fillManagementKeyNameAndSubmit` uses `#headlessui-portal-root [role="dialog"]` (falls back to page if no dialog) |
 | Fill **Name** via a11y | `fillManagementKeyNameAndSubmit` — **`getByRole('textbox', { name: /^name$/i })`**, then placeholders including **`Management Key`** |
 | Submit with **Save**, not toolbar **Create** | **`getByRole('button', { name: /^save$/i })`** first within modal scope; CSS fallback order ends with **`Create`** |
 | Tolerate overlay pointer interception | `fillManagementKeyNameAndSubmit` retries submit with Playwright **`click({ force: true })`** fallback |
-| Load page **before** `waitForResponse` | `createManagementKeyViaPlaywright` — `goto` + `networkidle` + **Create** click **before** registering the tRPC listener |
+| Register `waitForResponse` **before** Create + fill | `createManagementKeyViaPlaywright` — `goto` + `networkidle`, then start the POST listener, then **Create** → **Name** → **Save** (avoids missing early mutations) |
 | Accept tRPC / RSC POST when response body contains the key | `waitForResponse` — if **`extractManagementKeyFromResponseBody`** finds **`sk-or-mgmt-`**, the match is accepted (no longer gated on **keyName** appearing in `postData`, which breaks batched/encoded bodies). Deep JSON walk for nested key fields. |
 | Persist route **outside** response predicate | `discoveredRouteFromWait` → **`saveDiscoveredEndpoints`** after **`await trpcKeyWait`** |
 | Abort **provision** only on auth-like HTTP | **`shouldAbortProvisioning`** on cached + candidate **`catch`** (not **`isPermanentError`** for every tRPC code) |
-| Extract key from response then DOM | Regex on tRPC body → **`getByText(MGMT_KEY_RE)`** wait → **`body` textContent** |
+| Extract key from response then DOM | Regex on tRPC body → **`getByText(MGMT_KEY_RE)`** wait → **`code`/`pre`** → **`body` textContent** → input value scan |
 | API contract for operators | **`docs/API_REFERENCE.md`** — `POST /api/accounts/:id/provision` (**422** = session dead, not all tRPC failures) |
 
 ## Related code

@@ -56,9 +56,9 @@ class PoolController extends BaseController {
 
           // Get local DB records to merge isPooled + hasKeyString
           const localKeys = await store.getLocalKeys(req.user.id, account.id);
-          const localMap = new Map(localKeys.map(k => [k.hash, k]));
+          const localMap = new Map(localKeys.map((k) => [k.hash, k]));
 
-          const enrichedKeys = liveKeys.map(k => {
+          const enrichedKeys = liveKeys.map((k) => {
             const local = localMap.get(k.hash);
             return {
               hash: k.hash,

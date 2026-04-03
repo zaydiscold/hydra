@@ -130,7 +130,7 @@ Implemented in `server/routes/keys.js` and `server/controllers/KeyController.js`
 
 | Method | Route | Auth | Purpose | Notes |
 | --- | --- | --- | --- | --- |
-| `GET` | `/api/accounts/:accountId/keys` | JWT | List OpenRouter keys for an account | Requires a valid management key |
+| `GET` | `/api/accounts/:accountId/keys` | JWT | List OpenRouter keys for an account | Requires a valid management key. Response merges live upstream metadata with the local vault: each key may include **`hasKeyString`** (whether an encrypted `sk-or-v1-…` is stored) and **`plaintextKey`** when present (same semantics as Pool Manager — local vault only). |
 | `POST` | `/api/accounts/:accountId/keys` | JWT | Create a new OpenRouter key | Saves the raw key string locally after creation |
 | `PATCH` | `/api/accounts/:accountId/keys/:hash` | JWT | Update a specific OpenRouter key | Supports name, disabled, and limit fields |
 | `DELETE` | `/api/accounts/:accountId/keys/:hash` | JWT | Delete a specific OpenRouter key | Uses the management API upstream |
