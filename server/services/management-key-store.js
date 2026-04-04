@@ -25,6 +25,11 @@ export async function storeManagementKey(accountId, key, name, metadata = {}) {
   if (!key || !key.startsWith('sk-or-v1-')) {
     throw new Error('Invalid key format - must start with sk-or-v1-');
   }
+  
+  // Reject preview/masked keys (they contain ... in the middle or are too short)
+  if (key.includes('...') || key.length < 40) {
+    throw new Error(`Rejecting masked/preview key (length: ${key.length}) - full key required, not preview`);
+  }
 
   // Encrypt the key
   const encryptedKey = encrypt(key);

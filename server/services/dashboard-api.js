@@ -1803,45 +1803,81 @@ function trpcPathLooksLikeManagementKeyCreate(pathSegment) {
  * Granting clipboard-read in context + clicking copy-like controls fixes many headless failures.
  */
 async function tryCopyRevealManagementKeyUi(page, accountId) {
-  const copyLocators = [
-    page.getByRole('button', { name: /^copy$/i }),
-    page.getByRole('button', { name: /copy key/i }),
-    page.getByRole('button', { name: /copy to clipboard/i }),
-    page.getByRole('menuitem', { name: /copy/i }),
-    page.locator('button[aria-label*="copy" i]').first(),
-    page.locator('[data-testid*="copy" i]').first(),
-  ];
-  for (const loc of copyLocators) {
-    if (await loc.isVisible({ timeout: 500 }).catch(() => false)) {
-      await loc.click().catch(() => {});
-      provisionStepLog(accountId, 'Clicked copy-like control after provision submit');
-      await page.waitForTimeout(450);
-      const fromClip = await page
-        .evaluate(async (pattern) => {
-          try {
-            const text = await navigator.clipboard.readText();
-            const re = new RegExp(pattern);
-            const m = text.match(re);
-            return m ? m[0] : null;
-          } catch {
-            return null;
+  // Try multiple times to get the full key via clipboard or reveal
+  const maxAttempts = 3;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Try copy buttons first
+    const copyLocators = [
+      page.getByRole('button', { name: /^copy$/i }),
+      page.getByRole('button', { name: /copy key/i }),
+      page.getByRole('button', { name: /copy to clipboard/i }),
+      page.getByRole('menuitem', { name: /copy/i }),
+      page.locator('button[aria-label*="copy" i]').first(),
+      page.locator('[data-testid*="copy" i]').first(),
+      page.locator('button:has-text("Copy")').first(),
+    ];
+    
+    for (const loc of copyLocators) {
+      if (await loc.isVisible({ timeout: 800 }).catch(() => false)) {
+        await loc.click().catch(() => {});
+        provisionStepLog(accountId, `Clicked copy button (attempt ${attempt})`);
+        await page.waitForTimeout(600);
+        
+        // Try clipboard read
+        const fromClip = await page
+          .evaluate(async (pattern) => {
+            try {
+              const text = await navigator.clipboard.readText();
+              const re = new RegExp(pattern);
+              const m = text.match(re);
+              return m ? m[0] : null;
+            } catch {
+              return null;
+            }
+          }, MGMT_KEY_RE.source)
+          .catch(() => null);
+          
+        if (fromClip && !fromClip.includes('...') && fromClip.length >= 40) {
+          provisionStepLog(accountId, `Got full key from clipboard (attempt ${attempt})`);
+          return fromClip;
+        }
+      }
+    }
+    
+    // Try reveal buttons
+    const revealLocators = [
+      page.getByRole('button', { name: /reveal|show key|show full/i }),
+      page.locator('button:has-text("Reveal")').first(),
+      page.locator('button:has-text("Show")').first(),
+      page.locator('[data-testid*="reveal" i]').first(),
+    ];
+    
+    for (const loc of revealLocators) {
+      if (await loc.isVisible({ timeout: 800 }).catch(() => false)) {
+        await loc.click().catch(() => {});
+        provisionStepLog(accountId, `Clicked reveal button (attempt ${attempt})`);
+        await page.waitForTimeout(600);
+        
+        // After reveal, try to extract from page text (should now be full key)
+        const pageText = await page.textContent('body').catch(() => '');
+        const match = pageText?.normalize('NFC').match(MGMT_KEY_RE);
+        if (match) {
+          const potentialKey = match[0];
+          if (!potentialKey.includes('...') && potentialKey.length >= 40) {
+            provisionStepLog(accountId, `Got full key after reveal (attempt ${attempt})`);
+            return potentialKey;
           }
-        }, MGMT_KEY_RE.source)
-        .catch(() => null);
-      if (fromClip) return fromClip;
+        }
+      }
+    }
+    
+    // Wait before next attempt
+    if (attempt < maxAttempts) {
+      await page.waitForTimeout(1000);
     }
   }
-  const revealLocators = [
-    page.getByRole('button', { name: /reveal|show key|show full/i }),
-    page.locator('button:has-text("Reveal")').first(),
-  ];
-  for (const loc of revealLocators) {
-    if (await loc.isVisible({ timeout: 500 }).catch(() => false)) {
-      await loc.click().catch(() => {});
-      provisionStepLog(accountId, 'Clicked reveal-like control after provision');
-      await page.waitForTimeout(400);
-    }
-  }
+  
   return null;
 }
 
