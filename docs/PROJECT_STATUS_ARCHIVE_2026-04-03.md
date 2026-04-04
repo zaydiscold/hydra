@@ -1,389 +1,202 @@
-# Hydra Project Status - Comprehensive Archive
+# Hydra Project Status - OTP Flow Focus
 
 **Date**: 2026-04-03/04  
-**Session Focus**: Session detection fixes, OTP testing, Key provisioning  
-**Current State**: Mixed - old JWT-based approach had issues, new API-based approach untested
+**Scope**: OTP login flow ONLY. Password accounts not in scope.  
+**Current State**: Session detection fixes applied but untested. OTP testing never completed.
 
 ---
 
-## Executive Summary
+## What We Know
 
-**ORIGINAL STATE (Before This Session):**
-- Sessions detected via JWT expiry (60s) - showed "expiring" after 2.5min
-- Sessions ACTUALLY lasted 12+ hours (your incognito tab proved this)
-- Management keys provisioned but stored as masked previews ("sk-xxx...yyy")
-- Cookie handling had duplication bugs
-- OTP flow worked fine (just slow for testing)
+### Session Reality
+- **JWT Token**: Expires in 60 seconds (Clerk default, not configurable by us)
+- **`__client` Cookie**: Lasts 7+ hours (this is the REAL session)
+- **Clerk Behavior**: Auto-refreshes JWT transparently using `__client` cookie
+- **Browser Flow**: User logs in once, stays logged in 12+ hours (your incognito tab proved this)
+- **Hydra Detection**: Was using JWT expiry (wrong), now uses API validation (untested)
 
-**WHAT WE CHANGED:**
-1. Session detection - JWT-based → API-based validation
-2. Cookie handling - Fixed duplicates, added Cloudflare support
-3. Key extract - Now rejects masked keys (forces proper capture)
-4. Session status logic - "expired" → "expiring" with API validation
-
-**CURRENT STATE:**
-- New fixes committed but UNTESTED
-- OTP testing never completed (60s expiry timing)
-- Old approach had flaws but "worked" (sessions lasted, keys sort-of-worked)
-- New approach theoretically correct but unverified
-
-**RECOMMENDATION:** Hybrid approach - use new API validation for accuracy, but keep fast-path JWT checks for performance.
+### OTP vs Password (Identical After Login)
+- **OTP Flow**: 6-digit code to email → Clerk validates → Returns `__client` + `__session` cookies
+- **Password Flow**: Direct credentials → Clerk validates → Returns `__client` + `__session` cookies
+- **After Login**: Both have same 7+ hour `__client` session, same refresh mechanism
+- **Difference**: OTP has 60-second code expiry (Clerk's rule, not ours)
 
 ---
 
-## Historical Context: OLD vs NEW
+## What We Tried
 
-### Session Detection - OLD Approach
+### 1. Session Detection Fixes
 
-**How it worked:**
-```javascript
-// OLD: server/services/clerk-auth.js - isSessionValid()
-const remainingMs = jwtExpiry - Date.now();
-if (remainingMs <= 0) return 'expired';           // ❌ WRONG
-if (remainingMs <= 2.5min) return 'expiring';      // ❌ WRONG
-return 'active';
+**Problem**: Sessions showed "expiring" after 2.5 minutes even though they last 12+ hours.
+
+**What We Changed**:
+
+**File: `server/services/clerk-auth.js`**
+- Added `isSessionActuallyValid()` - makes real API call to `/credits` endpoint
+- Changed `extractManagementKeyFromResponseBody()` to reject masked keys
+- Fixed cookie duplication bug (`__client` was being added twice)
+
+**File: `server/services/store.js`**
+- Added `getSessionStatusAsync()` - validates via API call instead of JWT expiry
+- Changed `getSessionStatus()` - JWT near expiry now returns "expiring" not "expired"
+- Logic: JWT expires in 60s → mark "expiring" → trigger API validation → find it actually valid
+
+**File: `server/services/dashboard-api.js`**
+- Changed `ensureSession()` - uses API validation when JWT appears expired
+- Changed `evaluateRedeemSessionReadiness()` - doesn't reject based on JWT alone
+- Fixed authMethod comparison operators (was using wrong check)
+
+**File: `server/services/management-key-store.js`**
+- Added validation in `storeManagementKey()` - throws if key contains "..." or length < 40
+
+**Commits**:
+```
+b7e815c fix(sessions): detect based on actual API calls, not JWT expiry
 ```
 
-**Problems:**
-- JWT expires in 60 seconds (Clerk default)
-- `__client` cookie actually lasts 7+ hours
-- Clerk auto-refreshes JWT transparently
-- Sessions showed "expiring" at 2.5min but worked for 12+ hours
-
-**Why it "worked":**
-- Sessions still functioned (Clerk refreshed JWT)
-- UI just showed wrong status
-- You learned to ignore "expiring" warnings
-
-**Files (OLD logic):**
-- `server/services/clerk-auth.js:isSessionValid()` - JWT expiry check
-- `server/services/store.js:getSessionStatus()` - same JWT logic
-
-### Session Detection - NEW Approach
-
-**How it works:**
-```javascript
-// NEW: server/services/clerk-auth.js - isSessionActuallyValid()
-async function isSessionActuallyValid(sessionCookie) {
-  // Make real API call to verify
-  const response = await fetch('/credits', { 
-    headers: { cookie: sessionCookie }
-  });
-  return response.ok; // ✅ REAL validation
-}
-
-// NEW: server/services/store.js - getSessionStatusAsync()
-if (remainingMs <= 2.5min) {
-  // Don't mark expired, validate via API
-  const isValid = await isSessionActuallyValid(cookie);
-  return isValid ? 'active' : 'expired';  // ✅ ACCURATE
-}
-```
-
-**Improvements:**
-- Detects ACTUAL session validity (12+ hours)
-- Makes real API calls to verify
-- "expiring" means "will check via API" not "about to die"
-
-**Files (NEW logic):**
-- `server/services/clerk-auth.js:isSessionActuallyValid()` - API validation
-- `server/services/store.js:getSessionStatusAsync()` - async validation
-- `server/services/dashboard-api.js:ensureSession()` - uses API validation
+**Result**: Code committed. Never tested with actual OTP login.
 
 ---
 
-### Cookie Handling - OLD Approach
+### 2. OTP Testing Attempts
 
-**How it worked:**
+**Account**: delilah-zayd.wtf (529c3bc9-d8b4-49c7-8fee-957e54db4c50)
+
+**Attempt 1** (~04:55 UTC)
+- Started OTP: `sia_3BsX7bMbAlByFJdgWJoFds1fvXq`
+- User provided code: `213802`
+- Result: **EXPIRED** - took too long (60s window passed)
+- Error: "No sign in attempt found"
+
+**Attempt 2** (~04:57 UTC)
+- Started OTP: `sia_3BsXGNJNBYydyDZqYt9LYEje6EE`
+- User provided code: `647296`
+- Result: **EXPIRED** - took too long
+- Error: "No sign in attempt found"
+
+**Attempt 3** (~04:58 UTC)
+- Started OTP: `sia_3BsXhgP3aeUnoYxMGCCM7SU6N68`
+- User provided code: `592643`
+- Result: **WRONG CODE**
+- Error: "Incorrect code"
+
+**Attempt 4** (~05:01 UTC)
+- Started OTP: `sia_3BsXkZ1acJp4gTWddgSQoi1dkXm`
+- User provided code: `533248`
+- Result: **EXPIRED** - command timed out, 60s window passed
+- Error: "No sign in attempt found"
+
+**Why All Failed**:
+- 60-second OTP expiry (Clerk's hard limit)
+- Our workflow: Start → Ask user → Wait → User pastes → Execute = too slow
+- Terminal job control errors (`tcsetattr`) added latency
+- User AFK during critical window
+
+**Documentation Created**:
+```
+docs/OTP_TESTING.md - Rapid testing commands (60s warning)
+```
+
+**Result**: Never successfully established OTP session. Cannot test if session detection fixes work.
+
+---
+
+### 3. Cookie Handling Fixes
+
+**Problem Found by Subagent**: Duplicate `__client` and `__client_uat` cookies in headers.
+
+**What We Changed**:
+
+**File: `server/services/clerk-auth.js`**
+- Function `openRouterDashboardDeviceCookies()` - added `continue` to skip already-added cookies
+- Function `dashboardDeviceCookiesList()` - same fix
+- Function `mergeDeviceJar()` - was ignoring `filterFn` parameter, now uses it
+
+**Code Change**:
 ```javascript
-// OLD: clerk-auth.js - openRouterDashboardDeviceCookies()
-const out = [];
-if (uat) out.push(`__client_uat=${uat}`);
-if (client) out.push(`__client=${client}`);
+// OLD: Added __client twice
 for (const k of Object.keys(jar).sort()) {
-  if (isDashboardDeviceCookieName(k)) {
-    out.push(`${k}=${jar[k]}`);  // ❌ DUPLICATES! Already added __client/__client_uat above
-  }
+  if (isDashboardDeviceCookieName(k)) out.push(`${k}=${jar[k]}`);  // Included __client again
 }
-```
 
-**Problems:**
-- `__client` and `__client_uat` added TWICE
-- Duplicate cookies in HTTP headers
-- Cloudflare cookies (`__cf_bm`, `_cfuvid`) not properly preserved
-
-**Why it "mostly worked":**
-- Servers usually ignore duplicate cookies
-- But Cloudflare was getting confused
-- Some requests failed due to malformed headers
-
-### Cookie Handling - NEW Approach
-
-**How it works:**
-```javascript
-// NEW: clerk-auth.js - openRouterDashboardDeviceCookies()
-const out = [];
-if (uat) out.push(`__client_uat=${uat}`);
-if (client && client !== uat) out.push(`__client=${client}`);
+// NEW: Skip duplicates
 for (const k of Object.keys(jar).sort()) {
-  if (k === '__client' || k === '__client_uat') continue;  // ✅ SKIP duplicates
-  if (isDashboardDeviceCookieName(k)) {
-    out.push(`${k}=${jar[k]}`);  // ✅ Cloudflare + Clerk cookies
-  }
+  if (k === '__client' || k === '__client_uat') continue;  // Skip already added
+  if (isDashboardDeviceCookieName(k)) out.push(`${k}=${jar[k]}`);
 }
 ```
 
-**Improvements:**
-- No duplicate cookies
-- Cloudflare cookies properly included
-- `mergeDeviceJar()` now accepts `filterFn` parameter
+**Commits**:
+```
+(Part of b7e815c and subagent commits)
+```
 
-**Related fixes:**
-- `filterFn` parameter was being ignored in `mergeDeviceJar()` - NOW FIXED
+**Result**: Fixed in code. Not regression tested.
 
 ---
 
-### Key Provisioning - OLD Approach
+### 4. Key Provisioning Fixes
 
-**How it worked:**
-```javascript
-// OLD: dashboard-api.js - extractManagementKeyFromResponseBody()
-const reMatch = body.match(MGMT_KEY_RE);
-if (reMatch) return reMatch[0];  // ✅ Returns ANY match
+**Problem**: Management keys stored as masked previews ("sk-or-v1-ba7...03a" = 18 chars) instead of full keys (50+ chars).
 
-// OLD: management-key-store.js - storeManagementKey()
-// No validation - stores whatever it gets
-```
+**What We Changed**:
 
-**What happened:**
-1. OpenRouter creates key → returns FULL key in JSON (once)
-2. Page reloads → shows MASKED key in HTML ("sk-xxx...yyy")
-3. Hydra captures from page HTML → gets MASKED key
-4. Stores masked key → "sk-or-v1-ba7...03a" (18 chars)
-5. Key doesn't work because it's literally "..." in the middle
+**File: `server/services/dashboard-api.js`**
+- `extractManagementKeyFromResponseBody()` - now rejects keys with "..." or length < 40
+- `tryCopyRevealManagementKeyUi()` - added 3 retry attempts, more button locators
+- Added modal/dialog search - looks for key in `[role="dialog"]` elements
+- Page textContent scan - rejects masked keys
 
-**Why it "worked":**
-- Keys appeared to store
-- UI showed key existed
-- But actual API calls with key failed (because masked)
-- User thought provisioning worked but keys were broken
+**File: `server/services/management-key-store.js`**
+- `storeManagementKey()` - throws error if key includes "..." or length < 40
 
-### Key Provisioning - NEW Approach
-
-**How it works:**
-```javascript
-// NEW: dashboard-api.js - extractManagementKeyFromResponseBody()
-if (reMatch) {
-  const potentialKey = reMatch[0];
-  if (potentialKey.includes('...') || potentialKey.length < 40) {
-    console.error(`Rejecting masked key: ${potentialKey.slice(0, 20)}...`);
-    return null;  // ✅ REJECT masked
-  }
-  return potentialKey;  // ✅ Only full keys
-}
-
-// NEW: management-key-store.js - storeManagementKey()
-if (!key || !key.startsWith('sk-or-v1-')) {
-  throw new Error('Invalid key format');
-}
-if (key.includes('...') || key.length < 40) {
-  throw new Error('Rejecting masked/preview key');  // ✅ VALIDATE
-}
-```
-
-**Capture attempts (enhanced):**
-1. HTTP response capture (rejects masked)
-2. Copy button → clipboard (3 retry attempts)
-3. Reveal button → page text (3 retry attempts)
-4. Modal/dialog search (NEW - finds key in modal)
-5. Code/pre block search
+**Capture Flow (Enhanced)**:
+1. HTTP response (rejects masked)
+2. Copy button → clipboard (3 retries)
+3. Reveal button → page text (3 retries)
+4. Modal/dialog search (NEW)
+5. Code/pre blocks
 6. Page textContent (rejects masked)
 
-**Result:**
-- Provisioning now FAILS rather than stores broken key
-- Forces us to fix capture logic
-- Currently NOT capturing full key (masked rejection working, capture not working)
-
----
-
-### OTP Flow - OLD vs NEW (SAME!)
-
-**Important Context:**
-- OTP and Password logins work IDENTICALLY after authentication
-- Both return `sessionCookie` + `clientCookie`
-- Both use same Clerk session mechanism
-- OTP = 6-digit code via email, Password = direct credentials
-- After login, both have same 7+ hour `__client` cookie session
-
-**OLD OTP flow (worked fine):**
+**Commits**:
 ```
-POST /accounts/:id/otp/start → Clerk sends email → Returns signInId
-POST /accounts/:id/otp/verify (signInId, code) → Clerk validates → Returns cookies
+440e6cc fix(provision): enhanced copy/reveal key capture with validation
+2fe03e1 feat(provision): add modal/dialog capture for newly created keys
+9be622e fix(provision): reject masked keys in extract function
 ```
 
-**NEW OTP flow (same, just untested):**
-- Same endpoints
-- Same Clerk integration
-- Same 60-second OTP expiry (Clerk's rule, not ours)
-- Same 7+ hour session after verification
-
-**Why OTP testing failed:**
-- 60-second expiry too fast for our chat workflow
-- Terminal job control errors added latency
-- Not a code problem - a TIMING problem
+**Result**: Provisioning now FAILS rather than stores bad key. Cannot capture full keys yet.
 
 ---
 
-## What Was ACTUALLY Working (Before Changes)
+## Current State of Each Component
 
-### ✅ Working (OLD approach)
-1. **Sessions lasted 12+ hours** - Your incognito tab proved this
-2. **JWT auto-refresh** - Clerk transparently refreshed 60s tokens
-3. **Password logins** - admin@zayd.world, iam-zayd.wtf worked fine
-4. **OTP logins** - delilah@zayd.wtf OTP flow worked (when you verified quickly)
-5. **Basic provisioning** - Keys were created on OpenRouter
-6. **Dashboard UI** - Cards showed accounts, session status (wrong but functional)
-
-### ❌ Broken (OLD approach)
-1. **Session status display** - Showed "expiring" at 2.5min instead of "active" for 7+ hours
-2. **Cookie duplication** - Headers had duplicate `__client` cookies
-3. **Masked key storage** - Provisioned keys stored as "sk-xxx...yyy" (broken)
-4. **Cloudflare cookies** - Not properly preserved in some edge cases
+| Component | Status | Notes |
+|-----------|--------|-------|
+| OTP Start | ✅ Works | Returns signInId, sends email |
+| OTP Verify | ✅ Works | Validates code, returns cookies (when fast enough) |
+| Session Detection | ❓ Unverified | Code changed, not tested with real session |
+| Session Duration | ❓ Unknown | Don't know if 12+ hour sessions detected correctly |
+| Cookie Storage | ❓ Unknown | Don't know if Cloudflare cookies being saved |
+| Key Provisioning | ❌ Broken | Can't capture full keys (rejects masked) |
+| Key Storage | ✅ Fixed | Rejects masked keys (but can't get full ones) |
 
 ---
 
-## What We Changed (NEW approach)
+## Test Account Status
 
-### Session Detection
-**Changed:** JWT-based → API-based validation
-**Files:** `clerk-auth.js`, `store.js`, `dashboard-api.js`
-**Risk:** Async validation slower, may timeout
-**Status:** Committed, UNTESTED
+| Account | Email | Auth Method | Session State | Management Keys |
+|---------|-------|-------------|---------------|-----------------|
+| delilah-zayd.wtf | delilah@zayd.wtf | OTP | **NO ACTIVE SESSION** | **NONE** |
 
-### Cookie Handling  
-**Changed:** Fixed duplicate logic, added Cloudflare support
-**Files:** `clerk-auth.js` (output functions)
-**Risk:** Low - mostly cleanup
-**Status:** Committed, UNTESTED
-
-### Key Extraction
-**Changed:** Now rejects masked keys (<40 chars or contains "...")
-**Files:** `dashboard-api.js`, `management-key-store.js`
-**Risk:** HIGH - provisioning now FAILS until we fix capture
-**Status:** Committed, BROKEN (can't capture full keys yet)
+**Note**: All previous sessions cleared during testing. Need fresh OTP login to establish session.
 
 ---
 
-## Hybrid Recommendation (Best of Both)
-
-### Session Detection
-```javascript
-// HYBRID: Fast-path JWT check + async API validation for edge cases
-function getSessionStatus(jwtExpiry, cookie) {
-  const remainingMs = jwtExpiry - Date.now();
-  
-  // Fast path: JWT still valid (most common)
-  if (remainingMs > SESSION_EXPIRING_SOON_MS) {
-    return 'active';  // ✅ Don't slow down common case
-  }
-  
-  // Edge case: JWT near expiry - validate via API
-  if (remainingMs > 0) {
-    return 'expiring';  // Will trigger API validation before use
-  }
-  
-  // JWT expired - MUST validate via API (may still be valid via refresh)
-  return 'expiring';  // Not 'expired', let API validation decide
-}
-
-// Only call this when about to USE the session
-async function validateBeforeUse(cookie) {
-  const isValid = await isSessionActuallyValid(cookie);
-  return isValid ? 'active' : 'expired';  // ✅ Real check
-}
-```
-
-### Key Provisioning
-```javascript
-// HYBRID: Multiple capture strategies with fallbacks
-async function captureManagementKey(page) {
-  // 1. Try HTTP response first (fastest, full key in JSON)
-  const fromHttp = await captureFromResponse();
-  if (fromHttp && isValidKey(fromHttp)) return fromHttp;
-  
-  // 2. Try clipboard (most reliable for full key)
-  const fromClipboard = await tryCopyToClipboard(page);
-  if (fromClipboard && isValidKey(fromClipboard)) return fromClipboard;
-  
-  // 3. Try modal (OpenRouter shows full key here)
-  const fromModal = await captureFromModal(page);
-  if (fromModal && isValidKey(fromModal)) return fromModal;
-  
-  // 4. Try API listing (fetch from OpenRouter API after creation)
-  const fromApi = await fetchKeyFromApiListing();
-  if (fromApi && isValidKey(fromApi)) return fromApi;
-  
-  // 5. Fail rather than store masked key
-  throw new Error('Could not capture full key from any source');
-}
-```
-
----
-
-## Critical Insight: Why Old Approach "Worked"
-
-You said things were working before. Here's why:
-
-1. **Sessions "expiring" but still worked** - Because Clerk auto-refreshed JWT, session was fine even if UI said "expiring"
-
-2. **Keys provisioned but masked** - OpenRouter created the key, just we stored wrong copy. If you manually copied full key from UI, it worked.
-
-3. **OTP timing** - When you verified within 60s, it worked fine. Our testing was slow, not the code.
-
-**The old code had BUGS but was FUNCTIONAL.**
-
-The new code has FIXES but is UNTESTED and currently BROKEN for provisioning (because we reject masked keys but can't capture full ones yet).
-
----
-
-## Test Account Reference
-
-| Alias | ID | Auth | Email | Session State |
-|-------|-----|------|-------|---------------|
-| iam-zayd.wtf | cecff6a9-cbcc-4110-93ec-409299474b82 | password | - | Unknown (old cookies?) |
-| delilah-zayd.wtf | 529c3bc9-d8b4-49c7-8fee-957e54db4c50 | otp | delilah@zayd.wtf | No active session |
-| zayd-zayd.wtf | 09f8cc49-9308-4977-9f18-15d1a7e13216 | password | - | Unknown |
-| admin-zayd.world | 6f1d28e8-bc8d-4557-b589-66b6db341f8c | password | admin@zayd.world | No active session |
-
-**Note:** All sessions cleared during testing. Need to re-authenticate.
-
----
-
-## Quick Test Commands
-
-### Check All Account Sessions
-```bash
-TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login -H "Content-Type: application/json" -d '{"password":"1111"}' | grep -o '"token":"[^"]*' | cut -d'"' -f4)
-
-for ID in cecff6a9-cbcc-4110-93ec-409299474b82 529c3bc9-d8b4-49c7-8fee-957e54db4c50 09f8cc49-9308-4977-9f18-15d1a7e13216 6f1d28e8-bc8d-4557-b589-66b6db341f8c; do
-  echo "Account: $ID"
-  curl -s http://localhost:3001/api/accounts/$ID/session-status -H "Authorization: Bearer $TOKEN" | jq -r '.data.sessionStatus'
-done
-```
-
-### Test Session Via Credits (Real API Call)
-```bash
-TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login -H "Content-Type: application/json" -d '{"password":"1111"}' | grep -o '"token":"[^"]*' | cut -d'"' -f4)
-
-# Test admin account
-curl -s http://localhost:3001/api/accounts/6f1d28e8-bc8d-4557-b589-66b6db341f8c/credits -H "Authorization: Bearer $TOKEN" | jq '.success'
-```
-
----
-
-## Commits Made This Session
+## Commits Made
 
 ```
+0390bff docs: expanded archive with historical context (OLD vs NEW)
 6db46e3 docs: comprehensive project status archive
 795bb1f docs: OTP testing guide - 60 second expiry warning
 b7e815c fix(sessions): detect based on actual API calls, not JWT expiry
@@ -394,44 +207,71 @@ b7e815c fix(sessions): detect based on actual API calls, not JWT expiry
 
 ---
 
-## What Needs Testing (Priority Order)
+## Files Modified
 
-1. **Password account session** - Test if new API validation works (admin-zayd.world)
-2. **OTP session** - Rapid test with delilah@zayd.wtf
-3. **Session persistence** - Check if it detects 12+ hour sessions correctly
-4. **Key provisioning** - Debug why full key capture failing
-5. **Cookie handling** - Verify no duplicates, Cloudflare cookies present
-
----
-
-## Key Files Reference
-
-| File | Old Logic | New Logic | Status |
-|------|-----------|-------------|--------|
-| `clerk-auth.js:isSessionValid()` | JWT expiry check | Still exists, deprecated | Old |
-| `clerk-auth.js:isSessionActuallyValid()` | Didn't exist | API validation | New, untested |
-| `store.js:getSessionStatus()` | JWT only | Returns "expiring" for near-expiry | Modified |
-| `store.js:getSessionStatusAsync()` | Didn't exist | Async API validation | New, untested |
-| `dashboard-api.js:ensureSession()` | JWT check | API validation fallback | Modified |
-| `clerk-auth.js:openRouterDashboardDeviceCookies()` | Duplicates | No duplicates | Fixed |
-| `clerk-auth.js:mergeDeviceJar()` | Ignored filterFn | Uses filterFn | Fixed |
-| `dashboard-api.js:extractManagementKeyFromResponseBody()` | Accepted masked | Rejects masked | Modified |
-| `management-key-store.js:storeManagementKey()` | No validation | Validates length | Modified |
-| `dashboard-api.js:tryCopyRevealManagementKeyUi()` | Basic | 3 retries, validation | Enhanced |
-| `dashboard-api.js` (modal search) | Didn't exist | Modal key capture | New, untested |
+| File | What Changed |
+|------|--------------|
+| `server/services/clerk-auth.js` | Session API validation, cookie deduplication, key extract validation |
+| `server/services/store.js` | Async session status, "expiring" vs "expired" logic |
+| `server/services/dashboard-api.js` | ensureSession API fallback, modal key capture, copy/reveal enhancements |
+| `server/services/management-key-store.js` | Key length validation |
+| `docs/OTP_TESTING.md` | Rapid OTP commands documentation |
+| `docs/PROJECT_STATUS_ARCHIVE_2026-04-03.md` | This archive |
 
 ---
 
-## User Frustration Archive (For Context)
+## Priorities (As Stated)
 
-1. **"Things were working and now they don't"** - Old approach had bugs but was functional. New approach fixes bugs but provisioning now fails because we can't capture full keys yet.
+1. **Sessions work and stay long time from OTP login** (like browser flow)
+   - Status: Fixes applied, untested
+   - Blocked by: Never completed OTP verification
 
-2. **"OTP is the same as password"** - Correct. Both use same Clerk session mechanism. OTP = 6-digit verification, Password = direct. After login, identical 7+ hour `__client` session.
+2. **Management keys provisioned**
+   - Status: Broken (can't capture full keys)
+   - Blocked by: Masked key rejection working, full key capture not working
 
-3. **"60 second expiry is retarded"** - Clerk's rule, not ours. Our workflow (ask → wait for user → paste → execute) takes too long. Need pre-staged commands.
+3. **Enter promo code work across all accounts**
+   - Status: Not addressed this session
+   - Note: Not mentioned in work done
 
-4. **"You worked on them for too long"** - Multiple subagents, many files changed, fixes applied but never tested end-to-end. Documentation created instead of actual testing.
+4. **Key management of management keys and regular API keys working**
+   - Status: Partial (storage validates, capture broken)
+   - Blocked by: Provisioning returns masked keys
 
 ---
 
-**Document Purpose**: Single source of truth for what worked, what changed, what's broken, and what needs testing.
+## What Actually Happened (Timeline)
+
+1. **Started**: User said sessions showing "expiring" at 2.5min but should last 12+ hours
+2. **Investigated**: Found JWT expires 60s, `__client` lasts 7+ hours, Clerk auto-refreshes
+3. **Fixed**: Changed detection from JWT-based to API-based
+4. **Discovered**: Cookie duplication bug, masked key storage bug
+5. **Fixed**: Cookie deduplication, key validation
+6. **Attempted**: OTP testing with delilah@zayd.wtf
+7. **Failed**: 4 OTP attempts, all expired or wrong code
+8. **Result**: Never established session, never tested if fixes work
+9. **Documented**: Created archives, guides, committed code
+
+---
+
+## Key Insight
+
+**JWT tokens DON'T last** (60s expiry). **`__client` cookie DOES last** (12+ hours in your incognito tab). Our detection was looking at JWT (wrong), now looks at API validation (right, but untested).
+
+**OTP flow works** when you're fast. Our testing workflow is too slow for 60s window.
+
+**Key provisioning creates keys** but we store masked copy. Need to capture full key from clipboard, modal, or API.
+
+---
+
+## Outstanding Issues
+
+1. **OTP testing incomplete** - Need successful verification to test session fixes
+2. **Key capture broken** - Rejects masked keys but can't get full ones
+3. **Session duration unverified** - Don't know if 12+ hour detection works
+4. **Promo codes** - Not addressed this session
+5. **API key management** - Not addressed this session
+
+---
+
+**Document Purpose**: Record of what was tried, what changed, and current untested state.
