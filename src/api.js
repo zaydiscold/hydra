@@ -34,6 +34,17 @@ export function formatProvisionDetailsAppendix(details) {
 /** Appends server `hint`, Clerk debug hint (CLERK_DEBUG_OTP), and structured `details`. */
 export function formatApiErrorMessage(err) {
   if (!err?.message) return 'Request failed';
+  
+  // Special handling for Google OAuth OTP requirement
+  if (err.message?.includes('GOOGLE_OAUTH_REQUIRES_OTP')) {
+    return 'This Google OAuth account requires OTP verification before provisioning.\n\n' +
+           'Steps to fix:\n' +
+           '1. Click "Authenticate" on this account\n' +
+           '2. Select "Email OTP" method\n' +
+           '3. Enter the 6-digit code from your email\n' +
+           '4. Once authenticated, retry "Provision Key"';
+  }
+  
   const parts = [err.message];
   if (err.hint) parts.push(err.hint);
   if (err.clerkDebugHint) parts.push(err.clerkDebugHint);
