@@ -221,6 +221,19 @@ export class AccountController extends BaseController {
   }
 
   async login(req, res) {
+    const { rotationManager } = await import('../services/rotation-manager.js');
+    
+    // Check login attempt limit to prevent account lockout
+    const loginCheck = rotationManager.recordLoginAttempt(req.params.id);
+    if (!loginCheck.allowed) {
+      return this.error(
+        res,
+        `Too many failed login attempts. Please wait ${Math.ceil(loginCheck.cooldown / 60000)} minutes before retrying to prevent account lockout.`,
+        429,
+        'LOGIN_RATE_LIMITED'
+      );
+    }
+    
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
       const usePassword = req.body.password || account.password;
@@ -230,6 +243,9 @@ export class AccountController extends BaseController {
       const session = await clerkAuth.signInWithPassword(account.email, usePassword);
       await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry);
       await store.updateAccountLastSync(req.user.id, req.params.id);
+      
+      // Success - reset login attempts
+      rotationManager.resetLoginAttempts(req.params.id);
 
       return this.success(res, { sessionExpiry: session.sessionExpiry, status: 'active' });
     } catch (err) {
@@ -249,6 +265,19 @@ export class AccountController extends BaseController {
   }
 
   async startOTP(req, res) {
+    const { rotationManager } = await import('../services/rotation-manager.js');
+    
+    // Check login attempt limit to prevent account lockout
+    const loginCheck = rotationManager.recordLoginAttempt(req.params.id);
+    if (!loginCheck.allowed) {
+      return this.error(
+        res,
+        `Too many OTP requests. Please wait ${Math.ceil(loginCheck.cooldown / 60000)} minutes before retrying to prevent account lockout.`,
+        429,
+        'OTP_RATE_LIMITED'
+      );
+    }
+    
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
       const email = req.body.email || account.email;
@@ -262,6 +291,7 @@ export class AccountController extends BaseController {
       return this.success(res, {
         signInId,
         message: `OTP sent to ${email}`,
+        remainingAttempts: loginCheck.remaining,
       });
     } catch (err) {
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
@@ -292,6 +322,10 @@ export class AccountController extends BaseController {
         : await clerkAuth.completeEmailOTP(signInId, code, accountSession.clientCookie);
       await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry);
       await store.updateAccountLastSync(req.user.id, req.params.id);
+
+      // Success - reset login attempts
+      const { rotationManager } = await import('../services/rotation-manager.js');
+      rotationManager.resetLoginAttempts(req.params.id);
 
       // OTP sessions are SHORT-LIVED (1 min). Must provision SYNCHRONOUSLY before session expires.
       const userId = req.user.id;

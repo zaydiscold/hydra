@@ -59,9 +59,28 @@ class AuthController extends BaseController {
   }
 
   async login(req, res) {
+    const { rotationManager } = await import('../services/rotation-manager.js');
+    
+    // Use IP-based tracking for admin login attempts
+    const clientId = req.ip || req.connection?.remoteAddress || 'admin';
+    const loginCheck = rotationManager.recordLoginAttempt(`admin:${clientId}`);
+    
+    if (!loginCheck.allowed) {
+      return this.error(
+        res,
+        `Too many failed login attempts. Please wait ${Math.ceil(loginCheck.cooldown / 60000)} minutes.`,
+        429,
+        'LOGIN_RATE_LIMITED'
+      );
+    }
+    
     try {
       const { password } = this.validate(req.body, loginSchema);
       const token = await auth.login(password);
+      
+      // Success - reset login attempts
+      rotationManager.resetLoginAttempts(`admin:${clientId}`);
+      
       return this.success(res, { token });
     } catch (err) {
       return this.error(res, err.message, 401);

@@ -10,7 +10,8 @@ import { logger } from './logger.js';
 
 const COOLDOWN_429 = 60 * 1000;        // 1 min for rate-limits
 const COOLDOWN_402 = 10 * 60 * 1000;   // 10 min for credit-depleted keys
-const MAX_RETRIES = 4;                 // Drop key after 4 consecutive failures (conservative to avoid account lockout)
+const MAX_RETRIES = 10;                // Drop key after 10 consecutive proxy failures (keeps keys longer)
+const MAX_LOGIN_ATTEMPTS = 4;          // Stop login attempts after 4 consecutive failures (prevents account lockout)
 
 class RotationManager {
   constructor() {
@@ -21,6 +22,8 @@ class RotationManager {
     this.cooldowns = new Map();
     /** @type {Map<string, number>} hash → consecutive failure count */
     this.failureCounts = new Map();
+    /** @type {Map<string, {count: number, lastAttempt: number}>} accountId → login attempt tracking */
+    this.loginAttempts = new Map();
     this.loaded = false;
     this.userId = null;
   }
@@ -134,6 +137,69 @@ class RotationManager {
     }
     
     return false;
+  }
+
+  /**
+   * Record a login attempt for an account. After MAX_LOGIN_ATTEMPTS,
+   * further login attempts are blocked to prevent account lockout.
+   * @param {string} accountId
+   * @returns {{allowed: boolean, remaining: number, cooldown?: number}} 
+   */
+  recordLoginAttempt(accountId) {
+    const now = Date.now();
+    const record = this.loginAttempts.get(accountId) || { count: 0, lastAttempt: 0 };
+    
+    // Reset counter if last attempt was > 1 hour ago
+    if (now - record.lastAttempt > 60 * 60 * 1000) {
+      record.count = 0;
+    }
+    
+    record.count += 1;
+    record.lastAttempt = now;
+    this.loginAttempts.set(accountId, record);
+    
+    const remaining = Math.max(0, MAX_LOGIN_ATTEMPTS - record.count);
+    const allowed = record.count <= MAX_LOGIN_ATTEMPTS;
+    
+    if (!allowed) {
+      logger.error(`[LOGIN] Account ${accountId.slice(0, 8)}… BLOCKED after ${MAX_LOGIN_ATTEMPTS} login attempts (preventing lockout)`);
+    } else {
+      logger.info(`[LOGIN] Account ${accountId.slice(0, 8)}… login attempt ${record.count}/${MAX_LOGIN_ATTEMPTS}`);
+    }
+    
+    return {
+      allowed,
+      remaining,
+      cooldown: !allowed ? 60 * 60 * 1000 : null // Suggest 1 hour cooldown
+    };
+  }
+
+  /**
+   * Reset login attempts for an account (called on successful login).
+   * @param {string} accountId
+   */
+  resetLoginAttempts(accountId) {
+    if (this.loginAttempts.has(accountId)) {
+      this.loginAttempts.delete(accountId);
+      logger.info(`[LOGIN] Account ${accountId.slice(0, 8)}… login attempts reset (successful login)`);
+    }
+  }
+
+  /**
+   * Get remaining login attempts for an account.
+   * @param {string} accountId
+   * @returns {number}
+   */
+  getRemainingLoginAttempts(accountId) {
+    const record = this.loginAttempts.get(accountId);
+    if (!record) return MAX_LOGIN_ATTEMPTS;
+    
+    // Reset if > 1 hour old
+    if (Date.now() - record.lastAttempt > 60 * 60 * 1000) {
+      return MAX_LOGIN_ATTEMPTS;
+    }
+    
+    return Math.max(0, MAX_LOGIN_ATTEMPTS - record.count);
   }
 
   /**
