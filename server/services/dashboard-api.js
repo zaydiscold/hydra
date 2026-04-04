@@ -2227,7 +2227,42 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       }
     }
 
-    // Fallback 2: <code>/<pre> (common for API keys)
+    // Fallback 2: Modal/Dialog that shows newly created key (OpenRouter shows full key once in modal)
+    if (!capturedKey) {
+      provisionStepLog(accountId, 'Looking for key in modal/dialog...');
+      await page.waitForTimeout(1000); // Wait for modal to appear
+      
+      // Try to find key in common modal patterns
+      const modalSelectors = [
+        '[role="dialog"]',
+        '[role="alertdialog"]',
+        '.modal',
+        '.dialog',
+        '[data-testid*="modal"]',
+        '[data-testid*="dialog"]',
+        'div[class*="modal"]',
+        'div[class*="dialog"]',
+      ];
+      
+      for (const selector of modalSelectors) {
+        const modal = page.locator(selector).first();
+        if (await modal.isVisible({ timeout: 1000 }).catch(() => false)) {
+          provisionStepLog(accountId, `Found modal with selector: ${selector}`);
+          const modalText = await modal.textContent().catch(() => '');
+          const m = modalText?.normalize('NFC').match(MGMT_KEY_RE);
+          if (m) {
+            const potentialKey = m[0];
+            if (!potentialKey.includes('...') && potentialKey.length >= 40) {
+              capturedKey = potentialKey;
+              provisionStepLog(accountId, 'Found full key in modal');
+              break;
+            }
+          }
+        }
+      }
+    }
+    
+    // Fallback 3: <code>/<pre> (common for API keys)
     if (!capturedKey) {
       const codeOrPre = page.locator('code, pre').filter({ hasText: MGMT_KEY_RE }).first();
       if (await codeOrPre.isVisible({ timeout: 3000 }).catch(() => false)) {
