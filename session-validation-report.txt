@@ -1,0 +1,64 @@
+========================================================================================================================
+OPENROUTER SESSION VALIDATION REPORT
+Generated: 2026-04-04T00:57:57.013Z
+========================================================================================================================
+
+Found 1 user(s) in database
+
+Checking user: admin (26d94c8c-5294-4841-855c-2ae12d4490fe)
+  Found 2 account(s)
+
+  Processing account: test-account-1775247455969
+    Session status: none
+    Expiry: 2026-04-05T00:57:57.019Z
+    Minutes remaining: 1440
+    JWT refresh: N/A
+    Test request: N/A
+
+  Processing account: iam-zayd.wtf
+    Session status: expired
+    Expiry: 2026-04-03T23:34:56.000Z
+    Minutes remaining: -84
+    JWT refresh: SUCCESS
+    Test request: FAILED: Redirect/HTML (auth required)
+
+========================================================================================================================
+SUMMARY TABLE
+========================================================================================================================
+
+ACCOUNT ID                              ALIAS               EMAIL                    STATUS         EXPIRY                   MINUTES LEFT   JWT REFRESH         TEST REQUEST
+------------------------------------------------------------------------------------------------------------------------
+9c1e2edf-eef7-4b12-8ba3-19a59c6a74c0    test-account-17752  test-1775247455969@exam  NO SESSION     4/4/2026, 5:57:57 PM     1440           N/A                 N/A
+cecff6a9-cbcc-4110-93ec-409299474b82    iam-zayd.wtf        iam@zayd.wtf             EXPIRED        4/3/2026, 4:34:56 PM     EXPIRED        SUCCESS             FAILED: Redirect/HTML (auth required)
+
+========================================================================================================================
+STATISTICS
+========================================================================================================================
+Total accounts:        2
+Live sessions:         0
+Expired sessions:      1
+Expiring soon:         0
+No session:            1
+Errors:                0
+JWT refresh working:   1
+Test requests working: 0
+
+========================================================================================================================
+LEGEND
+========================================================================================================================
+Status:
+  LIVE           - Session is active and valid
+  EXPIRED        - Session has expired
+  EXPIRING SOON  - Session expires within 6 hours
+  NO SESSION     - No session token stored
+  ERROR          - Error reading session data
+
+JWT Refresh:
+  SUCCESS        - Successfully obtained fresh JWT from Clerk
+  FAILED: ...    - Could not get fresh JWT (session likely expired)
+
+Test Request:
+  SUCCESS (JSON)         - OpenRouter returned JSON (session valid)
+  FAILED: Redirect/HTML  - Got redirect or HTML (authentication required)
+  FAILED: Error response  - Got error JSON from API
+

@@ -254,7 +254,8 @@ async function main() {
     process.env.HYDRA_CAPTURE_KEY_NAME?.trim() ||
     `Hydra-capture-${new Date().toISOString().slice(0, 10)}`;
 
-  const networkLines = [];
+    const networkLines = [];
+  const serverActions = []; // Capture Server Action details
   const logLine = (line) => {
     networkLines.push(line);
     process.stdout.write(`${line}\n`);
@@ -288,6 +289,19 @@ async function main() {
         const nextAction = h['next-action'] || h['Next-Action'] || '';
         const contentType = h['content-type'] || h['Content-Type'] || '';
         const postData = truncateForLog(req.postData() || '', 2000);
+
+        // Capture Server Action details for replay documentation
+        if (nextAction && u.includes('/settings/management-keys')) {
+          serverActions.push({
+            timestamp: new Date().toISOString(),
+            url: u,
+            nextAction: String(nextAction),
+            contentType,
+            postData: req.postData() || '',
+            status: response.status(),
+          });
+        }
+
         const extra =
           nextAction || contentType
             ? `\nheaders: content-type=${contentType || '(none)'} next-action=${nextAction ? `${String(nextAction).slice(0, 80)}…` : '(none)'}`
@@ -317,10 +331,37 @@ async function main() {
     await fillManagementKeyNameAndSubmit(page, keyName);
     await page.waitForTimeout(8000);
 
+    // Build Server Action documentation section if we captured any
+    let serverActionDoc = '';
+    if (serverActions.length > 0) {
+      serverActionDoc = '\n\n## Captured Server Actions (for HYDRA_MGMT_KEY_SERVER_ACTION_ID)\n\n';
+      for (const sa of serverActions) {
+        serverActionDoc += `### ${sa.timestamp}\n`;
+        serverActionDoc += `- **URL**: ${sa.url}\n`;
+        serverActionDoc += `- **Next-Action**: ${sa.nextAction}\n`;
+        serverActionDoc += `- **Content-Type**: ${sa.contentType}\n`;
+        serverActionDoc += `- **Status**: ${sa.status}\n`;
+        serverActionDoc += `- **Body**: ${sa.postData.slice(0, 200)}${sa.postData.length > 200 ? '...' : ''}\n\n`;
+      }
+      serverActionDoc += '## Environment Variable Setup\n\n';
+      serverActionDoc += 'To enable Server Action replay in Hydra, set:\n\n';
+      serverActionDoc += '```bash\n';
+      serverActionDoc += '# Use the captured Next-Action ID\n';
+      serverActionDoc += `export HYDRA_MGMT_KEY_SERVER_ACTION_ID='${serverActions[0].nextAction}'\n`;
+      serverActionDoc += 'export HYDRA_PROVISION_SERVER_ACTION_REPLAY=1\n';
+      serverActionDoc += '```\n\n';
+    }
+
     const header = `# Hydra capture-mgmt-key-network — ${new Date().toISOString()}\n\n`;
-    await appendFile(logFile, header + networkLines.join('\n'), 'utf8');
+    await appendFile(logFile, header + networkLines.join('\n') + serverActionDoc, 'utf8');
     console.error(`\n[capture] Wrote ${logFile}`);
     console.error('[capture] Copy relevant POST lines into docs/recon/TRPC_ROUTES.md → Management keys — captured network.');
+
+    if (serverActions.length > 0) {
+      console.error('\n[capture] Server Actions captured! To enable replay:');
+      console.error(`   export HYDRA_MGMT_KEY_SERVER_ACTION_ID='${serverActions[0].nextAction}'`);
+      console.error('   export HYDRA_PROVISION_SERVER_ACTION_REPLAY=1');
+    }
   } finally {
     await browser.close().catch(() => {});
   }

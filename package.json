@@ -23,7 +23,9 @@
   "dependencies": {
     "@prisma/client": "^6.19.2",
     "@vitejs/plugin-react": "^4.7.0",
+    "axios": "^1.14.0",
     "bcryptjs": "^3.0.3",
+    "cheerio": "^1.2.0",
     "concurrently": "^8.2.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
@@ -48,5 +50,13 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "prisma": "^6.19.2"
-  }
+  },
+  "description": "Hydra is a professional, high-intensity local management dashboard for OpenRouter account fleets. It provides a single, locally-secured interface to manage balances, rotate API keys, and perform bulk operations across dozens of accounts simultaneously.",
+  "main": "eslint.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

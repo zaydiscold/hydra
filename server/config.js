@@ -49,6 +49,12 @@ const configSchema = z.object({
    * Currently logs a pointer to docs only — no replay is implemented until capture-derived wiring exists.
    */
   HYDRA_PROVISION_SERVER_ACTION_REPLAY: z.boolean().default(false),
+  /**
+   * Next.js Server Action ID for management key creation.
+   * Capture this from the dashboard using scripts/capture-mgmt-key-network.mjs
+   * when creating a management key (Next-Action header value).
+   */
+  HYDRA_MGMT_KEY_SERVER_ACTION_ID: z.string().min(1).optional(),
 });
 
 let parsedConfig;
@@ -75,6 +81,7 @@ try {
     HYDRA_PROVISION_NETWORK_LOG: parseBoolean(process.env.HYDRA_PROVISION_NETWORK_LOG),
     HYDRA_PROVISION_VERBOSE: parseBoolean(process.env.HYDRA_PROVISION_VERBOSE),
     HYDRA_PROVISION_SERVER_ACTION_REPLAY: parseBoolean(process.env.HYDRA_PROVISION_SERVER_ACTION_REPLAY),
+    HYDRA_MGMT_KEY_SERVER_ACTION_ID: process.env.HYDRA_MGMT_KEY_SERVER_ACTION_ID?.trim() || undefined,
   });
 } catch (err) {
   console.error('Invalid environment variables:', err.issues ?? err.errors ?? err);

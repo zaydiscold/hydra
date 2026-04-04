@@ -309,16 +309,244 @@ function summarizeTrpcFailure(err) {
 }
 
 /**
- * Placeholder for Next.js Server Action replay when dashboard create no longer hits `/api/trpc/*`.
- * Enable with HYDRA_PROVISION_SERVER_ACTION_REPLAY=1 after capturing `Next-Action` + body via
- * `scripts/capture-mgmt-key-network.mjs` — wire the fetch here; until then this always returns null.
+ * Next.js Server Action replay for management key creation.
+ * Used when dashboard create hits Server Actions instead of `/api/trpc/*`.
+ * Enable with HYDRA_PROVISION_SERVER_ACTION_REPLAY=1.
+ *
+ * The Server Action request format (captured from real dashboard):
+ * - POST to /settings/management-keys
+ * - Headers: Next-Action: <action-id>, content-type: text/plain;charset=UTF-8
+ * - Body: JSON array with action arguments, e.g. [{"name":"key-name"}]
+ * - Response: RSC payload that may contain the created key
+ *
+ * @param {string} sessionCookie - The __session JWT
+ * @param {string} clientCookie - Clerk device cookie(s)
+ * @param {string} keyName - Name for the management key
+ * @returns {Promise<string|null>} - The created key or null
  */
-async function tryManagementKeyServerActionReplay(_sessionCookie, _clientCookie, _keyName) {
-  console.warn(
-    '[dashboard-api] HYDRA_PROVISION_SERVER_ACTION_REPLAY is set but Server Action replay is not implemented yet. ' +
-      'Capture POST /settings/management-keys (and Next-Action headers) with scripts/capture-mgmt-key-network.mjs, ' +
-      'then add a minimal fetch replay in dashboard-api.js — see docs/MANAGEMENT_KEY_PROVISION_AUTOMATION.md',
-  );
+async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName) {
+  console.error('[dashboard-api] Attempting Server Action replay for management key creation');
+
+  // Get fresh JWT before making the call - OTP sessions have short-lived JWTs (60s)
+  const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+  const jwtToUse = freshJwt || sessionCookie;
+
+  if (provisionStepLogEnabled()) {
+    console.error(`[tryManagementKeyServerActionReplay] Using ${freshJwt ? 'fresh' : 'original'} JWT`);
+  }
+
+  // Build cookie header
+  const device = clientCookie ? openRouterDashboardDeviceCookies(clientCookie) : '';
+  const cookieHeader = `__session=${jwtToUse}${device ? `; ${device}` : ''}`;
+
+  // Next.js Server Action ID for management key creation
+  // This is the action ID that the dashboard sends when creating a key
+  // Format: <hex-id> (e.g., 'abc123def456...')
+  // Captured from real dashboard traffic via scripts/capture-mgmt-key-network.mjs
+  const NEXT_ACTION_ID = config.HYDRA_MGMT_KEY_SERVER_ACTION_ID || '';
+
+  if (!NEXT_ACTION_ID) {
+    console.warn(
+      '[dashboard-api] HYDRA_MGMT_KEY_SERVER_ACTION_ID not set. ' +
+        'Run scripts/capture-mgmt-key-network.mjs to capture the real Next-Action header, ' +
+        'then set HYDRA_MGMT_KEY_SERVER_ACTION_ID=<captured-id>'
+    );
+    // Continue anyway - some Server Action setups don't require explicit ID
+  }
+
+  const url = `${OR_BASE}/settings/management-keys`;
+
+  // Server Action body format: JSON array of arguments
+  // The dashboard may send: [] or [{"name":"key-name"}] or [{"json":{"name":"key-name"}}]
+  const actionPayloads = [
+    JSON.stringify([{ name: keyName }]),           // Standard shape
+    JSON.stringify([{ json: { name: keyName } }]), // tRPC-like wrapper
+    JSON.stringify([{ label: keyName }]),          // Alternative field name
+    JSON.stringify([{ title: keyName }]),          // Alternative field name
+    JSON.stringify([]),                            // Empty (name set elsewhere)
+    JSON.stringify([keyName]),                     // Direct string arg
+  ];
+
+  // Build headers for Server Action request
+  const buildHeaders = (contentType = 'text/plain;charset=UTF-8') => ({
+    'Content-Type': contentType,
+    'Cookie': cookieHeader,
+    'User-Agent': USER_AGENT,
+    'Origin': OR_ORIGIN,
+    'Referer': `${OR_ORIGIN}/settings/management-keys`,
+    ...(NEXT_ACTION_ID ? { 'Next-Action': NEXT_ACTION_ID } : {}),
+    'Accept': 'text/x-component',
+  });
+
+  // Try different content types and body formats
+  const attempts = [
+    { contentType: 'text/plain;charset=UTF-8', payloads: actionPayloads },
+    { contentType: 'application/json', payloads: actionPayloads },
+  ];
+
+  for (const attempt of attempts) {
+    const headers = buildHeaders(attempt.contentType);
+
+    for (const body of attempt.payloads) {
+      try {
+        if (provisionStepLogEnabled()) {
+          console.error(`[tryManagementKeyServerActionReplay] POST ${url} with content-type=${attempt.contentType}, body=${body.slice(0, 100)}`);
+        }
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body,
+        });
+
+        const contentType = res.headers.get('content-type') || '';
+
+        // Log response status for debugging
+        if (provisionStepLogEnabled()) {
+          console.error(`[tryManagementKeyServerActionReplay] Response: ${res.status} ${res.statusText}, content-type=${contentType}`);
+        }
+
+        // Check for auth failures
+        if (res.status === 401 || res.status === 403) {
+          console.warn(`[dashboard-api] Server Action replay: auth failed (${res.status})`);
+          continue;
+        }
+
+        // Server Actions often return 200 even on errors (error encoded in RSC payload)
+        if (!res.ok && res.status !== 200) {
+          continue;
+        }
+
+        // Read response body
+        const { text: responseText, error: readError } = await safeResponseText(res, 50000);
+
+        if (readError) {
+          console.warn(`[dashboard-api] Server Action replay: failed to read response: ${readError}`);
+          continue;
+        }
+
+        // Try to extract management key from response
+        // Server Action responses are RSC (React Server Components) format
+        // The key may be embedded in the payload
+        const key = extractManagementKeyFromServerActionResponse(responseText);
+
+        if (key) {
+          console.error(`[dashboard-api] Server Action replay: captured management key`);
+          return key;
+        }
+
+        // Check if this looks like an error response
+        if (responseText.includes('error') || responseText.includes('Error')) {
+          if (provisionStepLogEnabled()) {
+            console.error(`[tryManagementKeyServerActionReplay] Response may contain error: ${responseText.slice(0, 500)}`);
+          }
+        }
+
+      } catch (err) {
+        console.warn(`[dashboard-api] Server Action replay attempt failed: ${err.message}`);
+        if (provisionStepLogEnabled()) {
+          console.error(`[tryManagementKeyServerActionReplay] Error details:`, err);
+        }
+      }
+    }
+  }
+
+  console.warn('[dashboard-api] Server Action replay: all attempts failed to capture key');
+  return null;
+}
+
+/**
+ * Extract management key from Next.js Server Action (RSC) response.
+ * Server Action responses are typically in React Server Components format
+ * which is a stream of chunks. The key may be JSON-encoded or plain text.
+ *
+ * @param {string} responseText - The response body
+ * @returns {string|null} - The extracted key or null
+ */
+function extractManagementKeyFromServerActionResponse(responseText) {
+  if (!responseText || typeof responseText !== 'string') {
+    return null;
+  }
+
+  // Try direct regex match first
+  const directMatch = responseText.match(MGMT_KEY_RE);
+  if (directMatch) {
+    return directMatch[0];
+  }
+
+  // RSC format uses special delimiters and encoding
+  // Try to find JSON-encoded keys in the response
+  try {
+    // Look for JSON strings that might contain the key
+    const jsonStringPattern = /"((?:[^"\\]|\\.)*)"/g;
+    let match;
+    while ((match = jsonStringPattern.exec(responseText)) !== null) {
+      const decoded = match[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      const keyMatch = decoded.match(MGMT_KEY_RE);
+      if (keyMatch) {
+        return keyMatch[0];
+      }
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+
+  // Try to parse as RSC payload chunks
+  // RSC uses format like: "0:{...}" or "1:[...]" with newlines
+  try {
+    const chunks = responseText.split('\n').filter(line => line.trim());
+    for (const chunk of chunks) {
+      // Remove leading chunk ID if present (e.g., "0:")
+      const jsonPart = chunk.replace(/^\d+:/, '');
+      try {
+        const data = JSON.parse(jsonPart);
+        const key = findKeyInObject(data);
+        if (key) return key;
+      } catch {
+        // Not valid JSON, try regex on raw chunk
+        const keyMatch = chunk.match(MGMT_KEY_RE);
+        if (keyMatch) return keyMatch[0];
+      }
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+
+  return null;
+}
+
+/**
+ * Recursively search for management key in parsed object
+ * @param {any} obj - The object to search
+ * @returns {string|null} - The found key or null
+ */
+function findKeyInObject(obj) {
+  if (!obj || typeof obj !== 'object') {
+    return null;
+  }
+
+  // Check if this object has a key field
+  const keyFields = ['key', 'managementKey', 'apiKey', 'api_key', 'secret', 'token', 'value'];
+  for (const field of keyFields) {
+    const value = obj[field];
+    if (typeof value === 'string' && value.startsWith('sk-or-v1-')) {
+      return value;
+    }
+  }
+
+  // Recurse into arrays and objects
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findKeyInObject(item);
+      if (found) return found;
+    }
+  } else {
+    for (const key of Object.keys(obj)) {
+      const found = findKeyInObject(obj[key]);
+      if (found) return found;
+    }
+  }
+
   return null;
 }
 

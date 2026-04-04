@@ -13,7 +13,7 @@ Hydra provisions **management keys** (`sk-or-mgmt-…`) so each vault account ca
 ## Strategy (in order)
 
 1. **Direct tRPC** — `POST /api/trpc/{procedure}` with batch shape and cookies (fastest, no browser). Cached procedure name lives in the encrypted store after first success.
-2. **Optional Server Action hook** — if **`HYDRA_PROVISION_SERVER_ACTION_REPLAY=1`**, Hydra logs that replay is not wired until you capture `Next-Action` + body from the real dashboard (see **`scripts/capture-mgmt-key-network.mjs`**). Intended for when create moves off `/api/trpc/*` entirely.
+2. **Optional Server Action hook** — if **`HYDRA_PROVISION_SERVER_ACTION_REPLAY=1`** and **`HYDRA_MGMT_KEY_SERVER_ACTION_ID`** is set, Hydra attempts to replay the Next.js Server Action directly. This is useful when create moves off `/api/trpc/*` entirely. Capture the action ID using **`scripts/capture-mgmt-key-network.mjs`**.
 3. **Playwright** — Chromium launch **or** attach to your Chrome via **`HYDRA_PLAYWRIGHT_CDP_ENDPOINT`** (e.g. start Chrome with `--remote-debugging-port=9222`), same cookies, `/settings/management-keys`, then response + DOM extraction.
 
 This is **server-side Playwright** (npm `playwright` in the API process). It is **not** Playwright MCP in the IDE (that is for assistants driving a browser interactively).
@@ -153,7 +153,8 @@ Run the **same** `curl` **twice** on the same account (you may use distinct `key
 | `HYDRA_PLAYWRIGHT_HEADED=1` | Visible browser |
 | `HYDRA_PLAYWRIGHT_CHANNEL=chrome` | System Chrome instead of bundled Chromium |
 | `HYDRA_PLAYWRIGHT_CDP_ENDPOINT` | e.g. `http://127.0.0.1:9222` — attach to your Chrome (`connectOverCDP`) |
-| `HYDRA_PROVISION_SERVER_ACTION_REPLAY=1` | Logs pointer to implement Server Action replay after capture (no replay yet) |
+| `HYDRA_PROVISION_SERVER_ACTION_REPLAY=1` | Enable Server Action replay for management key creation (requires `HYDRA_MGMT_KEY_SERVER_ACTION_ID`) |
+| `HYDRA_MGMT_KEY_SERVER_ACTION_ID` | Next.js Server Action ID for create (capture with `scripts/capture-mgmt-key-network.mjs`) |
 
 ## H1–H10 live checklist (one angle per row)
 

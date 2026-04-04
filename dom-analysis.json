@@ -1,0 +1,841 @@
+{
+  "url": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+  "timestamp": "2026-04-03T23:51:23.823Z",
+  "isLoginPage": true,
+  "buttons": [
+    {
+      "index": 1,
+      "text": "OpenRouter",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(1)"
+    },
+    {
+      "index": 2,
+      "text": "Fusion",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(2)"
+    },
+    {
+      "index": 3,
+      "text": "Models",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(3)"
+    },
+    {
+      "index": 4,
+      "text": "Chat",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(4)"
+    },
+    {
+      "index": 5,
+      "text": "Rankings",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(5)"
+    },
+    {
+      "index": 6,
+      "text": "Apps",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(6)"
+    },
+    {
+      "index": 7,
+      "text": "Enterprise",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(7)"
+    },
+    {
+      "index": 8,
+      "text": "Pricing",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(8)"
+    },
+    {
+      "index": 9,
+      "text": "Docs",
+      "type": null,
+      "className": "inline-flex items-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 hover:bg-accent hover:text-accent-foreground border border-transparent h-9 rounded-md w-auto justify-center text-muted-foreground px-2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(9)"
+    },
+    {
+      "index": 10,
+      "text": "Sign Up",
+      "type": null,
+      "className": "inline-flex items-center justify-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 bg-primary text-primary-foreground shadow hover:bg-primary/90 hover:text-primary-foreground px-3 h-full w-full rounded-full",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(10)"
+    },
+    {
+      "index": 11,
+      "text": "",
+      "type": "button",
+      "className": "inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-transparent h-9 w-9",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(11)"
+    },
+    {
+      "index": 12,
+      "text": "Sign Up",
+      "type": null,
+      "className": "inline-flex items-center justify-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-ring gap-2 leading-6 bg-primary text-primary-foreground shadow hover:bg-primary/90 hover:text-primary-foreground h-9 rounded-md px-3 rounded-l-full border-r-0",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(12)"
+    },
+    {
+      "index": 13,
+      "text": "",
+      "type": null,
+      "className": "group h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 group flex gap-1 rounded-r-full pl-1 pr-2 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=open]:bg-primary/80",
+      "dataTestId": null,
+      "id": "radix-_r_0_-trigger-radix-_r_1_",
+      "disabled": false,
+      "selector": "#radix-_r_0_-trigger-radix-_r_1_"
+    },
+    {
+      "index": 14,
+      "text": "",
+      "type": null,
+      "className": "cl-socialButtonsIconButton cl-button cl-socialButtonsIconButton__github cl-button__github 🔒️ cl-internal-16o30v2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(14)"
+    },
+    {
+      "index": 15,
+      "text": "",
+      "type": null,
+      "className": "cl-socialButtonsIconButton cl-button cl-socialButtonsIconButton__google cl-button__google 🔒️ cl-internal-16o30v2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(15)"
+    },
+    {
+      "index": 16,
+      "text": "",
+      "type": null,
+      "className": "cl-socialButtonsIconButton cl-button cl-socialButtonsIconButton__metamask cl-button__metamask 🔒️ cl-internal-16o30v2",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(16)"
+    },
+    {
+      "index": 17,
+      "text": "",
+      "type": "submit",
+      "className": null,
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(17)"
+    },
+    {
+      "index": 18,
+      "text": "",
+      "type": null,
+      "className": "cl-formFieldInputShowPasswordButton cl-button 🔒️ cl-internal-jd9lbt",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(18)"
+    },
+    {
+      "index": 19,
+      "text": "Continue",
+      "type": null,
+      "className": "cl-formButtonPrimary cl-button 🔒️ cl-internal-j14dgf",
+      "dataTestId": null,
+      "id": null,
+      "disabled": false,
+      "selector": "button:nth-of-type(19)"
+    }
+  ],
+  "inputs": [
+    {
+      "index": 1,
+      "tagName": "input",
+      "type": "text",
+      "name": null,
+      "id": "radix-_R_sjdl9bH2_",
+      "placeholder": "Search",
+      "className": "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+      "dataTestId": null,
+      "value": "",
+      "required": false,
+      "selector": "#radix-_R_sjdl9bH2_"
+    },
+    {
+      "index": 2,
+      "tagName": "input",
+      "type": "text",
+      "name": "identifier",
+      "id": "identifier-field",
+      "placeholder": "Enter your email address",
+      "className": "cl-formFieldInput cl-input cl-formFieldInput__identifier cl-input__identifier cl-required 🔒️ cl-internal-whi2ly",
+      "dataTestId": null,
+      "value": "",
+      "required": true,
+      "selector": "#identifier-field"
+    },
+    {
+      "index": 3,
+      "tagName": "input",
+      "type": "password",
+      "name": "password",
+      "id": "password-field",
+      "placeholder": "Enter your password",
+      "className": "cl-formFieldInput cl-input cl-formFieldInput__password cl-input__password 🔒️ cl-internal-xuzdfu",
+      "dataTestId": null,
+      "value": "",
+      "required": false,
+      "selector": "#password-field"
+    }
+  ],
+  "forms": [
+    {
+      "index": 1,
+      "action": null,
+      "method": null,
+      "className": "cl-form 🔒️ cl-internal-ji79b9",
+      "dataTestId": null,
+      "elementCount": 5
+    }
+  ],
+  "testIds": [],
+  "hasNextData": false,
+  "networkLogs": [
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/media/5b01f339abf2f1a5.p.woff2",
+      "headers": {
+        "origin": "https://openrouter.ai",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/media/e4af272ccee01ff0-s.p.woff2",
+      "headers": {
+        "origin": "https://openrouter.ai",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/css/cda3af16020f96ba.css",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/css/23565049b3597e0b.css",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/css/9e25f1a538409811.css",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/css/bdee4bec1afee7ff.css",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/webpack-9bb35fed6611d0f4.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/902e3da9-f811af0be4fbd0c5.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/92a4cbe8-7f7029c8c092ce0a.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/34bd5b8a-1c36a7a5b3061df1.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/79852-00bfa899a26e58fe.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/72615-4380297c8ec342a5.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/main-app-14c7c304317c51f0.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/34946-1f13c3d4d5c05099.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/43885-8549dee2448273c1.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/25072-6c3baebbed07d090.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/55104-57c4ca597dc6cac7.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/30926-133797ad15893e7a.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/92365-00835d02d3b84b49.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/14803-913816cc67194ab3.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/34108-9c5c149c13366864.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/64307-8c3c294bdbc63c64.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/68756-7a0e195abc3132c8.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/67854-0c976710cd375ac6.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/7292-1a5e3f3e88177ed1.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/65689-a16726b2314c708f.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/80391-ff107035d3da0ef2.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/64606-28637a10eb0473c7.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/63602-64fbf517b273cdae.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/53562-0d7303f79094b08d.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/50248-8657cb4f4ac93ba9.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/25129-ee6bd779a48e5dbf.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/62722-9b95149b3f7509ef.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/1889-fc98118feb5be5f9.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/69572-1d7f6a1142afe6dc.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/96074-ed5e196287a665d2.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/app/layout-acd107a40c8754bb.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/98199-e109b49ef8794c1f.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/1883-24cc8a3359411d66.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/app/not-found-aeca27580836e332.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/app/(user)/layout-8a74c6fb010c507b.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/app/global-error-bfcd28cb120def0d.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/app/(static)/layout-1344dd915897cdb0.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/_next/static/chunks/app/sign-in/%5B%5B...sign-in%5D%5D/page-47d5c2c654b0a167.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/api/frontend/models",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/api/frontend/all-providers",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/api/internal/v1/provider-preferences",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "https://openrouter.ai/api/internal/v1/provider-preferences?includeGuardrails=true",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "referer": "https://openrouter.ai/sign-in?redirect_url=https%3A%2F%2Fopenrouter.ai%2Fsettings%2Fmanagement-keys",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "sec-ch-ua-mobile": "?0"
+      }
+    },
+    {
+      "type": "response",
+      "status": 200,
+      "url": "https://openrouter.ai/api/frontend/all-providers"
+    },
+    {
+      "type": "response",
+      "status": 200,
+      "url": "https://openrouter.ai/api/frontend/models"
+    }
+  ],
+  "apiEndpoints": []
+}
