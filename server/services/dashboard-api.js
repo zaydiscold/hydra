@@ -162,6 +162,16 @@ async function persistProvisionedManagementKey(userId, accountId, key, source = 
     err.source = source;
     throw err;
   }
+  
+  // Reject preview/masked keys (they contain ... in the middle or are too short)
+  if (key.includes('...') || key.length < 40) {
+    const err = new Error(`Provisioning returned a masked/preview key (length: ${key.length}) instead of full key - actual key may require clicking "Copy" or "Reveal"`);
+    err.code = 'PROVISION_PREVIEW_KEY_REJECTED';
+    err.source = source;
+    err.keyLength = key.length;
+    err.keyPreview = key.slice(0, 20) + '...' + key.slice(-8);
+    throw err;
+  }
 
   // Save to both systems for compatibility
   // 1. Legacy: Account config (for backward compatibility)
@@ -2166,11 +2176,20 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     }
 
     // Fallback 3: scan page textContent (catches text nodes, but NOT input .value)
+    // WARNING: UI may show masked preview like "sk-or-v1-xxx...yyy" - we need the FULL key
     if (!capturedKey) {
       const pageText = await page.textContent('body');
       const match = pageText?.normalize('NFC').match(MGMT_KEY_RE);
-      if (match) capturedKey = match[0];
-      if (capturedKey) provisionStepLog(accountId, 'Found key in page textContent');
+      if (match) {
+        const potentialKey = match[0];
+        // Reject if it looks like a masked preview (contains ... in the middle)
+        if (potentialKey.includes('...') || potentialKey.length < 30) {
+          console.error(`[dashboard-api] Rejecting masked/preview key from page text: ${potentialKey.slice(0, 20)}... (length: ${potentialKey.length})`);
+        } else {
+          capturedKey = potentialKey;
+          provisionStepLog(accountId, 'Found key in page textContent');
+        }
+      }
     }
 
     // Fallback 4: scan ALL input/textarea .value properties via evaluate()
