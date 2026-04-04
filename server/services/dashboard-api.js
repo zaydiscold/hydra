@@ -120,7 +120,15 @@ function extractManagementKeyFromResponseBody(body) {
   if (!body || typeof body !== 'string') return null;
   body = body.normalize('NFC');
   const reMatch = body.match(MGMT_KEY_RE);
-  if (reMatch) return reMatch[0];
+  if (reMatch) {
+    const potentialKey = reMatch[0];
+    // Reject masked/preview keys (they contain ... in the middle or are too short)
+    if (potentialKey.includes('...') || potentialKey.length < 40) {
+      console.error(`[dashboard-api] extractManagementKeyFromResponseBody: rejecting masked/preview key (length: ${potentialKey.length}): ${potentialKey.slice(0, 20)}...`);
+      return null;
+    }
+    return potentialKey;
+  }
   try {
     const data = JSON.parse(body);
     const fromPayload = (d) => {
@@ -133,7 +141,15 @@ function extractManagementKeyFromResponseBody(body) {
         d.token ??
         d.management_key ??
         d.api_key;
-      return typeof key === 'string' && key.startsWith('sk-or-v1-') ? key : null;
+      // Reject masked/preview keys from JSON payloads too
+      if (typeof key === 'string' && key.startsWith('sk-or-v1-')) {
+        if (key.includes('...') || key.length < 40) {
+          console.error(`[dashboard-api] fromPayload: rejecting masked/preview key (length: ${key.length})`);
+          return null;
+        }
+        return key;
+      }
+      return null;
     };
     if (Array.isArray(data)) {
       for (const item of data) {
