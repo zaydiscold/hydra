@@ -4,6 +4,7 @@ import * as api from '../api';
 import LoginAccountModal from '../components/LoginAccountModal';
 import PasteManagementKeyModal from '../components/PasteManagementKeyModal';
 import AttachSignInModal from '../components/AttachSignInModal';
+import CreatedKeyModal from '../components/CreatedKeyModal';
 import {
   getKeyManagerAccountState,
   getCreateKeyDisabledTitle,
@@ -165,8 +166,9 @@ function CreateKeyModal({ accountId, onClose, onCreated }) {
       const body = { name: name.trim() };
       if (creditLimit) body.limit = parseFloat(creditLimit);
       if (requestLimit) body.limit_requests = parseInt(requestLimit);
-      await api.createKey(accountId, body);
-      onCreated();
+      const result = await api.createKey(accountId, body);
+      // Pass the created key data back (includes the raw key string)
+      onCreated(result?.data);
       onClose();
     } catch (err) {
       setError(err.message);
@@ -250,6 +252,8 @@ export default function KeyManager({ addToast }) {
   const [balanceCredits, setBalanceCredits] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceError, setBalanceError] = useState('');
+  const [createdKeyData, setCreatedKeyData] = useState(null);
+  const [showCreatedModal, setShowCreatedModal] = useState(false);
 
   function toggleReveal(hash) {
     setRevealedKeys((prev) => {
@@ -365,10 +369,24 @@ export default function KeyManager({ addToast }) {
     setActionLoading(prev => ({ ...prev, [hash]: false }));
   }
 
-  function onKeyCreated() {
-    addToast('Key created', 'success');
+  function onKeyCreated(keyData) {
+    addToast('Key created and saved to vault', 'success');
     fetchKeys(selectedAccount.id);
     fetchAccountBalance();
+    // Show the created key modal with the key data
+    if (keyData) {
+      setCreatedKeyData(keyData);
+      setShowCreatedModal(true);
+    }
+  }
+
+  async function handleAddCreatedKeyToPool() {
+    if (!createdKeyData?.hash) {
+      throw new Error('No key data available');
+    }
+    // Key is already saved to vault by server, just need to toggle pooled status
+    await api.toggleKeyPooled(createdKeyData.hash, true);
+    addToast('Key added to pool', 'success');
   }
 
   const activeAccount = selectedAccount?.id
@@ -812,6 +830,17 @@ export default function KeyManager({ addToast }) {
           accountId={selectedAccount.id}
           onClose={() => setShowCreateModal(false)}
           onCreated={onKeyCreated}
+        />
+      )}
+
+      {showCreatedModal && createdKeyData && (
+        <CreatedKeyModal
+          keyData={createdKeyData}
+          onClose={() => {
+            setShowCreatedModal(false);
+            setCreatedKeyData(null);
+          }}
+          onAddToPool={handleAddCreatedKeyToPool}
         />
       )}
 

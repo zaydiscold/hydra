@@ -1392,23 +1392,26 @@ export async function refreshSession(clientCookie, sessionCookie) {
 }
 
 /**
- * Time remaining below which a session is "expiring" in the UI and treated as not reliably valid
- * for ensureSession without refresh — aligned with `getSessionStatus` in store.
+ * Time remaining below which a session is "expiring" in the UI.
+ * Clerk JWTs expire quickly (~1-5 min) but sessions auto-refresh and last much longer.
+ * Using 2.5 minutes matches realistic short-JWT lifespans without false "expiring" alerts.
+ * This is a UI warning threshold only - sessions are still valid until JWT actually expires.
  */
-export const SESSION_EXPIRING_SOON_MS = 10 * 60 * 1000;
+export const SESSION_EXPIRING_SOON_MS = 2.5 * 60 * 1000;
 
 /**
- * True when the session has more than SESSION_EXPIRING_SOON_MS until expiry (same bar as dashboard "expiring" dot).
+ * True when the session JWT has not yet expired.
+ * Clerk sessions auto-refresh - a "close to expiry" JWT is still valid for API calls.
+ * Use this to check if the session can be used; use SESSION_EXPIRING_SOON_MS only for UI warnings.
  *
- * @param {string} sessionExpiry - ISO date string (effective expiry, ideally min(JWT exp, stored))
+ * @param {string} sessionExpiry - ISO date string (JWT exp)
  * @returns {boolean}
  */
 export function isSessionValid(sessionExpiry) {
   if (!sessionExpiry) return false;
   const expiry = new Date(sessionExpiry).getTime();
   const now = Date.now();
-  // Session is valid if it has ANY time remaining (not just >10 min)
-  // The SESSION_EXPIRING_SOON_MS threshold is for UI warnings, not validity
+  // Session is valid as long as JWT hasn't expired (Clerk auto-refreshes sessions)
   return expiry > now;
 }
 

@@ -16,7 +16,7 @@ Computed for each account from encrypted **`sessionToken`** (and optional legacy
 | --- | --- |
 | `none` | No non-empty session token in the vault (and no legacy **`config.sessionCookie`**). |
 | `active` | A session token exists **and** either effective expiry is in the future, or expiry is missing / not a valid date (legacy row)—Hydra treats “token but no usable expiry” as **active** so the UI does not show a false “needs sign-in” after OTP. New logins set **`sessionExpiry`** from the Clerk JWT **`exp`** or a **24-hour** fallback (**`getJwtExpiry`** in **`server/services/clerk-auth.js`**). |
-| `expiring` | Effective expiry is within the next **10 minutes** (still valid). Same window as **`SESSION_EXPIRING_SOON_MS`** / **`isSessionValid`** in **`clerk-auth.js`**. |
+| `expiring` | Effective expiry is within the next **2.5 minutes** (still valid). Same window as **`SESSION_EXPIRING_SOON_MS`** in **`clerk-auth.js`**. Clerk JWTs expire quickly (~1-5 min) but sessions auto-refresh; this is a UI warning, not a failure. |
 | `expired` | Effective expiry is in the past. |
 | `error` | Decrypting **`sessionToken`** failed (**`sessionDecryptFailed: true`**). Distinct from **`none`** (no session vs unreadable blob). |
 
@@ -32,7 +32,7 @@ Computed for each account from encrypted **`sessionToken`** (and optional legacy
 
 ## Server-side session healing (`ensureSession`)
 
-List/dashboard **`sessionStatus`** can show **`active`** when a token exists but **`config.sessionExpiry`** is missing (legacy row). **`isSessionValid(effectiveExpiry)`** requires more than **10 minutes** until effective expiry—the same bar as the **`expiring`** dot.
+List/dashboard **`sessionStatus`** can show **`active`** when a token exists but **`config.sessionExpiry`** is missing (legacy row). **`isSessionValid(effectiveExpiry)`** checks if the JWT has not yet expired (any remaining time). The **`SESSION_EXPIRING_SOON_MS`** (2.5 min) threshold is for UI warnings only—sessions are usable until JWT actually expires.
 
 **`server/services/dashboard-api.js`** **`ensureSession`** now:
 
@@ -58,7 +58,7 @@ The dot is **only** the Clerk **`sessionStatus`**; it is **not** the SYNCED / NE
 
 | Dot | When |
 | --- | --- |
-| **Green** (pulsar) | `active` — JWT in vault and not expired past the expiring window. |
+| **Green** (pulsar) | `active` — JWT in vault and not expired. |
 | **Yellow** | `expiring`, **or** `none` with **both** management key **and** credentials on file (session not stored yet — use Authenticate; common if password sign-in stopped at 2FA until verify completes). |
 | **Cyan** (soft glow) | `none`, management key, **no** credentials — **key-only** import; snapshot is via API only, not a bug. |
 | **Red** | `expired` or `error` (decrypt failure). |
@@ -71,10 +71,10 @@ The UI does **not** use a server field for the badge label. `src/utils/accountDa
 1. **`sessionDecryptFailed`** or **`sessionStatus === 'error'`** — **SESSION UNREADABLE** (vault decrypt failure).
 2. **`status === 'error'`** — **NEEDS KEY** if there is no management key (or error text matches management key), else **SYNC FAILED**.
 3. **`hasCredentials` and session needs attention** (per `accountNeedsSession` above) — **SESSION UNCLEAR** if `sessionStatus === 'unknown'`, else **SIGN IN**.
-4. **`sessionStatus === 'expiring'`** and snapshot OK — **EXPIRING** (warning).
+4. **`sessionStatus === 'expiring'`** and snapshot OK — **EXPIRING** (warning, but still usable).
 5. **`status === 'ok'`** and **`hasManagementKey`** — **SYNCED** (success).
 
-`isReady` is true only for case (5); the Dashboard **Accounts** stat uses **synced** / **need attention** counts from this helper.
+`isReady` is true for cases (4) and (5); the Dashboard **Accounts** stat uses **synced** / **need attention** counts from this helper.
 
 ## Proactive refresh on dashboard load
 

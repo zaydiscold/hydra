@@ -2169,10 +2169,23 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     await provisionKeyWait;
     if (capturedFromWait) capturedKey = capturedFromWait;
     if (!capturedKey) {
+      provisionStepLog(accountId, 'No key from HTTP response, trying copy/reveal UI...');
+      
+      // Debug: check what's on the page
+      try {
+        const buttons = await page.locator('button').allInnerTexts();
+        const keyElements = buttons.filter(b => /copy|reveal|show|key/i.test(b));
+        console.error(`[dashboard-api] Available buttons: ${JSON.stringify(keyElements.slice(0, 10))}`);
+      } catch(e) {
+        console.error('[dashboard-api] Could not list buttons:', e.message);
+      }
+      
       const fromCopyUi = await tryCopyRevealManagementKeyUi(page, accountId);
       if (fromCopyUi) {
         capturedKey = fromCopyUi;
         provisionStepLog(accountId, 'Found key after copy/reveal UI step');
+      } else {
+        provisionStepLog(accountId, 'Copy/reveal UI did not return key');
       }
     }
     if (discoveredRouteFromWait) {

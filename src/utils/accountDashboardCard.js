@@ -39,11 +39,14 @@ export function getAccountDashboardCardState(account) {
     };
   }
 
+  // Expiring sessions are still usable - Clerk auto-refreshes them
+  // Only show EXPIRING badge but keep isReady true since session works
   if (account.sessionStatus === 'expiring' && account.status === 'ok') {
     return {
       badgeVariant: 'low',
       badgeLabel: 'EXPIRING',
-      isReady: false,
+      subtitle: 'Session will auto-refresh when used',
+      isReady: true,
     };
   }
 

@@ -26,7 +26,12 @@ export function resolveEffectiveSessionExpiry(config, sessionTokenPlain) {
   return jwtExp || stored || null;
 }
 
-/** Session cookie is stored in encrypted `sessionToken`; config.sessionCookie is legacy / optional. */
+/**
+ * Determine session status based on JWT expiry.
+ * Clerk JWTs expire quickly (~1-5 min) but sessions auto-refresh and last much longer.
+ * A session is only truly "expired" when the JWT has passed its exp claim.
+ * "expiring" is a UI warning for JWTs close to expiry - the session is still usable.
+ */
 function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed) {
   if (sessionDecryptFailed) return 'error';
 
@@ -41,9 +46,17 @@ function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed) {
 
   const expiryMs = new Date(effective).getTime();
   if (Number.isNaN(expiryMs)) return 'unknown';
+
   const now = Date.now();
-  if (expiryMs <= now) return 'expired';
-  if (expiryMs - now <= SESSION_EXPIRING_SOON_MS) return 'expiring';
+  const remainingMs = expiryMs - now;
+
+  // JWT has actually expired - session needs refresh
+  if (remainingMs <= 0) return 'expired';
+
+  // JWT is close to expiry but still valid - show warning but session works
+  // Clerk auto-refreshes sessions, so this is just a UI indicator
+  if (remainingMs <= SESSION_EXPIRING_SOON_MS) return 'expiring';
+
   return 'active';
 }
 
