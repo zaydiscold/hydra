@@ -28,4 +28,9 @@ router.delete('/:id', requireUnlocked, (req, res) => controller.deleteAccount(re
 router.get('/:id/snapshot', requireUnlocked, (req, res) => controller.getSnapshot(req, res));
 router.get('/:id/management-key', requireUnlocked, (req, res) => controller.getManagementKey(req, res));
 
+// New management key storage endpoints
+router.get('/:id/management-keys', requireUnlocked, (req, res) => controller.listManagementKeys(req, res));
+router.post('/:id/management-keys/store', requireUnlocked, (req, res) => controller.storeProvisionedKey(req, res));
+router.get('/:id/management-keys/best', requireUnlocked, (req, res) => controller.getBestManagementKey(req, res));
+
 export default router;

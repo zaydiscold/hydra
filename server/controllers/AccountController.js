@@ -368,6 +368,21 @@ export class AccountController extends BaseController {
           { source: result.source },
         );
       }
+      
+      // Store the key in ManagementKey storage
+      if (result.key) {
+        try {
+          const { storeManagementKey } = await import('../services/management-key-store.js');
+          await storeManagementKey(req.params.id, result.key, keyName || 'Management Key', {
+            provisionedAt: new Date().toISOString(),
+            via: result.source || 'playwright'
+          });
+        } catch (storeErr) {
+          console.error('[provision] Failed to store key:', storeErr.message);
+          // Don't fail the request if storage fails - key was still created
+        }
+      }
+      
       return this.success(res, result);
     } catch (err) {
       if (err instanceof ProvisionKeyNotCapturedError || err?.code === 'PROVISION_KEY_NOT_CAPTURED') {
@@ -499,6 +514,64 @@ export class AccountController extends BaseController {
         ? account.managementKey.slice(0, 16) + '••••••••' + account.managementKey.slice(-4)
         : null;
       return this.success(res, { id: account.id, alias: account.alias, email: account.email, managementKeyPreview: mgmtPreview, ...snapshot });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
+  // New management key storage endpoints
+  async listManagementKeys(req, res) {
+    try {
+      const { getManagementKeys } = await import('../services/management-key-store.js');
+      const keys = await getManagementKeys(req.params.id);
+      // Return without exposing full key
+      const sanitized = keys.map(k => ({
+        id: k.id,
+        name: k.name,
+        status: k.status,
+        createdAt: k.createdAt,
+        lastUsedAt: k.lastUsedAt,
+        preview: k.key ? `${k.key.slice(0, 12)}...${k.key.slice(-4)}` : null
+      }));
+      return this.success(res, { keys: sanitized });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
+  async storeProvisionedKey(req, res) {
+    try {
+      const { storeManagementKey } = await import('../services/management-key-store.js');
+      const { key, name, metadata } = req.body;
+      
+      if (!key || !key.startsWith('sk-or-v1-')) {
+        return this.error(res, 'Invalid key format', 400);
+      }
+      
+      const stored = await storeManagementKey(req.params.id, key, name || 'Imported Key', metadata);
+      return this.success(res, { id: stored.id, name: stored.name, status: stored.status }, 201);
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
+  async getBestManagementKey(req, res) {
+    try {
+      const { getBestKey } = await import('../services/management-key-store.js');
+      const key = await getBestKey(req.params.id);
+      
+      if (!key) {
+        return this.error(res, 'No active management key found. Provision one first.', 404);
+      }
+      
+      // Return full key for backend use (UI should warn this is sensitive)
+      return this.success(res, {
+        id: key.id,
+        name: key.name,
+        key: key.key, // Full key - handle with care
+        status: key.status,
+        createdAt: key.createdAt
+      });
     } catch (err) {
       return this.error(res, err.message, err.status || 500);
     }
