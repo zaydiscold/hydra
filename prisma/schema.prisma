@@ -20,15 +20,16 @@ model User {
 }
 
 model Account {
-  id           String    @id @default(uuid())
+  id           String          @id @default(uuid())
   openRouterId String?
   alias        String
-  sessionToken String    // Encrypted strings
-  config       String?   // Encrypted JSON
+  sessionToken String          // Encrypted strings
+  config       String?         // Encrypted JSON
   userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   keys         Key[]
-  createdAt    DateTime  @default(now())
+  managementKeys ManagementKey[]
+  createdAt    DateTime        @default(now())
 }
 
 model Key {
@@ -79,4 +80,21 @@ model RequestLog {
   @@index([createdAt])
   @@index([status, createdAt])
   @@index([keyHash, createdAt])
+}
+
+// OpenRouter management keys (sk-or-v1-...)
+model ManagementKey {
+  id            String   @id @default(uuid())
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  encryptedKey  String   // The sk-or-v1-... key (encrypted)
+  name          String   // User-provided label
+  status        String   @default("active") // active, revoked, expired
+  metadata      String?  // JSON string for additional data
+  lastUsedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([accountId, status])
+  @@index([createdAt])
 }
