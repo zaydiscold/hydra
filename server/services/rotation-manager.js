@@ -10,7 +10,7 @@ import { logger } from './logger.js';
 
 const COOLDOWN_429 = 60 * 1000;        // 1 min for rate-limits
 const COOLDOWN_402 = 10 * 60 * 1000;   // 10 min for credit-depleted keys
-const MAX_RETRIES = 10;                // Drop key after 10 consecutive failures
+const MAX_RETRIES = 4;                 // Drop key after 4 consecutive failures (conservative to avoid account lockout)
 
 class RotationManager {
   constructor() {
