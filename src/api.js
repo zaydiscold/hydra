@@ -248,3 +248,9 @@ export const getTraffic = () => request('/pool/traffic');
 export const getSystemTasks = () => request('/system/tasks');
 export const cancelSystemTask = (taskId, reason = 'operator_cancelled') => request(`/system/tasks/${taskId}/cancel`, { method: 'POST', body: { reason } });
 export const getSystemHealth = () => request('/system/health');
+
+// Management Key Storage (New)
+export const getManagementKeys = (accountId) => request(`/accounts/${accountId}/management-keys`);
+export const getBestManagementKey = (accountId) => request(`/accounts/${accountId}/management-keys/best`);
+export const storeManagementKey = (accountId, key, name, metadata) =>
+  request(`/accounts/${accountId}/management-keys/store`, { method: 'POST', body: { key, name, metadata } });

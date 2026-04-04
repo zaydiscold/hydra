@@ -171,6 +171,10 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const [copiedKey, setCopiedKey] = useState(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
+  // Management keys storage (New)
+  const [managementKeys, setManagementKeys] = useState([]);
+  const [loadingMgmtKeys, setLoadingMgmtKeys] = useState(false);
+
   const fetchSnapshot = useCallback(async () => {
     if (!resolvedAccountId) return;
     try {
@@ -197,6 +201,20 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     }
   }, [resolvedAccountId]);
 
+  const fetchManagementKeys = useCallback(async () => {
+    if (!resolvedAccountId) return;
+    setLoadingMgmtKeys(true);
+    try {
+      const res = await api.getManagementKeys(resolvedAccountId);
+      setManagementKeys(res.data?.keys || []);
+    } catch (err) {
+      console.error('[ACCOUNT_DETAIL] Failed to fetch management keys:', err.message);
+      setManagementKeys([]);
+    } finally {
+      setLoadingMgmtKeys(false);
+    }
+  }, [resolvedAccountId]);
+
   useEffect(() => {
     if (!resolvedAccountId) {
       setLoading(false);
@@ -210,11 +228,13 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         // If we already know there's no management key, don't spam snapshot.
         // Otherwise try snapshot; it will set a user-friendly error if it fails.
         fetchSnapshot();
+        // Also fetch stored management keys (new)
+        fetchManagementKeys();
       })();
       initialFetchDone.current = true;
     }
   // accountMeta intentionally not a dependency: we only want the initial decision once.
-  }, [resolvedAccountId, fetchSnapshot, fetchMeta, addToast, onBack]);
+  }, [resolvedAccountId, fetchSnapshot, fetchMeta, fetchManagementKeys, addToast, onBack]);
 
   async function handleToggleKey(hash, currentDisabled) {
     setActionLoading((p) => ({ ...p, [hash]: true }));
@@ -439,6 +459,30 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }} onClick={() => copyKey('mgmt', snapshot.managementKeyPreview)} title="Copy preview">
             {copiedKey === 'mgmt' ? <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={11} />}
           </button>
+        </div>
+      )}
+
+      {/* Stored Management Keys (New) */}
+      {managementKeys.length > 0 && (
+        <div style={{ marginBottom: 'var(--space-md)', padding: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Stored Management Keys ({managementKeys.length})
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys}>
+              {loadingMgmtKeys ? '↻' : '↻ Refresh'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {managementKeys.map((key) => (
+              <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{key.name}</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--status-success)', marginLeft: 'auto' }}>{key.status}</span>
+                <code style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{key.preview}</code>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{formatDate(key.createdAt)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
