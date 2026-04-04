@@ -189,20 +189,21 @@ router.use(async (req, res) => {
 
       // ── Error status handling ──
       if (upstreamRes.status === 429) {
-        rotationManager.applyCooldown(keyEntry.hash, 429);
+        await rotationManager.recordFailure(keyEntry.hash, 429);
         lastError = { status: 429, hash: keyEntry.hash };
         logRequest(keyEntry.hash, currentModel(), 429, Date.now() - startTime);
         continue;
       }
 
       if (upstreamRes.status === 402) {
-        rotationManager.applyCooldown(keyEntry.hash, 402);
+        await rotationManager.recordFailure(keyEntry.hash, 402);
         lastError = { status: 402, hash: keyEntry.hash };
         logRequest(keyEntry.hash, currentModel(), 402, Date.now() - startTime);
         continue;
       }
 
       if (upstreamRes.status === 401) {
+        await rotationManager.recordFailure(keyEntry.hash, 401);
         await rotationManager.evict(keyEntry.hash);
         evicted.add(keyEntry.hash);
         logRequest(keyEntry.hash, currentModel(), 401, Date.now() - startTime);
@@ -210,11 +211,12 @@ router.use(async (req, res) => {
       }
 
       if (upstreamRes.status >= 500 && upstreamRes.status < 600) {
+        const wasDropped = await rotationManager.recordFailure(keyEntry.hash, upstreamRes.status);
         lastError = { status: upstreamRes.status, hash: keyEntry.hash, message: `Upstream error ${upstreamRes.status}` };
         logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime);
 
         // ── Model fallback chain (request-scoped + deterministic) ──
-        if (!fallbackModel && baseBody && baseBody.model) {
+        if (!wasDropped && !fallbackModel && baseBody && baseBody.model) {
           const model = String(baseBody.model).toLowerCase();
           if (model.includes('claude-3.5') || model.includes('gpt-4o')) {
             fallbackModel = 'google/gemini-2.5-pro';
@@ -225,6 +227,7 @@ router.use(async (req, res) => {
       }
 
       // ── Success — forward the response ──
+      rotationManager.recordSuccess(keyEntry.hash); // Reset failure count
       logger.info(`[PROXY] ${req.method} ${path} → ${upstreamRes.status} (key: ${keyEntry.hash.slice(0, 8)}…, account: ${keyEntry.account?.alias ?? '?'})`);
 
       upstreamRes.headers.forEach((value, header) => {

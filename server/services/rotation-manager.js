@@ -10,6 +10,7 @@ import { logger } from './logger.js';
 
 const COOLDOWN_429 = 60 * 1000;        // 1 min for rate-limits
 const COOLDOWN_402 = 10 * 60 * 1000;   // 10 min for credit-depleted keys
+const MAX_RETRIES = 10;                // Drop key after 10 consecutive failures
 
 class RotationManager {
   constructor() {
@@ -18,6 +19,8 @@ class RotationManager {
     this.index = 0;
     /** @type {Map<string, number>} hash → expiry timestamp */
     this.cooldowns = new Map();
+    /** @type {Map<string, number>} hash → consecutive failure count */
+    this.failureCounts = new Map();
     this.loaded = false;
     this.userId = null;
   }
@@ -106,6 +109,63 @@ class RotationManager {
     this.cooldowns.set(hash, Date.now() + duration);
     const label = httpStatus === 402 ? 'credit-depleted' : 'rate-limited';
     logger.warn(`[POOL] Key ${hash.slice(0, 8)}… ${label} → cooling for ${duration / 1000}s`);
+  }
+
+  /**
+   * Record a failure for a key. After MAX_RETRIES consecutive failures,
+   * the key is dropped from the pool.
+   * @returns {Promise<boolean>} true if key was dropped
+   */
+  async recordFailure(hash, httpStatus) {
+    const current = (this.failureCounts.get(hash) || 0) + 1;
+    this.failureCounts.set(hash, current);
+    
+    logger.warn(`[POOL] Key ${hash.slice(0, 8)}… failure #${current}/${MAX_RETRIES} (status ${httpStatus})`);
+    
+    // Apply cooldown for 429/402
+    if (httpStatus === 429 || httpStatus === 402) {
+      this.applyCooldown(hash, httpStatus);
+    }
+    
+    // Drop key after max retries
+    if (current >= MAX_RETRIES) {
+      await this.dropFromPool(hash, `exceeded ${MAX_RETRIES} consecutive failures`);
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Record a success for a key - resets failure count.
+   */
+  recordSuccess(hash) {
+    if (this.failureCounts.has(hash)) {
+      this.failureCounts.delete(hash);
+    }
+  }
+
+  /**
+   * Permanently drop a key from the pool (disable pooling).
+   * Key stays in database but won't be used for rotation.
+   */
+  async dropFromPool(hash, reason) {
+    try {
+      // Update DB to disable pooling
+      await prisma.key.update({
+        where: { hash },
+        data: { isPooled: false }
+      });
+      
+      // Remove from in-memory pool
+      this.pool = this.pool.filter(k => k.hash !== hash);
+      this.failureCounts.delete(hash);
+      this.cooldowns.delete(hash);
+      
+      logger.error(`[POOL] Key ${hash.slice(0, 8)}… DROPPED from pool: ${reason}`);
+    } catch (e) {
+      logger.error(`[POOL] Failed to drop ${hash.slice(0, 8)}: ${e.message}`);
+    }
   }
 
   /** Permanently disable a revoked key (401) */

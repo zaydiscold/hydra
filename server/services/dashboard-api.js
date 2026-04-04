@@ -1989,6 +1989,36 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       provisionStepLog(accountId, 'after goto management-keys', { url: page.url(), title });
     }
 
+    // ── Google OAuth Edge Case: Check for factor-one page ──
+    const currentUrl = page.url();
+    if (currentUrl.includes('/sign-in/factor-one')) {
+      provisionStepLog(accountId, 'Detected /sign-in/factor-one page (Google OAuth account needs OTP)');
+      
+      // Try to click "Use another method" to get to OTP input
+      const useAnotherMethodBtn = page.locator('button:has-text("Use another method"), a:has-text("Use another method")').first();
+      if (await useAnotherMethodBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await useAnotherMethodBtn.click();
+        provisionStepLog(accountId, 'Clicked "Use another method" - waiting for OTP screen');
+        await page.waitForTimeout(2000);
+        
+        // Wait for OTP input to appear
+        const otpInput = page.locator('input[autocomplete="one-time-code"], input.cl-otpCodeFieldInput, input[data-testid*="otp"], input[maxlength="1"]').first();
+        if (await otpInput.isVisible({ timeout: 10000 }).catch(() => false)) {
+          throw new Error(
+            'GOOGLE_OAUTH_REQUIRES_OTP: This Google OAuth account requires OTP verification. ' +
+            'Please use the "Login Account" flow with OTP code to authenticate first, then retry provisioning.'
+          );
+        }
+      }
+      
+      // If we couldn't navigate to OTP, throw clear error
+      throw new Error(
+        'GOOGLE_OAUTH_REQUIRES_OTP: This account uses Google OAuth and requires OTP verification. ' +
+        'Please use the "Login Account" flow with the 6-digit OTP code from your email to authenticate first, ' +
+        'then retry management key provisioning.'
+      );
+    }
+
     await dismissOpenRouterBlockingOverlays(page, accountId);
 
     /** Set after a matching response is parsed — persist outside the predicate to avoid store I/O in the waiter. */
