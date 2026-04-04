@@ -23,6 +23,7 @@ import {
   mergeCloudflareCookieExpirations,
 } from './clerk-auth.js';
 import * as store from './store.js';
+import { storeManagementKey } from './management-key-store.js';
 import { getCredits } from './openrouter.js';
 
 const OR_ORIGIN = (() => {
@@ -162,7 +163,14 @@ async function persistProvisionedManagementKey(userId, accountId, key, source = 
     throw err;
   }
 
+  // Save to both systems for compatibility
+  // 1. Legacy: Account config (for backward compatibility)
   await store.updateAccountManagementKey(userId, accountId, key);
+  
+  // 2. New: ManagementKey table (for new API endpoints)
+  await storeManagementKey(accountId, key, `Hydra Auto Key (${source})`);
+  
+  // Verify it was saved
   const saved = await store.getAccountWithKey(userId, accountId);
   if (!saved?.managementKey || saved.managementKey !== key) {
     const err = new Error('Management key was created but could not be persisted to account');
