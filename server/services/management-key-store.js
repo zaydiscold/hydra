@@ -101,6 +101,40 @@ export async function getManagementKey(keyId) {
 }
 
 /**
+ * Get the best (most recently used or newest) management key for an account
+ * @param {string} accountId
+ * @returns {Object|null} Best key with decrypted value, or null if none
+ */
+export async function getBestManagementKey(accountId) {
+  // First try to find an active key that was recently used
+  let key = await prisma.managementKey.findFirst({
+    where: { accountId, status: 'active' },
+    orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }]
+  });
+  
+  // If no used key, get the newest active key
+  if (!key) {
+    key = await prisma.managementKey.findFirst({
+      where: { accountId, status: 'active' },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+  
+  if (!key) return null;
+
+  return {
+    id: key.id,
+    accountId: key.accountId,
+    key: decrypt(key.encryptedKey),
+    name: key.name,
+    status: key.status,
+    metadata: key.metadata ? JSON.parse(key.metadata) : null,
+    lastUsedAt: key.lastUsedAt,
+    createdAt: key.createdAt
+  };
+}
+
+/**
  * Mark a key as used (update lastUsedAt)
  * @param {string} keyId
  */

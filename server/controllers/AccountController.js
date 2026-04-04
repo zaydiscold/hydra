@@ -333,8 +333,11 @@ export class AccountController extends BaseController {
       let autoProvision = 'skipped';
       let provisionResult = null;
       try {
-        const acct = await store.getAccountWithKey(userId, accountId);
-        if (!acct.managementKey) {
+        // Check ManagementKey table (new system), not config (old system)
+        const { getManagementKeys } = await import('../services/management-key-store.js');
+        const existingKeys = await getManagementKeys(accountId);
+        
+        if (existingKeys.length === 0) {
           autoProvision = 'started';
           // SYNCHRONOUS - OTP sessions expire too fast for background processing
           provisionResult = await dashboardApi.createManagementKey(userId, accountId);
@@ -345,6 +348,8 @@ export class AccountController extends BaseController {
             autoProvision = 'failed';
             logger.warn(`[ACCOUNT] Auto-provision after OTP got no key (account=${accountId}): ${provisionResult?.message || 'unknown'}`);
           }
+        } else {
+          logger.info(`[ACCOUNT] Skipping auto-provision - ${existingKeys.length} key(s) already in ManagementKey table`);
         }
       } catch (checkErr) {
         autoProvision = 'error';
@@ -536,16 +541,21 @@ export class AccountController extends BaseController {
   async getSnapshot(req, res) {
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
-      if (!account.managementKey) return this.error(res, 'Account has no management key — use /provision first', 400);
+      
+      // Get key from ManagementKey table (new system), not config (old system)
+      const { getBestManagementKey } = await import('../services/management-key-store.js');
+      const bestKey = await getBestManagementKey(req.params.id);
+      
+      if (!bestKey) return this.error(res, 'Account has no management key — use /provision first', 400);
       try {
-        assertManagementKey(account.managementKey, 'account snapshot');
+        assertManagementKey(bestKey.key, 'account snapshot');
       } catch (err) {
         return this.error(res, err.message, 400);
       }
-      const snapshot = await openrouter.getAccountSnapshot(account.managementKey);
+      const snapshot = await openrouter.getAccountSnapshot(bestKey.key);
       await store.updateAccountLastSync(req.user.id, req.params.id);
-      const mgmtPreview = account.managementKey
-        ? account.managementKey.slice(0, 16) + '••••••••' + account.managementKey.slice(-4)
+      const mgmtPreview = bestKey.key
+        ? bestKey.key.slice(0, 16) + '••••••••' + bestKey.key.slice(-4)
         : null;
       return this.success(res, { id: account.id, alias: account.alias, email: account.email, managementKeyPreview: mgmtPreview, ...snapshot });
     } catch (err) {
