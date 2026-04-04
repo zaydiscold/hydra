@@ -4,7 +4,7 @@ import { prisma } from './db.js';
 import { getProxyMasterSecret } from './local-secrets.js';
 import { decrypt, decryptConfig, encrypt, encryptConfig } from './storage-codec.js';
 import { logger } from './logger.js';
-import { getJwtExpiry, SESSION_EXPIRING_SOON_MS } from './clerk-auth.js';
+import { getJwtExpiry, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
 
 /**
  * Single effective expiry for JWT vs stored `sessionExpiry` (whichever is sooner).
@@ -27,20 +27,69 @@ export function resolveEffectiveSessionExpiry(config, sessionTokenPlain) {
 }
 
 /**
- * Determine session status based on JWT expiry.
- * Clerk JWTs expire quickly (~1-5 min) but sessions auto-refresh and last much longer.
- * A session is only truly "expired" when the JWT has passed its exp claim.
- * "expiring" is a UI warning for JWTs close to expiry - the session is still usable.
+ * Determine session status based on actual API validation, NOT just JWT expiry.
+ * 
+ * User sessions last 12+ hours, but JWTs expire in ~2.5 minutes. 
+ * We cannot rely on JWT expiry alone to determine session validity.
+ * 
+ * This function uses actual API call success (validateSession) to determine status.
+ * 
+ * @param {object} config - decrypted account config
+ * @param {string} sessionTokenPlain - decrypted __session JWT or ''
+ * @param {boolean} sessionDecryptFailed - whether decryption failed
+ * @returns {Promise<string>} session status: 'active', 'expiring', 'expired', 'none', 'error', 'unknown'
+ */
+async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFailed) {
+  if (sessionDecryptFailed) return 'error';
+
+  const sessionCookie = sessionTokenPlain || config.sessionCookie || '';
+  const hasSession = !!sessionCookie.trim();
+  if (!hasSession) return 'none';
+
+  // ACTUAL API VALIDATION: Call OpenRouter to verify session is still valid
+  const isValid = await validateSession(sessionCookie);
+  if (!isValid) return 'expired';
+
+  // Session is valid via API. Now determine if it's expiring soon based on JWT.
+  const effective = resolveEffectiveSessionExpiry(config, sessionTokenPlain);
+  if (!effective) return 'active'; // API says valid, we trust it
+
+  const expiryMs = new Date(effective).getTime();
+  if (Number.isNaN(expiryMs)) return 'active';
+
+  const now = Date.now();
+  const remainingMs = expiryMs - now;
+
+  // JWT close to expiry - show warning but session still works
+  if (remainingMs <= SESSION_EXPIRING_SOON_MS) return 'expiring';
+
+  return 'active';
+}
+
+/**
+ * SYNC VERSION: Determine session status based on available data.
+ * 
+ * WARNING: This uses JWT expiry as a heuristic only. Real session status 
+ * requires actual API validation via getSessionStatusAsync.
+ * 
+ * Sessions last 12+ hours even though JWTs expire in ~2.5 minutes.
+ * Do NOT mark sessions as 'expired' solely based on JWT expiry.
+ * 
+ * @param {object} config - decrypted account config
+ * @param {string} sessionTokenPlain - decrypted __session JWT or ''
+ * @param {boolean} sessionDecryptFailed - whether decryption failed
+ * @returns {string} session status: 'active', 'expiring', 'expired', 'none', 'error', 'unknown'
  */
 function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed) {
   if (sessionDecryptFailed) return 'error';
 
-  const hasSession = !!(
-    (config.sessionCookie && String(config.sessionCookie).trim())
-    || (sessionTokenPlain && String(sessionTokenPlain).trim())
-  );
+  const sessionCookie = sessionTokenPlain || config.sessionCookie || '';
+  const hasSession = !!sessionCookie.trim();
   if (!hasSession) return 'none';
 
+  // IMPORTANT: Don't mark as expired just because JWT is expired.
+  // Real sessions last 12+ hours. We use 'expiring' as a hint to trigger
+  // API-based validation, not as a definitive 'expired' state.
   const effective = resolveEffectiveSessionExpiry(config, sessionTokenPlain);
   if (!effective) return 'unknown';
 
@@ -50,11 +99,8 @@ function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed) {
   const now = Date.now();
   const remainingMs = expiryMs - now;
 
-  // JWT has actually expired - session needs refresh
-  if (remainingMs <= 0) return 'expired';
-
-  // JWT is close to expiry but still valid - show warning but session works
-  // Clerk auto-refreshes sessions, so this is just a UI indicator
+  // If JWT is expired or close to expiry, mark as 'expiring' to trigger 
+  // API-based validation. Do NOT mark as 'expired' here.
   if (remainingMs <= SESSION_EXPIRING_SOON_MS) return 'expiring';
 
   return 'active';
@@ -119,28 +165,42 @@ async function assertAccountUniqueForUser(userId, { alias, email }, excludeAccou
   }
 }
 
-/** Session lifecycle label for one vault row (used by API and AccountController). */
+/** Session lifecycle label for one vault row (used by API and AccountController). 
+ * Uses ACTUAL API VALIDATION to determine true session status.
+ */
 export async function getStoredSessionStatus(userId, id) {
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
   const config = readConfig(account);
   const { plain, decryptFailed } = readSessionPlainResult(account);
-  return getSessionStatus(config, plain, decryptFailed);
+  // Use async version that validates via actual API call
+  return getSessionStatusAsync(config, plain, decryptFailed);
 }
 
-/** Session row for `GET /api/accounts/:id/session-status` — never throws on decrypt (uses `readSessionPlainResult`). */
+/** Session row for `GET /api/accounts/:id/session-status` — never throws on decrypt (uses `readSessionPlainResult`).
+ * Uses ACTUAL API VALIDATION to determine true session status.
+ */
 export async function getStoredSessionStatusPayload(userId, id) {
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
   const config = readConfig(account);
   const { plain, decryptFailed } = readSessionPlainResult(account);
+  // Use async version that validates via actual API call
+  const status = await getSessionStatusAsync(config, plain, decryptFailed);
   return {
-    status: getSessionStatus(config, plain, decryptFailed),
+    status,
     sessionExpiry: config.sessionExpiry ?? null,
     sessionDecryptFailed: decryptFailed,
   };
 }
 
+/**
+ * Get all accounts for a user.
+ * 
+ * NOTE: Uses SYNC session status check (heuristic-based) for performance.
+ * Sessions marked as 'expiring' will be validated via API before use.
+ * For ACTUAL session validation, use getStoredSessionStatus() or ensureSession().
+ */
 export async function getAccounts(userId) {
   const accounts = await prisma.account.findMany({ where: { userId } });
 
@@ -156,6 +216,7 @@ export async function getAccounts(userId) {
       /** True when a non-empty password is stored (encrypted). OTP-only accounts are false. */
       passwordOnFile: !!config.password,
       hasCredentials: !!(config.email && (config.password || config.authMethod === 'otp' || config.authMethod === 'password')),
+      // Use sync version for bulk list - 'expiring' status triggers API validation before use
       sessionStatus: getSessionStatus(config, plain, decryptFailed),
       sessionDecryptFailed: decryptFailed,
       lastSync: config.lastSync,

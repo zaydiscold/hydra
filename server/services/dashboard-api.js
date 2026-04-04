@@ -699,12 +699,14 @@ export async function ensureSession(userId, accountId) {
     session.cfCookieExpirations,
   );
 
-  // If CF cookies are valid and session is valid, return early
+  // If CF cookies are valid and we have a session, check if it's actually usable
   if (!cfCookiesNeedRefresh && session.sessionCookie) {
     const derivedExpiry = store.resolveEffectiveSessionExpiry(
       { sessionExpiry: session.sessionExpiry },
       session.sessionCookie,
     );
+    
+    // JWT-based check: if JWT is still valid, use the session
     if (isSessionValid(derivedExpiry)) {
       // Check if this is a short-lived session (< 1 hour) - try to get a longer one
       const expiryMs = new Date(derivedExpiry).getTime();
@@ -741,6 +743,25 @@ export async function ensureSession(userId, accountId) {
       }
       return { sessionCookie: session.sessionCookie, clientCookie: session.clientCookie };
     }
+    
+    // JWT appears expired, but real sessions last 12+ hours. Validate via API.
+    console.log(`[ensureSession] JWT expired (${derivedExpiry}), validating session via API...`);
+    if (await validateSession(session.sessionCookie)) {
+      console.log(`[ensureSession] Session still valid via API (despite expired JWT)`);
+      const expiry = store.resolveEffectiveSessionExpiry(
+        { sessionExpiry: session.sessionExpiry },
+        session.sessionCookie,
+      );
+      await store.updateAccountSession(
+        userId,
+        accountId,
+        session.sessionCookie,
+        session.clientCookie,
+        expiry,
+      );
+      return { sessionCookie: session.sessionCookie, clientCookie: session.clientCookie };
+    }
+    console.log(`[ensureSession] Session invalid via API, will attempt refresh/re-auth`);
   }
 
   // Try to refresh if CF cookies need refresh OR we have a client cookie but no valid session
@@ -846,25 +867,42 @@ export async function ensureSession(userId, accountId) {
 /**
  * Offline check: does this account have any path ensureSession() can use without user interaction?
  * Mirrors ensureSession order except network calls (refreshSession, validateSession).
+ * 
+ * IMPORTANT: Does NOT use JWT expiry alone to determine readiness. 
+ * Real sessions last 12+ hours even though JWTs expire in ~2.5 minutes.
+ * A session with expired JWT may still be valid and will be validated via API when needed.
  */
 function evaluateRedeemSessionReadiness(account, session) {
   const sessionCookie = session.sessionCookie?.trim();
   const hasSession = Boolean(sessionCookie);
-  const derivedExpiry = hasSession
-    ? store.resolveEffectiveSessionExpiry({ sessionExpiry: session.sessionExpiry }, sessionCookie)
-    : null;
-  if (hasSession && isSessionValid(derivedExpiry || getJwtExpiry(sessionCookie))) {
-    return { ready: true, detail: 'session_valid' };
-  }
-  if (session.clientCookie?.trim()) {
-    return { ready: true, detail: 'client_refresh' };
-  }
+  const clientCookie = session.clientCookie?.trim();
+  
+  // If we have a session cookie, it might be valid (JWT expiry is NOT reliable)
+  // ensureSession() will validate via API call when needed
   if (hasSession) {
+    // Check JWT expiry for informational purposes only
+    const derivedExpiry = store.resolveEffectiveSessionExpiry({ sessionExpiry: session.sessionExpiry }, sessionCookie);
+    const jwtValid = isSessionValid(derivedExpiry || getJwtExpiry(sessionCookie));
+    
+    if (jwtValid) {
+      return { ready: true, detail: 'session_valid' };
+    }
+    
+    // JWT appears expired but session might still be valid (12+ hour real sessions)
+    // Return as 'session_validate' - ensureSession will verify via API
     return { ready: true, detail: 'session_validate' };
   }
+  
+  // No session cookie but have client cookie - can try to refresh
+  if (clientCookie) {
+    return { ready: true, detail: 'client_refresh' };
+  }
+  
+  // No session but have credentials - can re-authenticate
   if (account.email && account.password && account.authMethod === 'password') {
     return { ready: true, detail: 'password_reauth' };
   }
+  
   return {
     ready: false,
     detail: 'blocked',

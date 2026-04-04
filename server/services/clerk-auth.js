@@ -1400,12 +1400,15 @@ export async function refreshSession(clientCookie, sessionCookie) {
 export const SESSION_EXPIRING_SOON_MS = 2.5 * 60 * 1000;
 
 /**
- * True when the session JWT has not yet expired.
- * Clerk sessions auto-refresh - a "close to expiry" JWT is still valid for API calls.
- * Use this to check if the session can be used; use SESSION_EXPIRING_SOON_MS only for UI warnings.
- *
+ * Check if session is valid based on JWT expiry.
+ * 
+ * WARNING: This only checks JWT expiry, which is NOT reliable for session validity.
+ * Clerk JWTs expire in ~2.5 minutes but actual sessions last 12+ hours.
+ * 
+ * For ACTUAL session validation, use validateSession() which makes an API call.
+ * 
  * @param {string} sessionExpiry - ISO date string (JWT exp)
- * @returns {boolean}
+ * @returns {boolean} true if JWT hasn't expired (but session may still be valid via auto-refresh)
  */
 export function isSessionValid(sessionExpiry) {
   if (!sessionExpiry) return false;
@@ -1413,6 +1416,19 @@ export function isSessionValid(sessionExpiry) {
   const now = Date.now();
   // Session is valid as long as JWT hasn't expired (Clerk auto-refreshes sessions)
   return expiry > now;
+}
+
+/**
+ * Check if session is ACTUALLY valid by making an API call.
+ * This is the ONLY reliable way to determine session status.
+ * Clerk JWTs expire quickly (~2.5 min) but sessions auto-refresh and last 12+ hours.
+ * 
+ * @param {string} sessionCookie - The __session cookie value
+ * @returns {Promise<boolean>} true if session is actually valid
+ */
+export async function isSessionActuallyValid(sessionCookie) {
+  if (!sessionCookie || typeof sessionCookie !== 'string') return false;
+  return validateSession(sessionCookie);
 }
 
 /**
