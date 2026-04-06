@@ -274,4 +274,140 @@ b7e815c fix(sessions): detect based on actual API calls, not JWT expiry
 
 ---
 
+## All Documents Created/Modified This Session
+
+### Documentation Files (with paths)
+
+| Document | Path | Purpose | Status |
+|----------|------|---------|--------|
+| **This Archive** | `docs/PROJECT_STATUS_ARCHIVE_2026-04-03.md` | Complete record of session work | Created |
+| OTP Testing Guide | `docs/OTP_TESTING.md` | Rapid OTP commands, 60s warning | Created |
+| Session Fix Notes | `docs/SESSION_FIX.md` | Pre-existing, referenced | Read only |
+| Management Key Automation | `docs/MANAGEMENT_KEY_PROVISION_AUTOMATION.md` | Pre-existing provisioning docs | Read only |
+| Clerk/OpenRouter Endpoints | `docs/research/CLERK_OPENROUTER_ENDPOINTS_REPORT.md` | Recon on Clerk APIs | Read only |
+
+### Pre-existing Docs Referenced
+
+- `docs/ARCHITECTURE_DEEP_DIVE.md` - System architecture
+- `docs/DASHBOARD_ACCOUNT_STATES.md` - Account state definitions  
+- `docs/SERVER_ACTION_CAPTURE_REPLAY.md` - Server action docs
+- `docs/TRPC_ROUTES.md` - tRPC endpoint documentation
+- `docs/SECURITY.md` - Security considerations
+
+---
+
+## Test Logs & Debug Artifacts
+
+### Server Logs
+| Log File | Path | Content |
+|----------|------|---------|
+| Dev Server Log | `/tmp/hydra-dev.log` | Main server output, all requests |
+| Monitor Log | `/tmp/hydra-monitor.log` | Additional monitoring |
+| Client Log | `/tmp/hydra-client.log` | Client-side output |
+| Automated Tests | `/tmp/hydra-automated-test.log` | Test suite results |
+| Complete Tests | `/tmp/hydra-complete-test.log` | Full test output |
+
+### Debug Screenshots (Failed Provisions)
+| Screenshot | Path | Account | Timestamp |
+|------------|------|---------|-----------|
+| provision-fail-6f1d28e8-bc8d-4557-b589-66b6db341f8c-1775277845843.png | `/var/folders/jp/srqsp2ts3rv7qxvsdx4s1n480000gn/T/hydra-provision-debug/` | admin-zayd.world | 2026-04-03 21:44 |
+| provision-fail-529c3bc9-d8b4-49c7-8fee-957e54db4c50-1775278706578.png | Same dir | delilah-zayd.wtf | 2026-04-03 21:58 |
+| provision-fail-529c3bc9-d8b4-49c7-8fee-957e54db4c50-1775278774172.png | Same dir | delilah-zayd.wtf | 2026-04-03 21:59 |
+| provision-fail-529c3bc9-d8b4-49c7-8fee-957e54db4c50-1775279014132.png | Same dir | delilah-zayd.wtf | 2026-04-03 22:03 |
+| provision-fail-8418a897-42cd-4d92-9c44-bab3786c4ced-*.png (3 files) | Same dir | iam-zayd.wtf | Earlier session |
+
+### Network Traces
+| Trace File | Path | Content |
+|------------|------|---------|
+| provision-network-*.log | `/var/folders/jp/srqsp2ts3rv7qxvsdx4s1n480000gn/T/hydra-provision-debug/` | HTTP request/response capture |
+| provision-trace-*.zip | Same dir | Full Playwright traces |
+
+---
+
+## Code Files Modified (with specific functions)
+
+### Session Detection Changes
+**File**: `server/services/clerk-auth.js`
+- Function: `isSessionActuallyValid()` - NEW, makes API calls
+- Function: `isSessionValid()` - Modified docs
+- Function: `extractManagementKeyFromResponseBody()` - Rejects masked keys
+- Function: `findManagementKeyDeep()` - Helper for nested search
+- Function: `fromPayload()` - Now validates key length
+- Function: `openRouterDashboardDeviceCookies()` - Fixed duplicates
+- Function: `dashboardDeviceCookiesList()` - Fixed duplicates  
+- Function: `mergeDeviceJar()` - Now uses filterFn parameter
+
+**File**: `server/services/store.js`
+- Function: `getSessionStatusAsync()` - NEW, async API validation
+- Function: `getSessionStatus()` - Returns "expiring" not "expired"
+- Function: `getStoredSessionStatus()` - Uses async validation
+- Function: `getStoredSessionStatusPayload()` - Uses async validation
+- Function: `readConfig()` - Config decryption
+
+**File**: `server/services/dashboard-api.js`
+- Function: `ensureSession()` - API validation fallback
+- Function: `evaluateRedeemSessionReadiness()` - Doesn't reject on JWT alone
+- Function: `tryCopyRevealManagementKeyUi()` - 3 retry attempts
+- Function: `createManagementKeyViaPlaywright()` - Main provisioning flow
+- Function: `extractManagementKeyFromResponseBody()` - Called from response handler
+
+### Key Storage Changes
+**File**: `server/services/management-key-store.js`
+- Function: `storeManagementKey()` - Validates key length, rejects masked
+
+---
+
+## Test Scripts & Commands Used
+
+### OTP Start Command
+```bash
+curl -s -X POST http://localhost:3001/api/accounts/529c3bc9-d8b4-49c7-8fee-957e54db4c50/otp/start \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"delilah@zayd.wtf"}'
+```
+
+### OTP Verify Command
+```bash
+curl -s -X POST http://localhost:3001/api/accounts/529c3bc9-d8b4-49c7-8fee-957e54db4c50/otp/verify \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"signInId":"SIGNIN_ID","code":"6_DIGIT_CODE"}'
+```
+
+### Session Status Check
+```bash
+curl -s http://localhost:3001/api/accounts/529c3bc9-d8b4-49c7-8fee-957e54db4c50/session-status \
+  -H "Authorization: Bearer TOKEN"
+```
+
+### Database Queries Used
+```sql
+-- List accounts
+SELECT id, alias FROM Account;
+
+-- Check session tokens (encrypted)
+SELECT id, alias, sessionToken FROM Account;
+
+-- Check user
+SELECT id, username FROM User;
+```
+
+---
+
+## Commits Made (Full Log)
+
+```
+bede092 docs: OTP-focused archive - what was tried and results
+0390bff docs: expanded archive with historical context (OLD vs NEW)
+6db46e3 docs: comprehensive project status archive
+795bb1f docs: OTP testing guide - 60 second expiry warning
+b7e815c fix(sessions): detect based on actual API calls, not JWT expiry
+440e6cc fix(provision): enhanced copy/reveal key capture with validation
+2fe03e1 feat(provision): add modal/dialog capture for newly created keys
+9be622e fix(provision): reject masked keys in extract function
+```
+
+---
+
 **Document Purpose**: Record of what was tried, what changed, and current untested state.
