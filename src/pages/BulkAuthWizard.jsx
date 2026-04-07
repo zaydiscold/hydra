@@ -23,9 +23,9 @@ function clerkErrorHint(message) {
   if (!message || typeof message !== 'string') return null;
   const m = message.toLowerCase();
   if (m.includes('oauth') || m.includes('social') || m.includes('google'))
-    return 'This address may be OAuth-only on OpenRouter. Skip this row and sign in with password or paste a session cookie via Monitor → Bulk Import.';
+    return 'This address may be OAuth-only on OpenRouter. Skip this row and sign in with password or paste a session cookie via Dashboard → Add Account.';
   if (m.includes('email_code') || m.includes('strategy') || m.includes('not available'))
-    return 'Clerk may not offer email code for this address. Try password auth from Monitor, or import a session cookie.';
+    return 'Clerk may not offer email code for this address. Try password auth from Dashboard, or import a session cookie.';
   return null;
 }
 
@@ -317,7 +317,7 @@ export default function BulkAuthWizard({ addToast }) {
           <p className="page-header__lede page-header__lede--note">
             Magic-link-only accounts: paste a{' '}
             <code className="form-input-mono" style={{ fontSize: '0.8em', padding: '1px 4px' }}>__session</code> cookie
-            via Monitor → Bulk Import instead.
+            via Dashboard → Add Account instead.
           </p>
         </div>
       </header>

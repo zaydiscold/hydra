@@ -383,35 +383,31 @@ export default function App() {
     checkAuth();
   }, [checkAuth]);
 
-  function handleAuthSuccess() {
-    setAuthState('app');
-  }
+  const handleAuthSuccess = useCallback(() => setAuthState('app'), []);
 
-  function handleRestartRequired(message) {
+  const handleRestartRequired = useCallback((message) => {
     if (message) setAuthError(message);
     setAuthState('restart');
-  }
+  }, []);
 
-  async function handleLogout() {
+  const handleLogout = useCallback(async () => {
     try { await api.logout(); } catch { /* fine */ }
     api.clearToken();
     setAuthState('login');
     navigate('/dashboard');
-  }
+  }, [navigate]);
 
-  async function handleShutdown() {
+  const handleShutdown = useCallback(async () => {
     if (!window.confirm('Shut down the Hydra background server?')) return;
     try { await api.shutdownServer(); } catch { /* ok */ }
     setAuthState('shutdown');
-  }
+  }, []);
 
-  function navigateToAccount(accountId) {
+  const navigateToAccount = useCallback((accountId) => {
     navigate(`/account/${accountId}`);
-  }
+  }, [navigate]);
 
-  function navigateBack() {
-    navigate('/dashboard');
-  }
+  const navigateBack = useCallback(() => navigate('/dashboard'), [navigate]);
 
   // Loading
   if (authState === 'loading') {

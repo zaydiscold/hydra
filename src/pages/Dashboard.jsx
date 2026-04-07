@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FixedSizeGrid as Grid } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
+import { Grid } from 'react-window';
+import { AutoSizer } from 'react-virtualized-auto-sizer';
 import * as api from '../api';
 import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
@@ -314,10 +314,9 @@ const AccountCard = memo(function AccountCard({
   // Intersection Observer for lazy animation trigger
   const [isVisible, setIsVisible] = useState(false);
   const cardRef = useRef(null);
-  
+
   useEffect(() => {
-    if (!cardRef.current) return;
-    
+    if (!cardRef.current || !account) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -327,14 +326,32 @@ const AccountCard = memo(function AccountCard({
       },
       { threshold: 0.1, rootMargin: '50px' }
     );
-    
     observer.observe(cardRef.current);
     return () => observer.disconnect();
-  }, []);
-  
+  }, [account]);
+
+  // Stable event handlers — safe when account is undefined (empty grid cell)
+  const handleClick = useCallback(() => {
+    if (account) onSelect(account.id);
+  }, [onSelect, account]);
+
+  const handleProvision = useCallback((e) => {
+    e.stopPropagation();
+    if (account) onProvision(account.id);
+  }, [onProvision, account]);
+
+  const handleLogin = useCallback((e) => {
+    e.stopPropagation();
+    if (account) onLogin(account);
+  }, [onLogin, account]);
+
+  // Empty grid cell (last row may be shorter than columnCount)
+  if (!account) {
+    return <div style={style} />;
+  }
+
   // Use live-probed status when available, fall back to sync heuristic
   const sessionStatus = (liveStatuses && liveStatuses[account.id]) || account.sessionStatus || 'none';
-
   const balStatus = account.status === 'error' ? 'error' : getBalanceStatus(account.credits);
   const pct = account.credits?.total > 0
     ? Math.max(0, (account.credits.remaining / account.credits.total) * 100)
@@ -348,26 +365,6 @@ const AccountCard = memo(function AccountCard({
   const showCardActions =
     (needsSession && account.hasCredentials)
     || (needsKey && account.hasCredentials && !needsSession);
-  
-  // Stable event handlers
-  const handleClick = useCallback(() => {
-    onSelect(account.id);
-  }, [onSelect, account.id]);
-  
-  const handleProvision = useCallback((e) => {
-    e.stopPropagation();
-    onProvision(account.id);
-  }, [onProvision, account.id]);
-  
-  const handleLogin = useCallback((e) => {
-    e.stopPropagation();
-    onLogin(account);
-  }, [onLogin, account]);
-
-  // If no account at this position, render empty cell
-  if (!account) {
-    return <div style={style} />;
-  }
 
   return (
     <div style={{ ...style, padding: '8px' }}>
