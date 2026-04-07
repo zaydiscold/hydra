@@ -16,6 +16,12 @@ import { URL } from 'node:url';
 import { USER_AGENT, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
 import { logger } from './logger.js';
 
+// Clerk JS version sent with all FAPI requests.
+// Real version per: curl https://clerk.openrouter.ai/npm/@clerk/clerk-js@5/package.json
+// OpenRouter's Clerk instance checks major version only, so 5.x.x all work.
+// Override with HYDRA_CLERK_JS_VERSION env var if OpenRouter upgrades to v6+.
+const CLERK_JS_VERSION = process.env.HYDRA_CLERK_JS_VERSION || '5.125.7';
+
 // =============================================================================
 // COOKIE SECURITY LIMITS (minimal defaults)
 // =============================================================================
@@ -779,7 +785,7 @@ function sleepMs(ms) {
  * @returns {{ data: object, setCookieLines: string[], clientCookie: string }}
  */
 async function touchClerkSession(sessionId, clientCookie) {
-  const path = `client/sessions/${encodeURIComponent(sessionId)}/touch?_clerk_js_version=5.0.0`;
+  const path = `client/sessions/${encodeURIComponent(sessionId)}/touch?_clerk_js_version=${CLERK_JS_VERSION}`;
   const { data, setCookieLines } = await clerkHttpsJson('POST', path, {
     cookieClient: clientCookie,
     extraHeaders: {
@@ -821,7 +827,7 @@ function logClerkDebugSignInSessionHints(label, result) {
 /**
  * Clerk FAPI via raw `https` so `Set-Cookie` is always visible (fetch/Undici can hide it).
  * @param {string} method
- * @param {string} pathAndQuery - e.g. `client/sign_ins/x/attempt_first_factor?_clerk_js_version=5.0.0`
+ * @param {string} pathAndQuery - e.g. `client/sign_ins/x/attempt_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`
  * @param {{ cookieClient?: string, extraHeaders?: Record<string, string>, body?: string }} opts
  */
 function clerkHttpsJson(method, pathAndQuery, opts = {}) {
@@ -909,7 +915,7 @@ function clientCookieAfterResponse(prior, headers) {
 function fetchClerkClientCookieViaHttps() {
   return new Promise((resolve, reject) => {
     const u = new URL(`${CLERK_BASE}/client`);
-    u.searchParams.set('_clerk_js_version', '5.0.0');
+    u.searchParams.set('_clerk_js_version', CLERK_JS_VERSION);
     const req = https.request(
       {
         hostname: u.hostname,
@@ -945,7 +951,7 @@ function deviceJarFromBootstrapLines(lines) {
 }
 
 async function obtainClerkClientCookie() {
-  const clientRes = await fetch(`${CLERK_BASE}/client?_clerk_js_version=5.0.0`, {
+  const clientRes = await fetch(`${CLERK_BASE}/client?_clerk_js_version=${CLERK_JS_VERSION}`, {
     headers: {
       'User-Agent': USER_AGENT,
       'Origin': CLERK_ORIGIN,
@@ -1046,7 +1052,7 @@ export async function detectAuthMethod(email) {
   let clientCookie = await obtainClerkClientCookie();
 
   // Step 1b: POST /v1/client/sign_ins with just the identifier to get strategies
-  const signInRes = await fetch(`${CLERK_BASE}/client/sign_ins?_clerk_js_version=5.0.0`, {
+  const signInRes = await fetch(`${CLERK_BASE}/client/sign_ins?_clerk_js_version=${CLERK_JS_VERSION}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -1094,7 +1100,7 @@ export async function detectAuthMethod(email) {
 export async function signInWithPassword(email, password) {
   let { signInId, clientCookie } = await detectAuthMethod(email);
 
-  const attemptPath = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_first_factor?_clerk_js_version=5.0.0`;
+  const attemptPath = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`;
   const { data: attemptData, setCookieLines } = await clerkHttpsJson('POST', attemptPath, {
     cookieClient: clientCookie,
     extraHeaders: {
@@ -1149,7 +1155,7 @@ async function clerkGetClientSession(clientCookie, sessionCookie, { debugPhase =
   let cc = clientCookie;
   let lastSetCookieLines = [];
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const { statusCode, data, setCookieLines } = await clerkHttpsJson('GET', 'client?_clerk_js_version=5.0.0', {
+    const { statusCode, data, setCookieLines } = await clerkHttpsJson('GET', `client?_clerk_js_version=${CLERK_JS_VERSION}`, {
       cookieClient: cc,
       sessionCookie, // Pass session for refresh
       extraHeaders: {
@@ -1262,7 +1268,7 @@ export async function startEmailOTP(email) {
 
   /** Send OTP email — must use prepare_first_factor; attempt_first_factor with email_code requires `code` (verify step only). */
   const otpRes = await fetch(
-    `${CLERK_BASE}/client/sign_ins/${signInId}/prepare_first_factor?_clerk_js_version=5.0.0`,
+    `${CLERK_BASE}/client/sign_ins/${signInId}/prepare_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`,
     {
       method: 'POST',
       headers: {
@@ -1300,7 +1306,7 @@ export async function startEmailOTP(email) {
  * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
  */
 export async function completeEmailOTP(signInId, code, clientCookie) {
-  const attemptPath = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_first_factor?_clerk_js_version=5.0.0`;
+  const attemptPath = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`;
   const { data, setCookieLines } = await clerkHttpsJson('POST', attemptPath, {
     cookieClient: clientCookie,
     extraHeaders: {
@@ -1348,7 +1354,7 @@ export async function completeEmailOTP(signInId, code, clientCookie) {
  * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
  */
 export async function completeSecondFactor(signInId, totpCode, clientCookie) {
-  const path2 = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_second_factor?_clerk_js_version=5.0.0`;
+  const path2 = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_second_factor?_clerk_js_version=${CLERK_JS_VERSION}`;
   const { data, setCookieLines } = await clerkHttpsJson('POST', path2, {
     cookieClient: clientCookie,
     extraHeaders: {
