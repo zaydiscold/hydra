@@ -32,5 +32,8 @@ router.get('/:id/management-key', requireUnlocked, (req, res) => controller.getM
 router.get('/:id/management-keys', requireUnlocked, (req, res) => controller.listManagementKeys(req, res));
 router.post('/:id/management-keys/store', requireUnlocked, (req, res) => controller.storeProvisionedKey(req, res));
 router.get('/:id/management-keys/best', requireUnlocked, (req, res) => controller.getBestManagementKey(req, res));
+router.delete('/:id/management-keys/:keyId', requireUnlocked, (req, res) => controller.deleteManagementKey(req, res));
+
+router.get('/:id/balance', requireUnlocked, (req, res) => controller.getBalance(req, res));
 
 export default router;

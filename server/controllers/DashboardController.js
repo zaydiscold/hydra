@@ -4,6 +4,41 @@ import * as openrouter from '../services/openrouter.js';
 import * as clerkAuth from '../services/clerk-auth.js';
 import { logger } from '../services/logger.js';
 import { assertManagementKey } from '../services/key-utils.js';
+import pLimit from 'p-limit';
+
+// Simple in-memory cache for account snapshots
+// TTL: 30 seconds to balance freshness vs performance
+const snapshotCache = new Map();
+const CACHE_TTL_MS = 30000;
+
+function getCachedSnapshot(accountId) {
+  const cached = snapshotCache.get(accountId);
+  if (!cached) return null;
+  
+  const now = Date.now();
+  if (now - cached.timestamp > CACHE_TTL_MS) {
+    snapshotCache.delete(accountId);
+    return null;
+  }
+  return cached.data;
+}
+
+function setCachedSnapshot(accountId, data) {
+  snapshotCache.set(accountId, {
+    data,
+    timestamp: Date.now(),
+  });
+}
+
+// Invalidate cache for an account (call when keys/balance updated)
+export function invalidateSnapshotCache(accountId) {
+  snapshotCache.delete(accountId);
+}
+
+// Clear entire cache (useful for testing/logout)
+export function clearSnapshotCache() {
+  snapshotCache.clear();
+}
 
 class DashboardController extends BaseController {
   async refreshDashboard(req, res) {
@@ -25,82 +60,118 @@ class DashboardController extends BaseController {
         (await store.getAccounts(req.user.id)).map((a) => [a.id, a]),
       );
 
+      // Refresh expired/expiring sessions in parallel (no stagger)
       let refreshedSessions = false;
-      for (const account of accounts) {
-        const meta = metaById.get(account.id);
-        // Refresh both 'expiring' (proactive) and 'expired' (reactive) sessions as long as a
-        // clientCookie exists — the __client device cookie can obtain a fresh __session JWT
-        // without a full re-login.
-        const needsRefresh = meta?.sessionStatus === 'expiring' || meta?.sessionStatus === 'expired';
-        if (!needsRefresh) continue;
-        const cc = account.clientCookie?.trim();
-        if (!cc || cc === 'undefined') continue;
-        try {
-          const refreshed = await clerkAuth.refreshSession(cc);
-          if (refreshed) {
-            const nextCc = refreshed.clientCookie ?? cc;
-            await store.updateAccountSession(
-              req.user.id,
-              account.id,
-              refreshed.sessionCookie,
-              nextCc,
-              refreshed.sessionExpiry,
-            );
-            refreshedSessions = true;
-            logger.info(`[DASHBOARD] Session refreshed via clientCookie (account=${account.id}, was=${meta.sessionStatus})`);
+      await Promise.all(
+        accounts.map(async (account) => {
+          const meta = metaById.get(account.id);
+          const needsRefresh = meta?.sessionStatus === 'expiring' || meta?.sessionStatus === 'expired';
+          if (!needsRefresh) return;
+          
+          const cc = account.clientCookie?.trim();
+          if (!cc || cc === 'undefined') return;
+          
+          try {
+            const refreshed = await clerkAuth.refreshSession(cc);
+            if (refreshed) {
+              const nextCc = refreshed.clientCookie ?? cc;
+              await store.updateAccountSession(
+                req.user.id,
+                account.id,
+                refreshed.sessionCookie,
+                nextCc,
+                refreshed.sessionExpiry,
+              );
+              refreshedSessions = true;
+              logger.info(`[DASHBOARD] Session refreshed via clientCookie (account=${account.id}, was=${meta.sessionStatus})`);
+            }
+          } catch (err) {
+            logger.warn(`[DASHBOARD] Proactive refresh failed (account=${account.id}): ${err.message}`);
           }
-        } catch (err) {
-          logger.warn(`[DASHBOARD] Proactive refresh failed (account=${account.id}): ${err.message}`);
-        }
-      }
+        })
+      );
+      
       if (refreshedSessions) {
         metaById = new Map(
           (await store.getAccounts(req.user.id)).map((a) => [a.id, a]),
         );
       }
 
+      // Fetch snapshots with concurrency limiting (no artificial delays)
+      // Concurrency of 5 to respect OpenRouter rate limits while maximizing speed
+      const CONCURRENCY = 5;
+      const limit = pLimit(CONCURRENCY);
+      
       const snapshots = await Promise.all(
-        accounts.map(async (account, index) => {
-          const meta = metaById.get(account.id) || {};
-          try {
-            // Stagger by 50ms per account to smooth out spikes
-            if (index > 0) await new Promise(r => setTimeout(r, index * 50));
-            if (!account.managementKey) {
-              throw new Error('No management key — provision one first');
+        accounts.map((account) =>
+          limit(async () => {
+            const meta = metaById.get(account.id) || {};
+            
+            // Check cache first (unless account has error status)
+            const cached = getCachedSnapshot(account.id);
+            if (cached && cached.status !== 'error') {
+              logger.debug(`[DASHBOARD] Using cached snapshot for account=${account.id}`);
+              return {
+                ...cached,
+                id: account.id,
+                alias: account.alias,
+                email: meta.email,
+                authMethod: meta.authMethod,
+                passwordOnFile: meta.passwordOnFile,
+                sessionStatus: meta.sessionStatus,
+                sessionDecryptFailed: meta.sessionDecryptFailed,
+                hasManagementKey: meta.hasManagementKey,
+                hasCredentials: meta.hasCredentials,
+                _cached: true, // Flag for debugging
+              };
             }
-            assertManagementKey(account.managementKey, 'account snapshot');
-            const snapshot = await openrouter.getAccountSnapshot(account.managementKey);
-            return {
-              id: account.id,
-              alias: account.alias,
-              status: 'ok',
-              email: meta.email,
-              authMethod: meta.authMethod,
-              passwordOnFile: meta.passwordOnFile,
-              sessionStatus: meta.sessionStatus,
-              sessionDecryptFailed: meta.sessionDecryptFailed,
-              hasManagementKey: meta.hasManagementKey,
-              hasCredentials: meta.hasCredentials,
-              ...snapshot,
-            };
-          } catch (err) {
-            return {
-              id: account.id,
-              alias: account.alias,
-              status: 'error',
-              error: err.message,
-              email: meta.email,
-              authMethod: meta.authMethod,
-              passwordOnFile: meta.passwordOnFile,
-              sessionStatus: meta.sessionStatus,
-              sessionDecryptFailed: meta.sessionDecryptFailed,
-              hasManagementKey: meta.hasManagementKey,
-              hasCredentials: meta.hasCredentials,
-              credits: { total: 0, used: 0, remaining: 0 },
-              keys: { total: 0, active: 0, disabled: 0, list: [] },
-            };
-          }
-        })
+            
+            try {
+              if (!account.managementKey) {
+                throw new Error('No management key — provision one first');
+              }
+              assertManagementKey(account.managementKey, 'account snapshot');
+              
+              const snapshot = await openrouter.getAccountSnapshot(account.managementKey);
+              const result = {
+                id: account.id,
+                alias: account.alias,
+                status: 'ok',
+                email: meta.email,
+                authMethod: meta.authMethod,
+                passwordOnFile: meta.passwordOnFile,
+                sessionStatus: meta.sessionStatus,
+                sessionDecryptFailed: meta.sessionDecryptFailed,
+                hasManagementKey: meta.hasManagementKey,
+                hasCredentials: meta.hasCredentials,
+                ...snapshot,
+              };
+              
+              // Cache successful snapshot
+              setCachedSnapshot(account.id, result);
+              return result;
+              
+            } catch (err) {
+              const errorResult = {
+                id: account.id,
+                alias: account.alias,
+                status: 'error',
+                error: err.message,
+                email: meta.email,
+                authMethod: meta.authMethod,
+                passwordOnFile: meta.passwordOnFile,
+                sessionStatus: meta.sessionStatus,
+                sessionDecryptFailed: meta.sessionDecryptFailed,
+                hasManagementKey: meta.hasManagementKey,
+                hasCredentials: meta.hasCredentials,
+                credits: { total: 0, used: 0, remaining: 0 },
+                keys: { total: 0, active: 0, disabled: 0, list: [] },
+              };
+              // Don't cache errors - let them retry next time
+              return errorResult;
+            }
+          })
+        )
       );
 
       // Compute totals

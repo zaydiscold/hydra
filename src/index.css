@@ -144,14 +144,40 @@ body {
 .animate-fade-in { animation: fadeIn var(--transition-fast) forwards; }
 .animate-slide-up { animation: slideUp var(--transition-fast) forwards; }
 
+/* OPTIMIZED: GPU-accelerated spring animation */
 @keyframes springIn {
-  0% { transform: scale(0.9) translateY(20px); opacity: 0; }
-  70% { transform: scale(1.02) translateY(-2px); opacity: 1; }
-  100% { transform: scale(1) translateY(0); opacity: 1; }
+  0% { 
+    transform: translate3d(0, 20px, 0) scale3d(0.9, 0.9, 1); 
+    opacity: 0; 
+  }
+  70% { 
+    transform: translate3d(0, -2px, 0) scale3d(1.02, 1.02, 1); 
+    opacity: 1; 
+  }
+  100% { 
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1); 
+    opacity: 1; 
+  }
 }
 
 .animate-spring {
   animation: springIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  will-change: transform, opacity;
+}
+
+/* Remove will-change after animation to free GPU memory */
+.animate-spring:not(.animating) {
+  will-change: auto;
+}
+
+/* Optimized fade-in using GPU */
+@keyframes fadeInGPU {
+  0% { opacity: 0; transform: translate3d(0, 0, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.animate-fade-in-gpu {
+  animation: fadeInGPU var(--transition-fast) forwards;
 }
 
 .stagger-delay-0 { animation-delay: 0ms; }
@@ -168,15 +194,33 @@ body {
   100% { left: 150%; opacity: 0; }
 }
 
+/* OPTIMIZED: Only show shine-sweep on hover, not on mount */
+.shine-sweep {
+  position: relative;
+  overflow: hidden;
+}
+
 .shine-sweep::after {
   content: '';
   position: absolute;
   top: 0;
+  left: -100%;
   width: 40%;
   height: 100%;
   background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.08), transparent);
-  animation: shineSweep 1.5s var(--transition-normal) forwards;
+  opacity: 0;
   z-index: 1;
+}
+
+/* Only animate on hover/focus - reduces initial load animation count from 17+ to 0 */
+.shine-sweep:hover::after,
+.shine-sweep:focus-within::after {
+  animation: shineSweep 1.5s var(--transition-normal) forwards;
+}
+
+/* For cards that should show shine on mount (limited use) */
+.shine-sweep-mount::after {
+  animation: shineSweep 1.5s var(--transition-normal) forwards;
 }
 
 @keyframes spin {
@@ -243,10 +287,37 @@ body {
   box-shadow: 0 0 8px var(--status-success);
 }
 
+/* OPTIMIZED ScrambleText - CSS-only implementation */
 .scramble-text {
   font-family: var(--font-mono);
   display: inline-block;
   white-space: pre;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+}
+
+/* Base state while animating */
+.scramble-text.scrambling {
+  color: var(--status-success);
+}
+
+/* Revealed characters - normal appearance */
+.scramble-revealed {
+  color: inherit;
+}
+
+/* Scrambled/masked characters - green glow effect */
+.scramble-mask {
+  color: var(--status-success);
+  opacity: 0.6;
+  text-shadow: 0 0 8px var(--status-success);
+}
+
+/* Latest revealed character gets extra glow */
+.scramble-text.scrambling .scramble-revealed:last-child {
+  color: var(--text-primary);
+  text-shadow: 0 0 10px var(--status-success);
+  font-weight: 900;
 }
 
 /* ========= LAYOUT ========= */
@@ -353,6 +424,13 @@ body {
   filter: drop-shadow(0 0 5px var(--accent-secondary-glow));
 }
 
+.sidebar-logo-icon svg {
+  color: var(--accent-primary);
+  z-index: 1;
+  filter: drop-shadow(0 0 4px var(--accent-primary-glow));
+  padding: 4px;
+}
+
 @keyframes logo-breathing {
   0%, 100% { transform: scale(1); box-shadow: 0 0 15px rgba(255, 0, 255, 0.1); }
   50% { transform: scale(1.04); box-shadow: 0 0 25px rgba(255, 0, 255, 0.3), 0 0 40px rgba(0, 255, 255, 0.1); }
@@ -440,6 +518,34 @@ body {
   color: var(--status-error);
   background: var(--status-error-bg);
   border-color: var(--status-error);
+}
+
+/* ── Collapsed Sidebar ── */
+.sidebar--collapsed {
+  width: 64px;
+  padding: var(--space-lg) var(--space-sm);
+}
+.sidebar--collapsed .sidebar-logo {
+  justify-content: center;
+  padding-bottom: var(--space-sm);
+}
+.sidebar--collapsed .sidebar-logo-icon {
+  width: 36px;
+  height: 36px;
+}
+.sidebar--collapsed .nav-link {
+  justify-content: center;
+  padding: 12px;
+  gap: 0;
+}
+.sidebar--collapsed .nav-link span:not(.nav-icon) {
+  display: none;
+}
+.sidebar--collapsed .sidebar-bottom {
+  align-items: center;
+}
+.main-content--expanded {
+  margin-left: 64px !important;
 }
 
 .main-content {

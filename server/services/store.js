@@ -4,7 +4,12 @@ import { prisma } from './db.js';
 import { getProxyMasterSecret } from './local-secrets.js';
 import { decrypt, decryptConfig, encrypt, encryptConfig } from './storage-codec.js';
 import { logger } from './logger.js';
-import { getJwtExpiry, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
+import { getJwtExpiry, refreshSession, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
+
+// In-memory cache for live session probe results.
+// Key: accountId (string), Value: { status: string, expiresAt: number }
+const _sessionStatusCache = new Map();
+const SESSION_STATUS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Single effective expiry for JWT vs stored `sessionExpiry` (whichever is sooner).
@@ -39,31 +44,43 @@ export function resolveEffectiveSessionExpiry(config, sessionTokenPlain) {
  * @param {boolean} sessionDecryptFailed - whether decryption failed
  * @returns {Promise<string>} session status: 'active', 'expiring', 'expired', 'none', 'error', 'unknown'
  */
-async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFailed) {
+async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFailed, accountId = null) {
   if (sessionDecryptFailed) return 'error';
 
   const sessionCookie = sessionTokenPlain || config.sessionCookie || '';
   const hasSession = !!sessionCookie.trim();
   if (!hasSession) return 'none';
 
-  // ACTUAL API VALIDATION: Call OpenRouter to verify session is still valid
+  const clientCookie = config.clientCookie ? String(config.clientCookie).trim() : '';
+  const hasClientCookie = !!clientCookie;
+
+  // Check in-memory cache first to avoid hammering Clerk.
+  if (accountId) {
+    const cached = _sessionStatusCache.get(accountId);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.status;
+    }
+  }
+
+  // Live probe: call GET /v1/client with __client cookie — ground truth for session health.
+  // refreshSession returns non-null (with fresh JWT) if __client is valid, null if 401/dead.
+  if (hasClientCookie) {
+    let status;
+    try {
+      const result = await refreshSession(clientCookie, sessionCookie);
+      status = result ? 'active' : 'expired';
+    } catch {
+      status = 'error';
+    }
+    if (accountId) {
+      _sessionStatusCache.set(accountId, { status, expiresAt: Date.now() + SESSION_STATUS_CACHE_TTL_MS });
+    }
+    return status;
+  }
+
+  // No __client cookie — fall back to direct JWT validation.
   const isValid = await validateSession(sessionCookie);
-  if (!isValid) return 'expired';
-
-  // Session is valid via API. Now determine if it's expiring soon based on JWT.
-  const effective = resolveEffectiveSessionExpiry(config, sessionTokenPlain);
-  if (!effective) return 'active'; // API says valid, we trust it
-
-  const expiryMs = new Date(effective).getTime();
-  if (Number.isNaN(expiryMs)) return 'active';
-
-  const now = Date.now();
-  const remainingMs = expiryMs - now;
-
-  // JWT close to expiry - show warning but session still works
-  if (remainingMs <= SESSION_EXPIRING_SOON_MS) return 'expiring';
-
-  return 'active';
+  return isValid ? 'active' : 'expired';
 }
 
 /**
@@ -173,8 +190,8 @@ export async function getStoredSessionStatus(userId, id) {
   if (!account) throw new Error('Account not found');
   const config = readConfig(account);
   const { plain, decryptFailed } = readSessionPlainResult(account);
-  // Use async version that validates via actual API call
-  return getSessionStatusAsync(config, plain, decryptFailed);
+  // Use async version that validates via actual Clerk API call
+  return getSessionStatusAsync(config, plain, decryptFailed, id);
 }
 
 /** Session row for `GET /api/accounts/:id/session-status` — never throws on decrypt (uses `readSessionPlainResult`).
@@ -185,8 +202,8 @@ export async function getStoredSessionStatusPayload(userId, id) {
   if (!account) throw new Error('Account not found');
   const config = readConfig(account);
   const { plain, decryptFailed } = readSessionPlainResult(account);
-  // Use async version that validates via actual API call
-  const status = await getSessionStatusAsync(config, plain, decryptFailed);
+  // Use async version that validates via actual Clerk API call
+  const status = await getSessionStatusAsync(config, plain, decryptFailed, id);
   return {
     status,
     sessionExpiry: config.sessionExpiry ?? null,
@@ -362,6 +379,7 @@ export async function updateAccountSession(userId, id, sessionCookie, clientCook
   const config = readConfig(account);
   if (clientCookie != null && String(clientCookie).trim() !== '' && String(clientCookie).trim() !== 'undefined') {
     config.clientCookie = String(clientCookie).trim();
+    config.clientCookieIssuedAt = new Date().toISOString();
   }
 
   if (sessionExpiry !== undefined) {
@@ -401,6 +419,7 @@ export async function getAccountSession(userId, id) {
     clientCookie: config.clientCookie,
     sessionExpiry: config.sessionExpiry,
     cfCookieExpirations: config.cfCookieExpirations || {},
+    clientCookieIssuedAt: config.clientCookieIssuedAt || null,
   };
 }
 

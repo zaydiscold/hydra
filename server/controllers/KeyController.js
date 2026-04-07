@@ -2,6 +2,7 @@ import BaseController from './BaseController.js';
 import * as store from '../services/store.js';
 import * as openrouter from '../services/openrouter.js';
 import { assertManagementKey } from '../services/key-utils.js';
+import { invalidateSnapshotCache } from './DashboardController.js';
 import { z } from 'zod';
 
 const createKeySchema = z.object({
@@ -70,6 +71,9 @@ class KeyController extends BaseController {
         isProvisioningKey: result.data.is_provisioning_key
       });
 
+      // Invalidate dashboard cache since key count changed
+      invalidateSnapshotCache(account.id);
+
       return this.success(res, { data: result.data, key: result.key }, 201);
     } catch (err) {
       return this.error(res, err.message);
@@ -86,6 +90,10 @@ class KeyController extends BaseController {
       }
       const data = this.validate(req.body, updateKeySchema);
       const result = await openrouter.updateKey(account.managementKey, req.params.hash, data);
+      
+      // Invalidate dashboard cache since key state changed
+      invalidateSnapshotCache(account.id);
+      
       return this.success(res, result);
     } catch (err) {
       return this.error(res, err.message);
@@ -101,6 +109,10 @@ class KeyController extends BaseController {
         return this.error(res, err.message, 400);
       }
       await openrouter.deleteKey(account.managementKey, req.params.hash);
+      
+      // Invalidate dashboard cache since key count changed
+      invalidateSnapshotCache(account.id);
+      
       return this.success(res, { deleted: true });
     } catch (err) {
       return this.error(res, err.message);

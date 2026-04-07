@@ -286,7 +286,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 const navItems = [
-  { id: 'dashboard', label: 'Monitor', icon: <DashboardIcon size={18} />, path: '/dashboard' },
+  { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon size={18} />, path: '/dashboard' },
   { id: 'bulk-auth', label: 'Bulk OTP', icon: <BulkAuthIcon size={18} />, path: '/bulk-auth' },
   { id: 'keys', label: 'Vault', icon: <VaultIcon size={18} />, path: '/keys' },
   { id: 'pool', label: 'Pool Manager', icon: <NetworkIcon size={18} />, path: '/pool' },
@@ -297,6 +297,7 @@ const navItems = [
 ];
 
 export default function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
   const [toasts, setToasts] = useState([]);
@@ -485,53 +486,72 @@ export default function App() {
           <ToastContainer toasts={toasts} onDismiss={dismissToast} />
         </>
       ) : (
-        <div className="app-layout">
-          <aside className="sidebar">
+        <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+          <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
             <div className="sidebar-logo">
+              {/* Abstract geometric logo mark */}
               <div className="sidebar-logo-icon">
-                <img src="/hydra_dragon.png" alt="Hydra" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+                  <polygon points="20,4 36,14 36,26 20,36 4,26 4,14" stroke="currentColor" strokeWidth="2" fill="none" opacity="0.9"/>
+                  <polygon points="20,10 30,16 30,24 20,30 10,24 10,16" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.5"/>
+                  <circle cx="20" cy="20" r="4" fill="currentColor" opacity="0.8"/>
+                  <line x1="20" y1="4" x2="20" y2="10" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+                  <line x1="20" y1="30" x2="20" y2="36" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+                  <line x1="4" y1="14" x2="10" y2="16" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+                  <line x1="36" y1="14" x2="30" y2="16" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+                  <line x1="4" y1="26" x2="10" y2="24" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+                  <line x1="36" y1="26" x2="30" y2="24" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+                </svg>
               </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+              {!sidebarCollapsed && (
+                <div>
                   <h1>Hydra</h1>
-                  <div className="vault-indicator" style={{ padding: '2px 6px', fontSize: '0.6rem' }}>
-                    <div className="vault-dot" />
-                    <span>ACTIVE</span>
-                  </div>
+                  <span className="sidebar-version">openrouter manager</span>
                 </div>
-                <span className="sidebar-version">openrouter manager</span>
-              </div>
+              )}
             </div>
 
             <nav className="sidebar-nav">
               {navItems.map((item) => {
-                const isActive = location.pathname.startsWith(item.path);
+                const isActive = item.id === 'dashboard'
+                  ? (location.pathname === '/' || location.pathname.startsWith('/dashboard'))
+                  : location.pathname.startsWith(item.path);
                 return (
                   <button
                     key={item.id}
                     className={`nav-link ${isActive ? 'active' : ''}`}
                     onClick={() => navigate(item.path)}
+                    title={sidebarCollapsed ? item.label : undefined}
                   >
                     <span className="nav-icon">{item.icon}</span>
-                    <span>{item.label}</span>
+                    {!sidebarCollapsed && <span>{item.label}</span>}
                   </button>
                 );
               })}
             </nav>
 
             <div className="sidebar-bottom">
-              <button className="nav-link nav-link-lock" onClick={handleLogout}>
-                <span className="nav-icon"><LockIcon size={18} /></span>
-                <span>[LOCK SYSTEM]</span>
+              <button
+                className="nav-link"
+                style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', opacity: 0.6 }}
+                onClick={() => setSidebarCollapsed(v => !v)}
+                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                <span className="nav-icon">{sidebarCollapsed ? '→' : '←'}</span>
+                {!sidebarCollapsed && <span>Collapse</span>}
               </button>
-              <button className="nav-link" style={{ marginTop: '8px', color: 'var(--status-error)' }} onClick={handleShutdown}>
+              <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
+                <span className="nav-icon"><LockIcon size={18} /></span>
+                {!sidebarCollapsed && <span>Lock</span>}
+              </button>
+              <button className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
                 <span className="nav-icon"><PowerIcon size={18} /></span>
-                <span>[SHUTDOWN]</span>
+                {!sidebarCollapsed && <span>Shutdown</span>}
               </button>
             </div>
           </aside>
 
-          <main className="main-content">
+          <main className={`main-content${sidebarCollapsed ? ' main-content--expanded' : ''}`}>
             <div key={location.pathname} className="animate-slide-up">
               <Routes>
                 <Route path="/" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />

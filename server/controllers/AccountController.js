@@ -9,6 +9,7 @@ import { ProvisionKeyNotCapturedError } from '../services/dashboard-api.js';
 import { assertManagementKey } from '../services/key-utils.js';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { logger } from '../services/logger.js';
+import { invalidateSnapshotCache } from './DashboardController.js';
 import {
   addAccountSchema,
   addAccountWithCredentialsSchema,
@@ -344,6 +345,8 @@ export class AccountController extends BaseController {
           if (provisionResult?.key) {
             autoProvision = 'completed';
             logger.info(`[ACCOUNT] Auto-provisioned management key after OTP (account=${accountId})`);
+            // Invalidate dashboard cache since we have a new management key
+            invalidateSnapshotCache(accountId);
           } else {
             autoProvision = 'failed';
             logger.warn(`[ACCOUNT] Auto-provision after OTP got no key (account=${accountId}): ${provisionResult?.message || 'unknown'}`);
@@ -416,6 +419,9 @@ export class AccountController extends BaseController {
             provisionedAt: new Date().toISOString(),
             via: result.source || 'playwright'
           });
+          
+          // Invalidate dashboard cache since we have a new management key
+          invalidateSnapshotCache(req.params.id);
         } catch (storeErr) {
           console.error('[provision] Failed to store key:', storeErr.message);
           // Don't fail the request if storage fails - key was still created
@@ -603,11 +609,11 @@ export class AccountController extends BaseController {
     try {
       const { getBestKey } = await import('../services/management-key-store.js');
       const key = await getBestKey(req.params.id);
-      
+
       if (!key) {
         return this.error(res, 'No active management key found. Provision one first.', 404);
       }
-      
+
       // Return full key for backend use (UI should warn this is sensitive)
       return this.success(res, {
         id: key.id,
@@ -616,6 +622,40 @@ export class AccountController extends BaseController {
         status: key.status,
         createdAt: key.createdAt
       });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
+  async deleteManagementKey(req, res) {
+    try {
+      const { getManagementKey, revokeManagementKey } = await import('../services/management-key-store.js');
+      const { id: accountId, keyId } = req.params;
+
+      const keyRecord = await getManagementKey(keyId);
+      if (!keyRecord || keyRecord.accountId !== accountId) {
+        return this.error(res, 'Management key not found', 404);
+      }
+
+      await revokeManagementKey(keyId);
+      return this.success(res, { id: keyId, status: 'revoked' });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
+  async getBalance(req, res) {
+    try {
+      const { getBestKey } = await import('../services/management-key-store.js');
+      const { getCredits } = await import('../services/openrouter.js');
+
+      const keyRecord = await getBestKey(req.params.id);
+      if (!keyRecord) {
+        return this.error(res, 'No active management key — provision one first', 404);
+      }
+
+      const credits = await getCredits(keyRecord.key);
+      return this.success(res, { credits, keyId: keyRecord.id });
     } catch (err) {
       return this.error(res, err.message, err.status || 500);
     }

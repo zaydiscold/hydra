@@ -48,6 +48,16 @@ const OR_HOSTNAME = (() => {
 const MGMT_KEY_RE = /sk-or-v1-[A-Za-z0-9_.-]+/;
 
 /**
+ * Next.js Server Action ID for management key creation on OpenRouter.
+ * Captured from live browser traffic (2026-04-07) by observing the Next-Action
+ * header on POST /settings/management-keys when clicking Save in the create dialog.
+ * Body format: [{"name":"<key-name>"}]
+ * This ID is baked into the Next.js build and will need updating if OpenRouter
+ * redeploys with a new build hash.
+ */
+const CREATE_MGMT_KEY_ACTION_HASH = config.HYDRA_MGMT_KEY_SERVER_ACTION_ID || '40a4728e6d23484cde9c2e629e0c0cc195dfbbd66b';
+
+/**
  * Response body cache to prevent race conditions when multiple waitForResponse
  * predicates try to read the same response stream. Playwright response bodies
  * can only be read once - subsequent reads return empty string.
@@ -119,15 +129,21 @@ function findManagementKeyDeep(value, depth = 0) {
 function extractManagementKeyFromResponseBody(body) {
   if (!body || typeof body !== 'string') return null;
   body = body.normalize('NFC');
-  const reMatch = body.match(MGMT_KEY_RE);
-  if (reMatch) {
-    const potentialKey = reMatch[0];
-    // Reject masked/preview keys (they contain ... in the middle or are too short)
+  // Use global match to find ALL occurrences — the RSC/server-action response may contain the
+  // masked preview key FIRST (e.g. "sk-or-v1-0b5...ecf") followed by the full key later in the
+  // payload. body.match() (non-global) would stop at the masked first match and reject it,
+  // missing the full key. matchAll finds every candidate; we return the first valid one.
+  const allMatches = [...body.matchAll(/sk-or-v1-[A-Za-z0-9_.-]+/g)].map(m => m[0]);
+  for (const potentialKey of allMatches) {
     if (potentialKey.includes('...') || potentialKey.length < 40) {
-      console.error(`[dashboard-api] extractManagementKeyFromResponseBody: rejecting masked/preview key (length: ${potentialKey.length}): ${potentialKey.slice(0, 20)}...`);
-      return null;
+      console.error(`[dashboard-api] extractManagementKeyFromResponseBody: skipping masked/short match (len=${potentialKey.length}): ${potentialKey.slice(0, 20)}…`);
+      continue;
     }
     return potentialKey;
+  }
+  if (allMatches.length > 0 && !allMatches.some(k => !k.includes('...') && k.length >= 40)) {
+    console.error(`[dashboard-api] extractManagementKeyFromResponseBody: found ${allMatches.length} key-like match(es) but all masked/short`);
+    return null;
   }
   try {
     const data = JSON.parse(body);
@@ -376,28 +392,19 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
   // Next.js Server Action ID for management key creation
   // This is the action ID that the dashboard sends when creating a key
   // Format: <hex-id> (e.g., 'abc123def456...')
-  // Captured from real dashboard traffic via scripts/capture-mgmt-key-network.mjs
-  const NEXT_ACTION_ID = config.HYDRA_MGMT_KEY_SERVER_ACTION_ID || '';
-
-  if (!NEXT_ACTION_ID) {
-    console.warn(
-      '[dashboard-api] HYDRA_MGMT_KEY_SERVER_ACTION_ID not set. ' +
-        'Run scripts/capture-mgmt-key-network.mjs to capture the real Next-Action header, ' +
-        'then set HYDRA_MGMT_KEY_SERVER_ACTION_ID=<captured-id>'
-    );
-    // Continue anyway - some Server Action setups don't require explicit ID
-  }
+  // Use the captured hash (confirmed from live browser traffic 2026-04-07)
+  const NEXT_ACTION_ID = CREATE_MGMT_KEY_ACTION_HASH;
 
   const url = `${OR_BASE}/settings/management-keys`;
 
-  // Server Action body format: JSON array of arguments
-  // The dashboard may send: [] or [{"name":"key-name"}] or [{"json":{"name":"key-name"}}]
+  // Body format confirmed from live capture: [{"name":"<key-name>"}]
+  // Fallbacks included in case OpenRouter changes the argument shape.
   const actionPayloads = [
-    JSON.stringify([{ name: keyName }]),           // Standard shape
-    JSON.stringify([{ json: { name: keyName } }]), // tRPC-like wrapper
+    JSON.stringify([{ name: keyName }]),           // Confirmed correct shape
     JSON.stringify([{ label: keyName }]),          // Alternative field name
     JSON.stringify([{ title: keyName }]),          // Alternative field name
-    JSON.stringify([]),                            // Empty (name set elsewhere)
+    JSON.stringify([{ json: { name: keyName } }]), // tRPC-like wrapper
+    JSON.stringify([]),                            // Empty body
     JSON.stringify([keyName]),                     // Direct string arg
   ];
 
@@ -459,10 +466,10 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
           continue;
         }
 
-        // Try to extract management key from response
-        // Server Action responses are RSC (React Server Components) format
-        // The key may be embedded in the payload
-        const key = extractManagementKeyFromServerActionResponse(responseText);
+        // Use extractManagementKeyFromResponseBody which handles RSC format correctly —
+        // it uses global matchAll so it skips the masked preview key (first match in the
+        // existing-keys list) and finds the full key further in the payload.
+        const key = extractManagementKeyFromResponseBody(responseText);
 
         if (key) {
           console.error(`[dashboard-api] Server Action replay: captured management key`);
@@ -693,152 +700,54 @@ export async function ensureSession(userId, accountId) {
   const account = await store.getAccountWithKey(userId, accountId);
   const session = await store.getAccountSession(userId, accountId);
 
-  // Check if Cloudflare cookies are expired or expiring soon
-  const cfCookiesNeedRefresh = areCloudflareCookiesExpired(
-    session.clientCookie,
-    session.cfCookieExpirations,
-  );
-
-  // If CF cookies are valid and we have a session, check if it's actually usable
-  if (!cfCookiesNeedRefresh && session.sessionCookie) {
+  // Fast path: if JWT is still valid, use it directly.
+  // CF cookie checks removed — confirmed from live browser traffic that Server Action
+  // POSTs work without any Cloudflare cookies (__cf_bm, _cfuvid, cf_clearance).
+  if (session.sessionCookie) {
     const derivedExpiry = store.resolveEffectiveSessionExpiry(
       { sessionExpiry: session.sessionExpiry },
       session.sessionCookie,
     );
-    
-    // JWT-based check: if JWT is still valid, use the session
+
     if (isSessionValid(derivedExpiry)) {
-      // Check if this is a short-lived session (< 1 hour) - try to get a longer one
+      // JWT valid. If it's very short-lived (< 5 minutes), proactively refresh now
+      // so the caller gets a token that won't expire mid-request.
       const expiryMs = new Date(derivedExpiry).getTime();
-      const nowMs = Date.now();
-      const ONE_HOUR = 60 * 60 * 1000;
-      
-      if (expiryMs - nowMs < ONE_HOUR && session.clientCookie) {
-        console.log(`[ensureSession] Short-lived session detected (${Math.round((expiryMs - nowMs)/1000)}s), attempting refresh`);
+      const remainingMs = expiryMs - Date.now();
+      if (remainingMs < 5 * 60 * 1000 && session.clientCookie) {
+        console.log(`[ensureSession] JWT expires in ${Math.round(remainingMs/1000)}s, refreshing proactively`);
         const refreshed = await refreshSession(session.clientCookie, session.sessionCookie);
         if (refreshed) {
-          const refreshedExpiryMs = new Date(refreshed.sessionExpiry).getTime();
-          if (refreshedExpiryMs - nowMs > ONE_HOUR) {
-            console.log(`[ensureSession] Upgraded to long-lived session (${Math.round((refreshedExpiryMs - nowMs)/1000/60)}min)`);
-            await store.updateAccountSession(
-              userId,
-              accountId,
-              refreshed.sessionCookie,
-              refreshed.clientCookie,
-              refreshed.sessionExpiry,
-            );
-            return { sessionCookie: refreshed.sessionCookie, clientCookie: refreshed.clientCookie };
-          }
+          await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, refreshed.clientCookie ?? session.clientCookie, refreshed.sessionExpiry);
+          return { sessionCookie: refreshed.sessionCookie, clientCookie: refreshed.clientCookie ?? session.clientCookie };
         }
       }
-      
+
       if (!session.sessionExpiry && derivedExpiry) {
-        await store.updateAccountSession(
-          userId,
-          accountId,
-          session.sessionCookie,
-          session.clientCookie,
-          derivedExpiry,
-        );
+        await store.updateAccountSession(userId, accountId, session.sessionCookie, session.clientCookie, derivedExpiry);
       }
       return { sessionCookie: session.sessionCookie, clientCookie: session.clientCookie };
     }
-    
-    // JWT appears expired, but real sessions last 12+ hours. Validate via API.
-    console.log(`[ensureSession] JWT expired (${derivedExpiry}), validating session via API...`);
-    if (await validateSession(session.sessionCookie)) {
-      console.log(`[ensureSession] Session still valid via API (despite expired JWT)`);
-      const expiry = store.resolveEffectiveSessionExpiry(
-        { sessionExpiry: session.sessionExpiry },
-        session.sessionCookie,
-      );
-      await store.updateAccountSession(
-        userId,
-        accountId,
-        session.sessionCookie,
-        session.clientCookie,
-        expiry,
-      );
-      return { sessionCookie: session.sessionCookie, clientCookie: session.clientCookie };
-    }
-    console.log(`[ensureSession] Session invalid via API, will attempt refresh/re-auth`);
   }
 
-  // Try to refresh if CF cookies need refresh OR we have a client cookie but no valid session
+  // JWT expired or missing. Try refreshing via __client device cookie (12-hour lifetime).
+  // This is the normal path for OTP accounts after the initial 60s JWT expires.
   if (session.clientCookie) {
+    console.log(`[ensureSession] JWT expired, refreshing via __client cookie`);
     const refreshed = await refreshSession(session.clientCookie, session.sessionCookie);
     if (refreshed) {
       const cc = refreshed.clientCookie ?? session.clientCookie;
-      // Extract and merge new CF cookie expirations from the refresh response
-      const newCfExpirations = extractCloudflareCookieExpirations(refreshed.setCookieLines || []);
-      const mergedCfExpirations = mergeCloudflareCookieExpirations(
-        session.cfCookieExpirations,
-        newCfExpirations,
-      );
-      await store.updateAccountSession(
-        userId,
-        accountId,
-        refreshed.sessionCookie,
-        cc,
-        refreshed.sessionExpiry,
-        { cfCookieExpirations: mergedCfExpirations },
-      );
+      await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, cc, refreshed.sessionExpiry);
       return { sessionCookie: refreshed.sessionCookie, clientCookie: cc };
     }
+    console.log(`[ensureSession] __client refresh failed, __client may be expired`);
   }
 
-  // Proactive CF cookie refresh: if CF cookies are expiring soon but session is still valid,
-  // try to refresh them using credentials before they actually expire
-  if (cfCookiesNeedRefresh && account.email && account.password && account.authMethod === 'password') {
-    try {
-      const fresh = await signInWithPassword(account.email, account.password);
-      // Extract CF cookie expirations from the fresh login response
-      const newCfExpirations = extractCloudflareCookieExpirations(fresh.setCookieLines || []);
-      await store.updateAccountSession(
-        userId,
-        accountId,
-        fresh.sessionCookie,
-        fresh.clientCookie,
-        fresh.sessionExpiry,
-        { cfCookieExpirations: newCfExpirations },
-      );
-      return { sessionCookie: fresh.sessionCookie, clientCookie: fresh.clientCookie };
-    } catch (err) {
-      // If proactive refresh fails due to 2FA, fall through to validateSession check
-      if (!(err instanceof NeedSecondFactorError)) {
-        // Log the error but continue - session validation might still work
-        console.warn(`[ensureSession] Proactive CF cookie refresh failed: ${err.message}`);
-      }
-    }
-  }
-
-  if (session.sessionCookie && (await validateSession(session.sessionCookie))) {
-    const expiry = store.resolveEffectiveSessionExpiry(
-      { sessionExpiry: session.sessionExpiry },
-      session.sessionCookie,
-    );
-    await store.updateAccountSession(
-      userId,
-      accountId,
-      session.sessionCookie,
-      session.clientCookie,
-      expiry,
-    );
-    return { sessionCookie: session.sessionCookie, clientCookie: session.clientCookie };
-  }
-
+  // No usable __client — try password re-auth for password accounts.
   if (account.email && account.password && account.authMethod === 'password') {
     try {
       const fresh = await signInWithPassword(account.email, account.password);
-      const newCfExpirations = extractCloudflareCookieExpirations(fresh.setCookieLines || []);
-      await store.updateAccountSession(
-        userId,
-        accountId,
-        fresh.sessionCookie,
-        fresh.clientCookie,
-        fresh.sessionExpiry,
-        { cfCookieExpirations: newCfExpirations },
-      );
+      await store.updateAccountSession(userId, accountId, fresh.sessionCookie, fresh.clientCookie, fresh.sessionExpiry);
       return { sessionCookie: fresh.sessionCookie, clientCookie: fresh.clientCookie };
     } catch (err) {
       if (err instanceof NeedSecondFactorError) {
@@ -850,7 +759,7 @@ export async function ensureSession(userId, accountId) {
     }
   }
 
-  // OTP accounts: session expired and no password - need re-authentication via email code
+  // OTP accounts: session expired and no password — need re-authentication via email code.
   if (account.authMethod === 'otp' || (account.email && !account.password)) {
     const err = new Error(
       `Session expired for OTP account ${accountId}. Email verification required. Open the account on the Hydra dashboard and click "Refresh Session" to receive a new verification code.`
@@ -1614,6 +1523,17 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
 export async function createManagementKey(userId, accountId, keyName = 'Hydra Auto Key') {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
   logProvisionOpenRouterBase(accountId, sessionCookie);
+
+  // Try direct HTTP Server Action first — this is the confirmed correct approach.
+  // OpenRouter uses Next.js Server Actions (not tRPC) for management key creation.
+  // The Next-Action hash and body format were captured from live browser traffic.
+  const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName);
+  if (fromSa) {
+    await persistProvisionedManagementKey(userId, accountId, fromSa, 'server-action');
+    return { key: fromSa, source: 'server-action' };
+  }
+
+  console.error('[dashboard-api] Server Action failed, falling back to tRPC discovery and Playwright');
   const endpoints = await store.getDiscoveredEndpoints();
   const endpoint = endpoints.createManagementKey;
 
@@ -1722,14 +1642,6 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   console.error(
     `[dashboard-api] REST API failed, falling back to browser UI automation (Chromium).`,
   );
-
-  if (config.HYDRA_PROVISION_SERVER_ACTION_REPLAY) {
-    const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName);
-    if (fromSa) {
-      await persistProvisionedManagementKey(userId, accountId, fromSa, 'server-action-replay');
-      return { key: fromSa, source: 'server-action-replay' };
-    }
-  }
 
   return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, {
     ...summarizeTrpcFailure(lastTrpcError),
@@ -1850,6 +1762,97 @@ function trpcPathLooksLikeManagementKeyCreate(pathSegment) {
   if (p.includes('management') && p.includes('create')) return true;
   if (p.includes('createmanagement') || p.includes('managementkey')) return true;
   return /managementkeys?\.|mgmt.*\.create|\.createkey/.test(p);
+}
+
+/**
+ * Aggressively scan the current page state for a management key right after the create form
+ * is submitted. The one-time reveal modal is visible for only a few seconds — this runs
+ * immediately so we catch it before it closes or the network wait times out.
+ */
+async function captureKeyFromPageImmediate(page, accountId) {
+  const keyRe = /sk-or-v1-[A-Za-z0-9_.-]+/g;
+  const isValidKey = (k) => k && !k.includes('...') && k.length >= 40;
+
+  // 1. DOM evaluate: check ALL input values and visible text nodes (most reliable)
+  const fromEval = await page.evaluate((pattern) => {
+    /* eslint-disable no-undef */
+    const re = new RegExp(pattern, 'g');
+    const candidates = new Set();
+
+    // Inputs / textareas (value property, not just attribute)
+    for (const el of document.querySelectorAll('input, textarea')) {
+      for (const v of [el.value, el.getAttribute('value')]) {
+        if (v) for (const m of String(v).matchAll(re)) candidates.add(m[0]);
+      }
+    }
+    // Any element that might visually show the key (code, pre, span, p, div)
+    for (const el of document.querySelectorAll('code, pre, [data-key], [data-value], [role="dialog"] *, [role="alertdialog"] *')) {
+      const t = el.textContent || '';
+      if (t.length < 200) { // only check short elements to avoid huge bodies
+        for (const m of t.matchAll(re)) candidates.add(m[0]);
+      }
+    }
+    // Body text — broader sweep
+    const bodyText = document.body?.innerText || '';
+    for (const m of bodyText.matchAll(re)) candidates.add(m[0]);
+
+    return [...candidates];
+  }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch(() => []);
+
+  for (const k of fromEval) {
+    if (isValidKey(k)) {
+      provisionStepLog(accountId, `captureKeyFromPageImmediate: found via DOM eval (len=${k.length})`);
+      return k;
+    }
+  }
+
+  // 2. Clipboard read (may work in non-headless or when permission granted)
+  const fromClip = await page.evaluate(async (pattern) => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const re = new RegExp(pattern, 'g');
+      const all = [...text.matchAll(re)].map(m => m[0]);
+      return all.find(k => !k.includes('...') && k.length >= 40) || null;
+    } catch { return null; }
+  }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch(() => null);
+  if (fromClip && isValidKey(fromClip)) {
+    provisionStepLog(accountId, `captureKeyFromPageImmediate: found in clipboard (len=${fromClip.length})`);
+    return fromClip;
+  }
+
+  // 3. Try clicking any Copy button that appeared (key then goes to clipboard)
+  const copyBtn = page.locator('button:has-text("Copy"), button[aria-label*="copy" i], [data-testid*="copy" i]').first();
+  if (await copyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await copyBtn.click().catch(() => {});
+    await page.waitForTimeout(400);
+    // Re-check clipboard after click
+    const afterClick = await page.evaluate(async (pattern) => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const re = new RegExp(pattern, 'g');
+        const all = [...text.matchAll(re)].map(m => m[0]);
+        return all.find(k => !k.includes('...') && k.length >= 40) || null;
+      } catch { return null; }
+    }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch(() => null);
+    if (afterClick && isValidKey(afterClick)) {
+      provisionStepLog(accountId, `captureKeyFromPageImmediate: found in clipboard after Copy click`);
+      return afterClick;
+    }
+    // Re-scan DOM after click (key might now be revealed)
+    const afterDom = await page.evaluate((pattern) => {
+      /* eslint-disable no-undef */
+      const re = new RegExp(pattern, 'g');
+      const t = document.body?.innerText || '';
+      const all = [...t.matchAll(re)].map(m => m[0]);
+      return all.find(k => !k.includes('...') && k.length >= 40) || null;
+    }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch(() => null);
+    if (afterDom && isValidKey(afterDom)) {
+      provisionStepLog(accountId, `captureKeyFromPageImmediate: found in DOM after Copy click`);
+      return afterDom;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -2220,20 +2223,36 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
 
     await fillManagementKeyNameAndSubmit(page, keyName, accountId);
     provisionStepLog(accountId, 'after fill name and submit');
-    await provisionKeyWait;
-    if (capturedFromWait) capturedKey = capturedFromWait;
+
+    // Poll for the key reveal modal (up to 10 seconds). The modal appears after the
+    // RSC round-trip completes (1-3 seconds). A fixed 800ms wait is too short.
+    provisionStepLog(accountId, 'Polling for key reveal modal (up to 10s)...');
+    let immediateUiKey = null;
+    for (let i = 0; i < 20 && !immediateUiKey; i++) {
+      await page.waitForTimeout(500);
+      immediateUiKey = await captureKeyFromPageImmediate(page, accountId);
+    }
+    if (immediateUiKey) {
+      capturedKey = immediateUiKey;
+      provisionStepLog(accountId, 'Got key from polled UI capture');
+    }
+
+    // Now check if the network response captured it (may already be resolved)
     if (!capturedKey) {
-      provisionStepLog(accountId, 'No key from HTTP response, trying copy/reveal UI...');
-      
-      // Debug: check what's on the page
-      try {
-        const buttons = await page.locator('button').allInnerTexts();
-        const keyElements = buttons.filter(b => /copy|reveal|show|key/i.test(b));
-        console.error(`[dashboard-api] Available buttons: ${JSON.stringify(keyElements.slice(0, 10))}`);
-      } catch(e) {
-        console.error('[dashboard-api] Could not list buttons:', e.message);
+      // Give the network response a short window — the RSC payload may also carry the key
+      const networkWait = Promise.race([
+        provisionKeyWait,
+        new Promise(r => setTimeout(r, 8000)), // 8s cap — don't block on 50s timeout
+      ]);
+      await networkWait;
+      if (capturedFromWait) {
+        capturedKey = capturedFromWait;
+        provisionStepLog(accountId, 'Got key from network response');
       }
-      
+    }
+
+    if (!capturedKey) {
+      provisionStepLog(accountId, 'No key from immediate UI or network response, trying copy/reveal UI...');
       const fromCopyUi = await tryCopyRevealManagementKeyUi(page, accountId);
       if (fromCopyUi) {
         capturedKey = fromCopyUi;

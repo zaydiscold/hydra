@@ -175,11 +175,11 @@ export default function Generator({ addToast }) {
 
       {status === 'idle' || isTerminalStatus(status) ? (
         <div className="card shine-sweep animate-spring stagger-delay-0">
-          <div className="field-group">
-            <label>Gmail Alias (e.g., zayd+5@gmail.com)</label>
+          <div className="form-group">
+            <label>Gmail Alias</label>
             <input
               type="email"
-              className="form-input mono"
+              className="form-input form-input-mono"
               value={emailTemplate}
               onChange={e => setEmailTemplate(e.target.value)}
               placeholder="zayd+1@gmail.com"
@@ -187,11 +187,11 @@ export default function Generator({ addToast }) {
               autoComplete="email"
             />
           </div>
-          <div className="field-group" style={{ marginTop: 'var(--space-md)' }}>
+          <div className="form-group">
             <label>Password to assign</label>
             <input
               type="text"
-              className="form-input mono"
+              className="form-input form-input-mono"
               value={password}
               onChange={e => setPassword(e.target.value)}
               spellCheck={false}
@@ -249,7 +249,7 @@ export default function Generator({ addToast }) {
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', marginBottom: '1rem' }}>
                   <input
                     type="text"
-                    className="form-input mono otp-input"
+                    className="form-input form-input-mono otp-input"
                     maxLength={6}
                     value={otp}
                     onChange={e => setOtp(e.target.value)}

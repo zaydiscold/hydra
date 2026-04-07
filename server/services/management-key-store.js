@@ -8,10 +8,8 @@
  * - Usage statistics
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './db.js';
 import { encrypt, decrypt } from './storage-codec.js';
-
-const prisma = new PrismaClient();
 
 /**
  * Store a newly created management key

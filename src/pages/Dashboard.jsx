@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FixedSizeGrid as Grid } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
 import * as api from '../api';
 import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
@@ -10,15 +12,14 @@ import {
   CreditsIcon, 
   DatabaseIcon, 
   PlusIcon, 
-  EyeIcon,
   ShieldIcon,
   LockIcon,
   KeyIcon,
   HydraIcon
 } from '../components/Icons';
 
-// ─── Auth Method Badge ───────────────────────────────────────────────────────
-function AuthBadge({ method, hasManagementKey, hasCredentials }) {
+// ─── Memoized Auth Method Badge ──────────────────────────────────────────────
+const AuthBadge = memo(function AuthBadge({ method, hasManagementKey, hasCredentials }) {
   const keyOnly =
     hasManagementKey &&
     !hasCredentials &&
@@ -40,11 +41,10 @@ function AuthBadge({ method, hasManagementKey, hasCredentials }) {
     return <span className="badge badge-neutral">[UNKNOWN]</span>;
   }
   return <span className="badge badge-success">[PASSWORD]</span>;
-}
+});
 
-// ─── Session Status Dot (Clerk dashboard session in vault — independent of SYNCED / management API) ──
-// `none` is split so grey is not read as “broken”: key-only API rows use cyan; creds-on-file + no session use amber.
-function SessionDot({ status, hasManagementKey, hasCredentials }) {
+// ─── Memoized Session Status Dot ─────────────────────────────────────────────
+const SessionDot = memo(function SessionDot({ status, hasManagementKey, hasCredentials }) {
   const base = {
     active: {
       color: 'var(--status-success)',
@@ -123,11 +123,11 @@ function SessionDot({ status, hasManagementKey, hasCredentials }) {
       }}
     />
   );
-}
+});
 
-// ─── Add Account Modal ───────────────────────────────────────────────────────
-function AddAccountModal({ onClose, onAdded }) {
-  const [addMethod, setAddMethod] = useState('credentials'); // 'key' | 'credentials' | 'bulk'
+// ─── Add Account Modal (memoized) ────────────────────────────────────────────
+const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
+  const [addMethod, setAddMethod] = useState('credentials');
   const [alias, setAlias] = useState('');
   const [managementKey, setManagementKey] = useState('');
   const [email, setEmail] = useState('');
@@ -136,7 +136,7 @@ function AddAccountModal({ onClose, onAdded }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleSubmit(e) {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -174,7 +174,7 @@ function AddAccountModal({ onClose, onAdded }) {
       setError(err.message);
     }
     setLoading(false);
-  }
+  }, [addMethod, alias, managementKey, email, password, bulkText, onAdded, onClose]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -189,7 +189,6 @@ function AddAccountModal({ onClose, onAdded }) {
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
 
-      {/* Method tabs */}
         <div className="method-tabs" style={{ marginBottom: 'var(--space-lg)' }}>
           {[
             { id: 'credentials', icon: <LockIcon size={24} />, title: 'Email + Pass', sub: 'Password or OTP + provision' },
@@ -260,7 +259,7 @@ function AddAccountModal({ onClose, onAdded }) {
               <textarea
                 className="form-input form-input-mono"
                 style={{ height: 200, resize: 'vertical' }}
-                placeholder={"alias:email@example.com:password\nalias2:email2@example.com:password2\n\nOr just email:password (alias = email)"}
+                placeholder={"alias:email@example.com:password\nalias2:email2@example.com:password2\n\nOr just email:pass (alias = email)"}
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
                 spellCheck={false}
@@ -283,7 +282,7 @@ function AddAccountModal({ onClose, onAdded }) {
       </div>
     </div>
   );
-}
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatCurrency(amount) {
@@ -299,6 +298,170 @@ function getBalanceStatus(credits) {
   return 'ok';
 }
 
+// ─── Memoized Account Card with Intersection Observer ────────────────────────
+const AccountCard = memo(function AccountCard({ 
+  data,
+  columnIndex,
+  rowIndex,
+  style 
+}) {
+  const { accounts, columnCount, onSelect, onProvision, onLogin, provisioningIds, liveStatuses } = data;
+  
+  // Calculate the account index based on grid position
+  const index = rowIndex * columnCount + columnIndex;
+  const account = accounts[index];
+  
+  // Intersection Observer for lazy animation trigger
+  const [isVisible, setIsVisible] = useState(false);
+  const cardRef = useRef(null);
+  
+  useEffect(() => {
+    if (!cardRef.current) return;
+    
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1, rootMargin: '50px' }
+    );
+    
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, []);
+  
+  // Use live-probed status when available, fall back to sync heuristic
+  const sessionStatus = (liveStatuses && liveStatuses[account.id]) || account.sessionStatus || 'none';
+
+  const balStatus = account.status === 'error' ? 'error' : getBalanceStatus(account.credits);
+  const pct = account.credits?.total > 0
+    ? Math.max(0, (account.credits.remaining / account.credits.total) * 100)
+    : 0;
+  const provisioning = provisioningIds.has(account.id);
+  const needsKey = !account.hasManagementKey;
+  const needsSession = accountNeedsSession(sessionStatus, {
+    hasCredentials: account.hasCredentials,
+  });
+  const cardState = getAccountDashboardCardState(account);
+  const showCardActions =
+    (needsSession && account.hasCredentials)
+    || (needsKey && account.hasCredentials && !needsSession);
+  
+  // Stable event handlers
+  const handleClick = useCallback(() => {
+    onSelect(account.id);
+  }, [onSelect, account.id]);
+  
+  const handleProvision = useCallback((e) => {
+    e.stopPropagation();
+    onProvision(account.id);
+  }, [onProvision, account.id]);
+  
+  const handleLogin = useCallback((e) => {
+    e.stopPropagation();
+    onLogin(account);
+  }, [onLogin, account]);
+
+  // If no account at this position, render empty cell
+  if (!account) {
+    return <div style={style} />;
+  }
+
+  return (
+    <div style={{ ...style, padding: '8px' }}>
+      <div
+        ref={cardRef}
+        className={`card card-clickable account-card ${isVisible ? 'animate-spring' : ''}`}
+        style={{ 
+          animationDelay: `${Math.min(index * 30, 500)}ms`,
+          borderColor: balStatus === 'depleted' ? 'var(--status-error)' : 'var(--border-subtle)',
+          height: '100%'
+        }}
+        onClick={handleClick}
+      >
+      <div className="account-card-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <SessionDot
+            status={sessionStatus}
+            hasManagementKey={!!account.hasManagementKey}
+            hasCredentials={!!account.hasCredentials}
+          />
+          <span className="account-card-alias">{account.alias}</span>
+        </div>
+        <div className={`account-card-status ${cardState.badgeVariant}`}>
+          <ShieldIcon size={14} />
+          <span>{cardState.badgeLabel}</span>
+        </div>
+      </div>
+
+      {account.email && (
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>
+          {account.email}
+        </div>
+      )}
+
+      <div className="account-card-balance">
+        <div className="account-card-balance-label">Remaining Balance</div>
+        <div className={`account-card-balance-value mono ${balStatus === 'low' ? 'low' : ''} ${balStatus === 'depleted' ? 'depleted' : ''}`}>
+          {account.status === 'error' ? '—' : formatCurrency(account.credits?.remaining)}
+        </div>
+      </div>
+
+      <div className="balance-bar">
+        <div
+          className={`balance-bar-fill ${balStatus === 'low' ? 'low' : ''} ${balStatus === 'depleted' ? 'depleted' : ''}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <div className="account-card-footer">
+        <div className="account-card-meta account-card-meta-row mono">
+          <span>[KEYS] <strong>{account.keys?.active || 0}</strong></span>
+          <span>[USED] <strong>{formatCurrency(account.credits?.used)}</strong></span>
+        </div>
+        <div className="account-card-auth-wrap">
+          <AuthBadge
+            method={account.authMethod}
+            hasManagementKey={!!account.hasManagementKey}
+            hasCredentials={!!account.hasCredentials}
+          />
+        </div>
+      </div>
+
+      {showCardActions && (
+        <div className="account-card-actions" onClick={(e) => e.stopPropagation()}>
+          {needsSession && account.hasCredentials && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleLogin}
+            >
+              [UNLOCK] Authenticate
+            </button>
+          )}
+          {needsKey && account.hasCredentials && !needsSession && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={provisioning}
+              onClick={handleProvision}
+            >
+              {provisioning ? <><div className="spinner" style={{ width: 10, height: 10 }} /> [WAIT] Provisioning...</> : '[AUTO] Provision Key'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {account.status === 'error' && (
+        <p className="account-card-error">{account.error}</p>
+      )}
+      </div>
+    </div>
+  );
+});
+
 // ─── Dashboard Page ──────────────────────────────────────────────────────────
 export default function Dashboard({ onSelectAccount, addToast }) {
   const navigate = useNavigate();
@@ -308,6 +471,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [loginModalAccount, setLoginModalAccount] = useState(null);
   const [provisioningIds, setProvisioningIds] = useState(new Set());
+  const [liveStatuses, setLiveStatuses] = useState({}); // accountId → live-probed status
   const didInitialLoadRef = useRef(false);
 
   const fetchDashboard = useCallback(async (silent = false) => {
@@ -329,6 +493,48 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     fetchDashboard();
   }, [fetchDashboard]);
 
+  // Live session probe: after accounts load, confirm real Clerk status for each account.
+  // The dashboard bulk-list uses a sync heuristic; this fires the actual Clerk API check.
+  // Max 3 concurrent to avoid hammering Clerk.
+  useEffect(() => {
+    const accounts = data?.accounts;
+    if (!accounts?.length) return;
+    let cancelled = false;
+
+    async function probeAll() {
+      const CONCURRENCY = 3;
+      let active = 0;
+      let idx = 0;
+      const results = {};
+
+      await new Promise((resolve) => {
+        function next() {
+          while (active < CONCURRENCY && idx < accounts.length) {
+            const acct = accounts[idx++];
+            active++;
+            api.getSessionStatus(acct.id)
+              .then((res) => {
+                if (!cancelled) results[acct.id] = res?.data?.status || res?.data;
+              })
+              .catch(() => { /* network error — keep existing status */ })
+              .finally(() => {
+                active--;
+                if (idx < accounts.length) next();
+                else if (active === 0) resolve();
+              });
+          }
+          if (idx >= accounts.length && active === 0) resolve();
+        }
+        next();
+      });
+
+      if (!cancelled) setLiveStatuses(results);
+    }
+
+    probeAll();
+    return () => { cancelled = true; };
+  }, [data?.accounts]);
+
   // Auto-refresh every 5 minutes while page is visible
   useEffect(() => {
     const interval = setInterval(() => {
@@ -337,13 +543,12 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     return () => clearInterval(interval);
   }, [fetchDashboard]);
 
-  function handleAccountAdded(msg) {
+  const handleAccountAdded = useCallback((msg) => {
     addToast(msg || 'Account added', 'success');
     fetchDashboard(true);
-  }
+  }, [addToast, fetchDashboard]);
 
-  async function handleProvision(e, accountId) {
-    e.stopPropagation();
+  const handleProvision = useCallback(async (accountId) => {
     setProvisioningIds(prev => new Set(prev).add(accountId));
     try {
       const res = await api.provisionManagementKey(accountId);
@@ -357,7 +562,28 @@ export default function Dashboard({ onSelectAccount, addToast }) {
       addToast(`Provision failed: ${api.formatApiErrorMessage(err)}`, 'error');
     }
     setProvisioningIds(prev => { const s = new Set(prev); s.delete(accountId); return s; });
-  }
+  }, [addToast, fetchDashboard]);
+  
+  const handleLogin = useCallback((account) => {
+    setLoginModalAccount(account);
+  }, []);
+  
+  const handleSelect = useCallback((accountId) => {
+    onSelectAccount(accountId);
+  }, [onSelectAccount]);
+  
+  const handleCloseModal = useCallback(() => {
+    setShowAddModal(false);
+  }, []);
+  
+  const handleCloseLogin = useCallback(() => {
+    setLoginModalAccount(null);
+  }, []);
+  
+  const handleLoginDone = useCallback((msg) => {
+    addToast(msg, 'success');
+    fetchDashboard(true);
+  }, [addToast, fetchDashboard]);
 
   if (loading && !data) {
     return (
@@ -499,117 +725,48 @@ export default function Dashboard({ onSelectAccount, addToast }) {
           </div>
         </div>
       ) : (
-        <div className="accounts-grid">
-          {accounts.map((account, index) => {
-            const balStatus = account.status === 'error' ? 'error' : getBalanceStatus(account.credits);
-            const pct = account.credits?.total > 0
-              ? Math.max(0, (account.credits.remaining / account.credits.total) * 100)
-              : 0;
-            const provisioning = provisioningIds.has(account.id);
-            const needsKey = !account.hasManagementKey;
-            const needsSession = accountNeedsSession(account.sessionStatus, {
-              hasCredentials: account.hasCredentials,
-            });
-            const cardState = getAccountDashboardCardState(account);
-            const showCardActions =
-              (needsSession && account.hasCredentials)
-              || (needsKey && account.hasCredentials && !needsSession);
-
-            return (
-              <div
-                key={account.id}
-                className="card card-clickable account-card shine-sweep animate-spring"
-                style={{ 
-                  animationDelay: `${index * 50}ms`,
-                  borderColor: balStatus === 'depleted' ? 'var(--status-error)' : 'var(--border-subtle)'
-                }}
-                onClick={() => onSelectAccount(account.id)}
-              >
-                <div className="account-card-header">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <SessionDot
-                      status={account.sessionStatus || 'none'}
-                      hasManagementKey={!!account.hasManagementKey}
-                      hasCredentials={!!account.hasCredentials}
-                    />
-                    <span className="account-card-alias">{account.alias}</span>
-                  </div>
-                  <div className={`account-card-status ${cardState.badgeVariant}`}>
-                    <ShieldIcon size={14} />
-                    <span>{cardState.badgeLabel}</span>
-                  </div>
-                </div>
-
-                {account.email && (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>
-                    {account.email}
-                  </div>
-                )}
-
-                <div className="account-card-balance">
-                  <div className="account-card-balance-label">Remaining Balance</div>
-                  <div className={`account-card-balance-value mono ${balStatus === 'low' ? 'low' : ''} ${balStatus === 'depleted' ? 'depleted' : ''}`}>
-                    {account.status === 'error' ? '—' : formatCurrency(account.credits?.remaining)}
-                  </div>
-                </div>
-
-                <div className="balance-bar">
-                  <div
-                    className={`balance-bar-fill ${balStatus === 'low' ? 'low' : ''} ${balStatus === 'depleted' ? 'depleted' : ''}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-
-                <div className="account-card-footer">
-                  <div className="account-card-meta account-card-meta-row mono">
-                    <span>[KEYS] <strong>{account.keys?.active || 0}</strong></span>
-                    <span>[USED] <strong>{formatCurrency(account.credits?.used)}</strong></span>
-                  </div>
-                  <div className="account-card-auth-wrap">
-                    <AuthBadge
-                      method={account.authMethod}
-                      hasManagementKey={!!account.hasManagementKey}
-                      hasCredentials={!!account.hasCredentials}
-                    />
-                  </div>
-                </div>
-
-                {showCardActions && (
-                  <div className="account-card-actions" onClick={(e) => e.stopPropagation()}>
-                    {needsSession && account.hasCredentials && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={(e) => { e.stopPropagation(); setLoginModalAccount(account); }}
-                      >
-                        [UNLOCK] Authenticate
-                      </button>
-                    )}
-                    {needsKey && account.hasCredentials && !needsSession && (
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        disabled={provisioning}
-                        onClick={(e) => handleProvision(e, account.id)}
-                      >
-                        {provisioning ? <><div className="spinner" style={{ width: 10, height: 10 }} /> [WAIT] Provisioning...</> : '[AUTO] Provision Key'}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {account.status === 'error' && (
-                  <p className="account-card-error">{account.error}</p>
-                )}
-              </div>
-            );
-          })}
+        <div className="accounts-grid-container" style={{ height: 'calc(100vh - 400px)', minHeight: '400px' }}>
+          <AutoSizer>
+            {({ height, width }) => {
+              const COLUMN_WIDTH = 320;
+              const ROW_HEIGHT = 220;
+              const GAP = 16;
+              const columnCount = Math.max(1, Math.floor(width / (COLUMN_WIDTH + GAP)));
+              const rowCount = Math.ceil(accounts.length / columnCount);
+              
+              // Memoized grid data — liveStatuses is included so cards update when probes return
+              const itemData = {
+                accounts,
+                columnCount,
+                onSelect: handleSelect,
+                onProvision: handleProvision,
+                onLogin: handleLogin,
+                provisioningIds,
+                liveStatuses,
+              };
+              
+              return (
+                <Grid
+                  columnCount={columnCount}
+                  columnWidth={COLUMN_WIDTH + GAP}
+                  height={height}
+                  rowCount={rowCount}
+                  rowHeight={ROW_HEIGHT + GAP}
+                  width={width}
+                  itemData={itemData}
+                  overscanRowCount={2}
+                >
+                  {AccountCard}
+                </Grid>
+              );
+            }}
+          </AutoSizer>
         </div>
       )}
 
       {showAddModal && (
         <AddAccountModal
-          onClose={() => setShowAddModal(false)}
+          onClose={handleCloseModal}
           onAdded={handleAccountAdded}
         />
       )}
@@ -617,8 +774,8 @@ export default function Dashboard({ onSelectAccount, addToast }) {
       {loginModalAccount && (
         <LoginAccountModal
           account={loginModalAccount}
-          onClose={() => setLoginModalAccount(null)}
-          onDone={(msg) => { addToast(msg, 'success'); fetchDashboard(true); }}
+          onClose={handleCloseLogin}
+          onDone={handleLoginDone}
         />
       )}
     </>
