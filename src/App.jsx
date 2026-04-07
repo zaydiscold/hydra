@@ -467,7 +467,6 @@ export default function App() {
   return (
     <ErrorBoundary>
       <GlobalLoadingBar />
-      <div className="edm-bar" />
       {/* Brutalist Space Background Assets (Now global) */}
       <div className="starfield" />
       <div className="nebula-glow" />
