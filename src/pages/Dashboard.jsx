@@ -1,7 +1,5 @@
-import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Grid } from 'react-window';
-import { AutoSizer } from 'react-virtualized-auto-sizer';
 import * as api from '../api';
 import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
@@ -298,25 +296,21 @@ function getBalanceStatus(credits) {
   return 'ok';
 }
 
-// ─── Memoized Account Card with Intersection Observer ────────────────────────
-const AccountCard = memo(function AccountCard({ 
-  data,
-  columnIndex,
-  rowIndex,
-  style 
+// ─── Memoized Account Card ────────────────────────────────────────────────────
+const AccountCard = memo(function AccountCard({
+  account,
+  index,
+  onSelect,
+  onProvision,
+  onLogin,
+  provisioningIds,
+  liveStatuses,
 }) {
-  const { accounts, columnCount, onSelect, onProvision, onLogin, provisioningIds, liveStatuses } = data;
-  
-  // Calculate the account index based on grid position
-  const index = rowIndex * columnCount + columnIndex;
-  const account = accounts[index];
-  
-  // Intersection Observer for lazy animation trigger
   const [isVisible, setIsVisible] = useState(false);
   const cardRef = useRef(null);
 
   useEffect(() => {
-    if (!cardRef.current || !account) return;
+    if (!cardRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -328,29 +322,12 @@ const AccountCard = memo(function AccountCard({
     );
     observer.observe(cardRef.current);
     return () => observer.disconnect();
-  }, [account]);
+  }, []);
 
-  // Stable event handlers — safe when account is undefined (empty grid cell)
-  const handleClick = useCallback(() => {
-    if (account) onSelect(account.id);
-  }, [onSelect, account]);
+  const handleClick = useCallback(() => onSelect(account.id), [onSelect, account.id]);
+  const handleProvision = useCallback((e) => { e.stopPropagation(); onProvision(account.id); }, [onProvision, account.id]);
+  const handleLogin = useCallback((e) => { e.stopPropagation(); onLogin(account); }, [onLogin, account]);
 
-  const handleProvision = useCallback((e) => {
-    e.stopPropagation();
-    if (account) onProvision(account.id);
-  }, [onProvision, account]);
-
-  const handleLogin = useCallback((e) => {
-    e.stopPropagation();
-    if (account) onLogin(account);
-  }, [onLogin, account]);
-
-  // Empty grid cell (last row may be shorter than columnCount)
-  if (!account) {
-    return <div style={style} />;
-  }
-
-  // Use live-probed status when available, fall back to sync heuristic
   const sessionStatus = (liveStatuses && liveStatuses[account.id]) || account.sessionStatus || 'none';
   const balStatus = account.status === 'error' ? 'error' : getBalanceStatus(account.credits);
   const pct = account.credits?.total > 0
@@ -358,26 +335,22 @@ const AccountCard = memo(function AccountCard({
     : 0;
   const provisioning = provisioningIds.has(account.id);
   const needsKey = !account.hasManagementKey;
-  const needsSession = accountNeedsSession(sessionStatus, {
-    hasCredentials: account.hasCredentials,
-  });
+  const needsSession = accountNeedsSession(sessionStatus, { hasCredentials: account.hasCredentials });
   const cardState = getAccountDashboardCardState(account);
   const showCardActions =
     (needsSession && account.hasCredentials)
     || (needsKey && account.hasCredentials && !needsSession);
 
   return (
-    <div style={{ ...style, padding: '8px' }}>
-      <div
-        ref={cardRef}
-        className={`card card-clickable account-card ${isVisible ? 'animate-spring' : ''}`}
-        style={{ 
-          animationDelay: `${Math.min(index * 30, 500)}ms`,
-          borderColor: balStatus === 'depleted' ? 'var(--status-error)' : 'var(--border-subtle)',
-          height: '100%'
-        }}
-        onClick={handleClick}
-      >
+    <div
+      ref={cardRef}
+      className={`card card-clickable account-card ${isVisible ? 'animate-spring' : ''}`}
+      style={{
+        animationDelay: `${Math.min(index * 30, 500)}ms`,
+        borderColor: balStatus === 'depleted' ? 'var(--status-error)' : 'var(--border-subtle)',
+      }}
+      onClick={handleClick}
+    >
       <div className="account-card-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <SessionDot
@@ -430,21 +403,12 @@ const AccountCard = memo(function AccountCard({
       {showCardActions && (
         <div className="account-card-actions" onClick={(e) => e.stopPropagation()}>
           {needsSession && account.hasCredentials && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleLogin}
-            >
+            <button type="button" className="btn btn-secondary btn-sm" onClick={handleLogin}>
               [UNLOCK] Authenticate
             </button>
           )}
           {needsKey && account.hasCredentials && !needsSession && (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={provisioning}
-              onClick={handleProvision}
-            >
+            <button type="button" className="btn btn-primary btn-sm" disabled={provisioning} onClick={handleProvision}>
               {provisioning ? <><div className="spinner" style={{ width: 10, height: 10 }} /> [WAIT] Provisioning...</> : '[AUTO] Provision Key'}
             </button>
           )}
@@ -454,7 +418,6 @@ const AccountCard = memo(function AccountCard({
       {account.status === 'error' && (
         <p className="account-card-error">{account.error}</p>
       )}
-      </div>
     </div>
   );
 });
@@ -722,42 +685,19 @@ export default function Dashboard({ onSelectAccount, addToast }) {
           </div>
         </div>
       ) : (
-        <div className="accounts-grid-container" style={{ height: 'calc(100vh - 400px)', minHeight: '400px' }}>
-          <AutoSizer>
-            {({ height, width }) => {
-              const COLUMN_WIDTH = 320;
-              const ROW_HEIGHT = 220;
-              const GAP = 16;
-              const columnCount = Math.max(1, Math.floor(width / (COLUMN_WIDTH + GAP)));
-              const rowCount = Math.ceil(accounts.length / columnCount);
-              
-              // Memoized grid data — liveStatuses is included so cards update when probes return
-              const itemData = {
-                accounts,
-                columnCount,
-                onSelect: handleSelect,
-                onProvision: handleProvision,
-                onLogin: handleLogin,
-                provisioningIds,
-                liveStatuses,
-              };
-              
-              return (
-                <Grid
-                  columnCount={columnCount}
-                  columnWidth={COLUMN_WIDTH + GAP}
-                  height={height}
-                  rowCount={rowCount}
-                  rowHeight={ROW_HEIGHT + GAP}
-                  width={width}
-                  itemData={itemData}
-                  overscanRowCount={2}
-                >
-                  {AccountCard}
-                </Grid>
-              );
-            }}
-          </AutoSizer>
+        <div className="accounts-grid">
+          {accounts.map((account, index) => (
+            <AccountCard
+              key={account.id}
+              account={account}
+              index={index}
+              onSelect={handleSelect}
+              onProvision={handleProvision}
+              onLogin={handleLogin}
+              provisioningIds={provisioningIds}
+              liveStatuses={liveStatuses}
+            />
+          ))}
         </div>
       )}
 
