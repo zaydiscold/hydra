@@ -242,6 +242,8 @@ Implemented in `server/routes/pool.js` and `server/controllers/PoolController.js
 | `POST` | `/api/pool/key/:hash/register` | JWT | Store a raw `sk-or-v1-...` string for a key record | Validates the key against OpenRouter first |
 | `POST` | `/api/pool/reload` | JWT | Manually reload the in-memory key pool | Rebuilds rotation state from the DB |
 | `POST` | `/api/pool/models/refresh` | JWT | Refresh the cached OpenRouter model list | Writes to `CachedModel` via `server/services/model-cache.js`. Uses a pooled key when available; if the pool is empty, uses the first stored standard (non-provisioning) key on the user’s vault so operators can warm the cache before pooling. Response `data.count` is rows upserted. Returns `400` only when no usable key exists |
+| `GET` | `/api/pool/models` | JWT | Return the full cached model list | Response `data.models` array of `{ id, name, ctx }`. `data.count` is total rows. Used by EndpointCard model browser. |
+| `GET` | `/api/pool/sync-status` | JWT | Return last pool reload timestamp, active key count, per-hash cooldown map | Response `data.lastSync` (ISO string or null) + `data.activeKeys` (int) + `data.cooldownMap` (`{[keyHash]: expiresAtMs}`). `cooldownMap` used by Dashboard for `[LOCKED Xm]` badges. |
 | `GET` | `/api/pool/traffic` | JWT | Return the latest request logs and 24h metrics | Feeds the Traffic Console; see [Traffic dashboard](#traffic-dashboard) below |
 
 ### Traffic dashboard
@@ -291,8 +293,30 @@ These are not routes, but they are the logic the routes call:
 - `server/services/dashboard-api.js` — OpenRouter dashboard tRPC / Playwright for session-backed actions (e.g. code redemption); **`ensureSession`** backfills/persists **`sessionExpiry`** from the JWT when needed; management REST calls live in `openrouter.js`
 - `server/services/clerk-auth.js` — Clerk sign-in, OTP, refresh, session validation; **`getJwtExpiry`** is **exported** for any code that writes **`__session`** to the vault
 - `server/services/account-generator.js` — Playwright signup workflow; persists JWT-derived **`sessionExpiry`** on new accounts
-- `server/services/rotation-manager.js` — pooled key selection (**weighted by balance**, round-robin fallback), cooldowns (**429** = 60s, **402** = 10m), eviction, and status reporting
+- `server/services/rotation-manager.js` — pooled key selection (**weighted by balance**, round-robin fallback), cooldowns (**429** = 60s, **402** = 10m), eviction, status reporting. Sets `lastSyncAt` on each pool reload.
+- `server/services/proxy-gate.js` — in-memory proxy kill switch (`proxyGate.enabled`). Shared by `server/index.js` middleware and `SystemController` toggle endpoint. Resets to `true` on server restart.
 - `server/services/health-pinger.js` — background key health checks
+
+### System Routes (`/api/system`)
+
+| Method | Route | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/api/system/health` | JWT | Uptime, pool stats, task supervisor snapshot |
+| `GET` | `/api/system/tasks` | JWT | List active + recent background tasks |
+| `POST` | `/api/system/tasks/:taskId/cancel` | JWT | Cancel a running task |
+| `GET` | `/api/system/proxy-status` | JWT | Returns `{ enabled: bool }` — current proxy gate state |
+| `POST` | `/api/system/proxy-toggle` | JWT | Body `{ enabled: bool }` — enable/disable `/v1` proxy. Returns 503 to all proxy requests when `enabled: false`. State is in-memory, resets on server restart. |
+
+### Debug Routes (`/api/debug`)
+
+All debug routes require JWT auth. Never expose unauthenticated. Used for security research and exploit probing.
+
+| Method | Path | Auth | Purpose | Notes |
+|--------|------|------|---------|-------|
+| `POST` | `/api/debug/trpc-probe` | JWT | Fire 15 tRPC route candidates across 3 auth variants | Body `{ accountId, categories?, includeVampire? }`. `full_auth` uses `trpcCall` (JWT refresh + HTML detection). `client_only` and `session_only` use raw fetch. Returns per-route results + findings (key plaintexts, `credit_source`, redemption history). |
+| `POST` | `/api/debug/vampire-mode` | JWT | Fire `user.updateProfile` no-op to probe session TTL reset | Body `{ accountId }`. Hypothesis: triggers fresh JWT issuance, extending 7-day clock. |
+| `POST` | `/api/debug/cookie-ttl` | JWT | Test `__client` cookie longevity via Clerk `/v1/client` | Body `{ accountId }`. Returns `{ isValid, sessionInfo }` — reveals how long after expiry `__client` still works. |
+
 - `server/services/request-log-retention.js` — log pruning
 - `server/services/webhook-idempotency.js` — webhook deduplication
 

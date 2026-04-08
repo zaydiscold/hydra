@@ -4,7 +4,7 @@ import { prisma } from './db.js';
 import { getProxyMasterSecret } from './local-secrets.js';
 import { decrypt, decryptConfig, encrypt, encryptConfig } from './storage-codec.js';
 import { logger } from './logger.js';
-import { getJwtExpiry, refreshSession, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
+import { refreshSession, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
 
 // In-memory cache for live session probe results.
 // Key: accountId (string), Value: { status: string, expiresAt: number }
@@ -12,23 +12,18 @@ const _sessionStatusCache = new Map();
 const SESSION_STATUS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Single effective expiry for JWT vs stored `sessionExpiry` (whichever is sooner).
- * @param {object} config - decrypted account config (sessionExpiry, optional legacy sessionCookie)
- * @param {string} sessionTokenPlain - decrypted __session JWT or ''
+ * Effective session expiry from stored config.
+ *
+ * Previously this took the min of JWT exp and stored expiry, but JWT exp (~2.5 min)
+ * is NOT the session lifetime — it's just a short-lived proof token. The actual Clerk
+ * session (backed by __client cookie) lasts ~7 days. We now store a realistic 7-day
+ * expiry at login/refresh time, so just return that.
+ *
+ * @param {object} config - decrypted account config (sessionExpiry field)
+ * @param {string} _sessionTokenPlain - unused (kept for call-site compat)
  */
-export function resolveEffectiveSessionExpiry(config, sessionTokenPlain) {
-  const plain = sessionTokenPlain != null ? String(sessionTokenPlain) : '';
-  let jwtExp = null;
-  if (plain.trim()) jwtExp = getJwtExpiry(plain);
-  const stored = config.sessionExpiry;
-  if (jwtExp && stored) {
-    const a = new Date(jwtExp).getTime();
-    const b = new Date(stored).getTime();
-    if (Number.isNaN(a)) return stored;
-    if (Number.isNaN(b)) return jwtExp;
-    return new Date(Math.min(a, b)).toISOString();
-  }
-  return jwtExp || stored || null;
+export function resolveEffectiveSessionExpiry(config, _sessionTokenPlain) {
+  return config.sessionExpiry || null;
 }
 
 /**
@@ -86,27 +81,37 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
 /**
  * SYNC VERSION: Determine session status based on available data.
  * 
- * WARNING: This uses JWT expiry as a heuristic only. Real session status 
- * requires actual API validation via getSessionStatusAsync.
+ * Checks the async validation cache first — if a recent getSessionStatusAsync()
+ * result exists (from Dashboard probeAll or getStoredSessionStatus), returns
+ * that immediately instead of the JWT heuristic.  This prevents false
+ * "expiring" signals caused by short-lived JWTs on perfectly healthy 12-hour
+ * Clerk sessions.
  * 
- * Sessions last 12+ hours even though JWTs expire in ~2.5 minutes.
- * Do NOT mark sessions as 'expired' solely based on JWT expiry.
+ * Falls back to JWT-based heuristic only on cold start / cache miss.
  * 
  * @param {object} config - decrypted account config
  * @param {string} sessionTokenPlain - decrypted __session JWT or ''
  * @param {boolean} sessionDecryptFailed - whether decryption failed
+ * @param {string} [accountId] - account id for cache lookup
  * @returns {string} session status: 'active', 'expiring', 'expired', 'none', 'error', 'unknown'
  */
-function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed) {
+function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed, accountId) {
   if (sessionDecryptFailed) return 'error';
 
   const sessionCookie = sessionTokenPlain || config.sessionCookie || '';
   const hasSession = !!sessionCookie.trim();
   if (!hasSession) return 'none';
 
-  // IMPORTANT: Don't mark as expired just because JWT is expired.
-  // Real sessions last 12+ hours. We use 'expiring' as a hint to trigger
-  // API-based validation, not as a definitive 'expired' state.
+  // Prefer cached async validation result (ground truth) over JWT heuristic.
+  if (accountId) {
+    const cached = _sessionStatusCache.get(accountId);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.status;
+    }
+  }
+
+  // Fallback: stored sessionExpiry heuristic (cold start / cache miss only).
+  // sessionExpiry is now a realistic 7-day TTL set at login/refresh, not JWT exp.
   const effective = resolveEffectiveSessionExpiry(config, sessionTokenPlain);
   if (!effective) return 'unknown';
 
@@ -116,8 +121,10 @@ function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed) {
   const now = Date.now();
   const remainingMs = expiryMs - now;
 
-  // If JWT is expired or close to expiry, mark as 'expiring' to trigger 
-  // API-based validation. Do NOT mark as 'expired' here.
+  // Session expired (realistic TTL, not JWT)
+  if (remainingMs <= 0) return 'expired';
+
+  // Expiring within 24h — warn user, auto-refresher will try
   if (remainingMs <= SESSION_EXPIRING_SOON_MS) return 'expiring';
 
   return 'active';
@@ -233,10 +240,13 @@ export async function getAccounts(userId) {
       /** True when a non-empty password is stored (encrypted). OTP-only accounts are false. */
       passwordOnFile: !!config.password,
       hasCredentials: !!(config.email && (config.password || config.authMethod === 'otp' || config.authMethod === 'password')),
-      // Use sync version for bulk list - 'expiring' status triggers API validation before use
-      sessionStatus: getSessionStatus(config, plain, decryptFailed),
+      // Sync version checks async cache first, falls back to JWT heuristic on cache miss
+      sessionStatus: getSessionStatus(config, plain, decryptFailed, account.id),
       sessionDecryptFailed: decryptFailed,
       lastSync: config.lastSync,
+      lastLoginAt: config.lastLoginAt || null,
+      sessionExpiry: config.sessionExpiry || null,
+      events: config.events || [],
       createdAt: account.createdAt,
     };
   });
@@ -365,6 +375,33 @@ export async function deleteAccount(userId, id) {
 }
 
 /**
+ * Log an event to the account's encrypted config (e.g. session changes, auth attempts).
+ * Keeps the last 20 events.
+ */
+export async function logAccountEvent(userId, id, type, message) {
+  const account = await prisma.account.findFirst({ where: { id, userId } });
+  if (!account) return;
+
+  const config = readConfig(account);
+  if (!config.events) config.events = [];
+  
+  config.events.unshift({
+    type,
+    message,
+    timestamp: new Date().toISOString()
+  });
+  
+  if (config.events.length > 20) {
+    config.events = config.events.slice(0, 20);
+  }
+
+  await prisma.account.update({
+    where: { id },
+    data: { config: encryptConfig(config) }
+  });
+}
+
+/**
  * @param {string|null|undefined} sessionCookie - JWT or empty; `null` clears; `undefined` with `preserveSessionToken` leaves vault token unchanged
  * @param {object} [options]
  * @param {boolean} [options.preserveSessionToken] - If true, do not write `sessionToken` (e.g. OTP start: refresh device cookie only)
@@ -380,6 +417,12 @@ export async function updateAccountSession(userId, id, sessionCookie, clientCook
   if (clientCookie != null && String(clientCookie).trim() !== '' && String(clientCookie).trim() !== 'undefined') {
     config.clientCookie = String(clientCookie).trim();
     config.clientCookieIssuedAt = new Date().toISOString();
+  }
+
+  // Record when a new login session is established (not refreshes).
+  // Enables session age display and auto-refresh scheduling.
+  if (options.isNewLogin) {
+    config.lastLoginAt = new Date().toISOString();
   }
 
   if (sessionExpiry !== undefined) {
@@ -437,6 +480,17 @@ export async function updateAccountManagementKey(userId, id, managementKey) {
   });
 
   return true;
+}
+
+export async function updateAccountBalance(id, { remaining, total }) {
+  await prisma.account.update({
+    where: { id },
+    data: {
+      lastKnownBalance: remaining ?? null,
+      totalCredits: total ?? null,
+      lastKnownBalanceAt: new Date(),
+    },
+  });
 }
 
 export async function updateAccountLastSync(userId, id) {
@@ -662,4 +716,18 @@ export async function getSettings() {
 
 export async function updateSettings(settings) {
   return settings;
+}
+
+export async function getAccountOwnerOfKey(userId, hash) {
+  const key = await prisma.key.findFirst({
+    where: { hash, account: { userId } },
+    include: { account: true },
+  });
+  if (!key) return null;
+  const config = readConfig(key.account);
+  return { ...key.account, managementKey: config.managementKey };
+}
+
+export async function deleteKey(userId, hash) {
+  await prisma.key.deleteMany({ where: { hash, account: { userId } } });
 }

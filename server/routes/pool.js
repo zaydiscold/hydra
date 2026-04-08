@@ -23,6 +23,16 @@ router.post('/account/:accountId/toggle', requireUnlocked, PoolController.toggle
 // Register (save encrypted) raw key string for an existing key
 router.post('/key/:hash/register', requireUnlocked, PoolController.registerKeyString.bind(PoolController));
 
+// Auto-provision a new key for an account (creates + registers + pools in one shot)
+router.post('/auto-provision/:accountId', requireUnlocked, PoolController.autoProvision.bind(PoolController));
+
+// Sync key plaintexts from OpenRouter website (session-auth fast path, Playwright fallback)
+router.post('/sync-keys/:accountId', requireUnlocked, PoolController.syncKeys.bind(PoolController));
+
+// Key actions (disable/enable, delete) — moved from AccountDetail to Pool Manager
+router.patch('/key/:hash/disable', requireUnlocked, PoolController.toggleKeyEnabled.bind(PoolController));
+router.delete('/key/:hash', requireUnlocked, PoolController.deleteKey.bind(PoolController));
+
 // Manual proxy reload
 router.post('/reload', requireUnlocked, PoolController.reloadPool.bind(PoolController));
 
@@ -31,5 +41,11 @@ router.post('/models/refresh', requireUnlocked, PoolController.refreshModels.bin
 
 // Get traffic metrics
 router.get('/traffic', requireUnlocked, PoolController.getTraffic.bind(PoolController));
+
+// Cached model list (for client-side model picker)
+router.get('/models', requireUnlocked, PoolController.getModels.bind(PoolController));
+
+// Last sync timestamp + active key count
+router.get('/sync-status', requireUnlocked, PoolController.getSyncStatus.bind(PoolController));
 
 export default router;

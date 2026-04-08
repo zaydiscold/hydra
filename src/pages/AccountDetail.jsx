@@ -171,9 +171,18 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const [copiedKey, setCopiedKey] = useState(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
+  // Mgmt key reveal
+  const [mgmtKeyFull, setMgmtKeyFull] = useState(null);
+  const [revealedMgmt, setRevealedMgmt] = useState(false);
+  const [loadingMgmtReveal, setLoadingMgmtReveal] = useState(false);
+
   // Management keys storage (New)
   const [managementKeys, setManagementKeys] = useState([]);
   const [loadingMgmtKeys, setLoadingMgmtKeys] = useState(false);
+
+  // Confirm modals
+  const [deleteKeyConfirm, setDeleteKeyConfirm] = useState(null); // { hash, name }
+  const [deleteAccountConfirm, setDeleteAccountConfirm] = useState(false);
 
   const fetchSnapshot = useCallback(async () => {
     if (!resolvedAccountId) return;
@@ -206,7 +215,14 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     setLoadingMgmtKeys(true);
     try {
       const res = await api.getManagementKeys(resolvedAccountId);
-      setManagementKeys(res.data?.keys || []);
+      // Deduplicate by hash (same key may appear under multiple names)
+      const raw = res.data?.keys || [];
+      const seen = new Set();
+      setManagementKeys(raw.filter(k => {
+        if (!k.hash || seen.has(k.hash)) return false;
+        seen.add(k.hash);
+        return true;
+      }));
     } catch (err) {
       console.error('[ACCOUNT_DETAIL] Failed to fetch management keys:', err.message);
       setManagementKeys([]);
@@ -249,7 +265,12 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   }
 
   async function handleDeleteKey(hash, name) {
-    if (!window.confirm(`Delete key "${name}"? This cannot be undone.`)) return;
+    setDeleteKeyConfirm({ hash, name });
+  }
+
+  async function handleDeleteKeyConfirmed() {
+    const { hash, name } = deleteKeyConfirm;
+    setDeleteKeyConfirm(null);
     setActionLoading((p) => ({ ...p, [hash]: true }));
     try {
       await api.deleteKey(resolvedAccountId, hash);
@@ -284,6 +305,19 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     });
   }
 
+  async function handleRevealMgmtKey() {
+    if (mgmtKeyFull) { setRevealedMgmt(v => !v); return; }
+    setLoadingMgmtReveal(true);
+    try {
+      const res = await api.getAccountManagementKey(resolvedAccountId);
+      setMgmtKeyFull(res.data.managementKey);
+      setRevealedMgmt(true);
+    } catch (err) {
+      addToast('Could not retrieve management key: ' + err.message, 'error');
+    }
+    setLoadingMgmtReveal(false);
+  }
+
   function copyKey(hash, value) {
     navigator.clipboard.writeText(value || hash);
     setCopiedKey(hash);
@@ -291,7 +325,11 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   }
 
   async function handleDeleteAccount() {
-    if (!window.confirm(`Delete this account from Hydra? This only removes it from Hydra — your OpenRouter account and keys are not affected.`)) return;
+    setDeleteAccountConfirm(true);
+  }
+
+  async function handleDeleteAccountConfirmed() {
+    setDeleteAccountConfirm(false);
     try {
       await api.deleteAccount(resolvedAccountId);
       addToast('Account removed from Hydra', 'success');
@@ -404,7 +442,9 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
 
   const credits = snapshot.credits || {};
   const keys = Array.isArray(snapshot.keys?.list) ? snapshot.keys.list : [];
-  const pct = credits.total > 0 ? Math.max(0, (credits.remaining / credits.total) * 100) : 0;
+  const remainingPct = credits.total > 0 ? Math.max(0, (credits.remaining / credits.total) * 100) : 0;
+  const pct = remainingPct; // alias for balance bar (remaining %)
+  const utilizationPct = credits.total > 0 ? Math.min(100, Math.max(0, (credits.used / credits.total) * 100)) : 0;
 
   return (
     <>
@@ -448,15 +488,43 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             </div>
           )}
         </div>
-        <p>Account details and API key management</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <p style={{ margin: 0 }}>Account details and API key management</p>
+          {accountMeta?.hasCredentials && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setLoginModalOpen(true)}
+              title="Re-authenticate via email OTP or password to refresh session"
+            >
+              [UNLOCK] Re-auth
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Management key preview */}
       {snapshot.managementKeyPreview && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-md)', padding: '6px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)' }}>
           <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Mgmt Key</span>
-          <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', userSelect: 'text', flex: 1 }}>{snapshot.managementKeyPreview}</span>
-          <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }} onClick={() => copyKey('mgmt', snapshot.managementKeyPreview)} title="Copy preview">
+          <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', userSelect: 'text', flex: 1 }}>
+            {revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview}
+          </span>
+          <button
+            className="btn btn-ghost"
+            style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }}
+            onClick={handleRevealMgmtKey}
+            title={revealedMgmt ? 'Hide' : 'Reveal full key'}
+            disabled={loadingMgmtReveal}
+          >
+            {loadingMgmtReveal ? <span style={{ fontSize: '0.65rem' }}>…</span> : revealedMgmt ? <EyeOffIcon size={11} /> : <EyeIcon size={11} />}
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }}
+            onClick={() => copyKey('mgmt', revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview)}
+            title={revealedMgmt ? 'Copy key' : 'Copy preview (reveal to copy full key)'}
+          >
             {copiedKey === 'mgmt' ? <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={11} />}
           </button>
         </div>
@@ -521,15 +589,15 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <InfoIcon className="stat-icon" />
           </div>
           <div className="stat-card-value info">
-            <ScrambleText text={pct.toFixed(1) + '%'} />
+            <ScrambleText text={utilizationPct.toFixed(1) + '%'} />
           </div>
         </div>
       </div>
 
       <div style={{ marginBottom: 'var(--space-xl)' }}>
         <div className="flex justify-between mb-sm text-xs text-secondary" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
-          <span>Balance utilization</span>
-          <span>{pct.toFixed(1)}%</span>
+          <span>Remaining</span>
+          <span>{remainingPct.toFixed(1)}%</span>
         </div>
         <div className="balance-bar balance-bar-mini">
           <div
@@ -594,22 +662,24 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                           style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', userSelect: 'text', cursor: 'text' }}
                         >
                           {revealedKeys.has(key.hash)
-                            ? (key.label || key.hash || '—')
+                            ? (key.plaintextKey || key.label || key.hash || '—')
                             : (key.label ? key.label.slice(0, 8) + '••••••' : '—')}
                         </span>
+                        {key.hasKeyString && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }}
+                            title={revealedKeys.has(key.hash) ? 'Hide' : 'Show full key'}
+                            onClick={() => toggleReveal(key.hash)}
+                          >
+                            {revealedKeys.has(key.hash) ? <EyeOffIcon size={12} /> : <EyeIcon size={12} />}
+                          </button>
+                        )}
                         <button
                           className="btn btn-ghost"
-                          style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }}
-                          title={revealedKeys.has(key.hash) ? 'Hide' : 'Show'}
-                          onClick={() => toggleReveal(key.hash)}
-                        >
-                          {revealedKeys.has(key.hash) ? <EyeOffIcon size={12} /> : <EyeIcon size={12} />}
-                        </button>
-                        <button
-                          className="btn btn-ghost"
-                          style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }}
-                          title="Copy to clipboard"
-                          onClick={() => copyKey(key.hash, key.label)}
+                          style={{ padding: '2px 4px', minHeight: 'unset', opacity: key.hasKeyString ? 0.8 : 0.35 }}
+                          title={key.hasKeyString ? 'Copy key' : 'Full key not stored — paste it in Pool Manager first'}
+                          onClick={() => key.hasKeyString && copyKey(key.hash, key.plaintextKey || key.label)}
                         >
                           {copiedKey === key.hash ? <span style={{ fontSize: '0.7rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={12} />}
                         </button>
@@ -663,6 +733,37 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         </div>
       )}
 
+      {/* Session Log */}
+      {accountMeta?.events && accountMeta.events.length > 0 && (
+        <div style={{ marginTop: 'var(--space-xl)' }}>
+          <div className="section-header">
+            <h3>Session Events</h3>
+          </div>
+          <div className="table-container" style={{ maxHeight: 250, overflowY: 'auto' }}>
+            <table className="table" style={{ fontSize: '0.8rem' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 140 }}>Time</th>
+                  <th style={{ width: 180 }}>Type</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accountMeta.events.map((ev, i) => (
+                  <tr key={i}>
+                    <td style={{ color: 'var(--text-tertiary)' }}>{new Date(ev.timestamp).toLocaleString(undefined, {
+                      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit'
+                    })}</td>
+                    <td className="mono" style={{ color: 'var(--text-secondary)' }}>{ev.type}</td>
+                    <td style={{ color: 'var(--text-primary)' }}>{ev.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Danger zone */}
       <div style={{ marginTop: 'var(--space-lg)', padding: '10px 14px', border: '1px solid rgba(255,34,85,0.2)', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -683,6 +784,44 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             fetchSnapshot();
           }}
         />
+      )}
+
+      {loginModalOpen && accountMeta && (
+        <LoginAccountModal
+          account={accountMeta}
+          onClose={() => setLoginModalOpen(false)}
+          onDone={async (msg) => {
+            addToast(msg, 'success');
+            setLoginModalOpen(false);
+            await fetchSnapshot();
+          }}
+        />
+      )}
+
+      {deleteKeyConfirm && (
+        <div className="modal-overlay" onClick={() => setDeleteKeyConfirm(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Delete key?</div>
+            <p className="modal-body">Delete <strong>{deleteKeyConfirm.name}</strong>? This removes it from OpenRouter and the local vault permanently.</p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setDeleteKeyConfirm(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleDeleteKeyConfirmed}>Delete key</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteAccountConfirm && (
+        <div className="modal-overlay" onClick={() => setDeleteAccountConfirm(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Remove account from Hydra?</div>
+            <p className="modal-body">This only removes the account from Hydra — your OpenRouter account, keys, and credits are not affected.</p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

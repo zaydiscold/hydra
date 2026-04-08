@@ -1,6 +1,7 @@
 import BaseController from './BaseController.js';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { rotationManager } from '../services/rotation-manager.js';
+import { proxyGate } from '../services/proxy-gate.js';
 
 class SystemController extends BaseController {
   async getTasks(req, res) {
@@ -21,6 +22,19 @@ class SystemController extends BaseController {
     } catch (err) {
       return this.error(res, err.message, err.status || 500, err.code || 'SYSTEM_TASK_CANCEL_FAILED');
     }
+  }
+
+  async getProxyStatus(req, res) {
+    return this.success(res, { enabled: proxyGate.enabled });
+  }
+
+  async toggleProxy(req, res) {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return this.error(res, 'enabled must be a boolean', 400);
+    }
+    proxyGate.set(enabled);
+    return this.success(res, { enabled: proxyGate.enabled });
   }
 
   async getHealth(req, res) {

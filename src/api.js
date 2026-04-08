@@ -200,7 +200,17 @@ export const verifyOTP = (id, signInId, code, options = {}) =>
   });
 export const refreshSession = (id) =>
   request(`/accounts/${id}/refresh`, { method: 'POST' });
+export const refreshAccountLogin = (id) =>
+  request(`/accounts/${id}/refresh-login`, { method: 'POST' });
+export const silentRefreshSession = (id) =>
+  request(`/accounts/${id}/refresh`, { method: 'POST' });
 export const getSessionStatus = (id) => request(`/accounts/${id}/session-status`);
+
+// Magic link (email_link strategy)
+export const sendMagicLink = (id, email) =>
+  request(`/accounts/${id}/magic-link/send`, { method: 'POST', body: { email } });
+export const getMagicLinkStatus = (id, signInId) =>
+  request(`/accounts/${id}/magic-link/status/${encodeURIComponent(signInId)}`);
 
 // Provisioning
 export const provisionManagementKey = (id, keyName) =>
@@ -227,6 +237,7 @@ export const bulkMatrixRedeem = (assignments) =>
 export const preflightRedeemAccounts = (accountIds) =>
   request('/codes/preflight', { method: 'POST', body: { accountIds } });
 export const getDiscoveredEndpoints = () => request('/codes/endpoints');
+export const getRedemptionLogs = () => request('/codes/history');
 
 // Generator
 export const startGeneratorJob = (emailTemplate, password, count) => 
@@ -253,12 +264,24 @@ export const toggleAccountPooled = (accountId, isPooled) =>
 export const registerKeyString = (hash, keyString) =>
   request(`/pool/key/${hash}/register`, { method: 'POST', body: { keyString } });
 export const refreshModels = () => request('/pool/models/refresh', { method: 'POST' });
+export const autoProvisionPoolKey = (accountId) =>
+  request(`/pool/auto-provision/${accountId}`, { method: 'POST' });
+export const syncPoolKeys = (accountId) =>
+  request(`/pool/sync-keys/${accountId}`, { method: 'POST' });
+export const disablePoolKey = (hash, disabled) =>
+  request(`/pool/key/${hash}/disable`, { method: 'PATCH', body: { disabled } });
+export const deletePoolKey = (hash) =>
+  request(`/pool/key/${hash}`, { method: 'DELETE' });
 export const getTraffic = () => request('/pool/traffic');
+export const getPoolModels = () => request('/pool/models');
+export const getPoolSyncStatus = () => request('/pool/sync-status');
 
 // System
 export const getSystemTasks = () => request('/system/tasks');
 export const cancelSystemTask = (taskId, reason = 'operator_cancelled') => request(`/system/tasks/${taskId}/cancel`, { method: 'POST', body: { reason } });
 export const getSystemHealth = () => request('/system/health');
+export const getProxyStatus = () => request('/system/proxy-status');
+export const toggleProxy = (enabled) => request('/system/proxy-toggle', { method: 'POST', body: { enabled } });
 
 // Management Key Storage (New)
 export const getManagementKeys = (accountId) => request(`/accounts/${accountId}/management-keys`);

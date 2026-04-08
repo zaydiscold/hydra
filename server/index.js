@@ -20,17 +20,22 @@ import poolRoutes from './routes/pool.js';
 import proxyRoutes from './routes/proxy.js';
 import webhookRoutes from './routes/webhooks.js';
 import systemRoutes from './routes/system.js';
+import debugRoutes from './routes/debug.js';
 
 import { startPinger, stopPinger } from './services/health-pinger.js';
 import { startRequestLogRetention, stopRequestLogRetention } from './services/request-log-retention.js';
 import { taskSupervisor } from './services/task-supervisor.js';
 import { enforceLegacyStorageReset } from './services/legacy-storage.js';
 import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
+import { startSessionRefresher } from './services/session-refresher.js';
+import { proxyGate } from './services/proxy-gate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 let server = null;
 let shutdownInFlight = false;
+
+// Proxy kill switch state lives in services/proxy-gate.js to avoid circular imports
 
 // Standard middleware
 app.use(cors());
@@ -61,9 +66,15 @@ app.use('/api/codes', codesRoutes);
 app.use('/api/generator', generatorRoutes);
 app.use('/api/pool', poolRoutes);
 app.use('/api/system', systemRoutes);
+app.use('/api/debug', debugRoutes);
 
 // --- OpenAI-compatible Proxy (must be before SPA catch-all) ---
-app.use('/v1', proxyRoutes);
+app.use('/v1', (req, res, next) => {
+  if (!proxyGate.enabled) {
+    return res.status(503).json({ error: 'Proxy disabled', message: 'The Hydra proxy has been turned off by the operator.' });
+  }
+  next();
+}, proxyRoutes);
 
 // --- Static Client (Production) ---
 const distPath = join(__dirname, '..', 'dist');
@@ -132,6 +143,7 @@ async function bootstrap() {
   taskSupervisor.start();
   startPinger();
   startRequestLogRetention();
+  startSessionRefresher(); // P13 — auto-refresh sessions approaching expiry
 
   server = app.listen(config.PORT, '0.0.0.0', () => {
     logger.info(`  🐉 Hydra Server live on port ${config.PORT}`);

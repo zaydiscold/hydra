@@ -90,7 +90,7 @@ function ProxyStatusBadge({ status, stats }) {
 
 // ─── Key Row ─────────────────────────────────────────────────────────────────
 
-function KeyRow({ keyData, onToggle, onRegister }) {
+function KeyRow({ keyData, onToggle, onRegister, onDisable, onDelete }) {
   const [showPaste, setShowPaste] = useState(false);
   const [pasteVal, setPasteVal] = useState('');
   const [saving, setSaving] = useState(false);
@@ -98,7 +98,7 @@ function KeyRow({ keyData, onToggle, onRegister }) {
 
   const {
     hash, name, enabled, isPooled, hasKeyString, plaintextKey, isProvisioningKey,
-    usage
+    usage, limit, limitRemaining,
   } = keyData;
 
   const [showPlaintext, setShowPlaintext] = useState(false);
@@ -132,9 +132,9 @@ function KeyRow({ keyData, onToggle, onRegister }) {
         display: 'grid',
         gridTemplateColumns: '28px 1fr auto auto auto',
         alignItems: 'center',
-        gap: 10,
-        padding: '8px 12px',
-        background: isPooled ? 'rgba(0,255,102,0.03)' : 'transparent',
+        gap: 8,
+        padding: '5px 12px',
+        background: isPooled ? 'rgba(0,255,102,0.04)' : 'transparent',
         borderLeft: isPooled ? '2px solid var(--status-success)' : '2px solid transparent',
         transition: 'all 150ms',
       }}
@@ -171,6 +171,29 @@ function KeyRow({ keyData, onToggle, onRegister }) {
             <ScrambleText text={hash ? hash.slice(0, 12) + '…' : '—'} duration={300} />
           )}
         </code>
+
+        {/* Key limit bar */}
+        {limit != null ? (() => {
+          const consumed = limit - (limitRemaining ?? 0);
+          const pct = Math.min(100, Math.round((consumed / limit) * 100));
+          const barColor = pct >= 80 || limitRemaining === 0
+            ? 'var(--status-error)'
+            : pct >= 50
+            ? 'var(--status-warning)'
+            : 'var(--status-success)';
+          return (
+            <div style={{ marginTop: 4 }}>
+              <div style={{ height: 3, background: 'var(--bg-tertiary)', borderRadius: 2, overflow: 'hidden', marginBottom: 2 }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: barColor, transition: 'width 0.3s' }} />
+              </div>
+              <span style={{ fontSize: '0.65rem', color: barColor, fontFamily: 'var(--font-mono)' }}>
+                {pct}% · ${(limitRemaining ?? 0).toFixed(2)} / ${limit.toFixed(2)}
+              </span>
+            </div>
+          );
+        })() : (
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 2, display: 'block' }}>∞ unlimited</span>
+        )}
 
         {/* Paste key panel */}
         {showPaste && (
@@ -211,11 +234,12 @@ function KeyRow({ keyData, onToggle, onRegister }) {
             className="btn btn-sm"
             onClick={openPastePanel}
             style={{
-              color: 'var(--status-warning)',
+              color: '#000',
               border: '1px solid var(--status-warning)',
-              background: 'rgba(255,238,0,0.05)',
+              background: 'var(--status-warning)',
               gap: 4,
               fontSize: '0.72rem',
+              fontWeight: 700,
             }}
           >
             <AlertIcon size={12} /> Paste Key
@@ -248,17 +272,28 @@ function KeyRow({ keyData, onToggle, onRegister }) {
         )}
       </div>
 
-      {/* Status dot */}
-      <div>
+      {/* Status + key actions */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
         <span
           style={{
             fontSize: '0.72rem',
             color: enabled ? 'var(--status-success)' : 'var(--text-tertiary)',
             fontFamily: 'var(--font-mono)',
+            cursor: 'pointer',
           }}
+          title={enabled ? 'Click to disable' : 'Click to enable'}
+          onClick={() => onDisable && onDisable(hash, enabled)}
         >
           {enabled ? '● ON' : '○ OFF'}
         </span>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => onDelete && onDelete(hash)}
+          title="Delete key from OpenRouter"
+          style={{ fontSize: '0.65rem', padding: '1px 5px', color: 'var(--status-error)', opacity: 0.6 }}
+        >
+          ✕
+        </button>
       </div>
     </div>
   );
@@ -266,9 +301,11 @@ function KeyRow({ keyData, onToggle, onRegister }) {
 
 // ─── Account Row (collapsible) ────────────────────────────────────────────────
 
-function AccountRow({ account, onToggleKey, onToggleAccount, onRegister }) {
+function AccountRow({ account, onToggleKey, onToggleAccount, onRegister, onAutoProvision, onSyncKeys, onDisableKey, onDeleteKey }) {
   const [expanded, setExpanded] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const keyList = normalizeAccountKeys(account.keys);
 
@@ -278,6 +315,8 @@ function AccountRow({ account, onToggleKey, onToggleAccount, onRegister }) {
   const somePooled = pooledEligible.length > 0;
 
   const missingCount = keyList.filter(k => !k.hasKeyString).length;
+  // Can auto-provision if account has no errors (has management key) and has no stored key strings
+  const canAutoProvision = !account.error && eligibleKeys.length === 0;
 
   async function handleBulkToggle(val) {
     setBulkLoading(true);
@@ -285,18 +324,30 @@ function AccountRow({ account, onToggleKey, onToggleAccount, onRegister }) {
     setBulkLoading(false);
   }
 
+  async function handleAutoProvision() {
+    setProvisioning(true);
+    await onAutoProvision(account.id);
+    setProvisioning(false);
+  }
+
+  async function handleSyncKeys() {
+    setSyncing(true);
+    await onSyncKeys(account.id);
+    setSyncing(false);
+  }
+
   return (
-    <div style={{ border: '2px solid var(--border-subtle)', marginBottom: 12 }}>
+    <div style={{ border: '1px solid var(--border-subtle)', marginBottom: 8 }}>
       {/* Account header */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
-          padding: '10px 14px',
-          background: 'var(--bg-tertiary)',
+          gap: 8,
+          padding: '7px 12px',
+          background: 'var(--bg-secondary)',
           cursor: 'pointer',
-          borderBottom: expanded ? '2px solid var(--border-subtle)' : 'none',
+          borderBottom: expanded ? '1px solid var(--border-subtle)' : 'none',
         }}
       >
         {/* Bulk checkbox */}
@@ -317,10 +368,10 @@ function AccountRow({ account, onToggleKey, onToggleAccount, onRegister }) {
         <div onClick={() => setExpanded(v => !v)} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>{expanded ? '▼' : '▶'}</span>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '0.95rem', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {account.alias}
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
               {account.email || 'No email'} · {keyList.length} key{keyList.length !== 1 ? 's' : ''}
               {missingCount > 0 && (
                 <span style={{ color: 'var(--status-warning)', marginLeft: 8 }}>
@@ -331,11 +382,54 @@ function AccountRow({ account, onToggleKey, onToggleAccount, onRegister }) {
           </div>
         </div>
 
-        {/* Stats */}
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
-            <span style={{ color: 'var(--status-success)' }}>{pooledEligible.length}</span>
-            <span style={{ color: 'var(--text-tertiary)' }}>/{keyList.length} pooled</span>
+        {/* Stats + auto-provision */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Sync keys — always show for accounts with missing strings */}
+          {missingCount > 0 && !account.error && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={(e) => { e.stopPropagation(); handleSyncKeys(); }}
+              disabled={syncing}
+              style={{
+                color: '#000',
+                border: '1px solid var(--accent-secondary)',
+                background: 'var(--accent-secondary)',
+                fontSize: '0.72rem',
+                gap: 4,
+                padding: '3px 10px',
+                fontWeight: 800,
+              }}
+              title="Sync key strings from OpenRouter using your stored session"
+            >
+              {syncing ? <><div className="spinner-sm" /> Syncing…</> : '↺ Sync Keys'}
+            </button>
+          )}
+          {canAutoProvision && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={(e) => { e.stopPropagation(); handleAutoProvision(); }}
+              disabled={provisioning}
+              style={{
+                color: '#000',
+                border: '1px solid var(--accent-primary)',
+                background: 'var(--accent-primary)',
+                fontSize: '0.72rem',
+                gap: 4,
+                padding: '3px 10px',
+                fontWeight: 800,
+              }}
+              title="Create a new API key using this account's management key and add it to the pool"
+            >
+              {provisioning ? <><div className="spinner-sm" /> Provisioning…</> : '⚡ Auto-attach'}
+            </button>
+          )}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
+              <span style={{ color: 'var(--status-success)' }}>{pooledEligible.length}</span>
+              <span style={{ color: 'var(--text-tertiary)' }}>/{keyList.length} pooled</span>
+            </div>
           </div>
         </div>
 
@@ -374,6 +468,8 @@ function AccountRow({ account, onToggleKey, onToggleAccount, onRegister }) {
             keyData={k}
             onToggle={(hash, val) => onToggleKey(hash, val)}
             onRegister={onRegister}
+            onDisable={onDisableKey}
+            onDelete={onDeleteKey}
           />
           ))}
         </div>
@@ -390,7 +486,21 @@ function AccountRow({ account, onToggleKey, onToggleAccount, onRegister }) {
 
 // ─── Master Endpoint Card ─────────────────────────────────────────────────────
 
-function EndpointCard({ masterKey, endpoint, modelCache }) {
+function EndpointCard({ masterKey, endpoint, modelCache, onRefreshModels, refreshingModels, proxyOn, onToggleProxy, models }) {
+  const [modelsOpen, setModelsOpen] = useState(false);
+  const [modelFilter, setModelFilter] = useState('');
+  const [copiedModel, setCopiedModel] = useState(null);
+
+  function copyModel(id) {
+    navigator.clipboard.writeText(id).catch(() => {});
+    setCopiedModel(id);
+    setTimeout(() => setCopiedModel(null), 1500);
+  }
+
+  const filteredModels = (models ?? []).filter(m =>
+    !modelFilter || m.id.toLowerCase().includes(modelFilter.toLowerCase()) || m.name.toLowerCase().includes(modelFilter.toLowerCase())
+  );
+
   if (!masterKey) return (
     <div className="card" style={{ padding: 'var(--space-lg)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -403,12 +513,30 @@ function EndpointCard({ masterKey, endpoint, modelCache }) {
   return (
     <div className="card" style={{
       padding: 'var(--space-lg)',
-      border: '2px solid var(--accent-primary)',
-      boxShadow: '4px 4px 0 var(--accent-primary)',
+      border: `2px solid ${proxyOn ? 'var(--accent-primary)' : 'var(--status-error)'}`,
+      boxShadow: `4px 4px 0 ${proxyOn ? 'var(--accent-primary)' : 'var(--status-error)'}`,
     }}>
-      <div style={{ fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-        Master Endpoint
+      {/* Header + kill switch */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          Master Endpoint
+        </div>
+        <button
+          type="button"
+          className={`btn btn-sm ${proxyOn ? 'btn-secondary' : 'btn-danger'}`}
+          style={{ fontSize: '0.65rem', padding: '2px 8px', minHeight: 'unset' }}
+          onClick={onToggleProxy}
+          title={proxyOn ? 'Click to disable the proxy (no traffic will be routed)' : 'Click to re-enable the proxy'}
+        >
+          {proxyOn ? '● LIVE' : '○ OFFLINE'}
+        </button>
       </div>
+
+      {!proxyOn && (
+        <div style={{ marginBottom: 12, padding: '6px 10px', background: 'rgba(255,34,85,0.1)', border: '1px solid var(--status-error)', fontSize: '0.72rem', color: 'var(--status-error)' }}>
+          Proxy is disabled — all /v1 requests return 503 until re-enabled.
+        </div>
+      )}
 
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginBottom: 4 }}>Base URL</div>
@@ -430,16 +558,80 @@ function EndpointCard({ masterKey, endpoint, modelCache }) {
         </div>
       </div>
 
+      {/* Model cache row */}
       <div style={{ marginTop: 12, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', fontSize: '0.68rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 4 }}>Model list cache</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Model list cache</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-icon"
+            style={{ padding: 0, minHeight: 'unset', width: 22, height: 22, marginTop: -2 }}
+            onClick={onRefreshModels}
+            disabled={refreshingModels}
+            title="Update the OpenRouter model catalog cached locally"
+          >
+            <RefreshIcon size={12} style={{ animation: refreshingModels ? 'spin 1s linear infinite' : 'none', opacity: 0.7 }} />
+          </button>
+        </div>
         {formatModelCacheSubtitle(modelCache)}
       </div>
 
-      <div style={{ marginTop: 16, padding: '8px 10px', background: 'rgba(0,204,255,0.05)', border: '1px solid var(--status-info)', fontSize: '0.7rem', color: 'var(--status-info)', lineHeight: 1.5 }}>
+      {/* Collapsible model browser */}
+      {(models ?? []).length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ width: '100%', justifyContent: 'space-between', fontSize: '0.68rem', padding: '4px 10px' }}
+            onClick={() => setModelsOpen(o => !o)}
+          >
+            <span>Browse {models.length} models</span>
+            <span>{modelsOpen ? '▲' : '▼'}</span>
+          </button>
+
+          {modelsOpen && (
+            <div style={{ marginTop: 4, border: '1px solid var(--border-subtle)', background: 'rgba(0,0,0,0.3)' }}>
+              <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Filter models…"
+                  value={modelFilter}
+                  onChange={e => setModelFilter(e.target.value)}
+                  style={{ padding: '3px 8px', fontSize: '0.72rem', height: 28 }}
+                />
+              </div>
+              <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                {filteredModels.slice(0, 200).map(m => (
+                  <div
+                    key={m.id}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: '0.68rem', gap: 8 }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.id}</div>
+                      {m.name !== m.id && <div style={{ color: 'var(--text-tertiary)', fontSize: '0.63rem', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-icon"
+                      style={{ padding: '2px 4px', minHeight: 'unset', flexShrink: 0, fontSize: '0.6rem' }}
+                      onClick={() => copyModel(m.id)}
+                    >
+                      {copiedModel === m.id ? '✓' : <CopyIcon size={10} />}
+                    </button>
+                  </div>
+                ))}
+                {filteredModels.length === 0 && (
+                  <div style={{ padding: 12, color: 'var(--text-tertiary)', fontSize: '0.7rem', textAlign: 'center' }}>No models match</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: 12, padding: '6px 10px', background: 'rgba(0,204,255,0.05)', border: '1px solid var(--status-info)', fontSize: '0.7rem', color: 'var(--status-info)', lineHeight: 1.5 }}>
         Use with any OpenAI-compatible client (Cursor, Open WebUI, etc).
-      </div>
-      <div style={{ marginTop: 8, fontSize: '0.68rem', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
-        Key reveal in this page is local-only and intended for self-hosted workflows.
       </div>
     </div>
   );
@@ -459,7 +651,11 @@ export default function PoolManager({ addToast }) {
   const [reloadingPool, setReloadingPool] = useState(false);
   const [refreshingModels, setRefreshingModels] = useState(false);
   const [modelCache, setModelCache] = useState(null);
+  const [models, setModels] = useState([]);
+  const [syncStatus, setSyncStatus] = useState(null); // { lastSync, activeKeys }
+  const [proxyOn, setProxyOn] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [deleteKeyConfirm, setDeleteKeyConfirm] = useState(null); // hash string
   const helpWrapRef = useRef(null);
   const didInitialLoadRef = useRef(false);
 
@@ -487,13 +683,22 @@ export default function PoolManager({ addToast }) {
     if (!quiet) setLoading(true);
     else setRefreshing(true);
     try {
-      const [poolRes, keyRes] = await Promise.all([api.getPoolData(), api.getMasterKey()]);
+      const [poolRes, keyRes, modelsRes, syncRes, proxyRes] = await Promise.all([
+        api.getPoolData(),
+        api.getMasterKey(),
+        api.getPoolModels().catch(() => null),
+        api.getPoolSyncStatus().catch(() => null),
+        api.getProxyStatus().catch(() => null),
+      ]);
       const rawAccounts = poolRes.data?.accounts ?? [];
       setAccounts(rawAccounts.map((a) => ({ ...a, keys: normalizeAccountKeys(a.keys) })));
       setPoolStats(poolRes.data?.poolStats ?? null);
       setModelCache(poolRes.data?.modelCache ?? null);
       setMasterKey(keyRes.data?.masterKey ?? '');
       setEndpoint(keyRes.data?.endpoint ?? '');
+      if (modelsRes?.data?.models) setModels(modelsRes.data.models);
+      if (syncRes?.data) setSyncStatus(syncRes.data);
+      if (proxyRes?.data != null) setProxyOn(proxyRes.data.enabled ?? true);
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -528,6 +733,17 @@ export default function PoolManager({ addToast }) {
     load();
   }, [load]);
 
+  async function handleToggleProxy() {
+    const next = !proxyOn;
+    try {
+      await api.toggleProxy(next);
+      setProxyOn(next);
+      addToast(`Proxy ${next ? 'enabled' : 'disabled'}`, next ? 'success' : 'warning');
+    } catch (err) {
+      addToast(`Proxy toggle failed: ${err.message}`, 'error');
+    }
+  }
+
   async function handleToggleKey(hash, isPooled) {
     try {
       await api.toggleKeyPooled(hash, isPooled);
@@ -555,6 +771,66 @@ export default function PoolManager({ addToast }) {
       await load(true);
     } catch (err) {
       addToast(err.message, 'error');
+    }
+  }
+
+  async function handleRefreshModels() {
+    setRefreshingModels(true);
+    try {
+      await api.refreshModels();
+      addToast('Model list refreshed', 'success');
+      await loadPoolData(true);
+    } catch (err) {
+      addToast(`Model refresh failed: ${err.message}`, 'error');
+    } finally {
+      setRefreshingModels(false);
+    }
+  }
+
+  async function handleAutoProvision(accountId) {
+    try {
+      const res = await api.autoProvisionPoolKey(accountId);
+      addToast(`Key "${res.data?.name}" created and added to pool`, 'success');
+      await load(true);
+    } catch (err) {
+      addToast(`Auto-provision failed: ${err.message}`, 'error');
+    }
+  }
+
+  async function handleSyncKeys(accountId) {
+    try {
+      const res = await api.syncPoolKeys(accountId);
+      const n = res.data?.synced ?? 0;
+      addToast(n > 0 ? `Synced ${n} key string(s) from OpenRouter` : 'No key strings found via sync — try pasting manually', n > 0 ? 'success' : 'warning');
+      await load(true);
+    } catch (err) {
+      addToast(`Sync failed: ${err.message}`, 'error');
+    }
+  }
+
+  async function handleDisableKey(hash, currentlyEnabled) {
+    try {
+      await api.disablePoolKey(hash, currentlyEnabled); // disable = currently enabled
+      addToast(`Key ${currentlyEnabled ? 'disabled' : 're-enabled'}`, 'success');
+      await load(true);
+    } catch (err) {
+      addToast(`Toggle failed: ${err.message}`, 'error');
+    }
+  }
+
+  async function handleDeleteKey(hash) {
+    setDeleteKeyConfirm(hash);
+  }
+
+  async function handleDeleteKeyConfirmed() {
+    const hash = deleteKeyConfirm;
+    setDeleteKeyConfirm(null);
+    try {
+      await api.deletePoolKey(hash);
+      addToast('Key deleted from OpenRouter and local DB', 'success');
+      await load(true);
+    } catch (err) {
+      addToast(`Delete failed: ${err.message}`, 'error');
     }
   }
 
@@ -657,27 +933,23 @@ export default function PoolManager({ addToast }) {
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={async () => {
-              setRefreshingModels(true);
-              try {
-                const res = await api.refreshModels();
-                const n = res?.data?.count ?? 0;
-                addToast(`Model list cache updated (${n} models)`, 'success');
-                await load(true);
-              } catch (err) {
-                addToast(err.message, 'error');
-              } finally {
-                setRefreshingModels(false);
-              }
-            }}
+            onClick={handleRefreshModels}
             disabled={loading || refreshing || refreshingModels}
             style={{ gap: 8, width: '100%' }}
             title="Fetch the OpenRouter model catalog and store it locally for GET /v1/models (Cursor, Open WebUI, etc.). Uses a pooled key if available, otherwise any pasted standard key."
           >
-            <RefreshIcon size={14} style={{ animation: refreshingModels ? 'spin 0.8s linear infinite' : 'none' }} />
+            <RefreshIcon size={14} style={{ animation: refreshingModels ? 'spin 1s linear infinite' : 'none' }} />
             {refreshingModels ? 'Refreshing…' : 'Refresh Models'}
           </button>
         </div>
+        {syncStatus?.lastSync && (
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 6 }}>
+            pool synced {(() => {
+              const ago = Math.floor((Date.now() - new Date(syncStatus.lastSync)) / 60000);
+              return ago < 1 ? 'just now' : `${ago}m ago`;
+            })()} · {syncStatus.activeKeys} key{syncStatus.activeKeys !== 1 ? 's' : ''} active
+          </div>
+        )}
       </div>
 
       {/* Stat cards */}
@@ -688,19 +960,19 @@ export default function PoolManager({ addToast }) {
             <NetworkIcon className="stat-icon" />
           </div>
           <div className={`stat-card-value mono ${totalReady > 0 ? 'success' : 'error'}`}>{totalReady}</div>
-          <div className="stat-card-sub">of {totalPooled} checked / {totalKeys} total</div>
+          <div className="stat-card-sub">{totalPooled} checked · {totalKeys} total</div>
         </div>
 
-        <div className="stat-card shine-sweep animate-spring stagger-delay-50">
+        <div className="stat-card shine-sweep animate-spring stagger-delay-50" style={{ background: 'var(--bg-tertiary)' }}>
           <div className="stat-card-header">
             <span className="stat-card-label">Cooling Down</span>
             <AlertIcon className="stat-icon" />
           </div>
           <div className={`stat-card-value mono ${cooldowns > 0 ? 'warning' : ''}`}>{cooldowns}</div>
-          <div className="stat-card-sub">keys on circuit-breaker cooldown</div>
+          <div className="stat-card-sub">circuit-breaker cooldown</div>
         </div>
 
-        <div className="stat-card shine-sweep animate-spring stagger-delay-100">
+        <div className="stat-card shine-sweep animate-spring stagger-delay-100" style={{ background: 'var(--bg-tertiary)' }}>
           <div className="stat-card-header">
             <span className="stat-card-label">Need Key String</span>
             <KeyIcon className="stat-icon" />
@@ -708,16 +980,16 @@ export default function PoolManager({ addToast }) {
           <div className={`stat-card-value mono ${(poolStats?.missingStringCount ?? 0) > 0 ? 'warning' : ''}`}>
             {poolStats?.missingStringCount ?? 0}
           </div>
-          <div className="stat-card-sub">paste raw sk-or-v1 once per key</div>
+          <div className="stat-card-sub">keys missing sk-or-v1</div>
         </div>
 
-        <div className="stat-card shine-sweep animate-spring stagger-delay-150">
+        <div className="stat-card shine-sweep animate-spring stagger-delay-150" style={{ background: 'var(--bg-tertiary)' }}>
           <div className="stat-card-header">
             <span className="stat-card-label">Accounts</span>
             <ShieldIcon className="stat-icon" />
           </div>
           <div className="stat-card-value mono">{accounts.length}</div>
-          <div className="stat-card-sub">connected OpenRouter accounts</div>
+          <div className="stat-card-sub">connected</div>
         </div>
       </div>
 
@@ -746,6 +1018,10 @@ export default function PoolManager({ addToast }) {
                   onToggleKey={handleToggleKey}
                   onToggleAccount={handleToggleAccount}
                   onRegister={handleRegister}
+                  onAutoProvision={handleAutoProvision}
+                  onSyncKeys={handleSyncKeys}
+                  onDisableKey={handleDisableKey}
+                  onDeleteKey={handleDeleteKey}
                 />
               </div>
             ))
@@ -754,7 +1030,16 @@ export default function PoolManager({ addToast }) {
 
         {/* Right: Endpoint card + legend */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
-          <EndpointCard masterKey={masterKey} endpoint={endpoint} modelCache={modelCache} />
+          <EndpointCard
+            masterKey={masterKey}
+            endpoint={endpoint}
+            modelCache={modelCache}
+            onRefreshModels={handleRefreshModels}
+            refreshingModels={refreshingModels}
+            models={models}
+            proxyOn={proxyOn}
+            onToggleProxy={handleToggleProxy}
+          />
 
           <div className="card" style={{ padding: '10px 12px' }}>
             <div style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
@@ -784,7 +1069,7 @@ export default function PoolManager({ addToast }) {
               Rotation Logic
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              <div>→ <strong>Round-robin</strong> across active keys</div>
+              <div>→ <strong>Weighted random</strong> by $ remaining</div>
               <div>→ <strong>429</strong> → 60s cooldown</div>
               <div>→ <strong>402</strong> → 10min cooldown</div>
               <div>→ <strong>401</strong> → permanent eviction</div>
@@ -793,6 +1078,22 @@ export default function PoolManager({ addToast }) {
           </div>
         </div>
       </div>
+
+      {deleteKeyConfirm && (
+        <div className="modal-overlay" onClick={() => setDeleteKeyConfirm(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Delete key?</div>
+            <p className="modal-body" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}>
+              {deleteKeyConfirm.slice(0, 20)}…
+            </p>
+            <p className="modal-body">This removes the key from OpenRouter and the local vault. This cannot be undone.</p>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setDeleteKeyConfirm(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleDeleteKeyConfirmed}>Delete key</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

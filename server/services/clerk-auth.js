@@ -13,7 +13,7 @@
 
 import https from 'node:https';
 import { URL } from 'node:url';
-import { USER_AGENT, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
+import { USER_AGENT, randomUserAgent, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
 import { logger } from './logger.js';
 
 // Clerk JS version sent with all FAPI requests.
@@ -834,7 +834,7 @@ function clerkHttpsJson(method, pathAndQuery, opts = {}) {
   const { cookieClient, sessionCookie, extraHeaders = {}, body } = opts;
   const url = new URL(pathAndQuery.replace(/^\//, ''), `${CLERK_BASE}/`);
   const headers = {
-    'User-Agent': USER_AGENT,
+    'User-Agent': randomUserAgent(),
     ...extraHeaders,
   };
   const deviceCookie = cookieClient ? clerkFapiDeviceCookieHeader(cookieClient) : '';
@@ -922,7 +922,7 @@ function fetchClerkClientCookieViaHttps() {
         path: u.pathname + u.search,
         method: 'GET',
         headers: {
-          'User-Agent': USER_AGENT,
+          'User-Agent': randomUserAgent(),
           Origin: CLERK_ORIGIN,
           Referer: CLERK_REFERER,
         },
@@ -953,7 +953,7 @@ function deviceJarFromBootstrapLines(lines) {
 async function obtainClerkClientCookie() {
   const clientRes = await fetch(`${CLERK_BASE}/client?_clerk_js_version=${CLERK_JS_VERSION}`, {
     headers: {
-      'User-Agent': USER_AGENT,
+      'User-Agent': randomUserAgent(),
       'Origin': CLERK_ORIGIN,
       'Referer': CLERK_REFERER,
     },
@@ -995,6 +995,15 @@ async function obtainClerkClientCookie() {
 }
 
 const DEFAULT_SESSION_TTL_MS = 86400000; // 24h — used when JWT has no exp or payload is unreadable
+
+// Clerk sessions backed by __client cookie last ~7 days.
+// JWT exp (~2.5 min) is just a short-lived proof token, NOT the session lifetime.
+const CLERK_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/** Realistic session expiry for storage — use this instead of JWT exp. */
+function realisticSessionExpiry() {
+  return new Date(Date.now() + CLERK_SESSION_TTL_MS).toISOString();
+}
 
 // Decode JWT exp claim without a library. Never returns null: missing exp breaks dashboard session UX (sessionStatus stays "unknown").
 export function getJwtExpiry(jwt) {
@@ -1057,7 +1066,7 @@ export async function detectAuthMethod(email) {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Cookie': clerkFapiDeviceCookieHeader(clientCookie),
-      'User-Agent': USER_AGENT,
+      'User-Agent': randomUserAgent(),
       'Origin': CLERK_ORIGIN,
       'Referer': CLERK_REFERER,
     },
@@ -1170,7 +1179,7 @@ async function clerkGetClientSession(clientCookie, sessionCookie, { debugPhase =
     cc = clientCookieAfterSetCookieLines(cc, setCookieLines);
     let newSessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
     if (!newSessionCookie) newSessionCookie = sessionJwtFromClerkClientPayload(data);
-    if (newSessionCookie) return { sessionCookie: newSessionCookie, clientCookie: cc, sessionExpiry: getJwtExpiry(newSessionCookie), setCookieLines: lastSetCookieLines };
+    if (newSessionCookie) return { sessionCookie: newSessionCookie, clientCookie: cc, sessionExpiry: realisticSessionExpiry(), setCookieLines: lastSetCookieLines };
     if (attempt < maxAttempts) await sleepMs(retryMs);
   }
   return null;
@@ -1243,7 +1252,7 @@ async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, 
     }
     return tokenResult ? { ...tokenResult, setCookieLines: allSetCookieLines } : null;
   }
-  return { sessionCookie, clientCookie: cc, sessionExpiry: getJwtExpiry(sessionCookie), setCookieLines: allSetCookieLines };
+  return { sessionCookie, clientCookie: cc, sessionExpiry: realisticSessionExpiry(), setCookieLines: allSetCookieLines };
 }
 
 /**
@@ -1274,7 +1283,7 @@ export async function startEmailOTP(email) {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Cookie': clerkFapiDeviceCookieHeader(clientCookie),
-        'User-Agent': USER_AGENT,
+        'User-Agent': randomUserAgent(),
         'Origin': CLERK_ORIGIN,
         'Referer': CLERK_REFERER,
       },
@@ -1289,6 +1298,60 @@ export async function startEmailOTP(email) {
 
   const prepared = otpData.response || otpData.client?.sign_in;
   const resolvedSignInId = prepared?.id && typeof prepared.id === 'string' ? prepared.id : signInId;
+
+  return {
+    signInId: resolvedSignInId,
+    clientCookie: mergedClient,
+    emailAddressId,
+  };
+}
+
+/**
+ * Send a Clerk magic-link (email_link strategy) to the given email.
+ * The user clicks the link → Clerk redirects to `redirectUrl` with a token.
+ * Hydra's callback handler (`GET /api/auth/magic-callback`) completes the sign-in.
+ *
+ * @param {string} email
+ * @param {string} redirectUrl  e.g. "http://localhost:3001/api/auth/magic-callback?accountId=xxx"
+ * @returns {{ signInId, clientCookie, emailAddressId }}
+ */
+export async function sendMagicLink(email, redirectUrl) {
+  const { signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email);
+
+  if (!strategies.includes('email_link')) {
+    // Many OpenRouter accounts support email_link; throw with available list so caller can fall back
+    throw new Error(`email_link strategy not available for ${email}. Available: ${strategies.join(', ')}`);
+  }
+
+  if (!emailAddressId) {
+    throw new Error('Clerk did not return email_address_id for email_link strategy.');
+  }
+
+  const prepRes = await fetch(
+    `${CLERK_BASE}/client/sign_ins/${signInId}/prepare_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': clerkFapiDeviceCookieHeader(clientCookie),
+        'User-Agent': randomUserAgent(),
+        'Origin': CLERK_ORIGIN,
+        'Referer': CLERK_REFERER,
+      },
+      body: formBody({
+        strategy: 'email_link',
+        email_address_id: emailAddressId,
+        redirect_url: redirectUrl,
+      }),
+    }
+  );
+
+  const mergedClient = clientCookieAfterResponse(clientCookie, prepRes.headers);
+  const prepData = await prepRes.json();
+  if (prepData.errors?.length) throw new Error(clerkApiErrorText(prepData.errors));
+
+  const prepared = prepData.response || prepData.client?.sign_in;
+  const resolvedSignInId = prepared?.id ?? signInId;
 
   return {
     signInId: resolvedSignInId,
@@ -1341,6 +1404,46 @@ export async function completeEmailOTP(signInId, code, clientCookie) {
     throw new Error(
       'Clerk sign-in completed after OTP but no __session was returned (Set-Cookie or client payload). Set CLERK_DEBUG_OTP=1 and retry.',
     );
+  }
+  return resolved;
+}
+
+/**
+ * Complete an email_link (magic link) sign-in.
+ * When Clerk redirects the user's browser to our callback URL it appends `__clerk_ticket=<token>`.
+ * We POST that token via attempt_first_factor with strategy: email_link.
+ *
+ * @param {string} signInId    - from pendingMagicLinks (set when we called sendMagicLink)
+ * @param {string} clientCookie - stored device cookie from pendingMagicLinks
+ * @param {string} [clerkTicket] - the __clerk_ticket query param from the redirect URL (if available)
+ * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
+ */
+export async function completeEmailLink(signInId, clientCookie, clerkTicket) {
+  const attemptPath = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`;
+  const body = clerkTicket
+    ? formBody({ strategy: 'email_link', token: clerkTicket })
+    : formBody({ strategy: 'email_link' });
+
+  const { data, setCookieLines } = await clerkHttpsJson('POST', attemptPath, {
+    cookieClient: clientCookie,
+    extraHeaders: {
+      Origin: CLERK_ORIGIN,
+      Referer: CLERK_REFERER,
+    },
+    body,
+  });
+
+  if (data.errors?.length) throw new Error(`Magic link error: ${clerkApiErrorText(data.errors)}`);
+
+  const result = data.response || data.client?.sign_in;
+  if (!result) throw new Error('Magic link sign-in returned no sign_in object from Clerk.');
+  if (result.status !== 'complete') {
+    throw new Error(`Magic link sign-in incomplete: status=${result.status ?? 'unknown'}`);
+  }
+
+  const resolved = await resolveSessionAfterCompletedAttempt(data, setCookieLines, clientCookie, signInId, 'email_link');
+  if (!resolved) {
+    throw new Error('Clerk magic link completed but no __session cookie returned. This may be a Clerk config issue.');
   }
   return resolved;
 }
@@ -1399,29 +1502,23 @@ export async function refreshSession(clientCookie, sessionCookie) {
 
 /**
  * Time remaining below which a session is "expiring" in the UI.
- * Clerk JWTs expire quickly (~1-5 min) but sessions auto-refresh and last much longer.
- * Using 2.5 minutes matches realistic short-JWT lifespans without false "expiring" alerts.
- * This is a UI warning threshold only - sessions are still valid until JWT actually expires.
+ * Sessions backed by __client cookie last ~7 days. Show "expiring" warning in the last 24h
+ * so the auto-refresher and user have time to act.
  */
-export const SESSION_EXPIRING_SOON_MS = 2.5 * 60 * 1000;
+export const SESSION_EXPIRING_SOON_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
- * Check if session is valid based on JWT expiry.
- * 
- * WARNING: This only checks JWT expiry, which is NOT reliable for session validity.
- * Clerk JWTs expire in ~2.5 minutes but actual sessions last 12+ hours.
- * 
- * For ACTUAL session validation, use validateSession() which makes an API call.
- * 
- * @param {string} sessionExpiry - ISO date string (JWT exp)
- * @returns {boolean} true if JWT hasn't expired (but session may still be valid via auto-refresh)
+ * Check if stored session expiry is still in the future.
+ * `sessionExpiry` is now a realistic 7-day TTL (set at login/refresh), not JWT exp.
+ * For ground-truth validation, use validateSession() (makes an API call).
+ *
+ * @param {string} sessionExpiry - ISO date string (7-day TTL from login/refresh)
+ * @returns {boolean} true if session TTL hasn't elapsed
  */
 export function isSessionValid(sessionExpiry) {
   if (!sessionExpiry) return false;
   const expiry = new Date(sessionExpiry).getTime();
-  const now = Date.now();
-  // Session is valid as long as JWT hasn't expired (Clerk auto-refreshes sessions)
-  return expiry > now;
+  return expiry > Date.now();
 }
 
 /**
@@ -1445,7 +1542,7 @@ export async function validateSession(sessionCookie) {
     const res = await fetch(`${OR_BASE}/api/v1/credits`, {
       headers: {
         'Cookie': `__session=${sessionCookie}`,
-        'User-Agent': USER_AGENT,
+        'User-Agent': randomUserAgent(),
       },
     });
     return res.status !== 401 && res.status !== 403;

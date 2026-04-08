@@ -3,6 +3,7 @@ import { networkInterfaces } from 'node:os';
 import * as store from '../services/store.js';
 import * as modelCatalog from '../services/model-cache.js';
 import * as openrouter from '../services/openrouter.js';
+import { syncApiKeys } from '../services/dashboard-api.js';
 import { rotationManager } from '../services/rotation-manager.js';
 import { assertManagementKey, assertStandardKey } from '../services/key-utils.js';
 
@@ -245,6 +246,110 @@ class PoolController extends BaseController {
     });
   }
 
+  /**
+   * POST /api/pool/auto-provision/:accountId
+   * Creates a new sk-or-v1-* key using the account's management key,
+   * stores it encrypted locally, and marks it as pooled immediately.
+   */
+  async autoProvision(req, res) {
+    try {
+      const account = await store.getAccountWithKey(req.user.id, req.params.accountId);
+      try {
+        assertManagementKey(account.managementKey, 'auto-provision pool key');
+      } catch (err) {
+        return this.error(res, err.message, 400);
+      }
+
+      const keyName = `Hydra Pool ${new Date().toISOString().slice(0, 10)}`;
+      const result = await openrouter.createKey(account.managementKey, { name: keyName });
+
+      // Save key string encrypted in DB (same as KeyController.createKey)
+      await store.saveKey(req.user.id, account.id, {
+        hash: result.data.hash,
+        name: result.data.name,
+        key: result.key,
+        limit: result.data.limit,
+        isProvisioningKey: result.data.is_provisioning_key,
+      });
+
+      // Auto-mark as pooled
+      await store.updateKeyPooledStatus(req.user.id, result.data.hash, true);
+      await rotationManager.reload();
+
+      return this.success(res, { hash: result.data.hash, name: result.data.name, pooled: true });
+    } catch (err) {
+      return this.error(res, err.message);
+    }
+  }
+
+  /**
+   * POST /api/pool/sync-keys/:accountId
+   * Tries session-auth tRPC routes for key plaintexts, falls back to Playwright scraping.
+   * Stores any revealed sk-or-v1-* strings encrypted in DB.
+   */
+  async syncKeys(req, res) {
+    try {
+      const { accountId } = req.params;
+      const revealed = await syncApiKeys(req.user.id, accountId);
+      let synced = 0;
+      for (const item of revealed) {
+        if (!item.plaintextKey) continue;
+        try {
+          // Try to match by hash — or register by key string directly
+          const hash = item.hash || item.plaintextKey;
+          await store.registerKeyString(req.user.id, hash, item.plaintextKey);
+          synced++;
+        } catch { /* key may not be in DB yet — will be picked up on next pool reload */ }
+      }
+      await rotationManager.reload();
+      return this.success(res, { synced, total: revealed.length, source: revealed[0]?.source ?? 'none' });
+    } catch (err) {
+      return this.error(res, err.message);
+    }
+  }
+
+  /**
+   * PATCH /api/pool/key/:hash/disable
+   * Toggle the enabled/disabled state of a key on OpenRouter.
+   */
+  async toggleKeyEnabled(req, res) {
+    try {
+      const { hash } = req.params;
+      const { disabled } = req.body; // boolean
+      if (typeof disabled !== 'boolean') return this.error(res, 'disabled must be a boolean', 400);
+
+      // Find the account that owns this key to get the management key
+      const account = await store.getAccountOwnerOfKey(req.user.id, hash);
+      if (!account) return this.error(res, 'Key not found or access denied', 404);
+      assertManagementKey(account.managementKey, 'toggle key enabled');
+
+      await openrouter.updateKey(account.managementKey, hash, { disabled });
+      return this.success(res, { hash, disabled });
+    } catch (err) {
+      return this.error(res, err.message);
+    }
+  }
+
+  /**
+   * DELETE /api/pool/key/:hash
+   * Delete a key from OpenRouter and remove from local DB.
+   */
+  async deleteKey(req, res) {
+    try {
+      const { hash } = req.params;
+      const account = await store.getAccountOwnerOfKey(req.user.id, hash);
+      if (!account) return this.error(res, 'Key not found or access denied', 404);
+      assertManagementKey(account.managementKey, 'delete key');
+
+      await openrouter.deleteKey(account.managementKey, hash);
+      await store.deleteKey(req.user.id, hash);
+      await rotationManager.reload();
+      return this.success(res, { deleted: true, hash });
+    } catch (err) {
+      return this.error(res, err.message);
+    }
+  }
+
   async reloadPool(req, res) {
     try {
       await rotationManager.reload();
@@ -304,6 +409,34 @@ class PoolController extends BaseController {
       });
 
       return this.success(res, { logs, metrics });
+    } catch (err) {
+      return this.error(res, err.message);
+    }
+  }
+
+  /** GET /pool/models — returns cached model list (id + name + ctx) */
+  async getModels(req, res) {
+    try {
+      const { prisma } = await import('../services/db.js');
+      const models = await prisma.cachedModel.findMany({
+        select: { id: true, name: true, ctx: true },
+        orderBy: { name: 'asc' },
+      });
+      return this.success(res, { models, count: models.length });
+    } catch (err) {
+      return this.error(res, err.message);
+    }
+  }
+
+  /** GET /pool/sync-status — last pool sync timestamp and key count */
+  async getSyncStatus(req, res) {
+    try {
+      const stats = rotationManager.getStatus();
+      return this.success(res, {
+        lastSync: stats.lastSyncAt ?? null,
+        activeKeys: stats.totalPooled ?? 0,
+        cooldownMap: stats.cooldownMap ?? {},
+      });
     } catch (err) {
       return this.error(res, err.message);
     }

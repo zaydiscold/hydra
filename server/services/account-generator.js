@@ -279,7 +279,8 @@ async function finalizeOtpSubmission(task, otpCode) {
         newAccount.id,
         sessionCookie,
         allDeviceCookies,
-        getJwtExpiry(sessionCookie),
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7-day realistic session TTL
+        { isNewLogin: true },
       );
 
       taskSupervisor.updateTask(task.taskId, {

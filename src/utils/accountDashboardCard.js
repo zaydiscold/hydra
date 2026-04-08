@@ -31,24 +31,24 @@ export function getAccountDashboardCardState(account) {
   }
 
   if (hasCredentials && needsSession) {
-    const unclear = account.sessionStatus === 'unknown';
     return {
       badgeVariant: 'low',
-      badgeLabel: unclear ? 'SESSION UNCLEAR' : 'SIGN IN',
+      badgeLabel: 'SIGN IN',
       isReady: false,
     };
   }
 
-  // Expiring sessions are still usable - Clerk auto-refreshes them
-  // Only show EXPIRING badge but keep isReady true since session works
-  if (account.sessionStatus === 'expiring' && account.status === 'ok') {
+  // 'unknown' = async Clerk probe still in flight — show neutral CHECKING badge, not SIGN IN.
+  if (account.sessionStatus === 'unknown') {
     return {
-      badgeVariant: 'low',
-      badgeLabel: 'EXPIRING',
-      subtitle: 'Session will auto-refresh when used',
-      isReady: true,
+      badgeVariant: 'neutral',
+      badgeLabel: 'CHECKING…',
+      isReady: false,
     };
   }
+
+  // Note: 'expiring' only appears briefly (JWT has <2.5min left but not expired yet).
+  // Probe resolves to 'active' or 'expired' within seconds.
 
   if (account.status === 'ok' && account.hasManagementKey) {
     return {

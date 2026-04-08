@@ -74,6 +74,13 @@ export default function CodeRedemption({ addToast }) {
     error: null,
   });
   const didInitialLoadRef = useRef(false);
+  const [historyLogs, setHistoryLogs] = useState([]);
+
+  function fetchHistory() {
+    api.getRedemptionLogs()
+      .then(res => setHistoryLogs(Array.isArray(res?.data) ? res.data : []))
+      .catch(() => {}); // non-fatal
+  }
 
   const blockedAccountIds = useMemo(
     () => new Set((sessionPreflight.blocked || []).map((b) => b.accountId)),
@@ -92,6 +99,7 @@ export default function CodeRedemption({ addToast }) {
         setSelectAll(true);
       })
       .catch(err => addToast(err.message, 'error'));
+    fetchHistory();
   }, [addToast]);
 
   useEffect(() => {
@@ -253,6 +261,8 @@ export default function CodeRedemption({ addToast }) {
     const successCount = Object.values(newResults).filter(v => v.status === STATUS.success).length;
     const total = Object.keys(newResults).length;
     addToast(`Done: ${successCount}/${total} redeemed`, successCount > 0 ? 'success' : 'error');
+    // Refresh history after a run
+    setTimeout(fetchHistory, 400);
   }
 
   function clearAll() {
@@ -270,32 +280,6 @@ export default function CodeRedemption({ addToast }) {
       <div className="page-header">
         <div>
           <h2>Code Redeemer</h2>
-          <p>Bulk redeem promo / credit codes across multiple accounts simultaneously</p>
-          <p className="text-muted" style={{ fontSize: '0.82rem', maxWidth: '44rem', marginTop: '0.5rem', lineHeight: 1.45 }}>
-            Redemption uses the OpenRouter <strong>dashboard</strong> session per account (Clerk cookies / tRPC), not the management API key.
-            Each selected account needs a session Hydra can refresh, or stored email and password for automatic re-login.
-          </p>
-        </div>
-        <div className="page-header-actions">
-          {hasResults && (
-            <button className="btn btn-secondary" onClick={clearAll} disabled={running}>Clear</button>
-          )}
-          <button
-            className="btn btn-primary"
-            onClick={handleRun}
-            disabled={
-              running ||
-              sessionPreflight.loading ||
-              codeList.length === 0 ||
-              selectedAccountIds.length === 0 ||
-              (sessionPreflight.blocked?.length > 0 && !sessionPreflight.error)
-            }
-          >
-            {running
-              ? <><div className="spinner-sm" /> Running ({pendingCount} left)…</>
-              : `[RUN] Redeem ${codeList.length > 0 ? `(${codeList.length} × ${selectedAccountIds.length})` : ''}`
-            }
-          </button>
         </div>
       </div>
 
@@ -310,27 +294,8 @@ export default function CodeRedemption({ addToast }) {
         </p>
       )}
       {sessionPreflight.blocked?.length > 0 && !sessionPreflight.loading && (
-        <div
-          className="card"
-          style={{
-            marginBottom: 'var(--space-md)',
-            borderColor: 'var(--status-error)',
-            background: 'color-mix(in srgb, var(--status-error) 8%, transparent)',
-            fontSize: '0.82rem',
-          }}
-        >
-          <strong style={{ color: 'var(--status-error)' }}>{sessionPreflight.blocked.length} account(s) cannot redeem</strong>
-          <p className="text-muted" style={{ margin: '0.35rem 0 0.5rem' }}>
-            They have no usable dashboard session and no stored password. Log in via Hydra or add credentials — management keys alone do not authorize code redemption.
-          </p>
-          <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
-            {sessionPreflight.blocked.map((b) => (
-              <li key={b.accountId}>
-                <span className="mono">{b.alias || b.accountId}</span>
-                {b.message ? <span className="text-muted"> — {b.message}</span> : null}
-              </li>
-            ))}
-          </ul>
+        <div style={{ marginBottom: 'var(--space-sm)', fontSize: '0.78rem', color: 'var(--status-error)', fontFamily: 'var(--font-mono)' }}>
+          ✕ {sessionPreflight.blocked.length} blocked: {sessionPreflight.blocked.map(b => b.alias || b.accountId.slice(0, 8)).join(', ')} — no session or password on file
         </div>
       )}
 
@@ -439,8 +404,33 @@ export default function CodeRedemption({ addToast }) {
             disabled={running}
             spellCheck={false}
           />
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', padding: '4px 0' }}>
-            Each code × all selected accounts = {codeList.length * selectedAccountIds.length} redemption{codeList.length * selectedAccountIds.length !== 1 ? 's' : ''}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+              {codeList.length * selectedAccountIds.length > 0
+                ? `${codeList.length} × ${selectedAccountIds.length} = ${codeList.length * selectedAccountIds.length} redemption${codeList.length * selectedAccountIds.length !== 1 ? 's' : ''}`
+                : ''}
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {hasResults && (
+                <button className="btn btn-secondary btn-sm" onClick={clearAll} disabled={running}>Clear</button>
+              )}
+              <button
+                className="btn btn-primary"
+                onClick={handleRun}
+                disabled={
+                  running ||
+                  sessionPreflight.loading ||
+                  codeList.length === 0 ||
+                  selectedAccountIds.length === 0 ||
+                  (sessionPreflight.blocked?.length > 0 && !sessionPreflight.error)
+                }
+              >
+                {running
+                  ? <><div className="spinner-sm" /> Running ({pendingCount} left)…</>
+                  : `Run ${codeList.length > 0 && selectedAccountIds.length > 0 ? `(${codeList.length} × ${selectedAccountIds.length})` : ''}`
+                }
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -481,6 +471,49 @@ export default function CodeRedemption({ addToast }) {
                         </td>
                       );
                     })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Redemption History — P16 */}
+      {historyLogs.length > 0 && (
+        <div style={{ marginTop: 'var(--space-xl)' }}>
+          <div className="section-header">
+            <h3>Recent Redemptions</h3>
+            <span className="section-count">{historyLogs.length}</span>
+          </div>
+          <div className="table-container animate-spring" style={{ maxHeight: 320, overflowY: 'auto' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Account</th>
+                  <th>Result</th>
+                  <th style={{ textAlign: 'right' }}>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyLogs.map((log, i) => (
+                  <tr key={i}>
+                    <td><code style={{ fontSize: '0.78rem' }}>{log.codePreview}</code></td>
+                    <td style={{ fontSize: '0.82rem' }}>{log.accountAlias}</td>
+                    <td>
+                      {log.success
+                        ? <span style={{ color: 'var(--status-success)', fontWeight: 700, fontSize: '0.82rem' }}>
+                            ✓ {log.creditsAdded != null ? `+$${log.creditsAdded}` : 'OK'}
+                          </span>
+                        : <span style={{ color: 'var(--status-error)', fontSize: '0.78rem' }} title={log.message}>
+                            ✕ {log.message?.slice(0, 28) || 'Failed'}
+                          </span>
+                      }
+                    </td>
+                    <td style={{ textAlign: 'right', fontSize: '0.72rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                      {log.at ? new Date(log.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </td>
                   </tr>
                 ))}
               </tbody>

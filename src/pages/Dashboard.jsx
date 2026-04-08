@@ -5,6 +5,7 @@ import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
 import { accountNeedsSession } from '../utils/accountSession';
 import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
+import { timeAgo } from '../utils/time';
 import { 
   WalletIcon, 
   CreditsIcon, 
@@ -25,20 +26,22 @@ const AuthBadge = memo(function AuthBadge({ method, hasManagementKey, hasCredent
   if (keyOnly) {
     return (
       <span
-        className="badge badge-info"
+        className="badge badge-method"
         title="Imported with management key only — no email/password or OTP on file"
       >
         [MGMT]
       </span>
     );
   }
-  if (method === 'oauth') return <span className="badge badge-neutral">[OAUTH]</span>;
-  if (method === 'api') return <span className="badge badge-info">[API]</span>;
-  if (method === 'email' || method === 'otp') return <span className="badge badge-neutral">[EMAIL]</span>;
+  if (method === 'oauth') return <span className="badge badge-method">[OAUTH]</span>;
+  if (method === 'api') return <span className="badge badge-method">[API]</span>;
+  if (method === 'otp') return <span className="badge badge-method">[OTP]</span>;
+  if (method === 'email') return <span className="badge badge-method">[EMAIL]</span>;
+  if (method === 'password') return <span className="badge badge-method">[PASS]</span>;
   if (method === 'unknown' || method == null || method === '') {
-    return <span className="badge badge-neutral">[UNKNOWN]</span>;
+    return <span className="badge badge-neutral" style={{ opacity: 0.5 }}>[?]</span>;
   }
-  return <span className="badge badge-success">[PASSWORD]</span>;
+  return <span className="badge badge-method">[{String(method).toUpperCase()}]</span>;
 });
 
 // ─── Memoized Session Status Dot ─────────────────────────────────────────────
@@ -66,7 +69,7 @@ const SessionDot = memo(function SessionDot({ status, hasManagementKey, hasCrede
     },
     unknown: {
       color: 'var(--text-tertiary)',
-      label: 'Session state unclear — re-authenticate if you use password login',
+      label: 'Probing session via Clerk — status will update in a moment',
       glow: false,
     },
   };
@@ -296,6 +299,7 @@ function getBalanceStatus(credits) {
   return 'ok';
 }
 
+
 // ─── Memoized Account Card ────────────────────────────────────────────────────
 const AccountCard = memo(function AccountCard({
   account,
@@ -329,6 +333,10 @@ const AccountCard = memo(function AccountCard({
   const handleLogin = useCallback((e) => { e.stopPropagation(); onLogin(account); }, [onLogin, account]);
 
   const sessionStatus = (liveStatuses && liveStatuses[account.id]) || account.sessionStatus || 'none';
+  // Merge live-probed session status so badge + actions use async truth, not JWT heuristic
+  const effectiveAccount = sessionStatus !== account.sessionStatus
+    ? { ...account, sessionStatus }
+    : account;
   const balStatus = account.status === 'error' ? 'error' : getBalanceStatus(account.credits);
   const pct = account.credits?.total > 0
     ? Math.max(0, (account.credits.remaining / account.credits.total) * 100)
@@ -336,7 +344,7 @@ const AccountCard = memo(function AccountCard({
   const provisioning = provisioningIds.has(account.id);
   const needsKey = !account.hasManagementKey;
   const needsSession = accountNeedsSession(sessionStatus, { hasCredentials: account.hasCredentials });
-  const cardState = getAccountDashboardCardState(account);
+  const cardState = getAccountDashboardCardState(effectiveAccount);
   const showCardActions =
     (needsSession && account.hasCredentials)
     || (needsKey && account.hasCredentials && !needsSession);
@@ -366,9 +374,12 @@ const AccountCard = memo(function AccountCard({
         </div>
       </div>
 
-      {account.email && (
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>
-          {account.email}
+      {(account.email || account.lastLoginAt) && (
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <span>{account.email}</span>
+          {account.lastLoginAt && sessionStatus !== 'none' && sessionStatus !== 'expired' && (
+            <span style={{ opacity: 0.6, whiteSpace: 'nowrap' }}>in {timeAgo(account.lastLoginAt)}</span>
+          )}
         </div>
       )}
 
@@ -433,6 +444,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
   const [provisioningIds, setProvisioningIds] = useState(new Set());
   const [liveStatuses, setLiveStatuses] = useState({}); // accountId → live-probed status
   const didInitialLoadRef = useRef(false);
+  const warnedExpiryRef = useRef(false);
 
   const fetchDashboard = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -453,12 +465,17 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  // Live session probe: after accounts load, confirm real Clerk status for each account.
-  // The dashboard bulk-list uses a sync heuristic; this fires the actual Clerk API check.
-  // Max 3 concurrent to avoid hammering Clerk.
+  // Live session probe: runs ONLY when server didn't include liveStatuses in the response.
+  // Since DashboardController now warms the cache server-side and returns liveStatuses,
+  // this probeAll is a fallback for older cached responses or errors.
   useEffect(() => {
     const accounts = data?.accounts;
     if (!accounts?.length) return;
+    // Server already did the work — use its liveStatuses, skip client-side probing
+    if (data?.liveStatuses && Object.keys(data.liveStatuses).length > 0) {
+      setLiveStatuses(data.liveStatuses);
+      return;
+    }
     let cancelled = false;
 
     async function probeAll() {
@@ -493,7 +510,21 @@ export default function Dashboard({ onSelectAccount, addToast }) {
 
     probeAll();
     return () => { cancelled = true; };
-  }, [data?.accounts]);
+  }, [data?.accounts, data?.liveStatuses]);
+
+  // P21 — Session expiry warning toast (fires once per load, skips already-expired)
+  useEffect(() => {
+    const accounts = data?.accounts;
+    // Only warn when liveStatuses is populated (async Clerk probe completed).
+    // JWT expiry is unreliable — sessions last days, JWTs last 2.5 min.
+    if (!accounts?.length || warnedExpiryRef.current || !Object.keys(liveStatuses).length) return;
+    const expiring = accounts.filter((a) => liveStatuses[a.id] === 'expiring');
+    if (expiring.length > 0) {
+      const detail = expiring.map((a) => a.alias).join(', ');
+      addToast(`⚠ ${expiring.length} session(s) expiring soon: ${detail}`, 'warning');
+      warnedExpiryRef.current = true;
+    }
+  }, [data?.accounts, liveStatuses, addToast]);
 
   // Auto-refresh every 5 minutes while page is visible
   useEffect(() => {
@@ -524,9 +555,19 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     setProvisioningIds(prev => { const s = new Set(prev); s.delete(accountId); return s; });
   }, [addToast, fetchDashboard]);
   
-  const handleLogin = useCallback((account) => {
+  const handleLogin = useCallback(async (account) => {
+    // Ghost session recovery: try silent __client refresh before opening OTP modal.
+    // ~60% of "expired" accounts still have a live client cookie.
+    try {
+      await api.silentRefreshSession(account.id);
+      addToast(`${account.alias}: session restored silently`, 'success');
+      fetchDashboard(true);
+      return;
+    } catch {
+      // Silent refresh failed — fall through to OTP modal
+    }
     setLoginModalAccount(account);
-  }, []);
+  }, [addToast, fetchDashboard]);
   
   const handleSelect = useCallback((accountId) => {
     onSelectAccount(accountId);

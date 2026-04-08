@@ -2,6 +2,9 @@
 
 Read `docs/AGENTS.md` first for full project context.
 
+## Master Plan
+**→ `~/.claude/plans/merry-chasing-naur.md`** — the living todo/plan/research doc. Always read this before starting work.
+
 ## Critical Rules
 
 ### Route/Controller Binding
@@ -27,6 +30,14 @@ After making changes to:
 - **`/v1` proxy, rotation policy, or optional gateway/sidecar documentation** → update `docs/API_REFERENCE.md` (proxy tables + behavior), `docs/ARCHITECTURE_DEEP_DIVE.md` (proxy/rotation), and `docs/CLIPROXYAPI_GATEWAY_SYNTHESIS.md` when the operator story or runbook changes; keep `SERVER_ARCHITECTURE.md` / `PROJECT_STRUCTURE.md` / `AGENTS.md` / root `README.md` links consistent if you add or rename docs.
 
 Also update the **relevant** doc(s) under `docs/` when a change is **material** to **UX**, **operator workflows**, or **audit/observability surfaces** (dashboards, tables, wizards, log viewers)—even when no HTTP route or JSON response shape changes. Example: Traffic Console column layout and labels should stay aligned with `docs/API_REFERENCE.md` and `docs/PROJECT_STRUCTURE.md`.
+
+## Research & Recon Documentation (MANDATORY)
+
+Every discovery — endpoint, session quirk, auth loophole, creative technique, UI trick — MUST be documented in `docs/`. Context windows die; files live. Use all available system tools for research: MCP servers, browser automation, DevTools, network capture, CLI recon tools.
+
+Each finding needs: what, how, why it matters, raw evidence (redact secrets), reproducibility. Write for a skilled operator who's never seen the system.
+
+**Triggers:** undocumented endpoints, auth/session mechanics differing from docs, creative approaches, rate limits or fingerprinting, reusable patterns, cookie/token scope discoveries.
 
 ## Stack
 

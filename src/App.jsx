@@ -5,7 +5,7 @@ import * as api from './api';
 import DevBackendHint from './components/DevBackendHint';
 import Dashboard from './pages/Dashboard.jsx';
 import AccountDetail from './pages/AccountDetail.jsx';
-import KeyManager from './pages/KeyManager.jsx';
+import Vault from './pages/Vault.jsx';
 import CodeRedemption from './pages/CodeRedemption.jsx';
 import Generator from './pages/Generator.jsx';
 import Settings from './pages/Settings.jsx';
@@ -288,7 +288,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon size={18} />, path: '/dashboard' },
   { id: 'bulk-auth', label: 'Bulk OTP', icon: <BulkAuthIcon size={18} />, path: '/bulk-auth' },
-  { id: 'keys', label: 'Vault', icon: <VaultIcon size={18} />, path: '/keys' },
+  { id: 'vault', label: 'Vault', icon: <VaultIcon size={18} />, path: '/vault' },
   { id: 'pool', label: 'Pool Manager', icon: <NetworkIcon size={18} />, path: '/pool' },
   { id: 'codes', label: 'Redeem', icon: <TicketIcon size={18} />, path: '/codes' },
   { id: 'generator', label: 'Generator', icon: <GeneratorIcon size={18} />, path: '/generator' },
@@ -301,6 +301,7 @@ export default function App() {
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const recentToastsRef = useRef(new Map());
   const navigate = useNavigate();
   const location = useLocation();
@@ -397,8 +398,9 @@ export default function App() {
     navigate('/dashboard');
   }, [navigate]);
 
-  const handleShutdown = useCallback(async () => {
-    if (!window.confirm('Shut down the Hydra background server?')) return;
+  const handleShutdown = useCallback(() => setShutdownConfirm(true), []);
+  const handleShutdownConfirmed = useCallback(async () => {
+    setShutdownConfirm(false);
     try { await api.shutdownServer(); } catch { /* ok */ }
     setAuthState('shutdown');
   }, []);
@@ -555,7 +557,7 @@ export default function App() {
                 <Route path="/account/:accountId" element={
                   <AccountDetail onBack={navigateBack} addToast={addToast} />
                 } />
-                <Route path="/keys" element={<KeyManager addToast={addToast} />} />
+                <Route path="/vault" element={<Vault addToast={addToast} />} />
                 <Route path="/pool" element={<PoolManager addToast={addToast} />} />
                 <Route path="/traffic" element={<Traffic addToast={addToast} />} />
                 <Route path="/codes" element={<CodeRedemption addToast={addToast} />} />
@@ -568,6 +570,19 @@ export default function App() {
           </main>
 
           <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+          {shutdownConfirm && (
+            <div className="modal-overlay" onClick={() => setShutdownConfirm(false)}>
+              <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-title">Shut down Hydra?</div>
+                <p className="modal-body">The background server will stop. You can restart it from the terminal.</p>
+                <div className="modal-actions">
+                  <button className="btn btn-ghost" onClick={() => setShutdownConfirm(false)}>Cancel</button>
+                  <button className="btn btn-danger" onClick={handleShutdownConfirmed}>Shut down</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </ErrorBoundary>

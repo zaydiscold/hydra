@@ -16,6 +16,9 @@ router.post('/bulk-matrix', requireUnlocked, CodeController.bulkMatrix.bind(Code
 // POST /api/codes/preflight — check selected accounts can obtain a dashboard session for redeem
 router.post('/preflight', requireUnlocked, CodeController.preflight.bind(CodeController));
 
+// GET /api/codes/history — P16 redemption history log
+router.get('/history', requireUnlocked, CodeController.getHistory.bind(CodeController));
+
 // GET /api/codes/endpoints — show what tRPC endpoints have been discovered
 router.get('/endpoints', requireUnlocked, CodeController.getEndpoints.bind(CodeController));
 

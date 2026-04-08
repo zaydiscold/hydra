@@ -11,7 +11,6 @@ import { tmpdir } from 'node:os';
 import { OR_BASE, config, USER_AGENT } from '../config.js';
 import {
   isSessionValid,
-  getJwtExpiry,
   signInWithPassword,
   refreshSession,
   validateSession,
@@ -56,6 +55,19 @@ const MGMT_KEY_RE = /sk-or-v1-[A-Za-z0-9_.-]+/;
  * redeploys with a new build hash.
  */
 const CREATE_MGMT_KEY_ACTION_HASH = config.HYDRA_MGMT_KEY_SERVER_ACTION_ID || '40a4728e6d23484cde9c2e629e0c0cc195dfbbd66b';
+
+/**
+ * Next.js Server Action hash for code redemption on /redeem.
+ * Captured 2026-04-07 via browser fetch interceptor — stable until OpenRouter redeploys.
+ * Override via HYDRA_REDEEM_ACTION_HASH env var if it changes.
+ */
+const REDEEM_ACTION_HASH = config.HYDRA_REDEEM_ACTION_HASH || '402002bec2b81db80981bde049958688557404e07a';
+
+/**
+ * next-router-state-tree header value for the /redeem page — required by Next.js Server Actions.
+ * Encodes the app router segment tree for the redeem route.
+ */
+const REDEEM_ROUTER_STATE_TREE = '%5B%22%22%2C%7B%22children%22%3A%5B%22(user)%22%2C%7B%22children%22%3A%5B%22(dashboard)%22%2C%7B%22children%22%3A%5B%22redeem%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%2Ctrue%5D';
 
 /**
  * Response body cache to prevent race conditions when multiple waitForResponse
@@ -635,7 +647,7 @@ async function captureProvisionDebugArtifacts(page, accountId) {
  * @param {string} clientCookie - Client cookie with __client and Cloudflare cookies
  * @returns {Promise<string|null>} Fresh JWT or null if refresh failed
  */
-async function getFreshJwt(sessionCookie, clientCookie) {
+export async function getFreshJwt(sessionCookie, clientCookie) {
   try {
     const cookieHeader = `__session=${sessionCookie}; ${clientCookie}`;
     const url = 'https://clerk.openrouter.ai/v1/client?_clerk_js_version=5.0.0';
@@ -789,9 +801,9 @@ function evaluateRedeemSessionReadiness(account, session) {
   // If we have a session cookie, it might be valid (JWT expiry is NOT reliable)
   // ensureSession() will validate via API call when needed
   if (hasSession) {
-    // Check JWT expiry for informational purposes only
+    // Check stored session expiry (realistic 7-day TTL, not JWT exp)
     const derivedExpiry = store.resolveEffectiveSessionExpiry({ sessionExpiry: session.sessionExpiry }, sessionCookie);
-    const jwtValid = isSessionValid(derivedExpiry || getJwtExpiry(sessionCookie));
+    const jwtValid = isSessionValid(derivedExpiry);
     
     if (jwtValid) {
       return { ready: true, detail: 'session_valid' };
@@ -1145,7 +1157,7 @@ function extractHtmlErrorInfo(html) {
 }
 
 /** Headers merged after defaults; use to override Referer per surface (e.g. redeem vs management keys). */
-async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrides = {}) {
+export async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrides = {}) {
   // Get fresh JWT before making tRPC call - OTP sessions have 60s JWTs
   const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
   const jwtToUse = freshJwt || sessionCookie; // Fallback to original if refresh failed
@@ -2691,12 +2703,104 @@ function trpcResponsePredicateForRedeemCode(response, code) {
   return true;
 }
 
-/** Order: tRPC (fast, bulk-friendly) then Playwright (UI parity, discovery). Browser is fallback, not default. */
+/**
+ * Redeem a promo code via the OpenRouter /redeem Next.js Server Action.
+ * Pure HTTP — no Playwright, no tRPC guessing. Captured 2026-04-07.
+ *
+ * Response format (RSC wire): line-delimited, action result on line starting with "1:"
+ * Success: 1:{"__kind":"OK",...}
+ * Failure: 1:{"__kind":"ERR","error":{"error":{"message":"...","code":...}}}
+ *
+ * @returns {{ success: boolean, result?: any, errorCode?: string, message?: string, source: string }}
+ */
+async function redeemCodeViaServerAction(sessionCookie, clientCookie, code) {
+  const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+  const jwtToUse = freshJwt || sessionCookie;
+
+  const device = clientCookie ? openRouterDashboardDeviceCookies(clientCookie) : '';
+  const cookieHeader = `__session=${jwtToUse}${device ? `; ${device}` : ''}`;
+
+  const url = `${OR_BASE}/redeem`;
+  const headers = {
+    'Content-Type': 'text/plain;charset=UTF-8',
+    'Accept': 'text/x-component',
+    'Next-Action': REDEEM_ACTION_HASH,
+    'next-router-state-tree': REDEEM_ROUTER_STATE_TREE,
+    'Cookie': cookieHeader,
+    'User-Agent': USER_AGENT,
+    'Origin': OR_ORIGIN,
+    'Referer': `${OR_ORIGIN}/redeem`,
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify([code]),
+  });
+
+  if (res.status === 404) {
+    throw new Error('Server Action hash stale — OpenRouter redeployed. Update REDEEM_ACTION_HASH.');
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`Redeem Server Action auth failed (${res.status}) — session may be expired`);
+  }
+
+  const text = await res.text();
+
+  // Parse RSC wire format: find the line with __kind
+  for (const line of text.split('\n')) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx < 0) continue;
+    const payload = line.slice(colonIdx + 1);
+    try {
+      const obj = JSON.parse(payload);
+      if (obj?.__kind === 'ERR') {
+        const msg = obj.error?.error?.message || obj.error?.message || 'Redemption failed';
+        const code404 = obj.error?.error?.code === 404 || obj.error?.code === 404;
+        const err = new Error(msg);
+        err.httpStatus = code404 ? 404 : 400;
+        err.redeemErrorKind = 'ERR';
+        err.redeemMeta = obj.error?.error?.metadata;
+        throw err;
+      }
+      if (obj?.__kind === 'OK' || obj?.success || obj?.credits != null) {
+        return { success: true, result: obj, source: 'server-action' };
+      }
+    } catch (e) {
+      if (e.redeemErrorKind) throw e;
+      // Not parseable JSON on this line — skip
+    }
+  }
+
+  // If we got text/x-component but no __kind, treat as unknown success (UI would show it worked)
+  if (res.headers.get('content-type')?.includes('x-component') || text.length > 10) {
+    return { success: true, result: { raw: text.slice(0, 200) }, source: 'server-action' };
+  }
+
+  throw new Error(`Redeem Server Action returned unrecognised response (status=${res.status})`);
+}
+
+/** Order: Server Action (fast HTTP) → cached tRPC → tRPC candidates → Playwright fallback */
 export async function redeemCode(userId, accountId, code) {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
 
   // Context for Cloudflare cookie migration
   const migrationContext = { userId, accountId };
+
+  // ── Step 0: Server Action (pure HTTP, confirmed working 2026-04-07) ──────────
+  try {
+    const saResult = await redeemCodeViaServerAction(sessionCookie, clientCookie, code);
+    if (saResult.success) return saResult;
+  } catch (err) {
+    const stale = err.message?.includes('stale');
+    if (stale) {
+      console.warn('[dashboard-api] Redeem Server Action hash stale — falling back to tRPC/Playwright');
+    } else if (isPermanentError(err) || err.redeemErrorKind === 'ERR') {
+      return redeemFailurePayload('server-action', err);
+    } else {
+      console.warn(`[dashboard-api] Redeem Server Action failed: ${err.message} — falling back`);
+    }
+  }
 
   const endpoints = await store.getDiscoveredEndpoints();
   if (endpoints.redeemCode) {
@@ -2714,7 +2818,38 @@ export async function redeemCode(userId, accountId, code) {
     }
   }
 
-  const candidates = ['credits.redeemCode', 'credits.redeem', 'credits.applyCode', 'voucher.redeem', 'code.redeem', 'promo.redeem', 'account.redeem'];
+  // Expanded candidate list — sorted by likelihood based on OpenRouter Next.js tRPC naming patterns.
+  // Route format: <router>.<procedure> (Next.js App Router tRPC, batched POST to /api/trpc/<route>?batch=1)
+  // Discovery: run a live redeem in DevTools → Network tab, filter "trpc", capture POST body + URL.
+  // The captured route is auto-persisted to Discovery table and tried first next time.
+  const candidates = [
+    // Most likely: credits router with code/promo variants
+    'credits.redeemCode',
+    'credits.redeem',
+    'credits.applyCode',
+    'credits.applyPromoCode',
+    'credits.redeemPromoCode',
+    // Voucher/coupon/promo routers
+    'voucher.redeem',
+    'voucher.apply',
+    'coupon.redeem',
+    'coupon.apply',
+    'promo.redeem',
+    'promo.applyCode',
+    'promo.redeemCode',
+    // Generic code/account handlers
+    'code.redeem',
+    'code.apply',
+    'account.redeem',
+    'account.applyCode',
+    // User-scoped variants
+    'user.redeemCode',
+    'user.redeemPromoCode',
+    // Gift/referral variants
+    'giftCard.redeem',
+    'referral.redeem',
+    'referralCode.redeem',
+  ];
   for (const route of candidates) {
     try {
       const result = await trpcCallWithMigration(route, { code }, sessionCookie, clientCookie, REDEEM_TRPC_HEADERS, migrationContext);
@@ -2990,5 +3125,105 @@ export async function getUserProfile(sessionCookie, clientCookie) {
     return await trpcCall('user.me', null, sessionCookie, clientCookie);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Sync API key plaintexts for an account.
+ *
+ * Exploit path (fast): OpenRouter session-auth tRPC may expose full key strings
+ * since the session represents the user's own browser context — same auth the "Reveal"
+ * button uses. We try several candidate routes before falling back to Playwright.
+ *
+ * Fallback: Playwright navigates to /settings/keys, clicks every Reveal button,
+ * captures the revealed sk-or-v1-* strings, and stores them per hash.
+ *
+ * Returns: Array of { hash, name, synced: bool, source: 'trpc'|'playwright' }
+ */
+export async function syncApiKeys(userId, accountId) {
+  const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
+
+  // ── Fast path: probe session-auth tRPC routes that might expose plaintexts ──
+  const keyListCandidates = [
+    'apiKey.list',
+    'user.apiKeys',
+    'user.keys',
+    'apiKeys.list',
+    'key.list',
+  ];
+
+  for (const route of keyListCandidates) {
+    try {
+      const result = await trpcCall(route, {}, sessionCookie, clientCookie);
+      if (!result) continue;
+      // Look for array of objects with a key/plaintext/secret field
+      const items = Array.isArray(result) ? result : (result.keys || result.data || result.items || []);
+      if (!Array.isArray(items) || items.length === 0) continue;
+      const withKey = items.filter(k => k.key || k.secret || k.plaintext);
+      if (withKey.length === 0) continue;
+      // Score — we found plaintext keys via tRPC
+      return withKey.map(k => ({
+        hash: k.hash || k.id,
+        name: k.name || k.label,
+        plaintextKey: k.key || k.secret || k.plaintext,
+        synced: true,
+        source: 'trpc',
+      }));
+    } catch {
+      // next candidate
+    }
+  }
+
+  // ── Fallback: Playwright scrape of /settings/keys ──
+  return await syncApiKeysViaPlaywright(sessionCookie, clientCookie);
+}
+
+async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
+  const { chromium } = await import('playwright');
+  const headless = !config.HYDRA_PLAYWRIGHT_HEADED;
+  const browser = await chromium.launch({ headless });
+  const results = [];
+
+  try {
+    const context = await browser.newContext({
+      userAgent: USER_AGENT,
+      extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+    });
+
+    const cookies = openRouterDashboardDeviceCookies(sessionCookie, clientCookie);
+    await context.addCookies(cookies.map(([name, value]) => ({
+      name, value, domain: OR_HOSTNAME, path: '/', secure: true, httpOnly: false, sameSite: 'Lax',
+    })));
+
+    const page = await context.newPage();
+    await page.goto(`${OR_ORIGIN}/settings/keys`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // Intercept: some Reveal buttons fire an XHR/tRPC call returning the plaintext.
+    // Also scan page HTML for already-visible sk-or-v1-* patterns.
+    const revealed = [];
+
+    // Try clicking all Reveal buttons
+    const revealBtns = await page.locator('button', { hasText: /reveal/i }).all();
+    for (const btn of revealBtns) {
+      try {
+        await btn.click({ timeout: 3000 });
+        await page.waitForTimeout(600);
+      } catch { /* skip */ }
+    }
+
+    // Extract any visible sk-or-v1-* strings from the DOM
+    const pageText = await page.content();
+    const keyMatches = [...pageText.matchAll(/sk-or-v1-[A-Za-z0-9_.-]{8,}/g)].map(m => m[0]);
+    for (const k of new Set(keyMatches)) {
+      revealed.push({ plaintextKey: k, synced: true, source: 'playwright' });
+    }
+
+    await context.close();
+    return revealed;
+  } catch (err) {
+    console.error('[syncApiKeys] Playwright scrape failed:', err.message);
+    return [];
+  } finally {
+    await browser.close().catch(() => {});
   }
 }

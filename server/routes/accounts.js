@@ -21,6 +21,7 @@ router.post('/:id/provision', requireUnlocked, (req, res) => controller.provisio
 router.post('/provision-all', requireUnlocked, (req, res) => controller.provisionAll(req, res));
 
 router.post('/:id/refresh', requireUnlocked, (req, res) => controller.refresh(req, res));
+router.post('/:id/refresh-login', requireUnlocked, (req, res) => controller.refreshAccountLogin(req, res));
 router.get('/:id/session-status', requireUnlocked, (req, res) => controller.getSessionStatus(req, res));
 
 router.patch('/:id', requireUnlocked, (req, res) => controller.updateAccount(req, res));
@@ -35,5 +36,9 @@ router.get('/:id/management-keys/best', requireUnlocked, (req, res) => controlle
 router.delete('/:id/management-keys/:keyId', requireUnlocked, (req, res) => controller.deleteManagementKey(req, res));
 
 router.get('/:id/balance', requireUnlocked, (req, res) => controller.getBalance(req, res));
+
+// P6 — Magic link (email_link strategy)
+router.post('/:id/magic-link/send', requireUnlocked, (req, res) => controller.sendMagicLink(req, res));
+router.get('/:id/magic-link/status/:signInId', requireUnlocked, (req, res) => controller.magicLinkStatus(req, res));
 
 export default router;

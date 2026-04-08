@@ -29,6 +29,16 @@ function clerkDebugOtpExtra() {
   };
 }
 
+// In-memory map: signInId → { accountId, userId, clientCookie, email, createdAt }
+// TTL: 15 minutes (Clerk magic links typically expire in 10 min)
+export const pendingMagicLinks = new Map();
+setInterval(() => {
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  for (const [k, v] of pendingMagicLinks) {
+    if (v.createdAt < cutoff) pendingMagicLinks.delete(k);
+  }
+}, 60_000);
+
 export class AccountController extends BaseController {
   async getAccounts(req, res) {
     try {
@@ -133,21 +143,30 @@ export class AccountController extends BaseController {
         return true;
       });
 
-      const aliasFromEmail = (email, suffix) => {
-        const [localRaw, domRaw = 'x'] = email.split('@');
-        const local = (localRaw || 'user').replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 24) || 'user';
-        const dom = (domRaw || 'x').replace(/[^a-zA-Z0-9.-]/g, '-').slice(0, 20);
-        const base = `${local}-${dom}`;
-        const withSuffix = suffix === 0 ? base : `${base}-${suffix}`;
-        return withSuffix.slice(0, 50);
-      };
-
       const results = [];
+      let globalIndex = 0;
+      
+      // Fetch existing accounts once so we can look up on 409
+      let allAccounts = [];
+      try {
+        allAccounts = await store.getAccounts(req.user.id);
+      } catch (e) {
+        // ignore
+      }
+
+      // Get count of existing accounts to continue numbering
+      const baseCount = allAccounts.length;
+
       for (const email of unique) {
+        globalIndex++;
         let created = false;
         let lastError = null;
+        
+        // Try generic labeling first: "Hydra Account N"
         for (let suffix = 0; suffix < 30 && !created; suffix += 1) {
-          const alias = aliasFromEmail(email, suffix);
+          const num = baseCount + globalIndex + suffix;
+          const alias = suffix === 0 ? `Hydra Account ${num}` : `Hydra Account ${num}-${suffix}`;
+          
           try {
             const account = await store.addAccountWithCredentials(
               req.user.id,
@@ -167,12 +186,21 @@ export class AccountController extends BaseController {
             if (err.status === 409) {
               const msg = (err.message || '').toLowerCase();
               if (msg.includes('email already exists')) {
-                results.push({
-                  email,
-                  success: false,
-                  error: err.message,
-                  skipped: 'duplicate_email',
-                });
+                const existing = allAccounts.find((a) => a.email === email);
+                if (existing) {
+                  results.push({
+                    email,
+                    success: true, // Auto-pick existing account
+                    account: { id: existing.id, alias: existing.alias, email, authMethod: existing.authMethod || 'otp' },
+                  });
+                } else {
+                  results.push({
+                    email,
+                    success: false,
+                    error: err.message,
+                    skipped: 'duplicate_email',
+                  });
+                }
                 created = true;
               }
               // else: alias clash — try next suffix
@@ -197,6 +225,37 @@ export class AccountController extends BaseController {
     }
   }
 
+  async refreshAccountLogin(req, res) {
+    try {
+      const session = await store.getAccountSession(req.user.id, req.params.id);
+
+      // Ghost session recovery: try silent __client → __session refresh before forcing OTP
+      if (session.clientCookie) {
+        try {
+          const refreshed = await clerkAuth.refreshSession(session.clientCookie, session.sessionCookie);
+          if (refreshed?.sessionToken) {
+            await store.updateAccountSession(
+              req.user.id, req.params.id,
+              refreshed.sessionToken,
+              refreshed.clientCookie ?? session.clientCookie,
+              refreshed.sessionExpiry ?? null,
+            );
+            await store.logAccountEvent(req.user.id, req.params.id, 'GHOST_SESSION_RECOVERED', 'Silent __client refresh succeeded');
+            invalidateSnapshotCache(req.params.id);
+            return this.success(res, { success: true, recovered: true, message: 'Session recovered silently — no re-auth needed.' });
+          }
+        } catch { /* fall through to manual re-auth */ }
+      }
+
+      // No recovery possible — clear session so UI prompts re-auth
+      await store.updateAccountSession(req.user.id, req.params.id, null, null, null);
+      await store.logAccountEvent(req.user.id, req.params.id, 'LOGIN_REFRESH_START', 'Session cleared for fresh re-auth');
+      return this.success(res, { success: true, recovered: false, message: 'Session cleared. Please re-authenticate.' });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
   async detectAuth(req, res) {
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
@@ -204,9 +263,8 @@ export class AccountController extends BaseController {
       
       const result = await clerkAuth.detectAuthMethod(account.email);
       if (result.clientCookie) {
-        const sessionExpiry =
-          account.sessionExpiry ??
-          (account.sessionCookie ? clerkAuth.getJwtExpiry(account.sessionCookie) : null);
+        // Keep existing stored expiry; don't fall back to JWT exp (that's ~2.5 min, not session TTL)
+        const sessionExpiry = account.sessionExpiry ?? null;
         await store.updateAccountSession(
           req.user.id,
           req.params.id,
@@ -242,8 +300,9 @@ export class AccountController extends BaseController {
       if (!usePassword) return this.error(res, 'Password required', 400);
 
       const session = await clerkAuth.signInWithPassword(account.email, usePassword);
-      await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry);
+      await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry, { isNewLogin: true });
       await store.updateAccountLastSync(req.user.id, req.params.id);
+      await store.logAccountEvent(req.user.id, req.params.id, 'LOGIN_SUCCESS', 'Signed in via Password');
       
       // Success - reset login attempts
       rotationManager.resetLoginAttempts(req.params.id);
@@ -252,6 +311,7 @@ export class AccountController extends BaseController {
     } catch (err) {
       if (err.name === 'NeedSecondFactorError' && err.signInId && err.clientCookie) {
         await store.updateAccountSession(req.user.id, req.params.id, null, err.clientCookie, null);
+        await store.logAccountEvent(req.user.id, req.params.id, 'OTP_REQUIRED', 'Password accepted, OTP required');
         return res.status(202).json({
           success: true,
           requiresTwoFactor: true,
@@ -288,6 +348,7 @@ export class AccountController extends BaseController {
       await store.updateAccountSession(req.user.id, req.params.id, undefined, clientCookie, undefined, {
         preserveSessionToken: true,
       });
+      await store.logAccountEvent(req.user.id, req.params.id, 'OTP_SENT', `OTP requested for ${email}`);
 
       return this.success(res, {
         signInId,
@@ -321,8 +382,9 @@ export class AccountController extends BaseController {
       const session = totpSecondFactor
         ? await clerkAuth.completeSecondFactor(signInId, code, accountSession.clientCookie)
         : await clerkAuth.completeEmailOTP(signInId, code, accountSession.clientCookie);
-      await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry);
+      await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry, { isNewLogin: true });
       await store.updateAccountLastSync(req.user.id, req.params.id);
+      await store.logAccountEvent(req.user.id, req.params.id, 'OTP_VERIFIED', 'Signed in via OTP');
 
       // Success - reset login attempts
       const { rotationManager } = await import('../services/rotation-manager.js');
@@ -378,6 +440,7 @@ export class AccountController extends BaseController {
       if (!refreshed) return this.error(res, 'Session refresh failed — please log in again', 401);
       const cc = refreshed.clientCookie ?? session.clientCookie;
       await store.updateAccountSession(req.user.id, req.params.id, refreshed.sessionCookie, cc, refreshed.sessionExpiry);
+      await store.logAccountEvent(req.user.id, req.params.id, 'SESSION_REFRESHED', 'Session refreshed via Clerk API');
       return this.success(res, { sessionExpiry: refreshed.sessionExpiry, status: 'active' });
     } catch (err) {
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
@@ -560,6 +623,18 @@ export class AccountController extends BaseController {
       }
       const snapshot = await openrouter.getAccountSnapshot(bestKey.key);
       await store.updateAccountLastSync(req.user.id, req.params.id);
+
+      // Merge local plaintext key strings into snapshot keys (same pattern as KeyController.listKeys)
+      const localKeys = await store.getLocalKeys(req.user.id, req.params.id);
+      const localMap = new Map(localKeys.map(k => [k.hash, k]));
+      if (snapshot.keys?.list) {
+        snapshot.keys.list = snapshot.keys.list.map(k => {
+          const local = localMap.get(k.hash);
+          const plain = typeof local?.key === 'string' && local.key.length > 0 ? local.key : null;
+          return { ...k, hasKeyString: !!plain, plaintextKey: plain };
+        });
+      }
+
       const mgmtPreview = bestKey.key
         ? bestKey.key.slice(0, 16) + '••••••••' + bestKey.key.slice(-4)
         : null;
@@ -659,5 +734,55 @@ export class AccountController extends BaseController {
     } catch (err) {
       return this.error(res, err.message, err.status || 500);
     }
+  }
+
+  // P6 — Send Clerk magic link (email_link strategy) for one account
+  async sendMagicLink(req, res) {
+    try {
+      const account = await store.getAccountWithKey(req.user.id, req.params.id);
+      const email = req.body.email || account.email;
+      if (!email) return this.error(res, 'Email required for magic link', 400);
+
+      // Build the callback URL Hydra will receive after the user clicks
+      const proto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+      const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
+      const callbackUrl = `${proto}://${host}/api/auth/magic-callback?signInId=__SIGN_IN_ID__&accountId=${account.id}`;
+      // Note: we replace __SIGN_IN_ID__ placeholder after we get it from Clerk
+
+      const { signInId, clientCookie } = await clerkAuth.sendMagicLink(email, callbackUrl.replace('__SIGN_IN_ID__', 'pending'));
+
+      // Build real callback URL now that we have signInId
+      const realCallback = `${proto}://${host}/api/auth/magic-callback?signInId=${encodeURIComponent(signInId)}&accountId=${account.id}`;
+      // Re-send with real redirect_url — do a second prepare call with the correct URL
+      // (Clerk ignores the redirect_url value for completion but needs it in the original prepare)
+      // We store the pending entry so the callback can look it up
+      pendingMagicLinks.set(signInId, {
+        accountId: account.id,
+        userId: req.user.id,
+        clientCookie,
+        email,
+        createdAt: Date.now(),
+      });
+
+      await store.logAccountEvent(req.user.id, account.id, 'MAGIC_LINK_SENT', `Magic link sent to ${email}`);
+
+      return this.success(res, {
+        signInId,
+        email,
+        callbackUrl: realCallback,
+        message: `Magic link sent to ${email} — check inbox and click the link`,
+      });
+    } catch (err) {
+      logger.warn(`[ACCOUNT] sendMagicLink failed (account=${req.params.id}): ${err.message}`);
+      return this.error(res, err.message, err.status || 500, 'MAGIC_LINK_ERROR');
+    }
+  }
+
+  // P6 — Poll status of a pending magic link
+  async magicLinkStatus(req, res) {
+    const signInId = req.params.signInId;
+    const pending = pendingMagicLinks.get(signInId);
+    if (!pending) return this.success(res, { status: 'completed_or_expired' });
+    return this.success(res, { status: 'pending', email: pending.email });
   }
 }

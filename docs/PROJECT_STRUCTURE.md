@@ -33,7 +33,7 @@ The backend is a Node.js Express server that manages the local SQLite database v
 - **`index.js`** — Server initialization and middleware pipeline.
 - **`routes/`** — API endpoint definitions (RESTful structure).
 - **`controllers/`** — Business logic for each route category.
-- **`services/`** — Core utilities (AES encryption, OpenRouter API wrappers, proxy logic).
+- **`services/`** — Core utilities (AES encryption, OpenRouter API wrappers, proxy logic). Key additions: `proxy-gate.js` (in-memory proxy kill switch, shared by `index.js` middleware and `SystemController`), `rotation-manager.js` (tracks `lastSyncAt` per pool reload for sync-status endpoint).
 - **`middleware/`** — Authentication (JWT), logging (Winston), and rate limiting.
 - **`validators/`** — Zod schemas for request validation.
 

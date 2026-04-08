@@ -8,4 +8,8 @@ router.get('/tasks', requireUnlocked, SystemController.getTasks.bind(SystemContr
 router.post('/tasks/:taskId/cancel', requireUnlocked, SystemController.cancelTask.bind(SystemController));
 router.get('/health', requireUnlocked, SystemController.getHealth.bind(SystemController));
 
+// Proxy kill switch
+router.get('/proxy-status', requireUnlocked, SystemController.getProxyStatus.bind(SystemController));
+router.post('/proxy-toggle', requireUnlocked, SystemController.toggleProxy.bind(SystemController));
+
 export default router;

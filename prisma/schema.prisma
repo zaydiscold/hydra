@@ -20,16 +20,20 @@ model User {
 }
 
 model Account {
-  id             String          @id @default(uuid())
-  openRouterId   String?
-  alias          String
-  sessionToken   String // Encrypted strings
-  config         String? // Encrypted JSON
-  userId         String
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  keys           Key[]
-  managementKeys ManagementKey[]
-  createdAt      DateTime        @default(now())
+  id                   String          @id @default(uuid())
+  openRouterId         String?
+  alias                String
+  sessionToken         String // Encrypted strings
+  config               String? // Encrypted JSON
+  userId               String
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keys                 Key[]
+  managementKeys       ManagementKey[]
+  createdAt            DateTime        @default(now())
+  // P15/P23 — persisted balance snapshot (avoids live API call on every load)
+  lastKnownBalance     Float?  // remaining credits in USD
+  totalCredits         Float?  // total credits allocated
+  lastKnownBalanceAt   DateTime? // when the above was last fetched
 }
 
 model Key {

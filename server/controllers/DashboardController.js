@@ -6,6 +6,7 @@ import { logger } from '../services/logger.js';
 import { assertManagementKey } from '../services/key-utils.js';
 import pLimit from 'p-limit';
 
+
 // Simple in-memory cache for account snapshots
 // TTL: 30 seconds to balance freshness vs performance
 const snapshotCache = new Map();
@@ -65,7 +66,9 @@ class DashboardController extends BaseController {
       await Promise.all(
         accounts.map(async (account) => {
           const meta = metaById.get(account.id);
-          const needsRefresh = meta?.sessionStatus === 'expiring' || meta?.sessionStatus === 'expired';
+          // 'unknown' = JWT stale but __client may be alive — try refresh proactively.
+          // 'expiring' = JWT about to die — refresh before it does.
+          const needsRefresh = meta?.sessionStatus === 'expiring' || meta?.sessionStatus === 'expired' || meta?.sessionStatus === 'unknown';
           if (!needsRefresh) return;
           
           const cc = account.clientCookie?.trim();
@@ -149,6 +152,11 @@ class DashboardController extends BaseController {
               
               // Cache successful snapshot
               setCachedSnapshot(account.id, result);
+              // Persist balance to DB (non-blocking, non-fatal)
+              store.updateAccountBalance(account.id, {
+                remaining: snapshot.credits?.remaining,
+                total: snapshot.credits?.total,
+              }).catch(() => {});
               return result;
               
             } catch (err) {
@@ -187,7 +195,33 @@ class DashboardController extends BaseController {
         { totalCredits: 0, totalUsed: 0, totalRemaining: 0, totalKeys: 0, totalActiveKeys: 0 },
       );
 
-      return this.success(res, { accounts: snapshots, totals });
+      // Warm session status cache server-side — probe all accounts in parallel.
+      // Results included in response so frontend skips its probeAll() round-trip.
+      const liveStatuses = {};
+      await Promise.allSettled(
+        snapshots.map(async (snapshot) => {
+          try {
+            const payload = await store.getStoredSessionStatusPayload(req.user.id, snapshot.id);
+            liveStatuses[snapshot.id] = payload.status;
+            // Merge live status into snapshot so response is immediately accurate
+            snapshot.sessionStatus = payload.status;
+            // Also add lastLoginAt if not already present from meta
+            if (!snapshot.lastLoginAt) {
+              const meta = metaById.get(snapshot.id);
+              if (meta?.lastLoginAt) snapshot.lastLoginAt = meta.lastLoginAt;
+            }
+            if (!snapshot.sessionExpiry) {
+              const meta = metaById.get(snapshot.id);
+              if (meta?.sessionExpiry) snapshot.sessionExpiry = meta.sessionExpiry;
+            }
+          } catch {
+            // Non-fatal: keep existing sessionStatus from meta
+          }
+        })
+      );
+
+      return this.success(res, { accounts: snapshots, totals, liveStatuses });
+
     } catch (err) {
       return this.error(res, err.message);
     }

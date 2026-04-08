@@ -26,6 +26,8 @@ class RotationManager {
     this.loginAttempts = new Map();
     this.loaded = false;
     this.userId = null;
+    /** @type {string|null} ISO timestamp of last pool reload */
+    this.lastSyncAt = null;
   }
 
   /** Called lazily on first request if pool was never initialized */
@@ -52,6 +54,7 @@ class RotationManager {
     this.pool = keys;
     this.index = 0;
     this.loaded = true;
+    this.lastSyncAt = new Date().toISOString();
     logger.info(`[POOL] Rotation pool reloaded: ${keys.length} active key(s)`);
   }
 
@@ -252,14 +255,20 @@ class RotationManager {
   getStatus() {
     const now = Date.now();
     const poolHashes = new Set(this.pool.map(k => k.hash));
-    const cooledHashes = [...this.cooldowns.entries()]
-      .filter(([hash, exp]) => poolHashes.has(hash) && exp > now)
-      .map(([h]) => h);
+    const cooledEntries = [...this.cooldowns.entries()]
+      .filter(([hash, exp]) => poolHashes.has(hash) && exp > now);
+    const cooledHashes = cooledEntries.map(([h]) => h);
+
+    // Per-hash cooldown map: { [hash]: expiresAtMs }
+    // Used by dashboard to render [LOCKED Xm] badges per account/key
+    const cooldownMap = Object.fromEntries(cooledEntries);
 
     return {
       totalPooled: this.pool.length,
       activeCooldowns: cooledHashes.length,
       available: Math.max(0, this.pool.length - cooledHashes.length),
+      lastSyncAt: this.lastSyncAt,
+      cooldownMap,
     };
   }
 
