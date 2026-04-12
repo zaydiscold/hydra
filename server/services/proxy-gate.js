@@ -8,10 +8,9 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __dirname = join(fileURLToPath(import.meta.url), '..');
-const STATE_FILE = join(__dirname, '..', 'data', 'proxy-gate.json');
+const DATA_DIR = join(process.cwd(), 'data');
+const STATE_FILE = join(DATA_DIR, 'proxy-gate.json');
 
 function loadPersistedState() {
   try {
@@ -24,8 +23,7 @@ function loadPersistedState() {
 
 function persistState(enabled) {
   try {
-    const dir = join(__dirname, '..', 'data');
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(STATE_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
   } catch (err) {
     // Non-fatal — log but don't crash

@@ -1,7 +1,9 @@
 export function classifyOpenRouterKey(key) {
   if (!key || typeof key !== 'string') return 'unknown';
   const trimmed = key.trim();
-  if (trimmed.startsWith('sk-or-mgmt-')) return 'management';
+  // Finding #47: OR management keys use sk-or-v1- prefix, NOT sk-or-mgmt-.
+  // MGMT_KEY_RE in dashboard-api.js was correct all along.
+  if (trimmed.startsWith('sk-or-v1-')) return 'management';
   if (trimmed.startsWith('sk-or-')) return 'standard';
   return 'unknown';
 }
