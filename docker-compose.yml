@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   hydra:
-    image: ghcr.io/zayd/hydra:latest
+    image: ghcr.io/zaydiscold/hydra:latest
     build: .
     # init:true provides Docker-native tini equivalent — properly forwards
     # SIGTERM to Node + Chromium, reaps zombie processes (Gotcha #2)
@@ -13,9 +11,11 @@ services:
       # /app/data covers: SQLite DB, local-secrets.json, redemption-log.json
       # This is the absolute source of truth for Hydra state (Gotcha #6)
       - hydra_data:/app/data
-      # Mount /tmp as tmpfs to prevent UnionFS exhaustion from Playwright
-      # debug artifacts when HYDRA_PROVISION_NETWORK_LOG=1 (Gotcha #7)
-      - hydra_tmp:/tmp
+    # RAM-backed tmpfs for /tmp — prevents UnionFS (Overlay2) exhaustion from
+    # Playwright debug traces/network logs when HYDRA_PROVISION_NETWORK_LOG=1.
+    # tmpfs is not a volume — it's a per-container RAM mount, cleared on stop. (Gotcha #7)
+    tmpfs:
+      - /tmp:size=256m,mode=1777
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/app/data/hydra.db
@@ -37,4 +37,3 @@ services:
 
 volumes:
   hydra_data:
-  hydra_tmp:
