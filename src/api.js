@@ -167,7 +167,6 @@ export function hasToken() {
 
 // Dashboard
 export const getDashboard = () => request('/dashboard');
-export const refreshDashboard = () => request('/dashboard');
 
 // Accounts
 export const getAccounts = () => request('/accounts');

@@ -8,6 +8,8 @@
  * - Usage statistics
  */
 
+import crypto from 'node:crypto';
+
 import { prisma } from './db.js';
 import { encrypt, decrypt } from './storage-codec.js';
 
@@ -19,14 +21,12 @@ import { encrypt, decrypt } from './storage-codec.js';
  * @param {Object} metadata - Additional metadata (expiresAt, etc)
  */
 export async function storeManagementKey(accountId, key, name, metadata = {}) {
-  // Validate key format
-  if (!key || !key.startsWith('sk-or-v1-')) {
-    throw new Error('Invalid key format - must start with sk-or-v1-');
+  // Reject empty, preview/masked keys (contain ... or too short to be real)
+  if (!key || key.length < 20) {
+    throw new Error('Key too short or empty — full key required');
   }
-  
-  // Reject preview/masked keys (they contain ... in the middle or are too short)
-  if (key.includes('...') || key.length < 40) {
-    throw new Error(`Rejecting masked/preview key (length: ${key.length}) - full key required, not preview`);
+  if (key.includes('...')) {
+    throw new Error(`Rejecting masked/preview key (length: ${key.length}) — full key required, not preview`);
   }
 
   // Encrypt the key
@@ -165,31 +165,8 @@ export async function revokeManagementKey(keyId) {
   });
 }
 
-/**
- * Get the best available key for an account (most recently created active key)
- * @param {string} accountId
- * @returns {Object|null} Key with decrypted value
- */
-export async function getBestKey(accountId) {
-  const key = await prisma.managementKey.findFirst({
-    where: {
-      accountId,
-      status: 'active'
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-
-  if (!key) return null;
-
-  return {
-    id: key.id,
-    accountId: key.accountId,
-    key: decrypt(key.encryptedKey),
-    name: key.name,
-    status: key.status,
-    createdAt: key.createdAt
-  };
-}
+/** Alias for getBestManagementKey — kept for call-site compat. */
+export const getBestKey = getBestManagementKey;
 
 /**
  * Check if account has any active keys
@@ -226,7 +203,7 @@ export async function provisionAndStoreKey(deviceId, accountId, name) {
   // Store it
   const stored = await storeManagementKey(accountId, result.key, name, {
     provisionedAt: new Date().toISOString(),
-    via: 'playwright'
+    via: result.source ?? 'unknown'
   });
 
   return {

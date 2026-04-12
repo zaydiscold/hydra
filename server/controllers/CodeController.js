@@ -4,6 +4,7 @@ import * as dashboardApi from '../services/dashboard-api.js';
 import { z } from 'zod';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { addRedemptionRecord, getRedemptionRecords } from '../services/redemption-log.js';
+import { runInBatches } from '../services/batch-runner.js';
 
 const redeemSchema = z.object({
   accountId: z.string().min(1, 'accountId is required'),
@@ -81,30 +82,30 @@ class CodeController extends BaseController {
         'batch_code_work',
         req.user.id,
         async () => {
-          const batchResults = [];
-          for (const assignment of assignments) {
+          return runInBatches(assignments, async (assignment) => {
             const { accountId, code } = assignment;
             try {
               const account = await store.getAccountWithKey(req.user.id, accountId);
               const result = await dashboardApi.redeemCode(req.user.id, accountId, code);
-              batchResults.push({ accountId, alias: account.alias, code, ...result, status: 'fulfilled' });
+              const payload = { accountId, alias: account.alias, code, ...result, status: 'fulfilled' };
               // P16 — log success
               try { addRedemptionRecord({ code, accountId, accountAlias: account.alias, success: true, message: result?.message, creditsAdded: result?.creditsAdded ?? null }); } catch { /* non-fatal */ }
+              return payload;
             } catch (err) {
               const { errorCode, message } = dashboardApi.classifyRedeemFailure(err.message, err);
-              batchResults.push({
+              const payload = {
                 accountId,
                 code,
                 error: message,
                 message,
                 status: 'rejected',
                 errorCode,
-              });
+              };
               // P16 — log failure
               try { addRedemptionRecord({ code, accountId, accountAlias: accountId, success: false, message }); } catch { /* non-fatal */ }
+              return payload;
             }
-          }
-          return batchResults;
+          });
         },
         { operation: 'bulk_matrix_redeem', size: assignments.length },
       );

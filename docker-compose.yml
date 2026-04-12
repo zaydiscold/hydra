@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  hydra:
+    image: ghcr.io/zayd/hydra:latest
+    build: .
+    # init:true provides Docker-native tini equivalent — properly forwards
+    # SIGTERM to Node + Chromium, reaps zombie processes (Gotcha #2)
+    init: true
+    ports:
+      - "3001:3001"
+    volumes:
+      # /app/data covers: SQLite DB, local-secrets.json, redemption-log.json
+      # This is the absolute source of truth for Hydra state (Gotcha #6)
+      - hydra_data:/app/data
+      # Mount /tmp as tmpfs to prevent UnionFS exhaustion from Playwright
+      # debug artifacts when HYDRA_PROVISION_NETWORK_LOG=1 (Gotcha #7)
+      - hydra_tmp:/tmp
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/hydra.db
+      - HYDRA_PLAYWRIGHT_NO_SANDBOX=1
+      - HYDRA_DOCKERIZED=1
+      # WARNING: Setting these to 1 on a persistent container will fill /tmp
+      # with Playwright traces and network logs. Use 0 in production. (Gotcha #7)
+      - HYDRA_PROVISION_NETWORK_LOG=0
+      - HYDRA_PROVISION_DEBUG=0
+    restart: unless-stopped
+    # NOTE: If you need external webhook ingress (e.g., Clerk push events),
+    # you must expose this container to the internet via Cloudflare Tunnels
+    # (cloudflared) or Ngrok. Docker NAT blocks inbound hooks. (Gotcha #8)
+    #
+    # WARNING: Running on a public VPS (DigitalOcean, AWS, Linode) changes
+    # your IP ASN to a datacenter range. Cloudflare may trigger Turnstile
+    # CAPTCHAs or 403 responses for automated Playwright provisioning.
+    # Consider routing through a residential proxy for account generation. (Gotcha #5)
+
+volumes:
+  hydra_data:
+  hydra_tmp:

@@ -27,7 +27,7 @@ import { startRequestLogRetention, stopRequestLogRetention } from './services/re
 import { taskSupervisor } from './services/task-supervisor.js';
 import { enforceLegacyStorageReset } from './services/legacy-storage.js';
 import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
-import { startSessionRefresher } from './services/session-refresher.js';
+import { startSessionRefresher, stopSessionRefresher } from './services/session-refresher.js';
 import { proxyGate } from './services/proxy-gate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -36,6 +36,12 @@ let server = null;
 let shutdownInFlight = false;
 
 // Proxy kill switch state lives in services/proxy-gate.js to avoid circular imports
+
+// Trust the Docker internal bridge / reverse proxy to prevent rate-limit global lockouts
+// (Gotcha #1: Without this, all Docker requests appear from 172.x.x.x → rate limiter locks out ALL users)
+if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1') {
+  app.set('trust proxy', 1);
+}
 
 // Standard middleware
 app.use(cors());
@@ -103,6 +109,7 @@ async function gracefulShutdown(source = 'unknown') {
   logger.info(`[SHUTDOWN] Starting graceful shutdown (${source})`);
   stopPinger();
   stopRequestLogRetention();
+  stopSessionRefresher();
 
   try {
     await taskSupervisor.shutdown();

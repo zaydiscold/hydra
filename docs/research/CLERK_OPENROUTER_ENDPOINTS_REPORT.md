@@ -313,10 +313,10 @@ node scripts/capture-mgmt-key-network.mjs
 
 ### 7.1 Flow Order
 
-1. **Try cached tRPC route** (if discovered previously)
-2. **Try candidate tRPC routes** (list of 12 procedures)
-3. **Try REST API endpoints** (4 endpoints)
-4. **Try Server Action replay** (if `HYDRA_PROVISION_SERVER_ACTION_REPLAY=1`)
+1. **Try Server Action replay** (current primary path)
+2. **Try cached tRPC route** (if discovered previously)
+3. **Try candidate tRPC routes** (list of 12 procedures)
+4. **Try REST API endpoints** (4 endpoints)
 5. **Fall back to Playwright browser automation**
 
 ### 7.2 Key Implementation Files
@@ -332,7 +332,7 @@ node scripts/capture-mgmt-key-network.mjs
 
 | Variable | Purpose |
 |----------|---------|
-| `HYDRA_PROVISION_SERVER_ACTION_REPLAY` | Enable Server Action replay |
+| `HYDRA_PROVISION_SERVER_ACTION_REPLAY` | Reserved compatibility flag; current code attempts Server Action replay first regardless |
 | `HYDRA_MGMT_KEY_SERVER_ACTION_ID` | Captured Next-Action ID |
 | `HYDRA_PROVISION_NETWORK_LOG` | Enable network logging |
 | `HYDRA_PROVISION_DEBUG` | Enable debug artifacts |

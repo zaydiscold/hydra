@@ -56,7 +56,7 @@ export default function Settings({ addToast }) {
         </div>
         {/* Inline status strip */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
-          <span>v1.2.4</span>
+          <span>v{import.meta.env.VITE_APP_VERSION ?? 'dev'}</span>
           <span>AES-256-GCM</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--status-success)' }}>
             <span className="status-dot success" style={{ width: 6, height: 6 }} />

@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { rmSync } from 'node:fs';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { prisma } from './db.js';
@@ -50,7 +50,7 @@ export async function nukeSystem() {
 
   // Remove the entire runtime data directory so any secrets/artifacts from
   // older storage layouts disappear in one pass.
-  rmSync(DATA_DIR, { force: true, recursive: true });
+  await fs.rm(DATA_DIR, { force: true, recursive: true });
   restartRequired = true;
 
   return {

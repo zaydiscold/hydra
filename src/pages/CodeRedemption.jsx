@@ -167,8 +167,8 @@ export default function CodeRedemption({ addToast }) {
     return codes.split('\n').map(c => c.trim()).filter(Boolean);
   }, [codes]);
 
-  function resultKey(codeIdx, accountId) {
-    return `${codeIdx}_${accountId}`;
+  function resultKey(code, accountId) {
+    return `${code}_${accountId}`;
   }
 
   async function handleRun() {
@@ -204,7 +204,7 @@ export default function CodeRedemption({ addToast }) {
     for (let ci = 0; ci < codesToRun.length; ci++) {
       const code = codesToRun[ci];
       for (const accountId of accountIdsToRun) {
-        const key = resultKey(ci, accountId);
+        const key = resultKey(code, accountId);
         const pendingResult = { status: STATUS.pending };
         newResults[key] = pendingResult;
         const bucketKey = `${accountId}::${code}`;
@@ -248,9 +248,7 @@ export default function CodeRedemption({ addToast }) {
     } catch (err) {
       const errorMessage = err.message || 'Bulk redeem failed';
       for (const assignment of assignments) {
-        const codeIdx = codesToRun.findIndex((c) => c === assignment.code);
-        if (codeIdx === -1) continue;
-        const key = resultKey(codeIdx, assignment.accountId);
+        const key = resultKey(assignment.code, assignment.accountId);
         newResults[key] = { status: STATUS.error, error: errorMessage };
       }
       addToast(errorMessage, 'error');
@@ -455,10 +453,10 @@ export default function CodeRedemption({ addToast }) {
               </thead>
               <tbody>
                 {codeList.map((code, ci) => (
-                  <tr key={ci}>
+                  <tr key={code}>
                     <td><code style={{ fontSize: '0.78rem' }}>{code}</code></td>
                     {selectedAccountIds.map(accountId => {
-                      const key = resultKey(ci, accountId);
+                      const key = resultKey(code, accountId);
                       const r = results[key] || {};
                       return (
                         <td key={accountId}>

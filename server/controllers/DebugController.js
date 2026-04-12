@@ -352,11 +352,26 @@ class DebugController extends BaseController {
       const { sessionCookie, clientCookie } = session;
       const OR_ORIGIN = new URL(OR_BASE).origin;
 
-      // Fire two mutations: set bio to something, then back to ''
+      // Read current bio first, then write it back unchanged (true no-op).
       // The goal is a new JWT being issued, not a visible profile change.
+      let currentBio = '';
+      try {
+        const profileUrl = `${OR_BASE}/api/trpc/user.getProfile?batch=1`;
+        const profileRes = await fetch(profileUrl, {
+          headers: {
+            'Cookie': `__session=${sessionCookie}; __client=${clientCookie}`,
+            'Origin': OR_ORIGIN,
+            'Referer': `${OR_ORIGIN}/settings`,
+            'x-trpc-source': 'nextjs-react',
+          },
+        });
+        const profileData = await profileRes.json().catch(() => null);
+        currentBio = profileData?.[0]?.result?.data?.json?.bio ?? '';
+      } catch { /* best-effort — proceed with empty bio */ }
+
       const results = [];
 
-      for (const bio of ['', ' ', '']) {
+      for (const bio of [currentBio, currentBio]) {
         const url = `${OR_BASE}/api/trpc/user.updateProfile?batch=1`;
         try {
           const r = await fetch(url, {
@@ -415,11 +430,12 @@ class DebugController extends BaseController {
 
       const CLERK_BASE_URL = 'https://clerk.openrouter.ai/v1';
       const clientCookie = session.clientCookie;
+      const cookieHeader = clientCookie.includes('=') ? clientCookie : `__client=${clientCookie}`;
 
       // Probe Clerk directly with the stored __client cookie
       const r = await fetch(`${CLERK_BASE_URL}/client`, {
         headers: {
-          'Cookie': `__client=${clientCookie}`,
+          'Cookie': cookieHeader,
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
           'Origin': 'https://openrouter.ai',
         },

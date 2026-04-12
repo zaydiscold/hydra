@@ -76,7 +76,11 @@ async function launchSignupFlow(task) {
   const promise = (async () => {
     try {
       taskSupervisor.updateTask(task.taskId, { status: 'launching_browser' });
-      const browser = await chromium.launch({ headless: true });
+      const launchArgs = [];
+      if (process.env.HYDRA_PLAYWRIGHT_NO_SANDBOX === '1') {
+        launchArgs.push('--no-sandbox', '--disable-setuid-sandbox');
+      }
+      const browser = await chromium.launch({ headless: true, args: launchArgs });
       const context = await browser.newContext({ userAgent: USER_AGENT });
       const page = await context.newPage();
       taskSupervisor.attachResources(task.taskId, { browser, context, page });

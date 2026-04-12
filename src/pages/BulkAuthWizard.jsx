@@ -37,6 +37,7 @@ function EmailLinkTab({ addToast }) {
   const [creating, setCreating] = useState(false);
   const [localError, setLocalError] = useState('');
   const pollRefs = useRef({});
+  const unmountedRef = useRef(false);
 
   function appendLog(msg) {
     setLogLines((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 100));
@@ -48,9 +49,11 @@ function EmailLinkTab({ addToast }) {
 
   // Poll a single signInId until done/expired
   function startPolling(email, accountId, signInId) {
+    if (unmountedRef.current) return;
     // clear any existing
     if (pollRefs.current[email]) clearInterval(pollRefs.current[email]);
     pollRefs.current[email] = setInterval(async () => {
+      if (unmountedRef.current) { clearInterval(pollRefs.current[email]); return; }
       try {
         const res = await api.getMagicLinkStatus(accountId, signInId);
         const st = res?.data?.status ?? res?.status;
@@ -96,6 +99,7 @@ function EmailLinkTab({ addToast }) {
   // Cleanup fallback pollers on unmount
   useEffect(() => {
     return () => {
+      unmountedRef.current = true;
       for (const t of Object.values(pollRefs.current)) clearInterval(t);
     };
   }, []);

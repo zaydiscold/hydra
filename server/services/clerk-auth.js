@@ -603,7 +603,25 @@ function getSetCookieHeaderLines(headers) {
   return raw ? [raw] : [];
 }
 
-/** Merge ALL device cookies from Set-Cookie into stored jar (survives OTP / touch). */
+/**
+ * Extract new __client cookie value from Set-Cookie lines.
+ * Clerk does NOT invalidate old device cookies — old __client values remain valid.
+ * Returns the raw __client value if found, or null.
+ */
+export function extractNewClientCookie(setCookieLines) {
+  if (!setCookieLines || !Array.isArray(setCookieLines)) return null;
+  const parsed = parseCookies(setCookieLines);
+  const c = parsed['__client']?.trim();
+  return (c && c !== '') ? c : null;
+}
+
+/** Merge ALL device cookies from Set-Cookie into stored jar (survives OTP / touch).
+ *  COOKIE STACKING (Exploit #14): When a new __client cookie arrives from Set-Cookie
+ *  and differs from the one already in the jar, we do NOT overwrite. Instead, the
+ *  caller (store.js / session-refresher.js) is responsible for appending the new
+ *  cookie string to the clientCookies array. This function simply returns the
+ *  merged jar as a string (same as before), and the caller decides whether to stack.
+ */
 function clientCookieAfterSetCookieLines(prior, setCookieLines) {
   // Use parseAllDeviceCookies to preserve ALL cookies (Clerk + Cloudflare)
   const jar = parseAllDeviceCookies(prior);
@@ -1484,11 +1502,38 @@ export async function completeSecondFactor(signInId, totpCode, clientCookie) {
  * Avoids a full re-login if the session has expired but client cookie is still valid.
  * The expired __session is used by Clerk to identify which session to refresh.
  *
- * @param {string} clientCookie
+ * Exploit #14: Cookie stacking — if clientCookie is an array of {cookie, issuedAt},
+ * tries each newest-first and returns on the first success. Dead cookies are noted
+ * in the result so callers can prune them.
+ *
+ * @param {string|Array<{cookie: string, issuedAt: string}>} clientCookie - Single cookie string or stacked array
  * @param {string} [sessionCookie] - Optional expired __session cookie (highly recommended for refresh)
- * @returns {{ sessionCookie, clientCookie, sessionExpiry } | null}
+ * @returns {{ sessionCookie, clientCookie, sessionExpiry, deadClientCookies? } | null}
  */
 export async function refreshSession(clientCookie, sessionCookie) {
+  // Exploit #14: If caller passes a stacked array, try newest-first
+  if (Array.isArray(clientCookie) && clientCookie.length > 0) {
+    const deadClientCookies = [];
+    for (const entry of clientCookie) {
+      try {
+        const result = await clerkGetClientSession(entry.cookie, sessionCookie, {
+          debugPhase: 'refresh',
+          maxAttempts: GET_CLIENT_MAX_ATTEMPTS,
+          retryMs: GET_CLIENT_RETRY_MS,
+        });
+        if (result) {
+          return { ...result, deadClientCookies };
+        }
+      } catch {
+        // This cookie is dead — record it
+      }
+      deadClientCookies.push(entry);
+    }
+    // All cookies in the stack failed
+    return null;
+  }
+
+  // Single cookie string (original behavior)
   try {
     return await clerkGetClientSession(clientCookie, sessionCookie, {
       debugPhase: 'refresh',

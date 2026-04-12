@@ -55,6 +55,8 @@ const configSchema = z.object({
    * when creating a management key (Next-Action header value).
    */
   HYDRA_MGMT_KEY_SERVER_ACTION_ID: z.string().min(1).optional(),
+  /** Next.js Server Action hash for code redemption on /redeem. Override if OR redeploys. */
+  HYDRA_REDEEM_ACTION_HASH: z.string().min(1).optional(),
 });
 
 let parsedConfig;
@@ -82,6 +84,7 @@ try {
     HYDRA_PROVISION_VERBOSE: parseBoolean(process.env.HYDRA_PROVISION_VERBOSE),
     HYDRA_PROVISION_SERVER_ACTION_REPLAY: parseBoolean(process.env.HYDRA_PROVISION_SERVER_ACTION_REPLAY),
     HYDRA_MGMT_KEY_SERVER_ACTION_ID: process.env.HYDRA_MGMT_KEY_SERVER_ACTION_ID?.trim() || undefined,
+    HYDRA_REDEEM_ACTION_HASH: process.env.HYDRA_REDEEM_ACTION_HASH?.trim() || undefined,
   });
 } catch (err) {
   console.error('Invalid environment variables:', err.issues ?? err.errors ?? err);

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import ScrambleText from '../components/ScrambleText';
 import {
@@ -301,7 +302,7 @@ function KeyRow({ keyData, onToggle, onRegister, onDisable, onDelete }) {
 
 // ─── Account Row (collapsible) ────────────────────────────────────────────────
 
-function AccountRow({ account, onToggleKey, onToggleAccount, onRegister, onAutoProvision, onSyncKeys, onDisableKey, onDeleteKey }) {
+function AccountRow({ account, onToggleKey, onToggleAccount, onRegister, onAutoProvision, onSyncKeys, onDisableKey, onDeleteKey, onOpenAccount }) {
   const [expanded, setExpanded] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
@@ -425,6 +426,15 @@ function AccountRow({ account, onToggleKey, onToggleAccount, onRegister, onAutoP
               {provisioning ? <><div className="spinner-sm" /> Provisioning…</> : '⚡ Auto-attach'}
             </button>
           )}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={(e) => { e.stopPropagation(); onOpenAccount(account.id); }}
+            style={{ fontSize: '0.72rem', padding: '3px 10px' }}
+            title="Open this account's detail page for key creation and management"
+          >
+            Manage
+          </button>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
               <span style={{ color: 'var(--status-success)' }}>{pooledEligible.length}</span>
@@ -640,6 +650,7 @@ function EndpointCard({ masterKey, endpoint, modelCache, onRefreshModels, refres
 // ─── Pool Manager Page ────────────────────────────────────────────────────────
 
 export default function PoolManager({ addToast }) {
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
   const [poolStats, setPoolStats] = useState(null);
   const [masterKey, setMasterKey] = useState('');
@@ -1022,6 +1033,7 @@ export default function PoolManager({ addToast }) {
                   onSyncKeys={handleSyncKeys}
                   onDisableKey={handleDisableKey}
                   onDeleteKey={handleDeleteKey}
+                  onOpenAccount={(accountId) => navigate(`/account/${accountId}`)}
                 />
               </div>
             ))

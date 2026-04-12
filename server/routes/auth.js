@@ -96,7 +96,7 @@ router.get('/magic-callback', async (req, res) => {
           signInId: ${JSON.stringify(signInId)},
           accountId: ${JSON.stringify(pending.accountId)},
           email: ${JSON.stringify(pending.email)},
-        }, '*');
+        }, window.location.origin);
       }
     } catch (e) { /* cross-origin or blocked — fallback is the 5s poller */ }
 

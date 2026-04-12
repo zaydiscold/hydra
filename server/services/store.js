@@ -5,6 +5,7 @@ import { getProxyMasterSecret } from './local-secrets.js';
 import { decrypt, decryptConfig, encrypt, encryptConfig } from './storage-codec.js';
 import { logger } from './logger.js';
 import { refreshSession, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
+import { getBestManagementKey } from './management-key-store.js';
 
 // In-memory cache for live session probe results.
 // Key: accountId (string), Value: { status: string, expiresAt: number }
@@ -58,11 +59,13 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
   }
 
   // Live probe: call GET /v1/client with __client cookie — ground truth for session health.
-  // refreshSession returns non-null (with fresh JWT) if __client is valid, null if 401/dead.
+  // Exploit #14: Try stacked cookies newest-first until one works.
   if (hasClientCookie) {
     let status;
     try {
-      const result = await refreshSession(clientCookie, sessionCookie);
+      // Try latest clientCookie first
+      const latestCc = getLatestClientCookie(config) || clientCookie;
+      const result = await refreshSession(latestCc, sessionCookie);
       status = result ? 'active' : 'expired';
     } catch {
       status = 'error';
@@ -228,15 +231,16 @@ export async function getStoredSessionStatusPayload(userId, id) {
 export async function getAccounts(userId) {
   const accounts = await prisma.account.findMany({ where: { userId } });
 
-  return accounts.map((account) => {
+  return Promise.all(accounts.map(async (account) => {
     const config = readConfig(account);
     const { plain, decryptFailed } = readSessionPlainResult(account);
+    const storedManagementKey = config.managementKey || (await getBestManagementKey(account.id))?.key || null;
     return {
       id: account.id,
       alias: account.alias,
       email: config.email,
       authMethod: config.authMethod,
-      hasManagementKey: !!config.managementKey,
+      hasManagementKey: !!storedManagementKey,
       /** True when a non-empty password is stored (encrypted). OTP-only accounts are false. */
       passwordOnFile: !!config.password,
       hasCredentials: !!(config.email && (config.password || config.authMethod === 'otp' || config.authMethod === 'password')),
@@ -249,7 +253,7 @@ export async function getAccounts(userId) {
       events: config.events || [],
       createdAt: account.createdAt,
     };
-  });
+  }));
 }
 
 export async function getAccountWithKey(userId, id) {
@@ -257,24 +261,32 @@ export async function getAccountWithKey(userId, id) {
   if (!account) throw new Error('Account not found');
 
   const config = readConfig(account);
+  // Exploit #14: Cookie stacking — normalize clientCookies array
+  const clientCookiesStack = normalizeClientCookies(config);
+  const storedManagementKey = config.managementKey || (await getBestManagementKey(account.id))?.key || null;
   return {
     ...account,
     ...config,
+    clientCookies: clientCookiesStack,
     password: config.password,
     sessionCookie: readSessionToken(account),
-    managementKey: config.managementKey,
+    managementKey: storedManagementKey,
   };
 }
 
 export async function getAllAccountsWithKeys(userId) {
   const accounts = await prisma.account.findMany({ where: { userId } });
 
-  return accounts.flatMap((account) => {
+  const hydrated = await Promise.all(accounts.map(async (account) => {
     try {
       const config = readConfig(account);
+      // Exploit #14: Cookie stacking — normalize clientCookies array for hydrated accounts
+      const clientCookiesStack = normalizeClientCookies(config);
       return [{
         ...account,
         ...config,
+        clientCookies: clientCookiesStack,
+        managementKey: config.managementKey || (await getBestManagementKey(account.id))?.key || null,
         sessionCookie: readSessionToken(account),
       }];
     } catch (err) {
@@ -283,7 +295,9 @@ export async function getAllAccountsWithKeys(userId) {
       prisma.account.delete({ where: { id: account.id } }).catch(() => { });
       return [];
     }
-  });
+  }));
+
+  return hydrated.flat();
 }
 
 export async function addAccount(userId, alias, managementKey) {
@@ -360,7 +374,7 @@ export async function updateAccount(userId, id, updates) {
   const updated = await prisma.account.update({
     where: { id },
     data: {
-      alias: updates.alias || account.alias,
+      alias: updates.alias !== undefined ? updates.alias : account.alias,
       config: encryptConfig(config),
     },
   });
@@ -407,6 +421,78 @@ export async function logAccountEvent(userId, id, type, message) {
  * @param {boolean} [options.preserveSessionToken] - If true, do not write `sessionToken` (e.g. OTP start: refresh device cookie only)
  * @param {Record<string, number>} [options.cfCookieExpirations] - Cloudflare cookie expiration timestamps {cookieName: timestampMs}
  */
+/** Maximum stacked __client cookies per account (Exploit #14: Cookie stacking). */
+const MAX_STACKED_CLIENT_COOKIES = 25;
+
+/**
+ * Normalize config.clientCookie / config.clientCookies into the new array format.
+ * Backward compat: if readConfig returns a string clientCookie, convert to single-element array.
+ * Exploit #14: Cookie stacking — clientCookie string → clientCookies array of {cookie, issuedAt}.
+ */
+function normalizeClientCookies(config) {
+  // New format already present
+  if (Array.isArray(config.clientCookies) && config.clientCookies.length > 0) {
+    return config.clientCookies;
+  }
+  // Legacy: string clientCookie → single-element array
+  const cc = config.clientCookie ? String(config.clientCookie).trim() : '';
+  if (cc && cc !== 'undefined') {
+    const issuedAt = config.clientCookieIssuedAt || new Date().toISOString();
+    return [{ cookie: cc, issuedAt }];
+  }
+  // Neither — empty array
+  return [];
+}
+
+/**
+ * Append a new client cookie to the stack (Exploit #14).
+ * Does NOT overwrite existing cookies — stacks them newest-first.
+ * Enforces MAX_STACKED_CLIENT_COOKIES cap (25).
+ * @param {Array<{cookie: string, issuedAt: string}>} existing
+ * @param {string} newCookie - New __client cookie string from Set-Cookie
+ * @returns {Array<{cookie: string, issuedAt: string}>} Updated stack
+ */
+export function appendClientCookie(existing, newCookie) {
+  if (!newCookie || typeof newCookie !== 'string') return existing;
+  const trimmed = newCookie.trim();
+  if (!trimmed || trimmed === 'undefined') return existing;
+
+  const stack = Array.isArray(existing) ? [...existing] : normalizeClientCookies({ clientCookie: existing });
+
+  // Dedup: if this exact cookie string already exists, move it to front (renew)
+  const dupIdx = stack.findIndex(e => e.cookie === trimmed);
+  if (dupIdx >= 0) {
+    const [dup] = stack.splice(dupIdx, 1);
+    dup.issuedAt = new Date().toISOString();
+    stack.unshift(dup);
+    return stack.slice(0, MAX_STACKED_CLIENT_COOKIES);
+  }
+
+  // Append newest-first
+  stack.unshift({ cookie: trimmed, issuedAt: new Date().toISOString() });
+  return stack.slice(0, MAX_STACKED_CLIENT_COOKIES);
+}
+
+/**
+ * Get the most recent (newest) client cookie from the stack.
+ * Falls back to legacy config.clientCookie string for backward compat.
+ */
+export function getLatestClientCookie(config) {
+  const stack = normalizeClientCookies(config);
+  return stack.length > 0 ? stack[0].cookie : '';
+}
+
+/**
+ * Remove a dead client cookie from the stack by index.
+ * Returns the updated stack.
+ */
+export function removeClientCookieAtIndex(stack, index) {
+  if (!Array.isArray(stack) || index < 0 || index >= stack.length) return stack;
+  const updated = [...stack];
+  updated.splice(index, 1);
+  return updated;
+}
+
 export async function updateAccountSession(userId, id, sessionCookie, clientCookie, sessionExpiry, options = {}) {
   const preserveSessionToken = options.preserveSessionToken === true;
   const cfCookieExpirations = options.cfCookieExpirations;
@@ -414,9 +500,16 @@ export async function updateAccountSession(userId, id, sessionCookie, clientCook
   if (!account) throw new Error('Account not found');
 
   const config = readConfig(account);
+
+  // Exploit #14: Cookie stacking — append new clientCookie instead of overwrite.
+  // If clientCookie is provided and non-empty, stack it onto clientCookies array.
   if (clientCookie != null && String(clientCookie).trim() !== '' && String(clientCookie).trim() !== 'undefined') {
-    config.clientCookie = String(clientCookie).trim();
-    config.clientCookieIssuedAt = new Date().toISOString();
+    const newCookieStr = String(clientCookie).trim();
+    const existingStack = normalizeClientCookies(config);
+    config.clientCookies = appendClientCookie(existingStack, newCookieStr);
+    // Keep legacy clientCookie in sync for backward compat readers
+    config.clientCookie = config.clientCookies[0]?.cookie || config.clientCookie;
+    config.clientCookieIssuedAt = config.clientCookies[0]?.issuedAt || new Date().toISOString();
   }
 
   // Record when a new login session is established (not refreshes).
@@ -457,9 +550,12 @@ export async function getAccountSession(userId, id) {
   if (!account) throw new Error('Account not found');
 
   const config = readConfig(account);
+  // Exploit #14: Cookie stacking — return clientCookies array alongside legacy clientCookie
+  const clientCookiesStack = normalizeClientCookies(config);
   return {
     sessionCookie: readSessionToken(account),
     clientCookie: config.clientCookie,
+    clientCookies: clientCookiesStack,
     sessionExpiry: config.sessionExpiry,
     cfCookieExpirations: config.cfCookieExpirations || {},
     clientCookieIssuedAt: config.clientCookieIssuedAt || null,

@@ -59,7 +59,7 @@ The backend is a Node.js Express server that manages the local SQLite database v
 - **Icons.jsx** — Custom SVG icon set tailored for the space-age aesthetic.
 - **ScrambleText.jsx** — High-intensity visual effect for loading and transitions.
 - **ErrorBoundary.jsx** — Safety wrapper for resilient UI rendering.
-- **PasteManagementKeyModal.jsx** — Modal to paste an OpenRouter **management** key (**`sk-or-…`**, e.g. **`sk-or-mgmt-…`** or **`sk-or-v1-…`**) into the vault (**`updateAccount`** / **`PATCH /api/accounts/:id`**) when Key Manager cannot auto-provision (**`canPasteManagementKey`**). Client checks the **`sk-or-`** prefix for UX; server uses **`assertManagementKey`** (non-empty) and **`openrouter.getCredits()`** before persisting (OpenRouter is authority on invalid keys).
+- **PasteManagementKeyModal.jsx** — Modal to paste an OpenRouter **management** key (**`sk-or-…`**, currently **`sk-or-v1-…`**) into the vault (**`updateAccount`** / **`PATCH /api/accounts/:id`**) when Key Manager cannot auto-provision (**`canPasteManagementKey`**). Client checks the **`sk-or-`** prefix for UX; server uses **`assertManagementKey`** (non-empty) and **`openrouter.getCredits()`** before persisting (OpenRouter is authority on invalid keys).
 
 ---
 

@@ -80,18 +80,18 @@ Hydra’s `dashboard-api.js` matches this order: prefer `getByRole('textbox', { 
 
 ### Management keys: tRPC vs headless browser (compare / contrast)
 
-OpenRouter does **not** document a public REST endpoint to **create** a management key; the dashboard uses **internal** calls (historically **`POST /api/trpc/{procedure}?batch=1`**). Hydra mirrors that with **`trpcCall`** first, then **Chromium + Playwright** if replay fails.
+OpenRouter does **not** document a public REST endpoint to **create** a management key; the dashboard uses **internal** calls (historically **`POST /api/trpc/{procedure}?batch=1`**, currently observed as Next.js Server Action / RSC posts). Hydra tries Server Action replay first, then tRPC, REST, and finally Chromium + Playwright if replay fails.
 
 | | **Direct tRPC** (`createManagementKey` → `trpcCall`) | **Playwright** (`createManagementKeyViaPlaywright`) |
 |---|------------------------------------------------------|------------------------------------------------------|
-| **Role in Hydra** | **Primary** — cached procedure, then named candidates | **Fallback** — after all tRPC attempts miss or return unusable JSON |
+| **Role in Hydra** | **Fallback** — cached procedure, then named candidates after Server Action replay misses | **Final fallback** — after Server Action, tRPC, and REST attempts miss or return unusable JSON |
 | **Cost / latency** | One **`fetch`** per try; milliseconds, tiny memory | Launches browser, navigation, **~seconds**, **hundreds of MB** RAM per run |
 | **Bulk / many accounts** | Reasonable to call sequentially per account | **Expensive** — avoid N parallel browsers; Hydra runs one provision at a time per request |
 | **What breaks it** | Wrong procedure name, batch/superjson shape change, new required headers, session as HTML | DOM/a11y rename (**Create** / **Name** / **Save**), layout changes, anti-bot friction |
-| **Secret capture** | Parse JSON body for `sk-or-mgmt-…` fields (`key`, `managementKey`, etc.) | Prefer **`waitForResponse`** on **`/api/trpc/`** POST whose body includes the key **name**, then regex on response text; else scrape page text / visible key |
+| **Secret capture** | Parse JSON body for `sk-or-v1-…` fields (`key`, `managementKey`, etc.) | Prefer **`waitForResponse`** on management-key creation responses whose body includes the key **name**, then regex on response text; else scrape page text / visible key |
 | **Discovery** | First success (or Playwright interception) **persists** `createManagementKey.route` in the vault for next time | Manual or IDE browser sessions are for **capturing** procedure URLs, headers, and **accessibility names** — not for every user click in production; they also **do not** store the created key in Hydra (use **Provision** or **`PATCH`** paste) |
 
-**Verdict:** **tRPC is better for steady-state operation** (cheaper, faster, simpler). The **browser** (DevTools Network, Cursor browser snapshot, `playwright codegen`) is **better for discovery and refinement** when the internal API or UI drifts — i.e. it “refunds” tooling by turning a one-time human observation into code + cached route. **Playwright inside the API** stays as the **reliability net** when replay is wrong but the session is still valid.
+**Verdict:** **Server Action replay is the current primary path** because captures no longer show a management-key tRPC POST. **tRPC remains useful as a cheap fallback/discovery path** if OpenRouter serves the old procedure from another navigation. The **browser** (DevTools Network, Cursor browser snapshot, `playwright codegen`) is **better for discovery and refinement** when the internal API or UI drifts — i.e. it “refunds” tooling by turning a one-time human observation into code + cached route. **Playwright inside the API** stays as the **reliability net** when replay is wrong but the session is still valid.
 
 ---
 
@@ -229,9 +229,9 @@ Inspect `/_next/static/chunks/*.js` for tRPC router definitions and mutation sch
 | **Captured** | 2026-04-03 |
 | **tRPC create POST** | **None observed** in the capture window before UI automation timed out — no `POST …/api/trpc/…?batch=1` tied to opening **Create → Name → Save**. |
 | **App-route POST** | **`POST https://openrouter.ai/settings/management-keys`** — HTTP **200**, **`postData` empty or `[]`** (typical **Next.js RSC / Server Actions**; not JSON tRPC batch bodies). |
-| **Headers (when present)** | Standalone capture logs **`content-type`** and truncated **`next-action`** (if any) for same-origin POSTs — use for future **`HYDRA_PROVISION_SERVER_ACTION_REPLAY`** wiring. |
+| **Headers (when present)** | Standalone capture logs **`content-type`** and truncated **`next-action`** (if any) for same-origin POSTs — use when the baked-in Server Action hash drifts and **`HYDRA_MGMT_KEY_SERVER_ACTION_ID`** needs an override. |
 | **Playwright failure mode** | **`locator.click: Timeout`** — **`#headlessui-portal-root`** overlay (e.g. cookie/consent) **intercepted pointer events** on the main **Create** control. **Mitigation:** `dismissOpenRouterBlockingOverlays` in **`server/services/dashboard-api.js`** and the capture script (Escape + dismiss-like buttons) before clicking **Create**. |
-| **Hydra strategy** | Unchanged: **`trpcCall`** first (still valid if OpenRouter serves tRPC from other tabs or later navigation); **Playwright** after; optional **`tryManagementKeyServerActionReplay`** once **`Next-Action`** + body are captured. |
+| **Hydra strategy** | **Server Action replay** first; **`trpcCall`** after (still valid if OpenRouter serves tRPC from other tabs or later navigation); REST fallback; then **Playwright** after. |
 
 ---
 

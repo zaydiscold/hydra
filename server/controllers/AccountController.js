@@ -9,6 +9,7 @@ import { ProvisionKeyNotCapturedError } from '../services/dashboard-api.js';
 import { assertManagementKey } from '../services/key-utils.js';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { logger } from '../services/logger.js';
+import { runInBatches } from '../services/batch-runner.js';
 import { invalidateSnapshotCache } from './DashboardController.js';
 import {
   addAccountSchema,
@@ -544,16 +545,14 @@ export class AccountController extends BaseController {
         'batch_account_work',
         req.user.id,
         async () => {
-          const batchResults = [];
-          for (const account of eligible) {
+          return runInBatches(eligible, async (account) => {
             try {
               const result = await dashboardApi.createManagementKey(req.user.id, account.id);
-              batchResults.push({ id: account.id, alias: account.alias, ...result });
+              return { id: account.id, alias: account.alias, ...result };
             } catch (err) {
-              batchResults.push({ id: account.id, alias: account.alias, success: false, error: err.message });
+              return { id: account.id, alias: account.alias, success: false, error: err.message };
             }
-          }
-          return batchResults;
+          });
         },
         { operation: 'provision_all', size: eligible.length },
       );

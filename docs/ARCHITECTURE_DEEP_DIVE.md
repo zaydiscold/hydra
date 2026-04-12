@@ -121,24 +121,56 @@ The encryption and decryption helpers live under `server/services/storage-codec.
 
 ### Session expiry and dashboard session labels
 
-After any successful Clerk session resolution (password, email OTP, TOTP, or `refreshSession`), Hydra persists **`config.sessionExpiry`** as an ISO timestamp derived in **`server/services/clerk-auth.js`** via **`getJwtExpiry(sessionCookie)`**. That helper decodes the JWT **`exp`** claim when present. If the token is missing **`exp`**, is not three segments, or the payload cannot be decoded, Hydra still stores a **non-null** expiry by falling back to **24 hours** from the resolution time. That keeps **`ensureSession`** / **`isSessionValid`** and the UI from treating a good login as “session unclear” solely because the upstream JWT omitted **`exp`**.
+After any successful Clerk session resolution (password, email OTP, TOTP, or
+`refreshSession`), Hydra persists **`config.sessionExpiry`** as a realistic
+Clerk session TTL, currently seven days from the login or refresh. The short
+Clerk JWT **`exp`** is a proof-token lifetime, not the dashboard session
+lifetime. It is only a fallback for legacy rows and account-generation timing
+checks.
 
-**`server/services/store.js`** **`getSessionStatus`** (used by **`GET /api/accounts`**, **`GET /api/dashboard`**, **`GET /api/accounts/:id/session-status`**) maps vault state to **`sessionStatus`**: **`none`** if there is no non-empty decrypted session token (and no legacy **`config.sessionCookie`**); **`active`** if a token exists but **`sessionExpiry`** is missing or not a valid date (legacy rows); **`expiring`** / **`expired`** / **`active`** from **`sessionExpiry`** when the date is valid. The server **does not** emit **`unknown`** for “token present, expiry missing” anymore—that case is **`active`** so OTP and credential-based accounts do not look logged out after a successful verify. The React app may still handle **`unknown`** defensively if present from older cached responses.
+**`server/services/store.js`** **`resolveEffectiveSessionExpiry`** returns the
+stored **`config.sessionExpiry`** when present. It no longer takes the minimum
+of JWT **`exp`** and stored expiry. **`getSessionStatus`** uses cached live
+Clerk probes when available, then falls back to stored expiry. It returns
+**`expiring`** when the realistic session expiry is within
+**`SESSION_EXPIRING_SOON_MS`** (24 hours), **`expired`** when it is past,
+**`active`** when it is later, **`none`** when no session token exists, and
+**`error`** when the encrypted session blob is unreadable. Legacy rows without
+a usable expiry may still report **`unknown`** on cold-start heuristics; clients
+handle that state defensively.
 
 ### `ensureSession` and persistent `sessionExpiry` (no new HTTP routes)
 
-Session-backed dashboard work (management key provision, code redemption, internal tRPC) goes through **`dashboardApi.ensureSession(userId, accountId)`** in **`server/services/dashboard-api.js`**. **`isSessionValid`** in **`clerk-auth.js`** still requires a non-null ISO expiry with a five-minute buffer; to avoid treating a good **`__session`** as dead when the vault never stored an expiry, **`ensureSession`** uses an **effective** expiry of **`session.sessionExpiry || getJwtExpiry(session.sessionCookie)`** (JWT **`exp`**, else the same **24-hour** fallback as login).
+Session-backed dashboard work (management key provision, code redemption, internal tRPC) goes through **`dashboardApi.ensureSession(userId, accountId)`** in **`server/services/dashboard-api.js`**. **`isSessionValid`** in **`clerk-auth.js`** checks that the stored ISO expiry is still in the future. If the stored session is very close to expiry (less than five minutes) and a **`__client`** device cookie exists, **`ensureSession`** refreshes before returning so the caller does not get a token that can die mid-request.
 
 **Order of operations inside `ensureSession`:**
 
-1. **Reuse + backfill** — If **`__session`** exists and the effective expiry is valid: return immediately. If **`config.sessionExpiry` was missing** but the JWT-derived expiry is valid, **`store.updateAccountSession`** writes the derived ISO string so the next read and **`isSessionValid`** stay aligned with the token.
+1. **Reuse + backfill** — If **`__session`** exists and the stored realistic expiry is valid: return immediately. If **`config.sessionExpiry` was missing** but a derived fallback expiry is available, **`store.updateAccountSession`** writes it so the next read and **`isSessionValid`** stay aligned.
 2. **`refreshSession(clientCookie)`** — Clerk **`GET /v1/client`** via **`clerkGetClientSession`** with **up to three attempts** and short backoff (same parameters as post-login **`getSessionToken`**), not a single attempt. On success, persist refreshed **`__session`**, device jar, and **`sessionExpiry`**.
-3. **`validateSession(sessionCookie)`** — Probes OpenRouter **`GET /api/v1/credits`** with the cookie. On success, **`updateAccountSession`** persists **`getJwtExpiry(sessionCookie)`** so a live session is not left without a stored expiry after refresh failure.
+3. **Live validation fallback** — Other session-status paths can probe Clerk or OpenRouter when stored state is unclear. Successful refresh paths persist a fresh realistic expiry.
 4. **Password re-auth** — When the account has stored email/password and **`authMethod === 'password'`**, **`signInWithPassword`** runs as today.
 
-**`preflightRedeemAccounts`** (used by **`POST /api/codes/preflight`**) mirrors **`ensureSession`** without network: “session already valid” uses **`session.sessionExpiry || getJwtExpiry(sessionCookie)`** for the same offline heuristic.
+**`preflightRedeemAccounts`** (used by **`POST /api/codes/preflight`**) mirrors **`ensureSession`** without network: it treats a stored session token as a usable path and lets the redeem path refresh or validate when needed.
 
-**Other writers of `sessionExpiry`:** **`getJwtExpiry`** is **exported** from **`clerk-auth.js`**. **`AccountController.detectAuth`** ( **`POST /api/accounts/:id/detect-auth`** ) backfills expiry from the existing **`__session`** when merging a new Clerk client cookie if the vault had no expiry. **`account-generator.js`** (Playwright signup completion) stores **`getJwtExpiry(sessionCookie)`** when saving the new account’s session, not **`null`**.
+**Other writers of `sessionExpiry`:** **`getJwtExpiry`** is still exported from **`clerk-auth.js`** for fallback and account-generation timing checks. New login and refresh paths store the realistic session expiry returned by Clerk helpers, not the short proof-token lifetime.
+
+### Cookie internals
+
+Hydra stores Clerk device cookies in the encrypted account config and stores the
+active **`__session`** JWT separately in the encrypted **`sessionToken`** field.
+The relevant helpers live in **`server/services/clerk-auth.js`**:
+
+- **`__session`** is the short-lived JWT proof token.
+- **`__client`**, **`__client_uat`**, and **`__client_uat_*`** are the device
+  cookies Hydra can replay to refresh the session without user interaction.
+- **`__cf_bm`**, **`_cfuvid`**, and **`cf_clearance`** are Cloudflare/dashboard
+  cookies. Hydra can parse and merge them when observed, but the current
+  Server Action path does not require stored Cloudflare cookies.
+
+Cookie parsing intentionally filters invalid names and unsafe values instead of
+rejecting the whole jar. If one cookie is malformed, the valid cookies continue
+through the flow. That keeps OTP and dashboard session recovery paths from
+failing because of one stale or malformed cookie.
 
 ## Core Flows
 
@@ -184,17 +216,17 @@ Relevant routes:
 Implementation:
 
 - `AccountController.provision()` and `provisionAll()` call `dashboardApi.createManagementKey()`.
-- `server/services/dashboard-api.js` first tries to reuse a valid session.
-- If it has one, it attempts cached tRPC discovery, then a list of candidate tRPC routes, then optional Server Action stub (when enabled), then **browser UI automation** (Chromium via the **`playwright`** npm package).
+- `server/services/dashboard-api.js` first tries to reuse or refresh a valid session.
+- If it has one, it attempts Next.js Server Action replay, then cached tRPC discovery, then tRPC candidate routes, then a REST session-token fallback, then **browser UI automation** (Chromium via the **`playwright`** npm package).
 - When a management key is found, it is written back into the local encrypted account config with `store.updateAccountManagementKey()`.
 
-**No clipboard in the automation path:** Provisioning does **not** click OpenRouter’s “Copy to clipboard” control. The implementation reads the secret from **tRPC JSON** or from **network/DOM text** inside server-side browser automation (`server/services/dashboard-api.js`). Assistant or operator browsers used only to **document** selectors (`docs/recon/TRPC_ROUTES.md`) do **not** persist keys into the vault.
+**No clipboard in the automation path:** Provisioning does **not** click OpenRouter’s “Copy to clipboard” control. The implementation reads the secret from **Server Action/RSC text**, **tRPC JSON**, the REST fallback, or network/DOM text inside server-side browser automation (`server/services/dashboard-api.js`). Assistant or operator browsers used only to **document** selectors (`docs/recon/TRPC_ROUTES.md`) do **not** persist keys into the vault.
 
-**Errors:** If no `sk-or-mgmt-…` is captured, the API returns **`PROVISION_KEY_NOT_CAPTURED`** with **`details.stage`** such as **`browser_ui`**, **`phasesTried`**, **`trpcLastRoute`**, etc. **`legacyCode` `PROVISION_PLAYWRIGHT_EXTRACT`** is a historical alias only.
+**Errors:** If no full **`sk-or-v1-…`** key is captured, the API returns **`PROVISION_KEY_NOT_CAPTURED`** with **`details.stage`** such as **`browser_ui`**, **`phasesTried`**, **`trpcLastRoute`**, etc. **`legacyCode` `PROVISION_PLAYWRIGHT_EXTRACT`** is a historical alias only.
 
 **Manual paste path:** Operators can still set or replace a management key with **`PATCH /api/accounts/:id`** (`AccountController.updateAccount`). The Key Manager modal **`PasteManagementKeyModal`** adds a client-side **`sk-or-`** prefix check; the server uses non-empty validation plus **`openrouter.getCredits()`** (see **`docs/API_REFERENCE.md`**).
 
-**Clerk session vs management key:** A valid dashboard **`__session`** (and device cookies) lets Hydra call dashboard-only paths (tRPC, or the Playwright fallback that drives `https://…/settings/management-keys`). That is **not** the same as storing a **management API key** (`sk-or-mgmt-…`): until provisioning succeeds and `updateAccountManagementKey` runs, Key Manager and OpenRouter REST management calls have nothing to authenticate with.
+**Clerk session vs management key:** A valid dashboard **`__session`** (and device cookies) lets Hydra call dashboard-only paths (Server Actions, tRPC, or the Playwright fallback that drives `https://…/settings/management-keys`). That is **not** the same as storing a **management API key**. OpenRouter currently returns management key material with the same **`sk-or-v1-…`** prefix shape as standard API keys, so Hydra verifies usefulness with OpenRouter rather than relying on a distinct prefix. Until provisioning succeeds and `updateAccountManagementKey` runs, Key Manager and OpenRouter REST management calls have nothing to authenticate with.
 
 **Server-side Playwright vs Playwright MCP:** The fallback uses the **`playwright` npm package** inside the Hydra Node process (headless Chromium, cookie injection, `waitForResponse` on `/api/trpc/`). It is unrelated to **Playwright MCP** in the IDE, which is a separate tool for assistants to control a browser via MCP.
 
@@ -247,7 +279,7 @@ Important detail:
 - A key must have its raw key string stored locally before it can participate in the proxy pool.
 - `store.updateKeyPooledStatus()` refuses to pool a key if the encrypted raw key string is missing.
 
-**Management key vs standard key secret:** Provisioning (`POST /api/accounts/:id/provision`) or credential login stores a **management** key (`sk-or-mgmt-…`). That authorizes `listKeys` and `createKey` on OpenRouter. The vendor API does **not** return existing standard key secrets—only metadata (hash, name, usage). OpenRouter shows the raw `sk-or-v1-…` string **once** at key creation. Keys synced into Hydra via `listKeys` therefore start without an encrypted `key.key` row until the user pastes the secret in Pool Manager (`POST /api/pool/key/:hash/register`) or creates a new key through Hydra (which persists the secret from `createKey`). We intentionally do not wrap `GET /api/v1/keys/{hash}` for “recovery”: its documented response is metadata-only, not the secret. **Re-logging in** does not restore lost standard key strings. **Operator-facing copy** for this behavior lives in [`src/pages/PoolManager.jsx`](../src/pages/PoolManager.jsx) under the **About keys** header control (popover), not a separate doc route.
+**Management key vs standard key secret:** Provisioning (`POST /api/accounts/:id/provision`) or credential login stores a **management** key. OpenRouter currently emits it as a full **`sk-or-v1-…`** string, the same visible prefix family used by standard keys, so prefix alone does not prove which API surface it can use. A working management key authorizes `listKeys` and `createKey` on OpenRouter. The vendor API does **not** return existing standard key secrets—only metadata (hash, name, usage). OpenRouter shows raw standard key strings **once** at key creation. Keys synced into Hydra via `listKeys` therefore start without an encrypted `key.key` row until the user pastes the secret in Pool Manager (`POST /api/pool/key/:hash/register`) or creates a new key through Hydra (which persists the secret from `createKey`). We intentionally do not wrap `GET /api/v1/keys/{hash}` for “recovery”: its documented response is metadata-only, not the secret. **Re-logging in** does not restore lost standard key strings. **Operator-facing copy** for this behavior lives in [`src/pages/PoolManager.jsx`](../src/pages/PoolManager.jsx) under the **About keys** header control (popover), not a separate doc route.
 
 ### 5. Sync and operate the pool
 

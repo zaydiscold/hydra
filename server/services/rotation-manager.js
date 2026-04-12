@@ -10,7 +10,7 @@ import { logger } from './logger.js';
 
 const COOLDOWN_429 = 60 * 1000;        // 1 min for rate-limits
 const COOLDOWN_402 = 10 * 60 * 1000;   // 10 min for credit-depleted keys
-const MAX_RETRIES = 10;                // Drop key after 10 consecutive proxy failures (keeps keys longer)
+const MAX_RETRIES = 4;                 // Drop key after 4 consecutive proxy failures
 const MAX_LOGIN_ATTEMPTS = 4;          // Stop login attempts after 4 consecutive failures (prevents account lockout)
 
 class RotationManager {
@@ -110,11 +110,21 @@ class RotationManager {
   }
 
   /** Apply a temporary cooldown to a key after a failed upstream request */
-  applyCooldown(hash, httpStatus) {
-    const duration = httpStatus === 402 ? COOLDOWN_402 : COOLDOWN_429;
+  applyCooldown(hash, httpStatus, durationMs) {
+    const fallback = httpStatus === 402 ? COOLDOWN_402 : COOLDOWN_429;
+    const duration = typeof durationMs === 'number' && durationMs > 0 ? durationMs : fallback;
     this.cooldowns.set(hash, Date.now() + duration);
     const label = httpStatus === 402 ? 'credit-depleted' : 'rate-limited';
     logger.warn(`[POOL] Key ${hash.slice(0, 8)}… ${label} → cooling for ${duration / 1000}s`);
+  }
+
+  /** Cool every key in the pool — used when OR signals an IP-level rate limit */
+  coolAllKeys(durationMs = COOLDOWN_429) {
+    const exp = Date.now() + durationMs;
+    for (const k of this.pool) {
+      this.cooldowns.set(k.hash, exp);
+    }
+    logger.warn(`[POOL] IP-level rate limit — cooling all ${this.pool.length} keys for ${durationMs / 1000}s`);
   }
 
   /**
@@ -122,7 +132,7 @@ class RotationManager {
    * the key is dropped from the pool.
    * @returns {Promise<boolean>} true if key was dropped
    */
-  async recordFailure(hash, httpStatus) {
+  async recordFailure(hash, httpStatus, cooldownDurationMs) {
     const current = (this.failureCounts.get(hash) || 0) + 1;
     this.failureCounts.set(hash, current);
     
@@ -130,7 +140,7 @@ class RotationManager {
     
     // Apply cooldown for 429/402
     if (httpStatus === 429 || httpStatus === 402) {
-      this.applyCooldown(hash, httpStatus);
+      this.applyCooldown(hash, httpStatus, cooldownDurationMs);
     }
     
     // Drop key after max retries

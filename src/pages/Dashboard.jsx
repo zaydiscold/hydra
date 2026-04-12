@@ -6,6 +6,7 @@ import LoginAccountModal from '../components/LoginAccountModal';
 import { accountNeedsSession } from '../utils/accountSession';
 import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
 import { timeAgo } from '../utils/time';
+import SessionDot from '../components/SessionDot';
 import { 
   WalletIcon, 
   CreditsIcon, 
@@ -44,87 +45,7 @@ const AuthBadge = memo(function AuthBadge({ method, hasManagementKey, hasCredent
   return <span className="badge badge-method">[{String(method).toUpperCase()}]</span>;
 });
 
-// ─── Memoized Session Status Dot ─────────────────────────────────────────────
-const SessionDot = memo(function SessionDot({ status, hasManagementKey, hasCredentials }) {
-  const base = {
-    active: {
-      color: 'var(--status-success)',
-      label: 'Clerk dashboard session active (stored in vault)',
-      glow: true,
-    },
-    expiring: {
-      color: 'var(--status-warning)',
-      label: 'Clerk session expiring within ~10 minutes',
-      glow: false,
-    },
-    expired: {
-      color: 'var(--status-error)',
-      label: 'Clerk dashboard session expired — re-authenticate for dashboard actions',
-      glow: false,
-    },
-    error: {
-      color: 'var(--status-error)',
-      label: 'Session data in vault could not be decrypted — check vault / Nuclear Reset',
-      glow: false,
-    },
-    unknown: {
-      color: 'var(--text-tertiary)',
-      label: 'Probing session via Clerk — status will update in a moment',
-      glow: false,
-    },
-  };
 
-  let d;
-  if (status === 'none') {
-    if (hasManagementKey && !hasCredentials) {
-      d = {
-        color: 'var(--status-info)',
-        label:
-          'Key-only account: no Clerk session in vault — OpenRouter snapshot uses the management key only. Add credentials + Authenticate if you need dashboard session flows.',
-        glow: true,
-      };
-    } else if (hasManagementKey && hasCredentials) {
-      d = {
-        color: 'var(--status-warning)',
-        label:
-          'No Clerk session stored yet — balances still work via management key. Use [UNLOCK] Authenticate to save a session (required after some password+2FA steps until you finish verify).',
-        glow: false,
-      };
-    } else {
-      d = {
-        color: 'var(--text-tertiary)',
-        label:
-          'No management key and no Clerk session — add a key or sign in to provision.',
-        glow: false,
-      };
-    }
-  } else {
-    d = base[status] || base.unknown;
-  }
-
-  const pulsar = status === 'active';
-  const shadow = pulsar
-    ? `0 0 8px ${d.color}`
-    : d.glow
-      ? `0 0 6px color-mix(in srgb, ${d.color} 55%, transparent)`
-      : 'none';
-
-  return (
-    <span
-      title={d.label}
-      className={pulsar ? 'pulsar' : ''}
-      style={{
-        display: 'inline-block',
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        background: d.color,
-        boxShadow: shadow,
-        flexShrink: 0,
-      }}
-    />
-  );
-});
 
 // ─── Add Account Modal (memoized) ────────────────────────────────────────────
 const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
@@ -309,6 +230,7 @@ const AccountCard = memo(function AccountCard({
   onLogin,
   provisioningIds,
   liveStatuses,
+  cooldownMap = {},
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const cardRef = useRef(null);
@@ -348,6 +270,14 @@ const AccountCard = memo(function AccountCard({
   const showCardActions =
     (needsSession && account.hasCredentials)
     || (needsKey && account.hasCredentials && !needsSession);
+
+  const now = Date.now();
+  const lockedKeys = (account.keys?.list || []).filter(
+    k => cooldownMap[k.hash] && cooldownMap[k.hash] > now
+  );
+  const lockedMinutes = lockedKeys.length > 0
+    ? Math.ceil((Math.max(...lockedKeys.map(k => cooldownMap[k.hash])) - now) / 60000)
+    : 0;
 
   return (
     <div
@@ -400,6 +330,9 @@ const AccountCard = memo(function AccountCard({
       <div className="account-card-footer">
         <div className="account-card-meta account-card-meta-row mono">
           <span>[KEYS] <strong>{account.keys?.active || 0}</strong></span>
+          {lockedMinutes > 0 && (
+            <span style={{ color: 'var(--status-warning)' }}>[LOCKED {lockedMinutes}m]</span>
+          )}
           <span>[USED] <strong>{formatCurrency(account.credits?.used)}</strong></span>
         </div>
         <div className="account-card-auth-wrap">
@@ -443,14 +376,19 @@ export default function Dashboard({ onSelectAccount, addToast }) {
   const [loginModalAccount, setLoginModalAccount] = useState(null);
   const [provisioningIds, setProvisioningIds] = useState(new Set());
   const [liveStatuses, setLiveStatuses] = useState({}); // accountId → live-probed status
+  const [cooldownMap, setCooldownMap] = useState({});   // { [hash]: expiresAtMs }
   const didInitialLoadRef = useRef(false);
   const warnedExpiryRef = useRef(false);
 
   const fetchDashboard = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
     try {
-      const res = await api.getDashboard();
+      const [res, syncRes] = await Promise.all([
+        api.getDashboard(),
+        api.getPoolSyncStatus().catch(() => ({ data: {} })),
+      ]);
       setData(res.data);
+      setCooldownMap(syncRes.data?.cooldownMap ?? {});
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
@@ -737,6 +675,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
               onLogin={handleLogin}
               provisioningIds={provisioningIds}
               liveStatuses={liveStatuses}
+              cooldownMap={cooldownMap}
             />
           ))}
         </div>

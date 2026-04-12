@@ -225,7 +225,7 @@ Leaked from unauthenticated page load:
 ## OpenRouter Management API Summary
 
 Base URL: `https://openrouter.ai/api/v1`
-Auth: `Authorization: Bearer sk-or-mgmt-<key>`
+Auth: `Authorization: Bearer sk-or-v1-<key>`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -295,4 +295,3 @@ The following tRPC routes were confirmed to exist (HTTP 200 instead of 404). Ful
 - `keys.create` — Create API key (alternative to REST)
 
 **All require:** valid `__session` cookie + correct tRPC batch request format (to be discovered via Playwright or Chrome DevTools network interception).
-

@@ -4,7 +4,9 @@ This document describes how to capture and replay Next.js Server Actions for man
 
 ## Overview
 
-OpenRouter's dashboard may use Next.js Server Actions (instead of tRPC) for creating management keys. Hydra can replay these Server Actions to create keys programmatically.
+OpenRouter's dashboard currently uses Next.js Server Actions for management-key
+creation. Hydra replays that action first, then falls back to tRPC, REST, and
+Playwright when replay fails.
 
 ## How It Works
 
@@ -92,16 +94,14 @@ $TMPDIR/hydra-provision-debug/capture-mgmt-<timestamp>.log
 On macOS: `/var/folders/.../T/hydra-provision-debug/`
 On Linux: `/tmp/hydra-provision-debug/`
 
-## Enabling Server Action Replay in Hydra
+## Configuring Server Action Replay in Hydra
 
-### 1. Set Environment Variables
+### 1. Optional environment variables
 
-Add to your `.env` file:
+Hydra attempts Server Action replay first by default. Add an override to your
+`.env` file only when the baked-in action ID is stale:
 
 ```bash
-# Enable Server Action replay
-HYDRA_PROVISION_SERVER_ACTION_REPLAY=1
-
 # Set the captured action ID
 HYDRA_MGMT_KEY_SERVER_ACTION_ID=abc123def456...
 ```
@@ -117,10 +117,11 @@ curl -X POST "http://localhost:3001/api/accounts/ACCOUNT_ID/provision" \
   -d '{"keyName":"My Key"}'
 ```
 
-Hydra will now:
-1. Try tRPC routes first (cached and candidates)
-2. **Try Server Action replay** (if enabled)
-3. Fall back to Playwright browser automation
+Hydra will:
+1. **Try Server Action replay**
+2. Try cached and candidate tRPC routes
+3. Try the REST session-token fallback
+4. Fall back to Playwright browser automation
 
 ### Debug Output
 
@@ -168,9 +169,9 @@ The implementation handles multiple RSC response formats:
 
 ## Troubleshooting
 
-### "HYDRA_MGMT_KEY_SERVER_ACTION_ID not set"
+### "Server Action hash stale"
 
-The replay will still attempt requests but without the `Next-Action` header. Capture the real ID and set the environment variable.
+Capture the real action ID and set `HYDRA_MGMT_KEY_SERVER_ACTION_ID`.
 
 ### "Server Action replay: all attempts failed"
 

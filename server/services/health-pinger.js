@@ -4,6 +4,8 @@ import { OR_BASE } from '../config.js';
 
 // How often to test a random key in the background (default 5 mins)
 const PING_INTERVAL = 5 * 60 * 1000;
+// Free model used for cheap health pings — update when OR deprecates it
+const PING_MODEL = 'google/gemini-2.0-flash-lite:free';
 const PING_TIMEOUT_MS = 10 * 1000;
 const NETWORK_ERROR_LOG_WINDOW_MS = 60 * 1000;
 let timer = null;
@@ -35,7 +37,7 @@ async function pingRandomKey() {
       },
       // 1-token cheap payload
       body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-lite-preview-02-05:free', // Zero-cost routing attempt if possible, fallback to standard
+        model: PING_MODEL,
         messages: [{ role: 'user', content: 'hello' }],
         max_tokens: 1
       }),

@@ -34,6 +34,16 @@ The master key used for AES-256-GCM is managed by `server/services/local-secrets
 - **Session Tokens** — Upon login, the server issues a signed **JWT (JSON Web Token)**.
 - **CSRF Protection** — All state-changing requests require a valid JWT in the `Authorization` header.
 
+Hydra is designed as a single-user local tool. Password policy is intentionally
+minimal compared with a shared SaaS system, because the stronger boundary is
+local machine access plus encrypted local storage. Do not expose the Express
+server to an untrusted network without adding a stricter deployment security
+review.
+
+Administrative reset uses `nukeSystem()` in `server/services/auth.js` to wipe
+local vault data and mark the app as restart-required. Treat it as a destructive
+local recovery tool, not a normal runtime flow.
+
 ## 🏮 Privacy Principles
 
 1. **No External Sync** — Hydra does not have a "cloud sync" feature. Your data stays in the local `prisma/dev.db`.

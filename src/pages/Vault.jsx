@@ -3,6 +3,7 @@ import * as api from '../api';
 import LoginAccountModal from '../components/LoginAccountModal';
 import { VaultIcon, RefreshIcon, LockIcon, SettingsIcon, ShieldIcon, EditIcon, TrashIcon } from '../components/Icons';
 import { accountNeedsSession } from '../utils/accountSession';
+import SessionDot from '../components/SessionDot';
 import { timeAgo } from '../utils/time';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -27,32 +28,7 @@ function exportAccountsCSV(accounts) {
   URL.revokeObjectURL(url);
 }
 
-// Inline session dot — mirrors Dashboard SessionDot logic without the full component
-function SessionDot({ status }) {
-  const colorMap = {
-    active: 'var(--status-success)',
-    expiring: 'var(--status-warning)',
-    expired: 'var(--status-error)',
-    error: 'var(--status-error)',
-    none: 'var(--text-tertiary)',
-    unknown: 'var(--text-tertiary)',
-  };
-  const color = colorMap[status] ?? colorMap.unknown;
-  return (
-    <span
-      className={status === 'active' ? 'pulsar' : ''}
-      style={{
-        display: 'inline-block',
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        background: color,
-        flexShrink: 0,
-        boxShadow: status === 'active' ? `0 0 8px ${color}` : 'none',
-      }}
-    />
-  );
-}
+
 
 // ─── Vault Page ───────────────────────────────────────────────────────────────
 
@@ -144,7 +120,7 @@ export default function Vault({ addToast }) {
     setProvisioningId(acc.id);
     try {
       const res = await api.provisionManagementKey(acc.id);
-      if (!res?.key) throw new Error(res?.message || 'Provisioning did not return a key');
+      if (!res?.data?.key) throw new Error(res?.error?.message || res?.message || 'Provisioning did not return a key');
       if (addToast) addToast(`Key provisioned for ${acc.alias}`, 'success');
       loadAccounts(true);
     } catch (err) {
@@ -383,7 +359,7 @@ export default function Vault({ addToast }) {
                   {/* Session */}
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                      <SessionDot status={sessionStatus} />
+                      <SessionDot status={sessionStatus} hasManagementKey={!!acc.hasManagementKey} hasCredentials={!!acc.hasCredentials} />
                       <div style={{ fontSize: '0.8rem' }}>
                         <div style={{ textTransform: 'capitalize', fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
                           {sessionStatus === 'unknown' ? (

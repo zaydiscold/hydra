@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { Readable } from 'stream';
+import { Readable, Transform, pipeline } from 'stream';
 
 import { OR_BASE } from '../config.js';
 import {
@@ -22,14 +22,14 @@ import { getMasterProxyKey, getGenericProxyKey } from '../services/store.js';
 const router = Router();
 const MAX_RETRIES = 3;
 
-// Minimal static fallback model list if pool is empty
+// Minimal static fallback model list if pool is empty AND DB cache is empty
 const STATIC_MODELS = [
   { id: 'openai/gpt-4o', object: 'model', created: 1725000000, owned_by: 'openai' },
   { id: 'openai/gpt-4o-mini', object: 'model', created: 1725000000, owned_by: 'openai' },
-  { id: 'anthropic/claude-3.5-sonnet', object: 'model', created: 1725000000, owned_by: 'anthropic' },
-  { id: 'anthropic/claude-3-haiku', object: 'model', created: 1725000000, owned_by: 'anthropic' },
-  { id: 'google/gemini-pro-1.5', object: 'model', created: 1725000000, owned_by: 'google' },
-  { id: 'meta-llama/llama-3.1-70b-instruct', object: 'model', created: 1725000000, owned_by: 'meta' },
+  { id: 'anthropic/claude-sonnet-4-5-20250514', object: 'model', created: 1746000000, owned_by: 'anthropic' },
+  { id: 'anthropic/claude-haiku-4-5-20251001', object: 'model', created: 1746000000, owned_by: 'anthropic' },
+  { id: 'google/gemini-2.5-pro', object: 'model', created: 1746000000, owned_by: 'google' },
+  { id: 'meta-llama/llama-3.3-70b-instruct', object: 'model', created: 1746000000, owned_by: 'meta' },
 ];
 
 // Headers we should NOT forward from OpenRouter back to the client
@@ -39,6 +39,42 @@ const BLOCKED_RESPONSE_HEADERS = new Set([
   'connection',
   'keep-alive',
 ]);
+
+function normalizeModelId(id) {
+  return String(id ?? '').trim().toLowerCase();
+}
+
+function isFreeModelId(id) {
+  const normalized = normalizeModelId(id);
+  return normalized === 'openrouter/free'
+    || normalized.startsWith('openrouter/free/')
+    || normalized.startsWith('openrouter/free:')
+    || normalized.endsWith(':free')
+    || normalized.endsWith('/free');
+}
+
+async function getCachedModels({ freeOnly = false } = {}) {
+  const cached = await prisma.cachedModel.findMany({
+    orderBy: [{ name: 'asc' }],
+    select: { id: true, name: true, ctx: true, ownedBy: true },
+  });
+
+  const models = cached.map(cachedRowToClientModel);
+  return freeOnly ? models.filter((model) => isFreeModelId(model.id)) : models;
+}
+
+async function resolveFreeModel(requestedModel) {
+  const freeModels = await getCachedModels({ freeOnly: true });
+  if (freeModels.length === 0) return null;
+
+  const requested = normalizeModelId(requestedModel);
+  if (requested) {
+    const match = freeModels.find((model) => normalizeModelId(model.id) === requested);
+    if (match) return match.id;
+  }
+
+  return freeModels[0].id;
+}
 
 function sendHydraError(res, status, message, code, headerValue) {
   if (headerValue) {
@@ -99,12 +135,124 @@ function logRequest(keyHash, model, status, latencyMs, tokens = {}) {
   });
 }
 
+async function createRequestLog(keyHash, model, status, latencyMs) {
+  try {
+    return await prisma.requestLog.create({
+      data: {
+        keyHash: keyHash ?? null,
+        model,
+        status,
+        latencyMs,
+      },
+    });
+  } catch (err) {
+    if (keyHash) {
+      try {
+        return await prisma.requestLog.create({
+          data: {
+            keyHash: null,
+            model,
+            status,
+            latencyMs,
+          },
+        });
+      } catch {
+        // fall through
+      }
+    }
+    logger.error(`[PROXY] Failed to create RequestLog placeholder: ${err.message}`);
+    return null;
+  }
+}
+
+function updateRequestLog(logId, model, latencyMs, tokens = {}) {
+  if (!logId) return;
+  prisma.requestLog.update({
+    where: { id: logId },
+    data: {
+      model,
+      latencyMs,
+      promptTokens: tokens.prompt_tokens || null,
+      completionTokens: tokens.completion_tokens || null,
+    },
+  }).catch((err) => {
+    logger.error(`[PROXY] Failed to update RequestLog: ${err.message}`);
+  });
+}
+
+/**
+ * SseUsageObserver — a Transform stream that sits between the upstream
+ * (OpenRouter) response and the client, observing SSE frames without
+ * altering them.  It buffers incoming bytes into SSE frames (delimited
+ * by blank lines), parses each `data:` line for JSON, and captures the
+ * last `usage` and `model` fields seen before the stream ends.
+ */
+class SseUsageObserver extends Transform {
+  constructor(options = {}) {
+    super(options);
+    this._buffer = '';
+    this._usage = null;
+    this._extractedModel = null;
+  }
+
+  _transform(chunk, _encoding, callback) {
+    // Pass through unmodified — observation only
+    this.push(chunk);
+    // Accumulate for SSE parsing
+    this._buffer += chunk.toString('utf8');
+    this._parseFrames();
+    callback();
+  }
+
+  _flush(callback) {
+    // Drain any partial frame remaining in the buffer
+    if (this._buffer.trim()) this._parseFrames();
+    callback();
+  }
+
+  _parseFrames() {
+    while (true) {
+      const boundary = this._buffer.indexOf('\n\n');
+      if (boundary < 0) break;
+
+      const frame = this._buffer.slice(0, boundary);
+      this._buffer = this._buffer.slice(boundary + 2);
+
+      const dataLines = frame
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+        .filter(Boolean);
+
+      for (const dataLine of dataLines) {
+        if (dataLine === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(dataLine);
+          if (parsed?.usage) this._usage = parsed.usage;
+          if (parsed?.model) this._extractedModel = parsed.model;
+        } catch {
+          // Ignore non-JSON SSE events.
+        }
+      }
+    }
+  }
+
+  /** The last `usage` object extracted from SSE frames (or null). */
+  get usage() { return this._usage; }
+  /** The last `model` string extracted from SSE frames (or null). */
+  get extractedModel() { return this._extractedModel; }
+}
+
 // ─── Main proxy handler ───────────────────────────────────────────────────────
 
 router.use(async (req, res) => {
   const path = req.path; // e.g. /chat/completions, /models
-  const upstreamPathWithQuery = req.url.startsWith('/') ? req.url : `/${req.url}`;
   const startTime = Date.now();
+  const isFreeRoute = path.startsWith('/free');
+  const upstreamPathWithQuery = (() => {
+    const rawUrl = req.url.startsWith('/') ? req.url : `/${req.url}`;
+    return isFreeRoute ? rawUrl.replace(/^\/free(?=\/|$)/, '') : rawUrl;
+  })();
 
   // ── Auth ──
   const isValid = await validateMasterKey(req.headers.authorization);
@@ -123,14 +271,32 @@ router.use(async (req, res) => {
     return handleModels(req, res);
   }
 
+  // ── /free/models — cached free-tier catalog ──
+  if (req.method === 'GET' && path === '/free/models') {
+    return handleFreeModels(req, res);
+  }
+
   const baseBody = req.body && typeof req.body === 'object'
     ? JSON.parse(JSON.stringify(req.body))
     : req.body;
+  let forcedFreeModel = null;
+  if (req.method === 'POST' && path === '/free/chat/completions') {
+    forcedFreeModel = await resolveFreeModel(baseBody?.model);
+    if (!forcedFreeModel) {
+      return sendHydraError(
+        res,
+        503,
+        'No cached free models are available. Refresh models in Pool Manager and try again.',
+        'hydra_free_models_empty',
+        'free-models-empty'
+      );
+    }
+  }
   const isStream = baseBody?.stream === true;
   const attempted = new Set();
   const evicted = new Set();
   let lastError = null;
-  let fallbackModel = null;
+  let fallbackModel = forcedFreeModel;
 
   const currentModel = () => fallbackModel || baseBody?.model || 'unknown';
   const buildBody = () => {
@@ -139,6 +305,12 @@ router.use(async (req, res) => {
 
     const cloned = JSON.parse(JSON.stringify(baseBody));
     if (fallbackModel) cloned.model = fallbackModel;
+    if (cloned.stream === true && upstreamPathWithQuery.startsWith('/chat/completions')) {
+      cloned.stream_options = {
+        ...(cloned.stream_options && typeof cloned.stream_options === 'object' ? cloned.stream_options : {}),
+        include_usage: true,
+      };
+    }
     return JSON.stringify(cloned);
   };
 
@@ -169,11 +341,17 @@ router.use(async (req, res) => {
 
     attempt += 1;
     attempted.add(keyEntry.hash);
-    let timeoutId;
+    let connectTimeoutId;
+    let streamTimeoutId;
 
     try {
+      // Connect timeout: short (10s) — only covers TCP+TLS handshake + waiting for headers.
+      // Stream timeout: only applied to non-SSE responses (5 min) — SSE streams are not
+      // arbitrarily killed since code generation can run 2-5 minutes.
+      const CONNECT_TIMEOUT_MS = 10_000;
+      const NON_STREAM_TIMEOUT_MS = 5 * 60_000;
       const ctrl = new AbortController();
-      timeoutId = setTimeout(() => ctrl.abort(), 30000);
+      connectTimeoutId = setTimeout(() => ctrl.abort(), CONNECT_TIMEOUT_MS);
 
       const upstreamRes = await fetch(`${OR_BASE}/api/v1${upstreamPathWithQuery}`, {
         method: req.method,
@@ -181,15 +359,56 @@ router.use(async (req, res) => {
           Authorization: `Bearer ${keyEntry.keyString}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'http://localhost:3001',
-          'X-Title': 'Hydra Pool Router',
+          // X-Title is a self-identifying beacon — only send if HYDRA_PROXY_TITLE is explicitly set
+          ...(process.env.HYDRA_PROXY_TITLE ? { 'X-Title': process.env.HYDRA_PROXY_TITLE } : {}),
         },
         body: buildBody(),
         signal: ctrl.signal,
       });
 
+      // Headers received — connect phase succeeded, clear connect timeout.
+      clearTimeout(connectTimeoutId);
+      connectTimeoutId = null;
+
+      // For non-stream responses, set a generous timeout so we don't hang forever.
+      // SSE streams intentionally have no stream timeout — they end when upstream ends.
+      if (!isStream) {
+        streamTimeoutId = setTimeout(() => ctrl.abort(), NON_STREAM_TIMEOUT_MS);
+      }
+
       // ── Error status handling ──
       if (upstreamRes.status === 429) {
-        await rotationManager.recordFailure(keyEntry.hash, 429);
+        // Peek at body to distinguish IP-level vs key-level rate limit
+        let bodyText = '';
+        try { bodyText = await upstreamRes.text(); } catch { /* ignore */ }
+        const isIpLimit = bodyText && !bodyText.toLowerCase().includes('key') &&
+          bodyText.toLowerCase().includes('rate limit');
+
+        // Respect upstream rate-limit headers for precise cooldown duration
+        const resetHeader = upstreamRes.headers.get('X-RateLimit-Reset');
+        const retryAfterHeader = upstreamRes.headers.get('Retry-After');
+        let cooldownMs = null;
+        if (resetHeader) {
+          // X-RateLimit-Reset is usually a Unix timestamp (seconds)
+          const resetAt = Number(resetHeader) * 1000;
+          if (resetAt > Date.now()) cooldownMs = resetAt - Date.now();
+        }
+        if (!cooldownMs && retryAfterHeader) {
+          // Retry-After can be seconds or an HTTP-date; try numeric first
+          const secs = Number(retryAfterHeader);
+          if (secs > 0) {
+            cooldownMs = secs * 1000;
+          } else {
+            const httpDate = Date.parse(retryAfterHeader);
+            if (httpDate > Date.now()) cooldownMs = httpDate - Date.now();
+          }
+        }
+
+        if (isIpLimit) {
+          rotationManager.coolAllKeys(cooldownMs);
+        } else {
+          await rotationManager.recordFailure(keyEntry.hash, 429, cooldownMs);
+        }
         lastError = { status: 429, hash: keyEntry.hash };
         logRequest(keyEntry.hash, currentModel(), 429, Date.now() - startTime);
         continue;
@@ -240,12 +459,32 @@ router.use(async (req, res) => {
       res.status(upstreamRes.status);
 
       if (isStream && upstreamRes.body) {
+        const requestLog = await createRequestLog(
+          keyEntry.hash,
+          currentModel(),
+          upstreamRes.status,
+          Date.now() - startTime,
+        );
+        const sseObserver = new SseUsageObserver();
+
         req.on('close', () => {
           if (upstreamRes.body?.cancel) upstreamRes.body.cancel();
         });
 
-        logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime);
-        Readable.fromWeb(upstreamRes.body).pipe(res);
+        const nodeStream = Readable.fromWeb(upstreamRes.body);
+
+        // Pipeline: OR response → SseUsageObserver (pass-through) → client
+        // The observer extracts usage/model from SSE frames without altering data.
+        pipeline(nodeStream, sseObserver, res, (err) => {
+          const finalModel = sseObserver.extractedModel || currentModel();
+          const finalUsage = sseObserver.usage || {};
+          const latency = Date.now() - startTime;
+
+          if (err) {
+            logger.error(`[PROXY] Stream pipeline failed: ${err.message}`);
+          }
+          updateRequestLog(requestLog?.id, finalModel, latency, finalUsage);
+        });
         return;
       }
 
@@ -262,8 +501,9 @@ router.use(async (req, res) => {
       return res.send(text);
     } catch (err) {
       if (err.name === 'AbortError') {
-        logger.error(`[PROXY] Upstream fetch timeout (30s) on attempt ${attempt}`);
-        lastError = { status: 504, message: 'Upstream timeout after 30s' };
+        const phase = connectTimeoutId ? 'connect' : 'stream';
+        logger.error(`[PROXY] Upstream fetch ${phase} timeout on attempt ${attempt}`);
+        lastError = { status: 504, message: `Upstream ${phase} timeout` };
         continue;
       }
 
@@ -271,7 +511,8 @@ router.use(async (req, res) => {
       lastError = { status: 502, message: err.message };
       // network error — try next key
     } finally {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (connectTimeoutId) clearTimeout(connectTimeoutId);
+      if (streamTimeoutId) clearTimeout(streamTimeoutId);
     }
   }
 
@@ -319,17 +560,22 @@ router.use(async (req, res) => {
 // ─── /v1/models handler ───────────────────────────────────────────────────────
 
 async function handleModels(req, res) {
-  try {
-    // Prefer cached models when available (populated by /api/pool/models/refresh).
-    const cached = await prisma.cachedModel.findMany({
-      orderBy: [{ name: 'asc' }],
-    });
+  return handleModelList(req, res, { freeOnly: false });
+}
 
-    if (cached.length > 0) {
+async function handleFreeModels(req, res) {
+  return handleModelList(req, res, { freeOnly: true });
+}
+
+async function handleModelList(req, res, { freeOnly = false } = {}) {
+  try {
+    const cached = await getCachedModels({ freeOnly });
+
+    if (cached.length > 0 || freeOnly) {
       res.setHeader('X-Hydra-Models-Source', 'cache');
       return res.json({
         object: 'list',
-        data: cached.map(cachedRowToClientModel),
+        data: cached,
       });
     }
 

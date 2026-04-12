@@ -71,13 +71,23 @@ class DashboardController extends BaseController {
           const needsRefresh = meta?.sessionStatus === 'expiring' || meta?.sessionStatus === 'expired' || meta?.sessionStatus === 'unknown';
           if (!needsRefresh) return;
           
+          // Exploit #14: Cookie stacking — try all stacked cookies newest-first
           const cc = account.clientCookie?.trim();
-          if (!cc || cc === 'undefined') return;
+          const stackedCookies = account.clientCookies; // from getAllAccountsWithKeys
+          if ((!cc || cc === 'undefined') && (!stackedCookies || stackedCookies.length === 0)) return;
           
           try {
-            const refreshed = await clerkAuth.refreshSession(cc);
+            // If stacked cookies available, pass the array; otherwise use single cookie
+            const refreshInput = (stackedCookies && stackedCookies.length > 0) ? stackedCookies : cc;
+            const refreshed = await clerkAuth.refreshSession(refreshInput);
             if (refreshed) {
-              const nextCc = refreshed.clientCookie ?? cc;
+              const nextCc = refreshed.clientCookie ?? (typeof refreshInput === 'string' ? refreshInput : cc);
+              // Prune dead cookies from the stack if any were reported
+              let prunedStack = stackedCookies || [];
+              if (refreshed.deadClientCookies && refreshed.deadClientCookies.length > 0) {
+                const deadSet = new Set(refreshed.deadClientCookies.map(e => e.cookie));
+                prunedStack = prunedStack.filter(e => !deadSet.has(e.cookie));
+              }
               await store.updateAccountSession(
                 req.user.id,
                 account.id,
