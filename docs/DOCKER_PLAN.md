@@ -4,6 +4,21 @@
 
 All 8 gotchas are resolved. Dockerfile, docker-compose.yml, entrypoint, .dockerignore, build helper, and ghcr.io Actions workflow are all committed and pushed to master.
 
+## Why Docker?
+
+Docker here is not just for deployment — it's **version-controlled distribution**. The problem it solves:
+
+> Giving Hydra to someone else means they need: correct Node version, `npm install` resolving cleanly, `.env` configured, Prisma migrations run, port 3001 free. That's 15+ steps and usually breaks.
+
+With Docker: `docker compose up`. That's it. The image has the right Node version, the right npm dependencies compiled against the right OS, Prisma synced, everything. Anyone with Docker Desktop can run the same exact binary you're running.
+
+The **version control** angle: every push to `master` triggers the GitHub Actions workflow (`.github/workflows/docker.yml`) which builds a new image and pushes it to `ghcr.io/zaydiscold/hydra:latest`. The git commit SHA is also tagged (`sha-abc1234`). This means:
+- Every version of Hydra ever built is stored and pullable by tag
+- Rolling back = `docker compose pull ghcr.io/zaydiscold/hydra:sha-abc1234`
+- Updating = `docker compose pull && docker compose up -d`
+
+The **data stays local** because the bind mount (`./data:/app/data`) makes Docker read your local `data/` directory directly. The image contains zero user data — it's a pure runtime. Each person who runs it has their own `data/` with their own encrypted accounts and secrets.
+
 ## Quick Start
 
 ```bash
@@ -15,6 +30,31 @@ docker compose up
 ```
 
 The app will be at `http://localhost:3001`.
+
+## Database path (important)
+
+The canonical database is `data/hydra.db`. Both dev mode and Docker use this path.
+
+Your `.env` should have:
+```
+DATABASE_URL="file:/Users/zaydk/Desktop/hydra/data/hydra.db"
+```
+
+Docker's `docker-compose.yml` overrides with `DATABASE_URL=file:/app/data/hydra.db` (same file, different mount path inside the container).
+
+**Historical note:** The project previously used `prisma/dev.db` as the dev database. If your accounts are missing from Docker, check whether your real database is at `prisma/dev.db` — copy it to `data/hydra.db` to consolidate:
+```bash
+cp prisma/dev.db data/hydra.db
+```
+Then update your `.env` to point at `data/hydra.db` so dev mode uses the same location going forward.
+
+## Cursor / AI IDE integration
+
+Hydra works as a drop-in OpenAI-compatible proxy for Cursor, Continue, any AI IDE:
+- **Base URL:** `http://localhost:3001/v1`
+- **API Key:** `sk-hydra-<your-key>` (shown at startup, derived from your `local-secrets.json`)
+
+This works identically whether you're running via `npm run dev` or `docker compose up`. Same port, same endpoints, same key.
 
 ## Volume Strategy: Local vs Server Deployment
 
