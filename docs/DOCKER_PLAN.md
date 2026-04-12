@@ -1,10 +1,58 @@
-# Hydra Dockerization Strategic Plan (V2 + V3 Deep Recon)
+# Hydra Dockerization Plan
 
-**Status:** Research & Planning Completed | **Priority:** P1 
+**Status:** ✅ FULLY IMPLEMENTED & SMOKE TESTED (session 21/22) | **Priority:** P1
 
-After extensive assessments, several catastrophic "oopsies" were identified in the initial Dockerization strategy. Standard containerization paradigms break down due to Hydra's specific stack (Playwright, SQLite, Express Rate Limiting, Node Native Modules). 
+All 8 gotchas are resolved. Dockerfile, docker-compose.yml, entrypoint, .dockerignore, build helper, and ghcr.io Actions workflow are all committed and pushed to master.
 
-This plan outlines the deeply verified architectural decisions needed to make Hydra fully and safely Docker compatible, including tertiary reconnaissance findings.
+## Quick Start
+
+```bash
+# Run with your existing local data (accounts, sessions, secrets):
+docker compose up
+
+# Or build locally first:
+./scripts/docker-build.sh && docker compose up
+```
+
+The app will be at `http://localhost:3001`.
+
+## Volume Strategy: Local vs Server Deployment
+
+**Local use (current config in docker-compose.yml):**
+```yaml
+volumes:
+  - ./data:/app/data   # bind mount → uses your actual local data/
+```
+This is why your accounts and sessions survive — Docker is reading the exact same `data/` directory that the dev server uses. No login prompt.
+
+**Server/shared deployment:** swap to a named volume so Docker manages the lifecycle independently of any local path:
+```yaml
+volumes:
+  - hydra_data:/app/data
+
+volumes:
+  hydra_data:           # Docker-managed, survives container restarts
+```
+
+**Data safety:** `data/` is in `.gitignore` and `.dockerignore`. The SQLite DB, `local-secrets.json`, and `proxy-gate.json` never leave your machine via git or image builds.
+
+## ghcr.io CI/CD
+
+`.github/workflows/docker.yml` — triggers on every push to `master` and on `v*.*.*` git tags.
+- Tags pushed: `ghcr.io/zaydiscold/hydra:latest` + `ghcr.io/zaydiscold/hydra:sha-<short>` + semver on tags
+- Uses `GITHUB_TOKEN` — no manual secrets needed
+- Layer cache stored at `ghcr.io/zaydiscold/hydra:buildcache` (speeds up rebuilds ~80%)
+
+To publish a versioned release:
+```bash
+git tag v1.0.1 && git push origin v1.0.1
+```
+
+---
+
+## Background: The "Oopsies" That Were Identified in V1
+
+Standard containerization paradigms break down due to Hydra's specific stack (Playwright, SQLite, Express Rate Limiting, Node Native Modules).
 
 ---
 

@@ -8,9 +8,10 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      # /app/data covers: SQLite DB, local-secrets.json, redemption-log.json
-      # This is the absolute source of truth for Hydra state (Gotcha #6)
-      - hydra_data:/app/data
+      # LOCAL USE: bind mount uses your actual ./data directory (DB, secrets, session state).
+      # This is why Docker has your accounts and doesn't prompt for new login.
+      # For server deployment: swap to named volume (see DOCKER_PLAN.md § "Volume strategy")
+      - ./data:/app/data
     # RAM-backed tmpfs for /tmp — prevents UnionFS (Overlay2) exhaustion from
     # Playwright debug traces/network logs when HYDRA_PROVISION_NETWORK_LOG=1.
     # tmpfs is not a volume — it's a per-container RAM mount, cleared on stop. (Gotcha #7)
@@ -34,6 +35,3 @@ services:
     # your IP ASN to a datacenter range. Cloudflare may trigger Turnstile
     # CAPTCHAs or 403 responses for automated Playwright provisioning.
     # Consider routing through a residential proxy for account generation. (Gotcha #5)
-
-volumes:
-  hydra_data:
