@@ -555,7 +555,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}
             </span>
             <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
-              {loadingMgmtKeys ? '↻' : '↻'}
+              {loadingMgmtKeys ? '…' : '↻'}
             </button>
           </div>
           {/* Active key preview (from snapshot) */}

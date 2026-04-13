@@ -123,7 +123,8 @@ export class AccountController extends BaseController {
             } catch (err) {
               // Deduplicate: if the email already exists, return the existing account as skipped
               if (err.status === 409 && (err.message || '').toLowerCase().includes('email already exists')) {
-                const lineEmail = lineStr.includes(':') ? lineStr.split(':')[lineStr.split(':').length >= 3 ? 1 : 0].trim() : null;
+                const lineParts = lineStr.split(':');
+                const lineEmail = lineParts.length >= 3 ? lineParts[1].trim() : lineParts[0].trim();
                 const existing = lineEmail
                   ? existingAccounts.find((a) => (a.email || '').toLowerCase() === lineEmail.toLowerCase())
                   : null;
