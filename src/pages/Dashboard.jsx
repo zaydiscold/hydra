@@ -87,9 +87,13 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
           return; 
         }
         const res = await api.bulkAddAccounts(lines);
-        const bulkRows = Array.isArray(res.data?.data) ? res.data.data : [];
-        const succeeded = bulkRows.filter((r) => r.success).length;
-        onAdded(`Bulk import: ${succeeded}/${lines.length} accounts added`);
+        const created = res.data?.created ?? 0;
+        const skipped = res.data?.skipped ?? 0;
+        const failed  = res.data?.failed  ?? 0;
+        const parts = [`${created} added`];
+        if (skipped > 0) parts.push(`${skipped} already existed (skipped)`);
+        if (failed  > 0) parts.push(`${failed} failed`);
+        onAdded(`Bulk import: ${parts.join(', ')}`);
       }
       onClose();
     } catch (err) {

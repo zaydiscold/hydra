@@ -85,11 +85,17 @@ export class AccountController extends BaseController {
   async bulkAdd(req, res) {
     try {
       const { lines } = this.validate(req.body, bulkAddSchema);
-      
+
       const results = await taskSupervisor.enqueueBatch(
         'batch_account_work',
         req.user.id,
         async () => {
+          // Pre-fetch existing accounts once for dedup lookup on 409
+          let existingAccounts = [];
+          try {
+            existingAccounts = await store.getAccounts(req.user.id);
+          } catch { /* ignore — dedup becomes best-effort */ }
+
           const batchResults = [];
           for (const [index, lineStr] of lines.entries()) {
             try {
@@ -106,16 +112,29 @@ export class AccountController extends BaseController {
                   password = parts[1];
                 }
                 const account = await store.addAccountWithCredentials(req.user.id, alias, email, password, 'password');
-                batchResults.push({ success: true, ...account });
+                batchResults.push({ success: true, created: true, ...account });
                 continue;
               }
 
               const timestamp = new Date().getTime().toString().slice(-4);
               const alias = `bulk-${timestamp}-${index + 1}`;
               const account = await store.addAccountWithSessionCookie(req.user.id, alias, lineStr);
-              batchResults.push({ success: true, ...account });
+              batchResults.push({ success: true, created: true, ...account });
             } catch (err) {
-              batchResults.push({ success: false, error: err.message, line: lineStr });
+              // Deduplicate: if the email already exists, return the existing account as skipped
+              if (err.status === 409 && (err.message || '').toLowerCase().includes('email already exists')) {
+                const lineEmail = lineStr.includes(':') ? lineStr.split(':')[lineStr.split(':').length >= 3 ? 1 : 0].trim() : null;
+                const existing = lineEmail
+                  ? existingAccounts.find((a) => (a.email || '').toLowerCase() === lineEmail.toLowerCase())
+                  : null;
+                if (existing) {
+                  batchResults.push({ success: true, skipped: true, id: existing.id, alias: existing.alias, email: existing.email, line: lineStr });
+                } else {
+                  batchResults.push({ success: false, skipped: true, error: err.message, line: lineStr });
+                }
+              } else {
+                batchResults.push({ success: false, error: err.message, line: lineStr });
+              }
             }
           }
           return batchResults;
@@ -123,8 +142,10 @@ export class AccountController extends BaseController {
         { operation: 'bulk_add_accounts', size: lines.length },
       );
 
-      const count = results.filter(r => r.success).length;
-      return this.success(res, { count, data: results }, 201);
+      const created = results.filter(r => r.success && r.created).length;
+      const skipped = results.filter(r => r.skipped).length;
+      const failed = results.filter(r => !r.success && !r.skipped).length;
+      return this.success(res, { count: created, created, skipped, failed, data: results }, 201);
     } catch (err) {
       return this.error(res, err.message, err.status || 500);
     }
