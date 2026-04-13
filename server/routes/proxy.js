@@ -90,6 +90,28 @@ function sendHydraError(res, status, message, code, headerValue) {
   });
 }
 
+/**
+ * Parse the client's User-Agent into a short human-readable hint.
+ * Returns a lowercase label like "cursor", "continue", "openai-node",
+ * "copilot", "litellm", "aider", "curl", etc., or null if unrecognized.
+ */
+function parseClientHint(ua) {
+  if (!ua) return null;
+  const s = ua.toLowerCase();
+  if (s.includes('cursor')) return 'cursor';
+  if (s.includes('windsurf') || s.includes('codeium')) return 'windsurf';
+  if (/\bcontinue[/ ]/.test(s)) return 'continue';
+  if (s.includes('copilot')) return 'copilot';
+  if (s.includes('aider')) return 'aider';
+  if (s.includes('litellm')) return 'litellm';
+  if (s.includes('openai/')) return s.includes('python') ? 'openai-py' : 'openai-node';
+  if (s.includes('anthropic')) return 'anthropic-sdk';
+  if (s.includes('curl')) return 'curl';
+  if (s.includes('python-httpx') || s.includes('python-requests')) return 'python';
+  if (s.includes('node-fetch') || s.includes('undici')) return 'node-fetch';
+  return null;
+}
+
 /** Validate the master proxy key against the vault-derived token */
 async function validateMasterKey(authHeader) {
   if (!authHeader?.startsWith('Bearer sk-')) return false;
@@ -102,7 +124,7 @@ async function validateMasterKey(authHeader) {
 }
 
 /** Asynchronously log proxy requests to the DB */
-function logRequest(keyHash, model, status, latencyMs, tokens = {}) {
+function logRequest(keyHash, model, status, latencyMs, tokens = {}, clientHint = null) {
   prisma.requestLog.create({
     data: {
       keyHash: keyHash ?? null,
@@ -111,6 +133,7 @@ function logRequest(keyHash, model, status, latencyMs, tokens = {}) {
       latencyMs,
       promptTokens: tokens.prompt_tokens || null,
       completionTokens: tokens.completion_tokens || null,
+      clientHint,
     },
   }).catch(async (err) => {
     if (keyHash) {
@@ -123,6 +146,7 @@ function logRequest(keyHash, model, status, latencyMs, tokens = {}) {
             latencyMs,
             promptTokens: tokens.prompt_tokens || null,
             completionTokens: tokens.completion_tokens || null,
+            clientHint,
           },
         });
         return;
@@ -135,7 +159,7 @@ function logRequest(keyHash, model, status, latencyMs, tokens = {}) {
   });
 }
 
-async function createRequestLog(keyHash, model, status, latencyMs) {
+async function createRequestLog(keyHash, model, status, latencyMs, clientHint = null) {
   try {
     return await prisma.requestLog.create({
       data: {
@@ -143,6 +167,7 @@ async function createRequestLog(keyHash, model, status, latencyMs) {
         model,
         status,
         latencyMs,
+        clientHint,
       },
     });
   } catch (err) {
@@ -154,6 +179,7 @@ async function createRequestLog(keyHash, model, status, latencyMs) {
             model,
             status,
             latencyMs,
+            clientHint,
           },
         });
       } catch {
@@ -293,6 +319,7 @@ router.use(async (req, res) => {
     }
   }
   const isStream = baseBody?.stream === true;
+  const clientHint = parseClientHint(req.headers['user-agent']);
   const attempted = new Set();
   const evicted = new Set();
   let lastError = null;
@@ -410,14 +437,14 @@ router.use(async (req, res) => {
           await rotationManager.recordFailure(keyEntry.hash, 429, cooldownMs);
         }
         lastError = { status: 429, hash: keyEntry.hash };
-        logRequest(keyEntry.hash, currentModel(), 429, Date.now() - startTime);
+        logRequest(keyEntry.hash, currentModel(), 429, Date.now() - startTime, {}, clientHint);
         continue;
       }
 
       if (upstreamRes.status === 402) {
         await rotationManager.recordFailure(keyEntry.hash, 402);
         lastError = { status: 402, hash: keyEntry.hash };
-        logRequest(keyEntry.hash, currentModel(), 402, Date.now() - startTime);
+        logRequest(keyEntry.hash, currentModel(), 402, Date.now() - startTime, {}, clientHint);
         continue;
       }
 
@@ -425,14 +452,14 @@ router.use(async (req, res) => {
         await rotationManager.recordFailure(keyEntry.hash, 401);
         await rotationManager.evict(keyEntry.hash);
         evicted.add(keyEntry.hash);
-        logRequest(keyEntry.hash, currentModel(), 401, Date.now() - startTime);
+        logRequest(keyEntry.hash, currentModel(), 401, Date.now() - startTime, {}, clientHint);
         continue;
       }
 
       if (upstreamRes.status >= 500 && upstreamRes.status < 600) {
         const wasDropped = await rotationManager.recordFailure(keyEntry.hash, upstreamRes.status);
         lastError = { status: upstreamRes.status, hash: keyEntry.hash, message: `Upstream error ${upstreamRes.status}` };
-        logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime);
+        logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime, {}, clientHint);
 
         // ── Model fallback chain (request-scoped + deterministic) ──
         if (!wasDropped && !fallbackModel && baseBody && baseBody.model) {
@@ -464,6 +491,7 @@ router.use(async (req, res) => {
           currentModel(),
           upstreamRes.status,
           Date.now() - startTime,
+          clientHint,
         );
         const sseObserver = new SseUsageObserver();
 
@@ -492,12 +520,12 @@ router.use(async (req, res) => {
       if (contentType.includes('application/json')) {
         const data = await upstreamRes.json();
         const tokens = data.usage || {};
-        logRequest(keyEntry.hash, data.model || currentModel(), upstreamRes.status, Date.now() - startTime, tokens);
+        logRequest(keyEntry.hash, data.model || currentModel(), upstreamRes.status, Date.now() - startTime, tokens, clientHint);
         return res.json(data);
       }
 
       const text = await upstreamRes.text();
-      logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime);
+      logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime, {}, clientHint);
       return res.send(text);
     } catch (err) {
       if (err.name === 'AbortError') {

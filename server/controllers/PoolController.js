@@ -395,9 +395,18 @@ class PoolController extends BaseController {
       const logs = await prisma.requestLog.findMany({
         take: 100,
         orderBy: { createdAt: 'desc' },
-        include: {
-          key: { select: { name: true, account: { select: { alias: true } } } }
-        }
+        select: {
+          id: true,
+          keyHash: true,
+          model: true,
+          status: true,
+          latencyMs: true,
+          promptTokens: true,
+          completionTokens: true,
+          clientHint: true,
+          createdAt: true,
+          key: { select: { name: true, account: { select: { alias: true } } } },
+        },
       });
       
       // Calculate basic stats for the last 24h

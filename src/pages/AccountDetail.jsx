@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import * as api from '../api';
 import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
+import SessionDot from '../components/SessionDot';
 import { accountNeedsSession } from '../utils/accountSession';
 import {
   WalletIcon,
@@ -436,6 +437,19 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             }}
           />
         )}
+
+        {deleteAccountConfirm && (
+          <div className="modal-overlay" onClick={() => setDeleteAccountConfirm(false)}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-title">Remove account from Hydra?</div>
+              <p className="modal-body">This only removes the account from Hydra — your OpenRouter account, keys, and credits are not affected.</p>
+              <div className="modal-actions">
+                <button className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
+                <button className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   }
@@ -488,69 +502,86 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <p style={{ margin: 0 }}>Account details and API key management</p>
-          {accountMeta?.hasCredentials && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setLoginModalOpen(true)}
-              title="Re-authenticate via email OTP or password to refresh session"
-            >
-              [UNLOCK] Re-auth
-            </button>
-          )}
-        </div>
+        <p style={{ margin: 0 }}>Account details and API key management</p>
       </div>
 
-      {/* Management key preview */}
-      {snapshot.managementKeyPreview && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-md)', padding: '6px 10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)' }}>
-          <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Mgmt Key</span>
-          <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', userSelect: 'text', flex: 1 }}>
-            {revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview}
+      {/* Identity strip */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+        marginBottom: 'var(--space-lg)',
+        padding: '10px 14px',
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border-subtle)',
+      }}>
+        <SessionDot
+          status={accountMeta?.sessionStatus}
+          hasManagementKey={!!accountMeta?.hasManagementKey}
+          hasCredentials={!!accountMeta?.hasCredentials}
+        />
+        <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+          {snapshot.email || accountMeta?.email || '—'}
+        </span>
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+          {resolvedAccountId}
+        </span>
+        {accountMeta?.sessionStatus && (
+          <span style={{
+            marginLeft: 'auto', fontSize: '0.65rem', fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: '0.07em',
+            color: accountMeta.sessionStatus === 'active' ? 'var(--status-success)'
+              : accountMeta.sessionStatus === 'expiring' ? 'var(--status-warning)'
+              : 'var(--text-tertiary)',
+          }}>
+            {accountMeta.sessionStatus}
           </span>
+        )}
+        {accountMeta?.hasCredentials && (
           <button
-            className="btn btn-ghost"
-            style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }}
-            onClick={handleRevealMgmtKey}
-            title={revealedMgmt ? 'Hide' : 'Reveal full key'}
-            disabled={loadingMgmtReveal}
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setLoginModalOpen(true)}
+            title="Re-authenticate via email OTP or password"
           >
-            {loadingMgmtReveal ? <span style={{ fontSize: '0.65rem' }}>…</span> : revealedMgmt ? <EyeOffIcon size={11} /> : <EyeIcon size={11} />}
+            [UNLOCK] Re-auth
           </button>
-          <button
-            className="btn btn-ghost"
-            style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }}
-            onClick={() => copyKey('mgmt', revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview)}
-            title={revealedMgmt ? 'Copy key' : 'Copy preview (reveal to copy full key)'}
-          >
-            {copiedKey === 'mgmt' ? <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={11} />}
-          </button>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Stored Management Keys (New) */}
-      {managementKeys.length > 0 && (
-        <div style={{ marginBottom: 'var(--space-md)', padding: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', borderRadius: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Stored Management Keys ({managementKeys.length})
+      {/* Management keys */}
+      {(snapshot.managementKeyPreview || managementKeys.length > 0) && (
+        <div style={{ marginBottom: 'var(--space-md)', border: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}
             </span>
-            <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys}>
-              {loadingMgmtKeys ? '↻' : '↻ Refresh'}
+            <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
+              {loadingMgmtKeys ? '↻' : '↻'}
             </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {managementKeys.map((key) => (
-              <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>{key.name}</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--status-success)', marginLeft: 'auto' }}>{key.status}</span>
-                <code style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{key.preview}</code>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{formatDate(key.createdAt)}</span>
-              </div>
-            ))}
-          </div>
+          {/* Active key preview (from snapshot) */}
+          {snapshot.managementKeyPreview && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-tertiary)' }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--status-success)', textTransform: 'uppercase' }}>active</span>
+              <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', userSelect: 'text', flex: 1 }}>
+                {revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview}
+              </span>
+              <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }} onClick={handleRevealMgmtKey} title={revealedMgmt ? 'Hide' : 'Reveal'} disabled={loadingMgmtReveal}>
+                {loadingMgmtReveal ? <span style={{ fontSize: '0.65rem' }}>…</span> : revealedMgmt ? <EyeOffIcon size={11} /> : <EyeIcon size={11} />}
+              </button>
+              <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }} onClick={() => copyKey('mgmt', revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview)}>
+                {copiedKey === 'mgmt' ? <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={11} />}
+              </button>
+            </div>
+          )}
+          {/* All stored management keys */}
+          {managementKeys.length > 0 && managementKeys.map((key) => (
+            <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-card)', borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontWeight: 500 }}>{key.name}</span>
+              <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>{key.status}</span>
+              <code style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{key.preview}</code>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{formatDate(key.createdAt)}</span>
+            </div>
+          ))}
         </div>
       )}
 

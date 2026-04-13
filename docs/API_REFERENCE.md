@@ -261,10 +261,12 @@ Implemented in `server/routes/pool.js` and `server/controllers/PoolController.js
 
 `GET /api/pool/traffic` — success payload `data` includes:
 
-- **`logs`** — Up to 100 newest `RequestLog` rows (`model`, `status`, `latencyMs`, `promptTokens`, `completionTokens`, `createdAt`, `keyHash`). When the related `Key` row still exists, each log includes `key.name` and `key.account.alias`.
+- **`logs`** — Up to 100 newest `RequestLog` rows (`model`, `status`, `latencyMs`, `promptTokens`, `completionTokens`, `clientHint`, `createdAt`, `keyHash`). When the related `Key` row still exists, each log includes `key.name` and `key.account.alias`.
 - **`metrics`** — Counts of requests in the last 24 hours grouped by HTTP `status` (used for aggregate stats on the page).
 
-The **Traffic Console** (`src/pages/Traffic.jsx`, route `/traffic`) renders each log in a table with columns: **Timestamp** (localized short date + medium time), **Status**, **Model** (ellipsis + `title` for full id), **Account** (alias, or archived/deleted fallback if the key is gone), **Key** (key name with an 8-character `keyHash` prefix as key id), **Latency**, **Tokens** (in/out or `stream` when counts are absent).
+The **Traffic Console** (`src/pages/Traffic.jsx`, route `/traffic`) renders each log in a table with columns: **Timestamp** (localized short date + medium time), **Status**, **Model** (ellipsis + `title` for full id), **Account** (alias, or archived/deleted fallback if the key is gone), **Key** (key name with an 8-character `keyHash` prefix as key id), **Client** (tool hint badge — see below), **Latency**, **Tokens** (in/out or `—` when counts are absent).
+
+**Client identification (`clientHint`):** `proxy.js` reads the `User-Agent` header of each incoming request and parses it into a short lowercase label stored in `RequestLog.clientHint`. Known labels: `cursor`, `windsurf`, `continue`, `copilot`, `aider`, `litellm`, `openai-node`, `openai-py`, `anthropic-sdk`, `curl`, `python`, `node-fetch`. Unknown UAs store `null` and display as `—` in the UI. Captured on every request including errors (429, 401, 402, 5xx).
 
 ## Proxy Routes
 

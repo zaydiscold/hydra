@@ -84,6 +84,7 @@ model RequestLog {
   latencyMs        Int
   promptTokens     Int?
   completionTokens Int?
+  clientHint       String?
   createdAt        DateTime @default(now())
 
   @@index([createdAt])

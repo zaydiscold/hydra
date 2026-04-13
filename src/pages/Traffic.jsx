@@ -161,6 +161,7 @@ export default function Traffic({ addToast }) {
                   <th>Model</th>
                   <th>Account</th>
                   <th>Key</th>
+                  <th>Client</th>
                   <th style={{ textAlign: 'right' }}>Latency</th>
                   <th style={{ textAlign: 'right' }}>Tokens (in/out)</th>
                 </tr>
@@ -215,6 +216,15 @@ export default function Traffic({ addToast }) {
                           {shortHash}
                         </div>
                       </td>
+                      <td style={{ verticalAlign: 'middle' }}>
+                        {log.clientHint ? (
+                          <span className="badge badge-info" style={{ fontSize: '0.7rem', textTransform: 'lowercase' }}>
+                            {log.clientHint}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>—</span>
+                        )}
+                      </td>
                       <td
                         className="mono"
                         style={{
@@ -235,7 +245,7 @@ export default function Traffic({ addToast }) {
                           verticalAlign: 'middle'
                         }}
                       >
-                        {(log.promptTokens !== null && log.completionTokens !== null) ? `${log.promptTokens}/${log.completionTokens}` : 'stream'}
+                        {(log.promptTokens !== null && log.completionTokens !== null) ? `${log.promptTokens}/${log.completionTokens}` : '—'}
                       </td>
                     </tr>
                   );
