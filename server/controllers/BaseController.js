@@ -49,4 +49,23 @@ export default class BaseController {
       throw err;
     }
   }
+
+  /**
+   * Express async handler wrapper. 
+   * Captures rejected promises and routes them through the error() response handler.
+   */
+  catchAsync(fn) {
+    return (req, res, next) => {
+      Promise.resolve(fn.call(this, req, res, next)).catch((err) => {
+        // Automatically translate generic errors via our base error handler
+        return this.error(
+          res, 
+          err.message, 
+          err.status || 500, 
+          err.code || 'INTERNAL_ERROR', 
+          err.extra || {}
+        );
+      });
+    };
+  }
 }

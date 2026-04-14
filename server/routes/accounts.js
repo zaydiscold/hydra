@@ -6,8 +6,8 @@ const router = Router();
 const controller = new AccountController();
 
 // Use .bind(controller) to preserve 'this' context if needed, or stick to arrow functions
-router.get('/', requireUnlocked, (req, res) => controller.getAccounts(req, res));
-router.post('/', requireUnlocked, (req, res) => controller.addAccount(req, res));
+router.get('/', requireUnlocked, controller.catchAsync(controller.getAccounts));
+router.post('/', requireUnlocked, controller.catchAsync(controller.addAccount));
 router.post('/with-credentials', requireUnlocked, (req, res) => controller.addAccountWithCredentials(req, res));
 router.post('/bulk', requireUnlocked, (req, res) => controller.bulkAdd(req, res));
 router.post('/bulk-otp-stubs', requireUnlocked, (req, res) => controller.bulkOtpStubs(req, res));

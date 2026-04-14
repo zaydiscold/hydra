@@ -30,46 +30,32 @@ function clerkDebugOtpExtra() {
   };
 }
 
-// In-memory map: signInId → { accountId, userId, clientCookie, email, createdAt }
-// TTL: 15 minutes (Clerk magic links typically expire in 10 min)
-export const pendingMagicLinks = new Map();
-setInterval(() => {
-  const cutoff = Date.now() - 15 * 60 * 1000;
-  for (const [k, v] of pendingMagicLinks) {
-    if (v.createdAt < cutoff) pendingMagicLinks.delete(k);
-  }
-}, 60_000);
-
 export class AccountController extends BaseController {
   async getAccounts(req, res) {
-    try {
-      const accounts = await store.getAccounts(req.user.id);
-      return this.success(res, accounts);
-    } catch (err) {
-      return this.error(res, err.message, err.status || 500);
-    }
+    const accounts = await store.getAccounts(req.user.id);
+    return this.success(res, accounts);
   }
 
   async addAccount(req, res) {
+    const { alias, managementKey } = this.validate(req.body, addAccountSchema);
+    
     try {
-      const { alias, managementKey } = this.validate(req.body, addAccountSchema);
-      try {
-        assertManagementKey(managementKey, 'account management');
-      } catch (err) {
-        return this.error(res, err.message, 400);
-      }
-      
-      try {
-        await openrouter.getCredits(managementKey);
-      } catch (err) {
-        return this.error(res, `Invalid management key: ${err.message}`, 400);
-      }
-      
-      const account = await store.addAccount(req.user.id, alias, managementKey);
-      return this.success(res, account, 201);
+      assertManagementKey(managementKey, 'account management');
     } catch (err) {
-      return this.error(res, err.message, err.status || 500);
+      err.status = 400;
+      throw err;
     }
+    
+    try {
+      await openrouter.getCredits(managementKey);
+    } catch (err) {
+      const wrappedErr = new Error(`Invalid management key: ${err.message}`);
+      wrappedErr.status = 400;
+      throw wrappedErr;
+    }
+    
+    const account = await store.addAccount(req.user.id, alias, managementKey);
+    return this.success(res, account, 201);
   }
 
   async addAccountWithCredentials(req, res) {
@@ -777,6 +763,7 @@ export class AccountController extends BaseController {
       // Re-send with real redirect_url — do a second prepare call with the correct URL
       // (Clerk ignores the redirect_url value for completion but needs it in the original prepare)
       // We store the pending entry so the callback can look it up
+      const { pendingMagicLinks } = await import('../services/magic-link-manager.js');
       pendingMagicLinks.set(signInId, {
         accountId: account.id,
         userId: req.user.id,

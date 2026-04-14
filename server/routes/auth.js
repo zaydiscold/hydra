@@ -32,7 +32,7 @@ router.get('/magic-callback', async (req, res) => {
 
   try {
     // Lazy import to avoid circular deps
-    const { pendingMagicLinks } = await import('../controllers/AccountController.js');
+    const { pendingMagicLinks } = await import('../services/magic-link-manager.js');
     const clerkAuth = await import('../services/clerk-auth.js');
     const store = await import('../services/store.js');
     const { logger } = await import('../services/logger.js');
