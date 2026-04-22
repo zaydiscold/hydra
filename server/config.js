@@ -87,6 +87,11 @@ try {
     HYDRA_REDEEM_ACTION_HASH: process.env.HYDRA_REDEEM_ACTION_HASH?.trim() || undefined,
   });
 } catch (err) {
+  // ─── ELECTRON_MIGRATION ───
+  // TODO: PAIN_POINTS.md #4 — Replace process.exit(1) with thrown error.
+  // In Electron this kills the entire app silently. electron/main.js should
+  // wrap the server import in try/catch and show a native dialog instead.
+  // ─── END ELECTRON_MIGRATION ───
   console.error('Invalid environment variables:', err.issues ?? err.errors ?? err);
   process.exit(1);
 }

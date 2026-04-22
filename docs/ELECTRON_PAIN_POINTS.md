@@ -1,8 +1,18 @@
 # Electron Pain Points & Approaches
 
 **Companion to** [ELECTRON_MASTER_PLAN.md](./ELECTRON_MASTER_PLAN.md)
-**Created:** 2026-04-21
+**Created:** 2026-04-21 | **Status:** AUDIT COMPLETE — All pain points marked in source code
 **Purpose:** Every trap, hangup, and broken thing in the codebase that will bite us during Electron migration. Multiple approaches for each. Exact file paths and line numbers.
+
+> ⚠️ **PICKUP NOTE:** All TODO comments are in the codebase. Look for `// ─── ELECTRON_MIGRATION ───` markers. No code changes have been made yet.
+>
+> **Phase 1 (Critical — do first):** Issues #1–7. Start with `server/index.js` → remove auto-bootstrap, remove signal handlers, refactor gracefulShutdown. Then fix data paths in 5 services. Then update launch.js and vite.config.js.
+>
+> **Phase 2 (Packaging):** Issues #8–10. Prisma asarUnpack, Playwright extraResources, pre-built DB template.
+>
+> **Phase 3 (Polish):** Issues #11–16. Logging, app size, code signing, Docker, dotenv, __dirname.
+
+---
 
 ---
 

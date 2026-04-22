@@ -1,7 +1,13 @@
 # Hydra Electron Master Plan
 
-**Status:** Ready for review | **Target:** Electron as the PRIMARY runtime  
+**Status:** Ready for review — **PLANNING COMPLETE, NO CODE CHANGES YET** | **Target:** Electron as the PRIMARY runtime  
 **Date:** 2026-04-21 | **Risk Level:** High (native modules + data migration + ESM)
+
+> ⚠️ **PICKUP NOTE:** All documentation and codebase auditing is complete. Every pain point is marked with `// ─── ELECTRON_MIGRATION ───` comments in the source code. The next step is **Agent A: Server Extract** — see Section 10 below.
+>
+> To pick up: start with `server/index.js` — remove `bootstrap()` auto-call, remove signal handlers, refactor `gracefulShutdown()` to accept `{ exit }` option. Then dispatch remaining agents.
+>
+> **Doc links:** [ELECTRON_PAIN_POINTS.md](./ELECTRON_PAIN_POINTS.md) — 16 issues, exact file:line numbers, recommended fixes.
 
 ---
 
