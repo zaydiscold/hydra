@@ -375,8 +375,8 @@ router.use(async (req, res) => {
       // Connect timeout: short (10s) — only covers TCP+TLS handshake + waiting for headers.
       // Stream timeout: only applied to non-SSE responses (5 min) — SSE streams are not
       // arbitrarily killed since code generation can run 2-5 minutes.
-      const CONNECT_TIMEOUT_MS = 10_000;
-      const NON_STREAM_TIMEOUT_MS = 5 * 60_000;
+      const CONNECT_TIMEOUT_MS = 10000;
+      const NON_STREAM_TIMEOUT_MS = 5 * 60000;
       const ctrl = new AbortController();
       connectTimeoutId = setTimeout(() => ctrl.abort(), CONNECT_TIMEOUT_MS);
 

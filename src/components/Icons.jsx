@@ -207,3 +207,46 @@ export const EyeOffIcon = (props) => (
     <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
+
+export const UserIcon = (props) => (
+  <svg {...defaultProps} {...props}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+export const ChevronDownIcon = (props) => (
+  <svg {...defaultProps} {...props}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
+export const SearchIcon = (props) => (
+  <svg {...defaultProps} {...props}>
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.3-4.3" />
+  </svg>
+);
+
+export const SyncIcon = (props) => (
+  <svg {...defaultProps} {...props}>
+    <path d="M21 2v6h-6" />
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M3 22v-6h6" />
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
+export const GlobeIcon = (props) => (
+  <svg {...defaultProps} {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+    <path d="M2 12h20" />
+  </svg>
+);
+
+export const ChevronRightIcon = (props) => (
+  <svg {...defaultProps} {...props}>
+    <path d="m9 18 6-6-6-6" />
+  </svg>
+);

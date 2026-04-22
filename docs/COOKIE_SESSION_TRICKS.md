@@ -15,7 +15,12 @@
 
 **Implementation plan:** `config.clientCookie` (string) → `config.clientCookies` (array of `{cookie, issuedAt}`). Max 25 per account. Migration: wrap existing string in array format. See P1 in plan.
 
-**Status:** Planned, not implemented.
+**Status:** Implemented.
+
+**Implementation reality (Apr 2026):**
+- Stack lives in `config.clientCookies` as `{cookie, issuedAt}` entries (newest-first), with legacy `config.clientCookie` synced to latest.
+- Dead cookies are now persisted as pruned during refresh flows, not only filtered in-memory.
+- Current cap is 25 cookies per account.
 
 ---
 
@@ -26,8 +31,8 @@
 **Why it matters:** The old bug stored JWT `exp` (~2.5 min) as `sessionExpiry`. All sessions appeared expired. Ghost recovery uses the `__client` cookie to silently refresh without user intervention.
 
 **How (exact flow):**
-1. `AccountController.refreshAccountLogin` checks `session.clientCookie` exists
-2. Calls `clerkAuth.refreshSession(clientCookie, sessionCookie)`
+1. `AccountController.refreshAccountLogin` checks stacked `session.clientCookies` (falls back to single `session.clientCookie`)
+2. Calls `clerkAuth.refreshSession(cookieStackOrCookie, sessionCookie)`
 3. If Clerk returns a fresh `__session` JWT → persist it, log `GHOST_SESSION_RECOVERED`
 4. If Clerk returns null → session is truly dead, prompt re-auth
 
@@ -160,6 +165,19 @@
 
 **If >7 days:** Increase `CLERK_SESSION_TTL_MS`. Ghost recovery covers nearly everything.
 **If ~3 days:** Session-refresher's 24h window is tight. Consider refreshing at 48h mark.
+
+---
+
+## 18. Browser Context vs Persisted Session Reality
+
+An active/incognito browser window is **not** Hydra's keepalive mechanism.
+
+Hydra keeps sessions alive via persisted cookies/session metadata:
+- `sessionCookie` (`__session`)
+- `clientCookies`/`clientCookie` (`__client` stack)
+- `sessionExpiry`
+
+Browser automation is used to **capture** cookies during auth/recovery, then runtime healing uses stored data (`store.js`, `session-refresher.js`, dashboard/account refresh paths).
 
 ---
 

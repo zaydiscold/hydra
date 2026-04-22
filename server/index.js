@@ -29,6 +29,7 @@ import { enforceLegacyStorageReset } from './services/legacy-storage.js';
 import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
 import { startSessionRefresher, stopSessionRefresher } from './services/session-refresher.js';
 import { proxyGate } from './services/proxy-gate.js';
+import { rotationManager } from './services/rotation-manager.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -151,6 +152,11 @@ async function bootstrap() {
   startPinger();
   startRequestLogRetention();
   startSessionRefresher(); // P13 — auto-refresh sessions approaching expiry
+
+  // Eagerly load the rotation pool so it's ready before first proxy request
+  rotationManager.reload().catch(err => {
+    logger.warn(`[POOL] Eager load failed (no accounts yet?): ${err.message}`);
+  });
 
   server = app.listen(config.PORT, '0.0.0.0', () => {
     logger.info(`  🐉 Hydra Server live on port ${config.PORT}`);

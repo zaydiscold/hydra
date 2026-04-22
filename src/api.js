@@ -118,6 +118,7 @@ async function request(path, options = {}) {
     if (!res.ok) {
       const msg = data?.error || `Request failed (${res.status})`;
       const err = new Error(msg);
+      err.status = res.status;
       if (data?.code) err.code = data.code;
       if (data?.hint) err.hint = data.hint;
       if (data?.details != null) err.details = data.details;
@@ -197,13 +198,13 @@ export const verifyOTP = (id, signInId, code, options = {}) =>
     method: 'POST',
     body: { ...options, signInId, code },
   });
-export const refreshSession = (id) =>
-  request(`/accounts/${id}/refresh`, { method: 'POST' });
 export const refreshAccountLogin = (id) =>
   request(`/accounts/${id}/refresh-login`, { method: 'POST' });
 export const silentRefreshSession = (id) =>
   request(`/accounts/${id}/refresh`, { method: 'POST' });
 export const getSessionStatus = (id) => request(`/accounts/${id}/session-status`);
+export const checkSessionLive = (id) => request(`/accounts/${id}/session-check`);
+export const silentRefreshOnly = (id) => request(`/accounts/${id}/silent-refresh`, { method: 'POST' });
 
 // Magic link (email_link strategy)
 export const sendMagicLink = (id, email) =>
@@ -274,6 +275,7 @@ export const deletePoolKey = (hash) =>
 export const getTraffic = () => request('/pool/traffic');
 export const getPoolModels = () => request('/pool/models');
 export const getPoolSyncStatus = () => request('/pool/sync-status');
+export const rotateMasterKey = () => request('/pool/rotate-master-key', { method: 'POST' });
 
 // System
 export const getSystemTasks = () => request('/system/tasks');
@@ -282,8 +284,18 @@ export const getSystemHealth = () => request('/system/health');
 export const getProxyStatus = () => request('/system/proxy-status');
 export const toggleProxy = (enabled) => request('/system/proxy-toggle', { method: 'POST', body: { enabled } });
 
+// Test a stored key against OpenRouter /auth/key
+export const testKey = (accountId, hash) =>
+  request(`/accounts/${accountId}/keys/${hash}/test`, { method: 'POST' });
+
 // Management Key Storage (New)
 export const getManagementKeys = (accountId) => request(`/accounts/${accountId}/management-keys`);
 export const getBestManagementKey = (accountId) => request(`/accounts/${accountId}/management-keys/best`);
 export const storeManagementKey = (accountId, key, name, metadata) =>
   request(`/accounts/${accountId}/management-keys/store`, { method: 'POST', body: { key, name, metadata } });
+
+export const importManagementKey = (accountId, key, name) =>
+  request(`/accounts/${accountId}/management-keys/store`, { method: 'POST', body: { key, name } });
+
+export const revokeManagementKey = (accountId, keyId) =>
+  request(`/accounts/${accountId}/management-keys/${keyId}`, { method: 'DELETE' });

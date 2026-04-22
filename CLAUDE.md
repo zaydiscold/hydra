@@ -1,5 +1,9 @@
 # Hydra — Claude Code Instructions
 
+## Do not be lazy
+
+Do not be lazy. We are the hardest workers; that's what separates the boys from the men. If you see something wrong, fix it — don't note it, don't table it, fix it. A loose wire left alone doesn't stay loose — it arcs, it shorts, it takes down the whole circuit. Every skipped fix is technical debt that compounds. Every "good enough" is a lie you'll pay for later. Be paranoid. Assume something is wrong. Check the wiring.
+
 ## Agent reading order
 
 1. Read this file for repo-level rules.
@@ -97,6 +101,34 @@ When a plan splits into mostly independent streams (e.g. a small util module, a 
 npm run dev        # both server + client
 node server/index.js  # server only
 ```
+
+## Password Recovery (when login breaks)
+
+The local password is stored as a bcrypt hash in `data/hydra.db`. If the UI shows "Invalid credentials" and `1111` doesn't work, reset it:
+
+```bash
+node -e "
+const { PrismaClient } = require('./node_modules/.prisma/client');
+const bcrypt = require('./node_modules/bcryptjs');
+const p = new PrismaClient({ datasources: { db: { url: 'file:$(pwd)/data/hydra.db' } } });
+bcrypt.hash('1111', 12).then(hash =>
+  p.user.updateMany({ data: { passwordHash: hash } })
+    .then(r => { console.log('Reset OK, rows:', r.count); p.\$disconnect(); })
+).catch(e => { console.error(e.message); p.\$disconnect(); });
+"
+```
+
+**Why this breaks:** The password can be changed via Settings in the UI. There's no "forgot password" flow — the only in-app recovery is Nuclear Reset (wipes all data). Use the command above instead.
+
+**Two DB files:** `data/hydra.db` is the live DB (set in `.env` via `DATABASE_URL`). `data/dev.db` is an old artifact — ignore it.
+
+## Cookie & Session Probe — Critical Implementation Notes
+
+**`getSessionStatusAsync` in `server/services/store.js`:** This is the per-account live probe called by `GET /api/accounts/:id/session-check`. It passes the full `clientCookies` stack to `refreshSession` (Exploit #14 stack traversal) and **persists the fresh `__client` cookie** returned by Clerk back to the DB (fire-and-forget via `updateAccountSession`). This prevents false `expired` reports caused by stale stored cookies after a probe cycle.
+
+**`AccountController` refresh endpoints (lines 244, 448, 851):** Must use `session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie` — the full stack, not the legacy single-string `session.clientCookie`. `dashboard-api.js` is the reference implementation for this pattern.
+
+**`src/utils/cardHealth.js`:** Single source of truth for card health status (healthy/partial/dead). Imported by `AccountCard.jsx` — do not inline health logic in the component. Both the status dot AND the border color are derived from this util.
 
 ## Learned Workspace Facts
 

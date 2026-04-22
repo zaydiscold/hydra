@@ -117,6 +117,11 @@ Internal lane keys are **`credentials`**, **`key_import`**, and **`oauth_session
 ### Session → management key → standard keys
 
 1. **Clerk session in vault** — For **`hasCredentials`** accounts, **`canProvision`** requires a session that **`accountNeedsSession`** does *not* treat as missing/expired. Without that, the row must **Authenticate** first (when **`canAuthenticate`** / email present) or use another path.
+   - Current Dashboard/Vault behavior splits state:
+     - **display status** (`/api/dashboard` + `/api/accounts/:id/session-status`) for badges/dots only
+     - **action truth** (`/api/accounts/:id/session-check`) for Provision enablement
+   - `active` and `expiring` are action-safe for Provision.
+   - Key-only accounts (`hasCredentials === false`) are excluded from session-gated Provision flows.
 2. **Management key** — OpenRouter management REST (balances, list/create keys) needs a key Hydra treats as valid for that API. OpenRouter currently returns provisioned management-key material as a full **`sk-or-v1-…`** string, so Hydra verifies it with OpenRouter instead of relying on a unique prefix. Automation fills this when **`canProvision`** is true; otherwise the operator pastes via **Paste management key** (modal) or Dashboard import.
 3. **Standard keys** — After the management key exists, Key Manager can list/create **standard** keys (`sk-or-v1-…`) for traffic/routing. Session without management key does not unlock those APIs.
 

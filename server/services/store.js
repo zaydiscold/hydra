@@ -5,12 +5,20 @@ import { getProxyMasterSecret } from './local-secrets.js';
 import { decrypt, decryptConfig, encrypt, encryptConfig } from './storage-codec.js';
 import { logger } from './logger.js';
 import { refreshSession, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
-import { getBestManagementKey } from './management-key-store.js';
+import {
+  backfillLegacyManagementKey,
+  getBestManagementKey,
+  storeManagementKey,
+} from './management-key-store.js';
 
 // In-memory cache for live session probe results.
 // Key: accountId (string), Value: { status: string, expiresAt: number }
 const _sessionStatusCache = new Map();
 const SESSION_STATUS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export function invalidateSessionStatusCache(accountId) {
+  _sessionStatusCache.delete(accountId);
+}
 
 /**
  * Effective session expiry from stored config.
@@ -38,20 +46,19 @@ export function resolveEffectiveSessionExpiry(config, _sessionTokenPlain) {
  * @param {object} config - decrypted account config
  * @param {string} sessionTokenPlain - decrypted __session JWT or ''
  * @param {boolean} sessionDecryptFailed - whether decryption failed
+ * @param {string|null} accountId - account id for cache lookup
+ * @param {string|null} userId - owner user id; when provided, persists fresh cookies returned by Clerk
  * @returns {Promise<string>} session status: 'active', 'expiring', 'expired', 'none', 'error', 'unknown'
  */
-async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFailed, accountId = null) {
+async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFailed, accountId = null, userId = null, { bypassCache = false } = {}) {
   if (sessionDecryptFailed) return 'error';
 
   const sessionCookie = sessionTokenPlain || config.sessionCookie || '';
   const hasSession = !!sessionCookie.trim();
   if (!hasSession) return 'none';
 
-  const clientCookie = config.clientCookie ? String(config.clientCookie).trim() : '';
-  const hasClientCookie = !!clientCookie;
-
-  // Check in-memory cache first to avoid hammering Clerk.
-  if (accountId) {
+  // Check in-memory cache first to avoid hammering Clerk (skipped when bypassCache=true).
+  if (accountId && !bypassCache) {
     const cached = _sessionStatusCache.get(accountId);
     if (cached && Date.now() < cached.expiresAt) {
       return cached.status;
@@ -59,17 +66,33 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
   }
 
   // Live probe: call GET /v1/client with __client cookie — ground truth for session health.
-  // Exploit #14: Try stacked cookies newest-first until one works.
-  if (hasClientCookie) {
+  // Exploit #14: Pass full cookie stack so refreshSession tries newest-first automatically.
+  // Use normalizeClientCookies to cover both legacy string field AND new array field.
+  const cookieStack = normalizeClientCookies(config);
+  if (cookieStack.length > 0) {
     let status;
+    let result;
     try {
-      // Try latest clientCookie first
-      const latestCc = getLatestClientCookie(config) || clientCookie;
-      const result = await refreshSession(latestCc, sessionCookie);
+      const cookieInput = cookieStack;
+      result = await refreshSession(cookieInput, sessionCookie);
       status = result ? 'active' : 'expired';
     } catch {
       status = 'error';
     }
+
+    // Persist the fresh __client cookie Clerk returned — prevents false 'expired' on next probe.
+    // Fire-and-forget: don't block the status response on a DB write.
+    if (result && userId && accountId) {
+      updateAccountSession(
+        userId, accountId,
+        result.sessionToken || result.sessionCookie || undefined,
+        result.clientCookie || undefined,
+        result.sessionExpiry || undefined,
+      ).catch((err) => {
+        logger.warn(`[SESSION] Failed to persist refreshed session probe result for account=${accountId}: ${err.message}`);
+      });
+    }
+
     if (accountId) {
       _sessionStatusCache.set(accountId, { status, expiresAt: Date.now() + SESSION_STATUS_CACHE_TTL_MS });
     }
@@ -161,6 +184,46 @@ function readSessionToken(account) {
   }
 }
 
+async function canonicalizeManagementKeyState(account) {
+  const config = readConfig(account);
+  const legacyManagementKey = typeof config.managementKey === 'string' ? config.managementKey.trim() : '';
+  let bestManagementKey = await getBestManagementKey(account.id);
+
+  if (legacyManagementKey) {
+    try {
+      const backfill = await backfillLegacyManagementKey(account.id, legacyManagementKey);
+      if (backfill?.backfilled) {
+        bestManagementKey = await getBestManagementKey(account.id);
+      }
+    } catch (err) {
+      logger.warn(`[STORE] Failed to backfill legacy management key for account=${account.id}: ${err.message}`);
+    }
+
+    const cleanedConfig = { ...config };
+    delete cleanedConfig.managementKey;
+    try {
+      await prisma.account.update({
+        where: { id: account.id },
+        data: { config: encryptConfig(cleanedConfig) },
+      });
+    } catch (err) {
+      logger.warn(`[STORE] Failed to clear legacy management key config for account=${account.id}: ${err.message}`);
+    }
+
+    return {
+      config: cleanedConfig,
+      bestManagementKey,
+      managementKey: bestManagementKey?.key || null,
+    };
+  }
+
+  return {
+    config,
+    bestManagementKey,
+    managementKey: bestManagementKey?.key || null,
+  };
+}
+
 async function assertAccountUniqueForUser(userId, { alias, email }, excludeAccountId) {
   const normalizedAlias = (alias || '').trim().toLowerCase();
   const normalizedEmail = (email || '').trim().toLowerCase();
@@ -200,24 +263,44 @@ export async function getStoredSessionStatus(userId, id) {
   if (!account) throw new Error('Account not found');
   const config = readConfig(account);
   const { plain, decryptFailed } = readSessionPlainResult(account);
-  // Use async version that validates via actual Clerk API call
-  return getSessionStatusAsync(config, plain, decryptFailed, id);
+  // Pass userId so fresh cookies are persisted after probe — prevents false 'expired' on next cache miss.
+  return getSessionStatusAsync(config, plain, decryptFailed, id, userId);
 }
 
-/** Session row for `GET /api/accounts/:id/session-status` — never throws on decrypt (uses `readSessionPlainResult`).
- * Uses ACTUAL API VALIDATION to determine true session status.
+/** Session row for `GET /api/accounts/:id/session-status` — cached/heuristic display read.
+ * Never performs a live Clerk probe directly. Use probeSessionLive() for action-gated truth.
  */
 export async function getStoredSessionStatusPayload(userId, id) {
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
   const config = readConfig(account);
   const { plain, decryptFailed } = readSessionPlainResult(account);
-  // Use async version that validates via actual Clerk API call
-  const status = await getSessionStatusAsync(config, plain, decryptFailed, id);
+  // Display-only status: can read prior async probe cache, but does not trigger a new live probe.
+  const status = getSessionStatus(config, plain, decryptFailed, id);
   return {
     status,
     sessionExpiry: config.sessionExpiry ?? null,
     sessionDecryptFailed: decryptFailed,
+  };
+}
+
+/**
+ * Force a fresh live Clerk probe, bypassing the 5-minute session status cache.
+ * Use for `GET /api/accounts/:id/session-check` (manual re-check button).
+ * More expensive than getStoredSessionStatusPayload — only call on user demand.
+ */
+export async function probeSessionLive(userId, id) {
+  const account = await prisma.account.findFirst({ where: { id, userId } });
+  if (!account) throw new Error('Account not found');
+  const config = readConfig(account);
+  const { plain, decryptFailed } = readSessionPlainResult(account);
+  // bypassCache: true — skip the in-memory TTL so Clerk is always queried
+  const status = await getSessionStatusAsync(config, plain, decryptFailed, id, userId, { bypassCache: true });
+  return {
+    status,
+    sessionExpiry: config.sessionExpiry ?? null,
+    sessionDecryptFailed: decryptFailed,
+    live: true, // signal to the client that this was a real probe
   };
 }
 
@@ -231,16 +314,15 @@ export async function getStoredSessionStatusPayload(userId, id) {
 export async function getAccounts(userId) {
   const accounts = await prisma.account.findMany({ where: { userId } });
 
-  return Promise.all(accounts.map(async (account) => {
-    const config = readConfig(account);
+  const shaped = await Promise.all(accounts.map(async (account) => {
+    const { config, managementKey } = await canonicalizeManagementKeyState(account);
     const { plain, decryptFailed } = readSessionPlainResult(account);
-    const storedManagementKey = config.managementKey || (await getBestManagementKey(account.id))?.key || null;
     return {
       id: account.id,
       alias: account.alias,
       email: config.email,
       authMethod: config.authMethod,
-      hasManagementKey: !!storedManagementKey,
+      hasManagementKey: !!managementKey,
       /** True when a non-empty password is stored (encrypted). OTP-only accounts are false. */
       passwordOnFile: !!config.password,
       hasCredentials: !!(config.email && (config.password || config.authMethod === 'otp' || config.authMethod === 'password')),
@@ -249,28 +331,33 @@ export async function getAccounts(userId) {
       sessionDecryptFailed: decryptFailed,
       lastSync: config.lastSync,
       lastLoginAt: config.lastLoginAt || null,
+      sessionRefreshedAt: config.sessionRefreshedAt || null,
       sessionExpiry: config.sessionExpiry || null,
       events: config.events || [],
       createdAt: account.createdAt,
+      // Accounts in the OTP wizard that haven't verified yet are hidden from the dashboard.
+      pendingVerification: !!config.pendingVerification,
     };
   }));
+
+  // Hide OTP stub accounts that haven't completed sign-in yet.
+  return shaped.filter((a) => !a.pendingVerification);
 }
 
 export async function getAccountWithKey(userId, id) {
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
 
-  const config = readConfig(account);
+  const { config, managementKey } = await canonicalizeManagementKeyState(account);
   // Exploit #14: Cookie stacking — normalize clientCookies array
   const clientCookiesStack = normalizeClientCookies(config);
-  const storedManagementKey = config.managementKey || (await getBestManagementKey(account.id))?.key || null;
   return {
     ...account,
     ...config,
     clientCookies: clientCookiesStack,
     password: config.password,
     sessionCookie: readSessionToken(account),
-    managementKey: storedManagementKey,
+    managementKey,
   };
 }
 
@@ -279,14 +366,14 @@ export async function getAllAccountsWithKeys(userId) {
 
   const hydrated = await Promise.all(accounts.map(async (account) => {
     try {
-      const config = readConfig(account);
+      const { config, managementKey } = await canonicalizeManagementKeyState(account);
       // Exploit #14: Cookie stacking — normalize clientCookies array for hydrated accounts
       const clientCookiesStack = normalizeClientCookies(config);
       return [{
         ...account,
         ...config,
         clientCookies: clientCookiesStack,
-        managementKey: config.managementKey || (await getBestManagementKey(account.id))?.key || null,
+        managementKey,
         sessionCookie: readSessionToken(account),
       }];
     } catch (err) {
@@ -297,12 +384,12 @@ export async function getAllAccountsWithKeys(userId) {
     }
   }));
 
-  return hydrated.flat();
+  return hydrated.flat().filter((a) => !a.pendingVerification);
 }
 
 export async function addAccount(userId, alias, managementKey) {
   await assertAccountUniqueForUser(userId, { alias });
-  const config = { managementKey, email: null, password: null, authMethod: null };
+  const config = { email: null, password: null, authMethod: null };
   const account = await prisma.account.create({
     data: {
       user: { connect: { id: userId } },
@@ -311,13 +398,20 @@ export async function addAccount(userId, alias, managementKey) {
       config: encryptConfig(config),
     },
   });
+
+  if (managementKey) {
+    await storeManagementKey(account.id, managementKey, 'Hydra Initial Key', {
+      importedAt: new Date().toISOString(),
+      via: 'account.create',
+    });
+  }
 
   return { id: account.id, alias, createdAt: account.createdAt };
 }
 
-export async function addAccountWithCredentials(userId, alias, email, password, authMethod, managementKey = null) {
+export async function addAccountWithCredentials(userId, alias, email, password, authMethod, managementKey = null, { pendingVerification = false } = {}) {
   await assertAccountUniqueForUser(userId, { alias, email });
-  const config = { managementKey, email, password, authMethod: authMethod || 'password' };
+  const config = { email, password, authMethod: authMethod || 'password', pendingVerification: pendingVerification || undefined };
   const account = await prisma.account.create({
     data: {
       user: { connect: { id: userId } },
@@ -327,7 +421,27 @@ export async function addAccountWithCredentials(userId, alias, email, password, 
     },
   });
 
+  if (managementKey) {
+    await storeManagementKey(account.id, managementKey, 'Hydra Initial Key', {
+      importedAt: new Date().toISOString(),
+      via: 'account.create_with_credentials',
+    });
+  }
+
   return { id: account.id, alias, email, authMethod: config.authMethod, createdAt: account.createdAt };
+}
+
+/**
+ * Clear the pendingVerification flag after OTP is successfully verified.
+ * This makes the account visible on the dashboard.
+ */
+export async function clearPendingVerification(userId, id) {
+  const account = await prisma.account.findFirst({ where: { id, userId } });
+  if (!account) return;
+  const config = readConfig(account);
+  if (!config.pendingVerification) return; // already clear — skip unnecessary write
+  delete config.pendingVerification;
+  await prisma.account.update({ where: { id }, data: { config: encryptConfig(config) } });
 }
 
 export async function addAccountWithSessionCookie(userId, alias, sessionCookie) {
@@ -350,7 +464,7 @@ export async function updateAccount(userId, id, updates) {
   if (!account) throw new Error('Account not found');
 
   const config = readConfig(account);
-  if (updates.managementKey !== undefined) config.managementKey = updates.managementKey;
+  const managementKey = updates.managementKey;
 
   if (updates.email !== undefined) {
     const normalizedNew = updates.email.trim().toLowerCase();
@@ -378,6 +492,13 @@ export async function updateAccount(userId, id, updates) {
       config: encryptConfig(config),
     },
   });
+
+  if (managementKey !== undefined) {
+    await updateAccountManagementKey(userId, id, managementKey, {
+      name: 'Hydra Updated Key',
+      metadata: { via: 'account.update' },
+    });
+  }
 
   const next = readConfig(updated);
   return { id: updated.id, alias: updated.alias, email: next.email, authMethod: next.authMethod };
@@ -420,6 +541,7 @@ export async function logAccountEvent(userId, id, type, message) {
  * @param {object} [options]
  * @param {boolean} [options.preserveSessionToken] - If true, do not write `sessionToken` (e.g. OTP start: refresh device cookie only)
  * @param {Record<string, number>} [options.cfCookieExpirations] - Cloudflare cookie expiration timestamps {cookieName: timestampMs}
+ * @param {Array<{cookie: string, issuedAt?: string}>} [options.replaceClientCookies] - Replace stored cookie stack before optional append
  */
 /** Maximum stacked __client cookies per account (Exploit #14: Cookie stacking). */
 const MAX_STACKED_CLIENT_COOKIES = 25;
@@ -429,7 +551,7 @@ const MAX_STACKED_CLIENT_COOKIES = 25;
  * Backward compat: if readConfig returns a string clientCookie, convert to single-element array.
  * Exploit #14: Cookie stacking — clientCookie string → clientCookies array of {cookie, issuedAt}.
  */
-function normalizeClientCookies(config) {
+export function normalizeClientCookies(config) {
   // New format already present
   if (Array.isArray(config.clientCookies) && config.clientCookies.length > 0) {
     return config.clientCookies;
@@ -482,24 +604,26 @@ export function getLatestClientCookie(config) {
   return stack.length > 0 ? stack[0].cookie : '';
 }
 
-/**
- * Remove a dead client cookie from the stack by index.
- * Returns the updated stack.
- */
-export function removeClientCookieAtIndex(stack, index) {
-  if (!Array.isArray(stack) || index < 0 || index >= stack.length) return stack;
-  const updated = [...stack];
-  updated.splice(index, 1);
-  return updated;
-}
 
 export async function updateAccountSession(userId, id, sessionCookie, clientCookie, sessionExpiry, options = {}) {
   const preserveSessionToken = options.preserveSessionToken === true;
   const cfCookieExpirations = options.cfCookieExpirations;
+  const replaceClientCookies = Array.isArray(options.replaceClientCookies)
+    ? options.replaceClientCookies
+        .filter((entry) => entry && typeof entry.cookie === 'string' && entry.cookie.trim() && entry.cookie.trim() !== 'undefined')
+        .map((entry) => ({ cookie: entry.cookie.trim(), issuedAt: entry.issuedAt || new Date().toISOString() }))
+        .slice(0, MAX_STACKED_CLIENT_COOKIES)
+    : null;
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
 
   const config = readConfig(account);
+
+  if (replaceClientCookies) {
+    config.clientCookies = replaceClientCookies;
+    config.clientCookie = replaceClientCookies[0]?.cookie || '';
+    config.clientCookieIssuedAt = replaceClientCookies[0]?.issuedAt || null;
+  }
 
   // Exploit #14: Cookie stacking — append new clientCookie instead of overwrite.
   // If clientCookie is provided and non-empty, stack it onto clientCookies array.
@@ -517,6 +641,8 @@ export async function updateAccountSession(userId, id, sessionCookie, clientCook
   if (options.isNewLogin) {
     config.lastLoginAt = new Date().toISOString();
   }
+
+  config.sessionRefreshedAt = new Date().toISOString();
 
   if (sessionExpiry !== undefined) {
     if (sessionExpiry === null && !preserveSessionToken) {
@@ -541,6 +667,7 @@ export async function updateAccountSession(userId, id, sessionCookie, clientCook
     where: { id },
     data,
   });
+  invalidateSessionStatusCache(id);
 
   return true;
 }
@@ -562,13 +689,19 @@ export async function getAccountSession(userId, id) {
   };
 }
 
-export async function updateAccountManagementKey(userId, id, managementKey) {
+export async function updateAccountManagementKey(userId, id, managementKey, { name = 'Hydra Auto Key', metadata = {} } = {}) {
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
 
   const config = readConfig(account);
-  config.managementKey = managementKey;
   config.lastSync = new Date().toISOString();
+
+  await storeManagementKey(id, managementKey, name, {
+    provisionedAt: new Date().toISOString(),
+    via: 'updateAccountManagementKey',
+    ...metadata,
+  });
+  delete config.managementKey;
 
   await prisma.account.update({
     where: { id },
@@ -806,13 +939,6 @@ export async function syncKeysFromOpenRouter(userId, accountId, liveKeys) {
   }
 }
 
-export async function getSettings() {
-  return { refreshInterval: 300000, theme: 'dark' };
-}
-
-export async function updateSettings(settings) {
-  return settings;
-}
 
 export async function getAccountOwnerOfKey(userId, hash) {
   const key = await prisma.key.findFirst({
@@ -820,8 +946,8 @@ export async function getAccountOwnerOfKey(userId, hash) {
     include: { account: true },
   });
   if (!key) return null;
-  const config = readConfig(key.account);
-  return { ...key.account, managementKey: config.managementKey };
+  const { managementKey } = await canonicalizeManagementKeyState(key.account);
+  return { ...key.account, managementKey };
 }
 
 export async function deleteKey(userId, hash) {

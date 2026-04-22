@@ -220,7 +220,8 @@ export default function CodeRedemption({ addToast }) {
     try {
       const res = await api.bulkMatrixRedeem(assignments);
       const payload = res?.data ?? res ?? [];
-      const batch = Array.isArray(payload) ? payload : payload.data;
+      const batch = Array.isArray(payload) ? payload : (payload?.data ?? payload?.results ?? []);
+      if (!batch.length && payload?.error) addToast(payload.error, 'error');
       if (!Array.isArray(batch)) throw new Error('Bulk redeem returned an invalid response');
 
       for (const item of batch) {
@@ -341,7 +342,7 @@ export default function CodeRedemption({ addToast }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)' }}>Accounts</span>
             <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', minHeight: 'unset', fontSize: '0.68rem' }} onClick={toggleAll} disabled={running}>
-              {selectAll ? 'None' : 'All'}
+              {selectAll ? 'Clear' : 'All'}
             </button>
           </div>
 
@@ -452,7 +453,7 @@ export default function CodeRedemption({ addToast }) {
                 </tr>
               </thead>
               <tbody>
-                {codeList.map((code, ci) => (
+                {codeList.map((code) => (
                   <tr key={code}>
                     <td><code style={{ fontSize: '0.78rem' }}>{code}</code></td>
                     {selectedAccountIds.map(accountId => {

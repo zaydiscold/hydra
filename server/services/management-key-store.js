@@ -13,6 +13,34 @@ import crypto from 'node:crypto';
 import { prisma } from './db.js';
 import { encrypt, decrypt } from './storage-codec.js';
 
+const LEGACY_BACKFILL_NAME = 'Migrated Legacy Key';
+const _legacyBackfillLocks = new Map();
+
+function normalizeManagementKey(key) {
+  if (typeof key !== 'string') return null;
+  const trimmed = key.trim();
+  if (!trimmed) return null;
+  if (!trimmed.startsWith('sk-or-v1-')) return null;
+  if (trimmed.includes('...')) return null;
+  if (trimmed.length < 20) return null;
+  return trimmed;
+}
+
+async function findMatchingKeyRecord(accountId, plainKey) {
+  const keys = await prisma.managementKey.findMany({
+    where: { accountId },
+    orderBy: { createdAt: 'desc' },
+  });
+  for (const row of keys) {
+    try {
+      if (decrypt(row.encryptedKey) === plainKey) return row;
+    } catch {
+      // Ignore unreadable rows and continue scanning.
+    }
+  }
+  return null;
+}
+
 /**
  * Store a newly created management key
  * @param {string} accountId - Hydra account ID
@@ -21,16 +49,24 @@ import { encrypt, decrypt } from './storage-codec.js';
  * @param {Object} metadata - Additional metadata (expiresAt, etc)
  */
 export async function storeManagementKey(accountId, key, name, metadata = {}) {
-  // Reject empty, preview/masked keys (contain ... or too short to be real)
-  if (!key || key.length < 20) {
-    throw new Error('Key too short or empty — full key required');
+  const normalized = normalizeManagementKey(key);
+  if (!normalized) {
+    throw new Error('Invalid management key format — expected full sk-or-v1-* key');
   }
-  if (key.includes('...')) {
-    throw new Error(`Rejecting masked/preview key (length: ${key.length}) — full key required, not preview`);
+
+  const existing = await findMatchingKeyRecord(accountId, normalized);
+  if (existing) {
+    return {
+      id: existing.id,
+      accountId,
+      name: existing.name,
+      status: existing.status,
+      createdAt: existing.createdAt,
+    };
   }
 
   // Encrypt the key
-  const encryptedKey = encrypt(key);
+  const encryptedKey = encrypt(normalized);
 
   // Store in database
   const keyRecord = await prisma.managementKey.create({
@@ -57,6 +93,52 @@ export async function storeManagementKey(accountId, key, name, metadata = {}) {
 }
 
 /**
+ * Idempotently migrate a legacy config.managementKey value into ManagementKey table.
+ * Returns the existing or newly created key record summary, or null when nothing migrated.
+ */
+export async function backfillLegacyManagementKey(accountId, legacyKey) {
+  const normalized = normalizeManagementKey(legacyKey);
+  if (!normalized) {
+    return { backfilled: false, reason: 'missing_or_invalid_legacy_key' };
+  }
+
+  // Prevent duplicate creates within this process for the same account/key pair.
+  const lockId = `${accountId}:${normalized.slice(0, 24)}`;
+  const inflight = _legacyBackfillLocks.get(lockId);
+  if (inflight) return inflight;
+
+  const job = (async () => {
+    const existing = await prisma.managementKey.findFirst({
+      where: { accountId },
+      select: { id: true, name: true, status: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) {
+      return {
+        id: existing.id,
+        accountId,
+        name: existing.name,
+        status: existing.status,
+        createdAt: existing.createdAt,
+        backfilled: false,
+        reason: 'management_key_rows_exist',
+      };
+    }
+
+    const stored = await storeManagementKey(accountId, normalized, LEGACY_BACKFILL_NAME, {
+      migratedAt: new Date().toISOString(),
+      migratedFrom: 'config.managementKey',
+    });
+    return { ...stored, backfilled: true };
+  })().finally(() => {
+    _legacyBackfillLocks.delete(lockId);
+  });
+
+  _legacyBackfillLocks.set(lockId, job);
+  return job;
+}
+
+/**
  * Get all management keys for an account (decrypted)
  * @param {string} accountId
  * @returns {Array} Keys with decrypted values
@@ -77,6 +159,19 @@ export async function getManagementKeys(accountId) {
     lastUsedAt: k.lastUsedAt,
     createdAt: k.createdAt
   }));
+}
+
+/**
+ * Check whether any management-key rows exist for an account.
+ * @param {string} accountId
+ * @returns {boolean}
+ */
+export async function hasManagementKeyRecords(accountId) {
+  const key = await prisma.managementKey.findFirst({
+    where: { accountId },
+    select: { id: true },
+  });
+  return !!key;
 }
 
 /**
@@ -200,14 +295,8 @@ export async function provisionAndStoreKey(deviceId, accountId, name) {
     throw new Error(`Provisioning failed: ${result.message}`);
   }
 
-  // Store it
-  const stored = await storeManagementKey(accountId, result.key, name, {
-    provisionedAt: new Date().toISOString(),
-    via: result.source ?? 'unknown'
-  });
-
   return {
-    ...stored,
-    key: result.key // Include full key in response
+    ...result,
+    key: result.key, // Include full key in response
   };
 }

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api';
 import LoginAccountModal from '../components/LoginAccountModal';
-import { VaultIcon, RefreshIcon, LockIcon, SettingsIcon, ShieldIcon, EditIcon, TrashIcon } from '../components/Icons';
-import { accountNeedsSession } from '../utils/accountSession';
+import { VaultIcon, RefreshIcon, LockIcon, SettingsIcon, ShieldIcon, EditIcon, TrashIcon, SearchIcon } from '../components/Icons';
+import { accountNeedsSession, canProvisionWithSession } from '../utils/accountSession';
 import SessionDot from '../components/SessionDot';
 import { timeAgo } from '../utils/time';
 
@@ -35,12 +35,17 @@ function exportAccountsCSV(accounts) {
 export default function Vault({ addToast }) {
   const [accounts, setAccounts] = useState([]);
   const [liveStatuses, setLiveStatuses] = useState({});
+  const [actionSessionTruth, setActionSessionTruth] = useState({});
   const [loading, setLoading] = useState(true);
   const [probing, setProbing] = useState(false);
   const [loginModalAccount, setLoginModalAccount] = useState(null);
   const [provisioningId, setProvisioningId] = useState(null);
   const [editModal, setEditModal] = useState(null); // { acc, value }
   const [deleteModal, setDeleteModal] = useState(null); // acc
+  const [checkResults, setCheckResults] = useState({}); // id → { status, sessionExpiry }
+  const [checkingId, setCheckingId] = useState(null);
+  const [silentRefreshingId, setSilentRefreshingId] = useState(null);
+  const [modalErrors, setModalErrors] = useState({});
   const warnedRef = useRef(false);
 
   // ── Load accounts from dashboard endpoint ──
@@ -51,9 +56,10 @@ export default function Vault({ addToast }) {
       const accts = res?.data?.accounts ?? [];
       setAccounts(accts);
 
-      // Use server-provided liveStatuses if present
-      if (res?.data?.liveStatuses && Object.keys(res.data.liveStatuses).length > 0) {
-        setLiveStatuses(res.data.liveStatuses);
+      // Use server-provided display statuses if present (cheap/cached path).
+      const serverDisplay = res?.data?.displaySessionStatuses || res?.data?.liveStatuses;
+      if (serverDisplay && Object.keys(serverDisplay).length > 0) {
+        setLiveStatuses(serverDisplay);
       } else {
         // Kick off client-side probe
         probeStatuses(accts);
@@ -94,7 +100,7 @@ export default function Vault({ addToast }) {
         const acct = queue.shift();
         try {
           const r = await api.getSessionStatus(acct.id);
-          results[acct.id] = r?.status ?? 'unknown';
+          results[acct.id] = r?.data?.status ?? r?.status ?? 'unknown';
         } catch {
           results[acct.id] = 'unknown';
         }
@@ -105,7 +111,40 @@ export default function Vault({ addToast }) {
     setProbing(false);
   }
 
+  const probeProvisionTruth = useCallback(async (accts) => {
+    const candidates = (accts || []).filter(
+      (acct) => !acct.hasManagementKey && acct.hasCredentials
+    );
+
+    if (candidates.length === 0) {
+      setActionSessionTruth({});
+      return;
+    }
+
+    const results = {};
+    const queue = [...candidates];
+    const CONCURRENCY = 2;
+    const workers = Array.from({ length: CONCURRENCY }, async () => {
+      while (queue.length) {
+        const acct = queue.shift();
+        try {
+          const res = await api.checkSessionLive(acct.id);
+          results[acct.id] = res?.data?.status ?? 'unknown';
+        } catch {
+          results[acct.id] = 'unknown';
+        }
+      }
+    });
+
+    await Promise.all(workers);
+    setActionSessionTruth(results);
+  }, []);
+
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
+
+  useEffect(() => {
+    probeProvisionTruth(accounts);
+  }, [accounts, probeProvisionTruth]);
 
   // Auto-refresh every 10 minutes while page is visible
   useEffect(() => {
@@ -117,6 +156,27 @@ export default function Vault({ addToast }) {
 
   // ── Provision management key ──
   const handleProvision = useCallback(async (acc) => {
+    if (!acc.hasCredentials) {
+      if (addToast) addToast('Live sign-in is required before provisioning on this account.', 'warning');
+      return;
+    }
+
+    let truthStatus = actionSessionTruth[acc.id];
+    try {
+      const live = await api.checkSessionLive(acc.id);
+      truthStatus = live?.data?.status ?? 'unknown';
+      setActionSessionTruth((prev) => ({ ...prev, [acc.id]: truthStatus }));
+    } catch {
+      truthStatus = truthStatus ?? 'unknown';
+    }
+
+    const canProvisionNow = truthStatus === 'active' || truthStatus === 'expiring';
+
+    if (!canProvisionNow) {
+      if (addToast) addToast('Live session check required before provisioning. Sign in or refresh session first.', 'warning');
+      return;
+    }
+
     setProvisioningId(acc.id);
     try {
       const res = await api.provisionManagementKey(acc.id);
@@ -128,7 +188,7 @@ export default function Vault({ addToast }) {
     } finally {
       setProvisioningId(null);
     }
-  }, [addToast, loadAccounts]);
+  }, [actionSessionTruth, addToast, loadAccounts]);
   
   const handleEdit = useCallback((acc) => {
     setEditModal({ acc, value: acc.alias });
@@ -136,8 +196,15 @@ export default function Vault({ addToast }) {
 
   const commitEdit = useCallback(async () => {
     const { acc, value } = editModal;
-    setEditModal(null);
-    if (!value || value === acc.alias) return;
+    setModalErrors({});
+    if (!value?.trim()) {
+      setModalErrors({ rename: 'Alias cannot be empty' });
+      return;
+    }
+    if (value === acc.alias) {
+      setEditModal(null);
+      return;
+    }
     try {
       await api.updateAccount(acc.id, { alias: value });
       addToast('Account alias updated', 'success');
@@ -179,6 +246,40 @@ export default function Vault({ addToast }) {
     }
   }, [addToast, loadAccounts]);
 
+  const handleCheckSession = useCallback(async (acc) => {
+    setCheckingId(acc.id);
+    try {
+      const res = await api.checkSessionLive(acc.id);
+      const result = res?.data ?? {};
+      setCheckResults((prev) => ({ ...prev, [acc.id]: result }));
+      setActionSessionTruth((prev) => ({ ...prev, [acc.id]: result.status ?? 'unknown' }));
+    } catch (err) {
+      setCheckResults((prev) => ({ ...prev, [acc.id]: { status: 'error', error: err.message } }));
+      setActionSessionTruth((prev) => ({ ...prev, [acc.id]: 'unknown' }));
+    } finally {
+      setCheckingId(null);
+    }
+  }, []);
+
+  const handleSilentRefresh = useCallback(async (acc) => {
+    setSilentRefreshingId(acc.id);
+    try {
+      const res = await api.silentRefreshOnly(acc.id);
+      if (res?.data?.success) {
+        if (addToast) addToast(`✓ ${acc.alias} session refreshed silently`, 'success');
+        setLiveStatuses((prev) => ({ ...prev, [acc.id]: 'active' }));
+        setActionSessionTruth((prev) => ({ ...prev, [acc.id]: 'active' }));
+        loadAccounts(true);
+      } else {
+        if (addToast) addToast('Silent refresh failed — use Sign In to re-authenticate', 'error');
+      }
+    } catch {
+      if (addToast) addToast('Silent refresh failed — use Sign In to re-authenticate', 'error');
+    } finally {
+      setSilentRefreshingId(null);
+    }
+  }, [addToast, loadAccounts]);
+
   // ── Login modal ──
   const handleLoginDone = useCallback((msg) => {
     if (addToast) addToast(msg, 'success');
@@ -188,12 +289,10 @@ export default function Vault({ addToast }) {
 
   // ── Computed totals ──
   const totalBalance = accounts.reduce((s, a) => s + (a.credits?.remaining ?? 0), 0);
-  const activeCount = Object.values(liveStatuses).filter((s) => s === 'active').length
-    || accounts.filter((a) => a.sessionStatus === 'active').length;
-  const expiredCount = accounts.filter((a) => {
-    const s = liveStatuses[a.id] ?? a.sessionStatus;
-    return s === 'expired';
-  }).length;
+  const statusSource = (id) => liveStatuses?.[id] || accounts.find((a) => a.id === id)?.sessionStatus;
+  const activeCount = accounts.filter((a) => statusSource(a.id) === 'active').length;
+  const expiredCount = accounts.filter((a) => ['expired', 'none'].includes(statusSource(a.id))).length;
+  const errorCount = accounts.filter((a) => statusSource(a.id) === 'error').length;
 
   if (loading && accounts.length === 0) {
     return (
@@ -260,9 +359,16 @@ export default function Vault({ addToast }) {
         </div>
         <div className="stat-card shine-sweep animate-spring stagger-delay-100">
           <div className="stat-card-label">Expired Sessions</div>
-          <div className="stat-card-value error mono">{expiredCount}</div>
+          <div className="stat-card-value mono" style={{ color: 'var(--status-warning)' }}>{expiredCount}</div>
           {expiredCount > 0 && (
-            <div className="stat-card-sub" style={{ color: 'var(--status-error)' }}>needs re-auth</div>
+            <div className="stat-card-sub" style={{ color: 'var(--status-warning)' }}>needs re-auth</div>
+          )}
+        </div>
+        <div className="stat-card shine-sweep animate-spring stagger-delay-150">
+          <div className="stat-card-label">Errored</div>
+          <div className="stat-card-value mono" style={{ color: errorCount > 0 ? 'var(--status-error)' : 'var(--text-secondary)' }}>{errorCount}</div>
+          {errorCount > 0 && (
+            <div className="stat-card-sub" style={{ color: 'var(--status-error)' }}>decrypt / config error</div>
           )}
         </div>
       </div>
@@ -302,9 +408,10 @@ export default function Vault({ addToast }) {
             )}
             {accounts.map((acc) => {
               const sessionStatus = liveStatuses[acc.id] ?? acc.sessionStatus ?? 'none';
-              const needsSession = accountNeedsSession(sessionStatus, { hasCredentials: acc.hasCredentials });
+              const provisionTruthStatus = actionSessionTruth[acc.id] ?? 'unknown';
+              const needsSession = accountNeedsSession(sessionStatus);
               const provisioning = provisioningId === acc.id;
-              const canProvision = sessionStatus === 'active' && acc.hasCredentials;
+              const canProvision = !!acc.hasCredentials && canProvisionWithSession(provisionTruthStatus);
 
               return (
                 <tr
@@ -316,9 +423,6 @@ export default function Vault({ addToast }) {
                   {/* Alias */}
                   <td style={{ padding: '12px 16px', fontWeight: 700, fontFamily: 'monospace', fontSize: '0.9rem' }}>
                     {acc.alias}
-                    {acc.hasManagementKey && (
-                      <span className="badge badge-info" style={{ marginLeft: 6, fontSize: '0.65rem', padding: '1px 5px' }}>MK</span>
-                    )}
                   </td>
 
                   {/* Email / Auth */}
@@ -384,21 +488,71 @@ export default function Vault({ addToast }) {
                           className="btn btn-secondary btn-sm"
                           onClick={() => setLoginModalAccount(acc)}
                           title="Authenticate to establish a session"
-                          style={{ padding: '4px 10px' }}
+                          style={{ padding: '4px 10px', ...(sessionStatus === 'expired' ? { color: 'var(--status-error)', borderColor: 'var(--status-error)' } : sessionStatus === 'none' ? { color: 'var(--status-warning)', borderColor: 'var(--status-warning)' } : {}) }}
                         >
                           <LockIcon size={13} />
                           <span style={{ fontSize: '0.72rem', fontWeight: 600 }}>Unlock</span>
                         </button>
                       )}
-                      {!needsSession && acc.hasCredentials && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm btn-icon"
-                          onClick={() => handleRefreshLogin(acc)}
-                          title="Refresh session (re-auth)"
+                      {acc.hasCredentials && (
+                        <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                          {/* Check — read-only live probe */}
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm btn-icon"
+                            onClick={() => handleCheckSession(acc)}
+                            disabled={checkingId === acc.id}
+                            title="Check live session status (read-only)"
+                            style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            {checkingId === acc.id
+                              ? <div className="spinner-sm" style={{ width: 10, height: 10 }} />
+                              : <SearchIcon size={13} />}
+                          </button>
+                          {/* Silent refresh — no session wipe */}
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm btn-icon"
+                            onClick={() => handleSilentRefresh(acc)}
+                            disabled={silentRefreshingId === acc.id}
+                            title="Silent refresh (cookie re-auth, no wipe)"
+                            style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            {silentRefreshingId === acc.id
+                              ? <div className="spinner-sm" style={{ width: 10, height: 10 }} />
+                              : <RefreshIcon size={13} />}
+                          </button>
+                          {/* Wipe — clears session and opens sign-in modal */}
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm btn-icon"
+                            onClick={() => handleRefreshLogin(acc)}
+                            title="Wipe session and re-authenticate"
+                            style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--status-warning)' }}
+                          >
+                            <LockIcon size={13} />
+                          </button>
+                        </div>
+                      )}
+                      {checkResults[acc.id] && (
+                        <span
+                          style={{
+                            fontSize: '0.68rem',
+                            color: checkResults[acc.id].status === 'active'
+                              ? 'var(--status-success)'
+                              : checkResults[acc.id].status === 'error'
+                              ? 'var(--status-error)'
+                              : 'var(--status-warning)',
+                            fontFamily: 'monospace',
+                            padding: '1px 4px',
+                            background: 'var(--bg-secondary)',
+                            borderRadius: 3,
+                            cursor: 'default',
+                          }}
+                          title={checkResults[acc.id].sessionExpiry ? `Expiry: ${checkResults[acc.id].sessionExpiry}` : undefined}
                         >
-                          <RefreshIcon size={14} />
-                        </button>
+                          {checkResults[acc.id].status}
+                        </span>
                       )}
                       <button
                         type="button"
@@ -449,7 +603,7 @@ export default function Vault({ addToast }) {
                   style={{ padding: '10px 16px', fontSize: '0.78rem', color: 'var(--text-tertiary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}
                 >
                   <ShieldIcon size={12} style={{ marginRight: 6, opacity: 0.6 }} />
-                  {accounts.length} accounts · {activeCount} active · {expiredCount} expired
+                  {accounts.length} accounts · {activeCount} active · {expiredCount} expired{errorCount > 0 ? ` · ${errorCount} errored` : ''}
                 </td>
                 <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: 'var(--status-success)', fontSize: '0.9rem' }}>
                   {fmtBalance(totalBalance)}
@@ -473,17 +627,28 @@ export default function Vault({ addToast }) {
 
       {/* Inline edit alias modal */}
       {editModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '24px 28px', minWidth: 340, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ fontWeight: 600 }}>Rename account</div>
-            <input
-              autoFocus
-              value={editModal.value}
-              onChange={(e) => setEditModal((m) => ({ ...m, value: e.target.value }))}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditModal(null); }}
-              style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 4, padding: '6px 10px', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
-            />
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setEditModal(null)}>
+          <div style={{ background: 'var(--bg-tertiary)', border: `1px solid ${modalErrors.rename ? 'var(--status-error)' : 'var(--border-subtle)'}`, borderRadius: 4, padding: '24px 28px', minWidth: 340, display: 'flex', flexDirection: 'column', gap: 16 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.85rem' }}>Rename account</div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <input
+                autoFocus
+                className={`form-input ${modalErrors.rename ? 'form-input-error' : ''}`}
+                value={editModal.value}
+                onChange={(e) => {
+                  setEditModal((m) => ({ ...m, value: e.target.value }));
+                  if (modalErrors.rename) setModalErrors({});
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditModal(null); }}
+                style={{ width: '100%' }}
+              />
+              {modalErrors.rename && (
+                <p style={{ color: 'var(--status-error)', fontSize: '0.7rem', marginTop: 4, fontWeight: 600 }}>
+                  {modalErrors.rename}
+                </p>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
               <button className="btn btn-ghost" onClick={() => setEditModal(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={commitEdit}>Save</button>
             </div>
@@ -493,13 +658,16 @@ export default function Vault({ addToast }) {
 
       {/* Inline delete confirm modal */}
       {deleteModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '24px 28px', minWidth: 340, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ fontWeight: 600 }}>Delete {deleteModal.alias}?</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>This will also remove any stored management keys and pooled API keys. This cannot be undone.</div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setDeleteModal(null)}>
+          <div style={{ background: 'var(--bg-tertiary)', border: '2px solid var(--status-error)', borderRadius: 4, padding: '24px 28px', minWidth: 340, display: 'flex', flexDirection: 'column', gap: 16 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.85rem', color: 'var(--status-error)' }}>Delete {deleteModal.alias}?</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', lineHeight: 1.5 }}>
+              This will also remove any stored management keys and pooled API keys. <br/>
+              <strong style={{ color: 'var(--status-error)' }}>This cannot be undone.</strong>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
               <button className="btn btn-ghost" onClick={() => setDeleteModal(null)}>Cancel</button>
-              <button className="btn" style={{ background: 'var(--error)', color: '#fff' }} onClick={commitDelete}>Delete</button>
+              <button className="btn" style={{ background: 'var(--status-error)', color: '#fff', fontWeight: 700 }} onClick={commitDelete}>Delete</button>
             </div>
           </div>
         </div>

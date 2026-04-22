@@ -22,71 +22,26 @@ import { logger } from './logger.js';
 // Override with HYDRA_CLERK_JS_VERSION env var if OpenRouter upgrades to v6+.
 const CLERK_JS_VERSION = process.env.HYDRA_CLERK_JS_VERSION || '5.125.7';
 
-// =============================================================================
-// COOKIE SECURITY LIMITS (minimal defaults)
-// =============================================================================
-const COOKIE_LIMITS = {
-  MAX_COOKIE_NAME_LENGTH: 128,
-  MAX_COOKIE_VALUE_LENGTH: 4096,
-  MAX_TOTAL_HEADER_SIZE: 8192,
-  MAX_COOKIE_COUNT: 50,
-};
+import {
+  parseCookies,
+  clientCookieAfterSetCookieLines,
+  serializeClerkDeviceCookieJar,
+  mergeDeviceJar,
+  clerkFapiDeviceCookieHeader,
+} from '../utils/cookie-utils.js';
 
-function isValidCookieName(name) {
-  if (!name || typeof name !== 'string') return false;
-  if (name.length === 0 || name.length > COOKIE_LIMITS.MAX_COOKIE_NAME_LENGTH) return false;
-  const validToken = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
-  return validToken.test(name);
-}
-
-function encodeCookieValue(value) {
-  if (value == null) return '';
-  const str = String(value);
-  if (str.length > COOKIE_LIMITS.MAX_COOKIE_VALUE_LENGTH) return null;
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    const code = str.charCodeAt(i);
-    if ((code <= 0x1F && code !== 0x09) || code === 0x7F || char === ';' || char === '\n' || char === '\r' || code === 0x00) {
-      return null;
-    }
-  }
-  return str;
-}
-
-function validateCookieJar(jar) {
-  const errors = [];
-  const validatedJar = {};
-  if (!jar || typeof jar !== 'object') {
-    return { valid: true, jar: {}, errors: [] };
-  }
-  for (const [name, value] of Object.entries(jar)) {
-    if (!isValidCookieName(name)) {
-      errors.push(`Invalid name: ${name.slice(0, 20)}`);
-      continue;
-    }
-    const encoded = encodeCookieValue(value);
-    if (encoded === null) {
-      errors.push(`Invalid value: ${name}`);
-      continue;
-    }
-    validatedJar[name] = encoded;
-  }
-  return { valid: errors.length === 0, jar: validatedJar, errors };
-}
-
-function getCookieHeaderSize(cookieHeader) {
-  if (!cookieHeader) return 0;
-  return Buffer.byteLength(cookieHeader, 'utf8');
-}
-
-function validateCookieHeaderSize(cookieHeader) {
-  const size = getCookieHeaderSize(cookieHeader);
-  if (size > COOKIE_LIMITS.MAX_TOTAL_HEADER_SIZE) {
-    return { valid: false, size };
-  }
-  return { valid: true, size };
-}
-
+export {
+  CF_COOKIE_EXPIRING_SOON_MS,
+  checkCloudflareCookieExpiration,
+  areCloudflareCookiesExpired,
+  parseClerkDeviceCookieJar,
+  clerkFapiDeviceCookieHeader,
+  openRouterDashboardDeviceCookies,
+  openRouterPlaywrightDeviceCookies,
+  extractNewClientCookie,
+  extractCloudflareCookieExpirations,
+  mergeCloudflareCookieExpirations
+} from '../utils/cookie-utils.js';
 // =============================================================================
 /** Thrown when password first factor succeeds but Clerk requires a second factor (e.g. TOTP). */
 export class NeedSecondFactorError extends Error {
@@ -98,632 +53,6 @@ export class NeedSecondFactorError extends Error {
   }
 }
 
-// Parse a Set-Cookie header string into { name, value } pairs
-function parseCookies(setCookieHeaders) {
-  if (!setCookieHeaders) return {};
-  const arr = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
-  const result = {};
-  for (const raw of arr) {
-    const [pair] = raw.split(';');
-    const eqIdx = pair.indexOf('=');
-    if (eqIdx < 0) continue;
-    const name = pair.slice(0, eqIdx).trim();
-    const value = pair.slice(eqIdx + 1).trim();
-    result[name] = value;
-  }
-  return result;
-}
-
-/**
- * Parse cookie expiration from Set-Cookie header attributes.
- * Extracts Expires and Max-Age attributes to calculate expiration timestamp.
- * @param {string} setCookieHeader - Raw Set-Cookie header string
- * @returns {number|null} Expiration timestamp in milliseconds, or null if no expiration
- */
-function parseCookieExpiration(setCookieHeader) {
-  if (!setCookieHeader || typeof setCookieHeader !== 'string') return null;
-
-  const parts = setCookieHeader.split(';').map(p => p.trim());
-
-  // Check for Max-Age first (takes precedence)
-  for (const part of parts) {
-    const lower = part.toLowerCase();
-    if (lower.startsWith('max-age=')) {
-      const maxAge = parseInt(part.slice(8), 10);
-      if (!isNaN(maxAge) && maxAge > 0) {
-        return Date.now() + (maxAge * 1000);
-      }
-      // Negative or zero Max-Age means session cookie (expires immediately)
-      return null;
-    }
-  }
-
-  // Check for Expires attribute
-  for (const part of parts) {
-    const lower = part.toLowerCase();
-    if (lower.startsWith('expires=')) {
-      const expiresStr = part.slice(8);
-      const expiresDate = new Date(expiresStr);
-      if (!isNaN(expiresDate.getTime())) {
-        return expiresDate.getTime();
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Parse all Cloudflare cookies with their expiration timestamps from Set-Cookie headers.
- * @param {string[]} setCookieHeaders - Array of Set-Cookie header strings
- * @returns {Record<string, {value: string, expires: number|null}>} Object mapping cookie names to {value, expires}
- */
-function parseCloudflareCookiesWithExpiration(setCookieHeaders) {
-  if (!setCookieHeaders || !Array.isArray(setCookieHeaders)) return {};
-
-  const result = {};
-  for (const raw of setCookieHeaders) {
-    const [pair] = raw.split(';');
-    const eqIdx = pair.indexOf('=');
-    if (eqIdx < 0) continue;
-
-    const name = pair.slice(0, eqIdx).trim();
-    if (!isCloudflareCookieName(name)) continue;
-
-    const value = pair.slice(eqIdx + 1).trim();
-    const expires = parseCookieExpiration(raw);
-
-    result[name] = { value, expires };
-  }
-  return result;
-}
-
-/** Time window before expiration to trigger proactive refresh (6 hours) */
-export const CF_COOKIE_EXPIRING_SOON_MS = 6 * 60 * 60 * 1000;
-
-/**
- * Check if Cloudflare cookies in the stored jar are expired or expiring soon.
- * @param {string} storedCookieJar - The stored client cookie string
- * @param {Record<string, number>} cfCookieExpirations - Object mapping CF cookie names to expiration timestamps
- * @returns {{expired: boolean, expiringSoon: boolean, details: Record<string, {expired: boolean, expiringSoon: boolean, expiresIn: number|null}>}}
- */
-export function checkCloudflareCookieExpiration(storedCookieJar, cfCookieExpirations = {}) {
-  const jar = parseAllDeviceCookies(storedCookieJar);
-  const now = Date.now();
-  const details = {};
-  let anyExpired = false;
-  let anyExpiringSoon = false;
-
-  // Key CF cookies to check
-  const cfCookieNames = ['__cf_bm', '_cfuvid', 'cf_clearance'];
-
-  for (const name of cfCookieNames) {
-    const hasCookie = !!jar[name];
-    const expiration = cfCookieExpirations?.[name];
-
-    if (!hasCookie) {
-      details[name] = { expired: true, expiringSoon: true, expiresIn: null, missing: true };
-      anyExpired = true;
-      continue;
-    }
-
-    if (!expiration) {
-      // Cookie exists but no expiration info - treat as expiring soon to be safe
-      details[name] = { expired: false, expiringSoon: true, expiresIn: null, missing: false };
-      anyExpiringSoon = true;
-      continue;
-    }
-
-    const expiresIn = expiration - now;
-    const expired = expiresIn <= 0;
-    const expiringSoon = expiresIn <= CF_COOKIE_EXPIRING_SOON_MS;
-
-    details[name] = { expired, expiringSoon, expiresIn, expiresAt: expiration, missing: false };
-
-    if (expired) anyExpired = true;
-    if (expiringSoon) anyExpiringSoon = true;
-  }
-
-  return { expired: anyExpired, expiringSoon: anyExpiringSoon, details };
-}
-
-/**
- * Quick check if Cloudflare cookies need refresh (missing, expired, or expiring soon).
- * This is the primary helper for ensureSession() to decide if CF cookies are usable.
- * @param {string} storedCookieJar - The stored client cookie string
- * @param {Record<string, number>} cfCookieExpirations - Stored expiration timestamps
- * @returns {boolean} true if CF cookies need refresh
- */
-export function areCloudflareCookiesExpired(storedCookieJar, cfCookieExpirations = {}) {
-  const check = checkCloudflareCookieExpiration(storedCookieJar, cfCookieExpirations);
-  return check.expired || check.expiringSoon;
-}
-
-/** Clerk / OpenRouter device cookies we persist and replay on FAPI (not __session). */
-function isClerkDeviceCookieName(name) {
-  if (!name || typeof name !== 'string') return false;
-  if (name === '__client') return true;
-  if (name === '__client_uat') return true;
-  if (name.startsWith('__client_uat_')) return true;
-  return false;
-}
-
-/** Cloudflare cookies required for openrouter.ai dashboard access (anti-bot/challenge). */
-function isCloudflareCookieName(name) {
-  if (!name || typeof name !== 'string') return false;
-  if (name === '__cf_bm') return true;      // Bot management cookie
-  if (name === '_cfuvid') return true;      // Unique visitor ID
-  if (name === 'cf_clearance') return true;  // Challenge clearance token
-  return false;
-}
-
-/** All device cookies needed for dashboard (Clerk + Cloudflare). */
-function isDashboardDeviceCookieName(name) {
-  return isClerkDeviceCookieName(name) || isCloudflareCookieName(name);
-}
-
-function mergeDeviceCookiesFromParsed(into, parsed, filterFn = isClerkDeviceCookieName) {
-  if (!parsed || typeof parsed !== 'object') return into;
-  for (const [k, v] of Object.entries(parsed)) {
-    if (!filterFn(k)) continue;
-    const s = v != null ? String(v).trim() : '';
-    if (s !== '') into[k] = s;
-  }
-  return into;
-}
-
-/**
- * Parse vault `clientCookie`: legacy single token (treated as __client), or `__client=a; __client_uat=b`.
- * 
- * SECURITY: Validates cookie names and rejects dangerous values during parsing.
- * @returns {Record<string, string>}
- */
-export function parseClerkDeviceCookieJar(stored) {
-  const t = stored != null ? String(stored).trim() : '';
-  if (!t || t === 'undefined') return {};
-  
-  // Check for potential injection attacks in the raw input
-  if (t.includes('\n') || t.includes('\r')) {
-    logger.error('[COOKIE_SECURITY] parseClerkDeviceCookieJar: rejecting cookie string containing newlines (possible header injection)');
-    return {};
-  }
-  
-  if (t.includes('\x00')) {
-    logger.error('[COOKIE_SECURITY] parseClerkDeviceCookieJar: rejecting cookie string containing null bytes');
-    return {};
-  }
-  
-  // Legacy single token format (no semicolon)
-  if (!t.includes(';')) {
-    // Validate the single token value
-    if (t.includes(';') || t.includes('\n') || t.includes('\r')) {
-      logger.error('[COOKIE_SECURITY] parseClerkDeviceCookieJar: rejecting invalid legacy token with dangerous characters');
-      return {};
-    }
-    return { __client: t };
-  }
-  
-  const jar = {};
-  for (const part of t.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq < 0) continue;
-    const k = part.slice(0, eq).trim();
-    const v = part.slice(eq + 1).trim();
-    
-    // Validate name
-    if (!isValidCookieName(k)) {
-      logger.warn(`[COOKIE_SECURITY] parseClerkDeviceCookieJar: skipping invalid cookie name "${k.slice(0, 32)}"`);
-      continue;
-    }
-    
-    // Check value for injection attempts
-    if (v.includes('\n') || v.includes('\r') || v.includes(';')) {
-      logger.warn(`[COOKIE_SECURITY] parseClerkDeviceCookieJar: skipping cookie "${k}" with dangerous characters in value`);
-      continue;
-    }
-    
-    if (isClerkDeviceCookieName(k) && v) jar[k] = v;
-  }
-  return Object.keys(jar).length ? jar : { __client: t };
-}
-
-/**
- * Parse ALL device cookies from stored string (Clerk + Cloudflare + any others).
- * This preserves all cookies needed for dashboard access, not just Clerk ones.
- * 
- * SECURITY: Validates cookie names and rejects dangerous values during parsing.
- * @returns {Record<string, string>}
- */
-function parseAllDeviceCookies(stored) {
-  const t = stored != null ? String(stored).trim() : '';
-  if (!t || t === 'undefined') return {};
-  
-  // Check for potential injection attacks in the raw input
-  // Look for newlines that could indicate HTTP header injection
-  if (t.includes('\n') || t.includes('\r')) {
-    logger.error('[COOKIE_SECURITY] parseAllDeviceCookies: rejecting cookie string containing newlines (possible header injection)');
-    return {};
-  }
-  
-  // Check for null bytes
-  if (t.includes('\x00')) {
-    logger.error('[COOKIE_SECURITY] parseAllDeviceCookies: rejecting cookie string containing null bytes');
-    return {};
-  }
-  
-  const jar = {};
-  for (const part of t.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq < 0) continue;
-    const k = part.slice(0, eq).trim();
-    const v = part.slice(eq + 1).trim();
-    
-    // Validate name - reject invalid names
-    if (!isValidCookieName(k)) {
-      logger.warn(`[COOKIE_SECURITY] parseAllDeviceCookies: skipping invalid cookie name "${k.slice(0, 32)}"`);
-      continue;
-    }
-    
-    // Check value for obvious injection attempts
-    if (v.includes('\n') || v.includes('\r') || v.includes(';')) {
-      logger.warn(`[COOKIE_SECURITY] parseAllDeviceCookies: skipping cookie "${k}" with dangerous characters in value`);
-      continue;
-    }
-    
-    // Preserve ALL non-empty cookies except __session (handled separately)
-    if (k && v && k !== '__session') jar[k] = v;
-  }
-  return jar;
-}
-
-/**
- * Cookie header value for Clerk FAPI (clerk.openrouter.ai): Clerk device cookies only, sorted.
- * 
- * SECURITY: Validates cookie names and values to prevent header injection.
- * Rejects cookies with control chars, semicolons, or newlines.
- */
-export function clerkFapiDeviceCookieHeader(stored) {
-  const jar = parseClerkDeviceCookieJar(stored);
-  
-  // Validate the jar for security
-  const validation = validateCookieJar(jar);
-  if (!validation.valid && validation.errors.length > 0) {
-    logger.warn(`[COOKIE_SECURITY] clerkFapiDeviceCookieHeader validation errors: ${validation.errors.join(', ')}`);
-  }
-  const validJar = validation.valid ? jar : validation.jar;
-  
-  const keys = Object.keys(validJar).filter((k) => isClerkDeviceCookieName(k) && validJar[k]).sort();
-  if (!keys.length) return '';
-  
-  // Build cookie string with validated/encoded values
-  const parts = [];
-  for (const k of keys) {
-    const encodedValue = encodeCookieValue(validJar[k]);
-    if (encodedValue !== null) {
-      parts.push(`${k}=${encodedValue}`);
-    }
-  }
-  
-  const result = parts.join('; ');
-  
-  // Check total header size
-  const sizeCheck = validateCookieHeaderSize(result);
-  if (!sizeCheck.valid) {
-    logger.error(`[COOKIE_SECURITY] clerkFapiDeviceCookieHeader: total header size exceeds limit (${sizeCheck.size} bytes)`);
-    // Return minimal essential cookie as fallback
-    const client = encodeCookieValue(validJar.__client);
-    const uat = encodeCookieValue(validJar.__client_uat);
-    if (uat) return `__client_uat=${uat}`;
-    if (client) return `__client=${client}`;
-    return '';
-  }
-  
-  return result;
-}
-
-/**
- * Device cookie fragment for openrouter.ai dashboard tRPC (after __session).
- * Includes ALL device cookies: Clerk + Cloudflare (cf_bm, cfuvid, cf_clearance).
- * 
- * SECURITY: Validates cookie names and values to prevent header injection.
- * Rejects cookies with control chars, semicolons, or newlines.
- */
-export function openRouterDashboardDeviceCookies(stored) {
-  const jar = parseAllDeviceCookies(stored);
-  
-  // Validate the jar for security
-  const validation = validateCookieJar(jar);
-  if (!validation.valid && validation.errors.length > 0) {
-    logger.warn(`[COOKIE_SECURITY] openRouterDashboardDeviceCookies validation errors: ${validation.errors.join(', ')}`);
-  }
-  const validJar = validation.valid ? jar : validation.jar;
-  
-  const out = [];
-  const uat = validJar.__client_uat;
-  const client = validJar.__client;
-  const legacySingle = Object.keys(validJar).length === 1 && client && !uat;
-  
-  // Validate and encode values before adding
-  const encodedUat = uat ? encodeCookieValue(uat) : null;
-  const encodedClient = client ? encodeCookieValue(client) : null;
-  
-  if (encodedUat) out.push(`__client_uat=${encodedUat}`);
-  else if (legacySingle && encodedClient) out.push(`__client_uat=${encodedClient}`);
-  if (encodedClient && encodedClient !== encodedUat) out.push(`__client=${encodedClient}`);
-  
-  for (const k of Object.keys(validJar).sort()) {
-    // Skip already-added Clerk cookies to avoid duplicates
-    if (k === '__client' || k === '__client_uat') continue;
-    // Include both Clerk cookies AND Cloudflare cookies
-    if (isDashboardDeviceCookieName(k)) {
-      const encoded = encodeCookieValue(validJar[k]);
-      if (encoded !== null) {
-        out.push(`${k}=${encoded}`);
-      }
-    }
-  }
-  
-  const result = out.join('; ');
-  
-  // Check total header size
-  const sizeCheck = validateCookieHeaderSize(result);
-  if (!sizeCheck.valid) {
-    logger.error(`[COOKIE_SECURITY] openRouterDashboardDeviceCookies: total header size exceeds limit (${sizeCheck.size} bytes)`);
-    // Return minimal essential cookies as fallback
-    if (encodedClient || encodedUat) {
-      const minimal = encodedUat ? `__client_uat=${encodedUat}` : `__client=${encodedClient}`;
-      return minimal;
-    }
-    return '';
-  }
-  
-  return result;
-}
-
-/**
- * Playwright cookie injection for openrouter.ai - includes ALL device cookies.
- * 
- * SECURITY: Validates cookie names and values to prevent header injection.
- * Rejects cookies with control chars, semicolons, or newlines in names/values.
- */
-export function openRouterPlaywrightDeviceCookies(stored) {
-  const jar = parseAllDeviceCookies(stored);
-  
-  // Validate the jar for security
-  const validation = validateCookieJar(jar);
-  if (!validation.valid && validation.errors.length > 0) {
-    logger.warn(`[COOKIE_SECURITY] openRouterPlaywrightDeviceCookies validation errors: ${validation.errors.join(', ')}`);
-  }
-  const validJar = validation.valid ? jar : validation.jar;
-  
-  const list = [];
-  const uat = validJar.__client_uat ?? (Object.keys(validJar).length === 1 && validJar.__client ? validJar.__client : null);
-  const client = validJar.__client;
-  
-  // Validate and encode values before adding
-  const encodedUat = uat ? encodeCookieValue(uat) : null;
-  const encodedClient = client ? encodeCookieValue(client) : null;
-  
-  // Validate cookie names (Playwright will use these in browser context)
-  if (encodedUat && isValidCookieName('__client_uat')) {
-    list.push({ name: '__client_uat', value: encodedUat, domain: 'openrouter.ai', path: '/' });
-  }
-  if (encodedClient && encodedClient !== encodedUat && isValidCookieName('__client')) {
-    list.push({ name: '__client', value: encodedClient, domain: 'openrouter.ai', path: '/' });
-  }
-  
-  for (const k of Object.keys(validJar)) {
-    // Skip already-added Clerk cookies to avoid duplicates
-    if (k === '__client' || k === '__client_uat') continue;
-    // Include ALL dashboard cookies (Clerk + Cloudflare)
-    if (isDashboardDeviceCookieName(k)) {
-      // Validate both name and value before adding to Playwright
-      if (isValidCookieName(k)) {
-        const encoded = encodeCookieValue(validJar[k]);
-        if (encoded !== null) {
-          list.push({ name: k, value: encoded, domain: 'openrouter.ai', path: '/' });
-        }
-      } else {
-        logger.warn(`[COOKIE_SECURITY] Skipping invalid cookie name for Playwright: "${k.slice(0, 32)}"`);
-      }
-    }
-  }
-  
-  // Check for excessive cookie count (DoS protection)
-  if (list.length > COOKIE_LIMITS.MAX_COOKIE_COUNT) {
-    logger.error(`[COOKIE_SECURITY] Too many cookies for Playwright (${list.length} > ${COOKIE_LIMITS.MAX_COOKIE_COUNT}), truncating to essential cookies only`);
-    // Return only essential Clerk cookies
-    return list.filter(c => c.name === '__client' || c.name === '__client_uat');
-  }
-  
-  return list;
-}
-
-function mergeDeviceJar(priorJar, lines, filterFn = isClerkDeviceCookieName) {
-  const next = { ...priorJar };
-  mergeDeviceCookiesFromParsed(next, parseCookies(lines), filterFn);
-  return next;
-}
-
-/**
- * Persist device jar: single __client only stays legacy string; multiple keys → `a=b; c=d`.
- * 
- * SECURITY: Validates cookie names and values to prevent header injection.
- */
-function serializeClerkDeviceCookieJar(jar) {
-  // Validate the entire jar first
-  const validation = validateCookieJar(jar);
-  if (!validation.valid) {
-    if (validation.errors.length > 0) {
-      logger.warn(`[COOKIE_SECURITY] serializeClerkDeviceCookieJar validation errors: ${validation.errors.join(', ')}`);
-    }
-    // If no valid cookies remain, return empty string
-    if (Object.keys(validation.jar).length === 0) return '';
-  }
-  
-  const validJar = validation.jar;
-  const keys = Object.keys(validJar).filter((k) => isClerkDeviceCookieName(k) && validJar[k]).sort();
-  if (!keys.length) return '';
-  if (keys.length === 1 && keys[0] === '__client') return validJar.__client;
-  
-  // Build cookie string with validated/encoded values
-  const parts = [];
-  for (const k of keys) {
-    const encodedValue = encodeCookieValue(validJar[k]);
-    if (encodedValue !== null) {
-      parts.push(`${k}=${encodedValue}`);
-    }
-  }
-  
-  const result = parts.join('; ');
-  
-  // Check total header size
-  const sizeCheck = validateCookieHeaderSize(result);
-  if (!sizeCheck.valid) {
-    logger.error(`[COOKIE_SECURITY] serializeClerkDeviceCookieJar: total header size exceeds limit, returning truncated cookies`);
-    // Return just the __client cookie if available as fallback
-    if (validJar.__client && encodeCookieValue(validJar.__client) !== null) {
-      return validJar.__client;
-    }
-    return '';
-  }
-  
-  return result;
-}
-
-/**
- * Node fetch (Undici) does not expose Set-Cookie via headers.get('set-cookie').
- * Use getSetCookie() (Node.js 18.14+ / 20+) which returns one string per Set-Cookie header.
- */
-function getSetCookieHeaderLines(headers) {
-  if (typeof headers.getSetCookie === 'function') {
-    return headers.getSetCookie().filter(Boolean);
-  }
-  const raw = headers.get('set-cookie');
-  return raw ? [raw] : [];
-}
-
-/**
- * Extract new __client cookie value from Set-Cookie lines.
- * Clerk does NOT invalidate old device cookies — old __client values remain valid.
- * Returns the raw __client value if found, or null.
- */
-export function extractNewClientCookie(setCookieLines) {
-  if (!setCookieLines || !Array.isArray(setCookieLines)) return null;
-  const parsed = parseCookies(setCookieLines);
-  const c = parsed['__client']?.trim();
-  return (c && c !== '') ? c : null;
-}
-
-/** Merge ALL device cookies from Set-Cookie into stored jar (survives OTP / touch).
- *  COOKIE STACKING (Exploit #14): When a new __client cookie arrives from Set-Cookie
- *  and differs from the one already in the jar, we do NOT overwrite. Instead, the
- *  caller (store.js / session-refresher.js) is responsible for appending the new
- *  cookie string to the clientCookies array. This function simply returns the
- *  merged jar as a string (same as before), and the caller decides whether to stack.
- */
-function clientCookieAfterSetCookieLines(prior, setCookieLines) {
-  // Use parseAllDeviceCookies to preserve ALL cookies (Clerk + Cloudflare)
-  const jar = parseAllDeviceCookies(prior);
-  // Merge using dashboard filter to include Cloudflare cookies from Set-Cookie
-  const merged = mergeDeviceJar(jar, setCookieLines, isDashboardDeviceCookieName);
-  const s = serializeAllDeviceCookies(merged);
-  return s || prior;
-}
-
-/**
- * Extract Cloudflare cookie expirations from Set-Cookie headers.
- * Returns an object mapping cookie names to expiration timestamps.
- * @param {string[]} setCookieLines - Array of Set-Cookie header strings
- * @returns {Record<string, number>} Object mapping CF cookie names to expiration timestamps (ms)
- */
-export function extractCloudflareCookieExpirations(setCookieLines) {
-  if (!setCookieLines || !Array.isArray(setCookieLines)) return {};
-
-  const expirations = {};
-  for (const raw of setCookieLines) {
-    const [pair] = raw.split(';');
-    const eqIdx = pair.indexOf('=');
-    if (eqIdx < 0) continue;
-
-    const name = pair.slice(0, eqIdx).trim();
-    if (!isCloudflareCookieName(name)) continue;
-
-    const expires = parseCookieExpiration(raw);
-    if (expires) {
-      expirations[name] = expires;
-    }
-  }
-
-  return expirations;
-}
-
-/**
- * Merge new Cloudflare cookie expirations into existing expirations object.
- * Only updates timestamps for cookies that are present in the new response.
- * @param {Record<string, number>} existing - Existing CF cookie expirations
- * @param {Record<string, number>} incoming - New CF cookie expirations from Set-Cookie
- * @returns {Record<string, number>} Merged expirations object
- */
-export function mergeCloudflareCookieExpirations(existing, incoming) {
-  const merged = { ...(existing || {}) };
-
-  for (const [name, expires] of Object.entries(incoming || {})) {
-    if (isCloudflareCookieName(name)) {
-      merged[name] = expires;
-    }
-  }
-
-  return merged;
-}
-
-/**
- * Serialize all device cookies for storage (Clerk + Cloudflare).
- * Single __client only stays legacy string; multiple keys → `a=b; c=d`.
- * 
- * SECURITY: Validates cookie names and values to prevent header injection.
- * Rejects cookies with control chars, semicolons, or newlines.
- */
-function serializeAllDeviceCookies(jar) {
-  // Validate the entire jar first
-  const validation = validateCookieJar(jar);
-  if (!validation.valid) {
-    if (validation.errors.length > 0) {
-      logger.warn(`[COOKIE_SECURITY] serializeAllDeviceCookies validation errors: ${validation.errors.join(', ')}`);
-    }
-    // If no valid cookies remain, return empty string
-    if (Object.keys(validation.jar).length === 0) return '';
-  }
-  
-  const validJar = validation.jar;
-  const keys = Object.keys(validJar).filter((k) => isDashboardDeviceCookieName(k) && validJar[k]).sort();
-  if (!keys.length) return '';
-  if (keys.length === 1 && keys[0] === '__client') return validJar.__client;
-  
-  // Build cookie string with validated/encoded values
-  const parts = [];
-  for (const k of keys) {
-    const encodedValue = encodeCookieValue(validJar[k]);
-    if (encodedValue !== null) {
-      parts.push(`${k}=${encodedValue}`);
-    }
-  }
-  
-  const result = parts.join('; ');
-  
-  // Check total header size
-  const sizeCheck = validateCookieHeaderSize(result);
-  if (!sizeCheck.valid) {
-    logger.error(`[COOKIE_SECURITY] serializeAllDeviceCookies: total header size exceeds limit, returning truncated cookies`);
-    // Return just the __client cookie if available as fallback
-    if (validJar.__client && encodeCookieValue(validJar.__client) !== null) {
-      return validJar.__client;
-    }
-    return '';
-  }
-  
-  return result;
-}
 
 function sessionCookieFromSetCookieLines(setCookieLines) {
   return parseCookies(setCookieLines)['__session'] || null;
@@ -731,6 +60,14 @@ function sessionCookieFromSetCookieLines(setCookieLines) {
 
 function setCookieNamesForDebug(setCookieLines) {
   return setCookieLines.map((l) => l.split('=')[0]?.trim()).filter(Boolean);
+}
+
+function getSetCookieHeaderLines(headers) {
+  if (!headers || typeof headers !== 'object') return [];
+  const value = headers['set-cookie'] ?? headers['Set-Cookie'];
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean).map(String);
+  return [String(value)];
 }
 
 function clerkDebugOtpEnabled() {
@@ -1049,6 +386,25 @@ function formBody(params) {
     .join('&');
 }
 
+/**
+ * Auto-generate a username for Clerk sign_up flows (new accounts).
+ * Format: word + 4-digit number, e.g. "nova4821", "cipher7342".
+ * Retried on collision (Clerk returns form_identifier_exists).
+ */
+function generateRandomUsername() {
+  const words = [
+    'azure', 'cipher', 'comet', 'cosmic', 'crystal', 'cyber', 'delta', 'echo',
+    'ember', 'flash', 'frost', 'ghost', 'helix', 'hydra', 'ion', 'jade',
+    'karma', 'laser', 'lunar', 'mango', 'matrix', 'nexus', 'nova', 'onyx',
+    'orbit', 'pixel', 'plasma', 'prism', 'pulse', 'quartz', 'raven', 'sigma',
+    'solar', 'sonic', 'spark', 'storm', 'swift', 'titan', 'turbo', 'ultra',
+    'vapor', 'vector', 'venom', 'vibe', 'void', 'wave', 'xenon', 'zeal', 'zero', 'zeta',
+  ];
+  const word = words[Math.floor(Math.random() * words.length)];
+  const suffix = String(Math.floor(Math.random() * 9000) + 1000);
+  return `${word}${suffix}`;
+}
+
 /** User-facing text from Clerk `errors[0]` — prefer `long_message` (e.g. "`code` is required…") over short `message` ("is missing"). */
 function clerkApiErrorText(errors) {
   const e = errors?.[0];
@@ -1095,6 +451,13 @@ export async function detectAuthMethod(email) {
 
   const signInData = await signInRes.json();
 
+  // Detect sign_up path: new email → Clerk returns sign_up object instead of sign_in.
+  // This happens when the identifier is not registered on OpenRouter's Clerk instance.
+  const signUpObj = signInData.client?.sign_up;
+  if (signUpObj?.id && !signInData.client?.sign_in?.id) {
+    return { isSignUp: true, signUpId: signUpObj.id, signInId: null, clientCookie, strategies: [], method: 'otp', emailAddressId: null };
+  }
+
   if (signInData.errors?.length) {
     throw new Error(`Clerk error: ${clerkApiErrorText(signInData.errors)}`);
   }
@@ -1114,7 +477,7 @@ export async function detectAuthMethod(email) {
   if (strategies.includes('password')) method = 'password';
   else if (strategies.includes('oauth_google')) method = 'google';
 
-  return { signInId, clientCookie, strategies, method, emailAddressId };
+  return { isSignUp: false, signInId, clientCookie, strategies, method, emailAddressId };
 }
 
 /**
@@ -1167,9 +530,12 @@ export async function signInWithPassword(email, password) {
 const GET_CLIENT_MAX_ATTEMPTS = 3;
 const GET_CLIENT_RETRY_MS = 150;
 
-// OTP-specific constants: Clerk session propagation after OTP can take 2-4 seconds
-const GET_CLIENT_MAX_ATTEMPTS_OTP = 8;
-const GET_CLIENT_RETRY_MS_OTP = 500;
+// OTP-specific constants: Clerk session propagation typically completes within 700-900ms.
+// 4 × 200ms = 800ms max. Capped at 4 to stay under OR's 5-failed-OTP lockout threshold
+// (5 failed OTP attempts → 1 hour lockout, documented in recon). GET /client doesn't
+// count toward the verify lockout, but staying conservative here regardless.
+const GET_CLIENT_MAX_ATTEMPTS_OTP = 4;
+const GET_CLIENT_RETRY_MS_OTP = 200;
 
 /**
  * GET /v1/client with optional retries; merges __client from Set-Cookie; extracts __session or embedded JWT.
@@ -1281,7 +647,25 @@ async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, 
  * @returns {{ signInId, clientCookie, emailAddressId }}
  */
 export async function startEmailOTP(email) {
-  const { signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email);
+  const { isSignUp, signUpId, signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email);
+
+  if (isSignUp) {
+    // New account: send OTP via sign_up email verification path.
+    // signUpId is stored in the returned signInId field for backward compatibility with the controller.
+    const { data, setCookieLines } = await clerkHttpsJson('POST',
+      `client/sign_ups/${encodeURIComponent(signUpId)}/prepare_email_address_verification?_clerk_js_version=${CLERK_JS_VERSION}`,
+      {
+        cookieClient: clientCookie,
+        extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
+        body: formBody({ strategy: 'email_code' }),
+      }
+    );
+    const mergedClient = clientCookieAfterSetCookieLines(clientCookie, setCookieLines);
+    if (data.errors?.length) throw new Error(clerkApiErrorText(data.errors));
+    const resolvedSignUpId = data.client?.sign_up?.id ?? signUpId;
+    logger.info(`[CLERK] startEmailOTP: new account signup path for ${email} (signUpId=${resolvedSignUpId})`);
+    return { signInId: resolvedSignUpId, clientCookie: mergedClient, emailAddressId: null, isSignUp: true };
+  }
 
   if (!strategies.includes('email_code')) {
     throw new Error(`email_code strategy not available for ${email}. Available: ${strategies.join(', ')}`);
@@ -1321,6 +705,7 @@ export async function startEmailOTP(email) {
     signInId: resolvedSignInId,
     clientCookie: mergedClient,
     emailAddressId,
+    isSignUp: false,
   };
 }
 
@@ -1334,7 +719,24 @@ export async function startEmailOTP(email) {
  * @returns {{ signInId, clientCookie, emailAddressId }}
  */
 export async function sendMagicLink(email, redirectUrl) {
-  const { signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email);
+  const { isSignUp, signUpId, signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email);
+
+  if (isSignUp) {
+    // New account: send magic link via sign_up email verification path.
+    const { data, setCookieLines } = await clerkHttpsJson('POST',
+      `client/sign_ups/${encodeURIComponent(signUpId)}/prepare_email_address_verification?_clerk_js_version=${CLERK_JS_VERSION}`,
+      {
+        cookieClient: clientCookie,
+        extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
+        body: formBody({ strategy: 'email_link', redirect_url: redirectUrl }),
+      }
+    );
+    const mergedClient = clientCookieAfterSetCookieLines(clientCookie, setCookieLines);
+    if (data.errors?.length) throw new Error(clerkApiErrorText(data.errors));
+    const resolvedSignUpId = data.client?.sign_up?.id ?? signUpId;
+    logger.info(`[CLERK] sendMagicLink: new account signup path for ${email} (signUpId=${resolvedSignUpId})`);
+    return { signInId: resolvedSignUpId, clientCookie: mergedClient, emailAddressId: null, isSignUp: true };
+  }
 
   if (!strategies.includes('email_link')) {
     // Many OpenRouter accounts support email_link; throw with available list so caller can fall back
@@ -1375,6 +777,7 @@ export async function sendMagicLink(email, redirectUrl) {
     signInId: resolvedSignInId,
     clientCookie: mergedClient,
     emailAddressId,
+    isSignUp: false,
   };
 }
 
@@ -1386,7 +789,74 @@ export async function sendMagicLink(email, redirectUrl) {
  * @param {string} clientCookie
  * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
  */
-export async function completeEmailOTP(signInId, code, clientCookie) {
+export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp } = {}) {
+  if (isSignUp) {
+    // signInId is actually signUpId when isSignUp=true (repurposed field for backward compat)
+    const signUpId = signInId;
+
+    // Step 1: attempt email address verification
+    const { data, setCookieLines } = await clerkHttpsJson('POST',
+      `client/sign_ups/${encodeURIComponent(signUpId)}/attempt_email_address_verification?_clerk_js_version=${CLERK_JS_VERSION}`,
+      {
+        cookieClient: clientCookie,
+        extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
+        body: formBody({ strategy: 'email_code', code }),
+      }
+    );
+
+    let cc = clientCookieAfterSetCookieLines(clientCookie, setCookieLines);
+    if (data.errors?.length) throw new Error(`OTP error: ${clerkApiErrorText(data.errors)}`);
+
+    const signUp = data.client?.sign_up;
+    if (!signUp) throw new Error('Sign-up OTP verify returned no sign_up object from Clerk.');
+
+    // Step 2: complete sign-up with auto-generated username if required
+    if (signUp.status === 'missing_requirements' || (signUp.missing_fields ?? []).includes('username')) {
+      let usernameSet = false;
+      for (let attempt = 0; attempt < 5 && !usernameSet; attempt++) {
+        const username = generateRandomUsername();
+        const { data: ud, setCookieLines: usl } = await clerkHttpsJson('PATCH',
+          `client/sign_ups/${encodeURIComponent(signUpId)}?_clerk_js_version=${CLERK_JS_VERSION}`,
+          {
+            cookieClient: cc,
+            extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
+            body: formBody({ username }),
+          }
+        );
+        cc = clientCookieAfterSetCookieLines(cc, usl);
+        if (ud.errors?.some(e => e.code === 'form_identifier_exists')) continue; // username taken, retry
+        if (ud.errors?.length) throw new Error(clerkApiErrorText(ud.errors));
+        logger.info(`[CLERK] completeEmailOTP: sign_up username set to "${username}"`);
+        usernameSet = true;
+      }
+      if (!usernameSet) throw new Error('Could not set username after 5 attempts (all taken)');
+    }
+
+    // Step 3: resolve session — try Set-Cookie → session touch → GET /client fallback
+    const createdSessionId = signUp.created_session_id;
+    let sessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
+
+    if (!sessionCookie && createdSessionId) {
+      const touch = await touchClerkSession(createdSessionId, cc);
+      cc = touch.clientCookie;
+      sessionCookie = sessionCookieFromSetCookieLines(touch.setCookieLines);
+      if (!sessionCookie) sessionCookie = sessionJwtFromClerkClientPayload(touch.data);
+    }
+
+    if (!sessionCookie) {
+      const tokenResult = await clerkGetClientSession(cc, null, {
+        debugPhase: 'signup-otp',
+        maxAttempts: GET_CLIENT_MAX_ATTEMPTS_OTP,
+        retryMs: GET_CLIENT_RETRY_MS_OTP,
+      });
+      if (!tokenResult) throw new Error('Sign-up complete but no session returned. Set CLERK_DEBUG_OTP=1 and retry.');
+      return tokenResult;
+    }
+
+    return { sessionCookie, clientCookie: cc, sessionExpiry: realisticSessionExpiry(), setCookieLines };
+  }
+
+  // Existing sign_in path
   const attemptPath = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`;
   const { data, setCookieLines } = await clerkHttpsJson('POST', attemptPath, {
     cookieClient: clientCookie,
@@ -1436,7 +906,74 @@ export async function completeEmailOTP(signInId, code, clientCookie) {
  * @param {string} [clerkTicket] - the __clerk_ticket query param from the redirect URL (if available)
  * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
  */
-export async function completeEmailLink(signInId, clientCookie, clerkTicket) {
+export async function completeEmailLink(signInId, clientCookie, clerkTicket, { isSignUp } = {}) {
+  if (isSignUp) {
+    // signInId is actually signUpId for sign_up path
+    const signUpId = signInId;
+
+    const { data, setCookieLines } = await clerkHttpsJson('POST',
+      `client/sign_ups/${encodeURIComponent(signUpId)}/attempt_email_address_verification?_clerk_js_version=${CLERK_JS_VERSION}`,
+      {
+        cookieClient: clientCookie,
+        extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
+        body: clerkTicket
+          ? formBody({ strategy: 'email_link', token: clerkTicket })
+          : formBody({ strategy: 'email_link' }),
+      }
+    );
+
+    let cc = clientCookieAfterSetCookieLines(clientCookie, setCookieLines);
+    if (data.errors?.length) throw new Error(`Magic link error: ${clerkApiErrorText(data.errors)}`);
+
+    const signUp = data.client?.sign_up;
+    if (!signUp) throw new Error('Magic link sign-up verify returned no sign_up object from Clerk.');
+
+    // Auto-assign username if required
+    if (signUp.status === 'missing_requirements' || (signUp.missing_fields ?? []).includes('username')) {
+      let usernameSet = false;
+      for (let attempt = 0; attempt < 5 && !usernameSet; attempt++) {
+        const username = generateRandomUsername();
+        const { data: ud, setCookieLines: usl } = await clerkHttpsJson('PATCH',
+          `client/sign_ups/${encodeURIComponent(signUpId)}?_clerk_js_version=${CLERK_JS_VERSION}`,
+          {
+            cookieClient: cc,
+            extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
+            body: formBody({ username }),
+          }
+        );
+        cc = clientCookieAfterSetCookieLines(cc, usl);
+        if (ud.errors?.some(e => e.code === 'form_identifier_exists')) continue;
+        if (ud.errors?.length) throw new Error(clerkApiErrorText(ud.errors));
+        logger.info(`[CLERK] completeEmailLink: sign_up username set to "${username}"`);
+        usernameSet = true;
+      }
+      if (!usernameSet) throw new Error('Could not set username after 5 attempts');
+    }
+
+    const createdSessionId = signUp.created_session_id;
+    let sessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
+
+    if (!sessionCookie && createdSessionId) {
+      const touch = await touchClerkSession(createdSessionId, cc);
+      cc = touch.clientCookie;
+      sessionCookie = sessionCookieFromSetCookieLines(touch.setCookieLines);
+      if (!sessionCookie) sessionCookie = sessionJwtFromClerkClientPayload(touch.data);
+    }
+
+    if (!sessionCookie) {
+      const tokenResult = await clerkGetClientSession(cc, null, {
+        debugPhase: 'signup-magic-link',
+        maxAttempts: GET_CLIENT_MAX_ATTEMPTS_OTP,
+        retryMs: GET_CLIENT_RETRY_MS_OTP,
+      });
+      if (!tokenResult) throw new Error('Clerk magic link sign-up completed but no session returned.');
+      return tokenResult;
+    }
+
+    return { sessionCookie, clientCookie: cc, sessionExpiry: realisticSessionExpiry(), setCookieLines };
+  }
+
+  // Existing sign_in path
   const attemptPath = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`;
   const body = clerkTicket
     ? formBody({ strategy: 'email_link', token: clerkTicket })
@@ -1566,18 +1103,6 @@ export function isSessionValid(sessionExpiry) {
   return expiry > Date.now();
 }
 
-/**
- * Check if session is ACTUALLY valid by making an API call.
- * This is the ONLY reliable way to determine session status.
- * Clerk JWTs expire quickly (~2.5 min) but sessions auto-refresh and last 12+ hours.
- * 
- * @param {string} sessionCookie - The __session cookie value
- * @returns {Promise<boolean>} true if session is actually valid
- */
-export async function isSessionActuallyValid(sessionCookie) {
-  if (!sessionCookie || typeof sessionCookie !== 'string') return false;
-  return validateSession(sessionCookie);
-}
 
 /**
  * Validate a session cookie by calling the OpenRouter credits API

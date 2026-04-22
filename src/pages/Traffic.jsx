@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import * as api from '../api';
+import { useTraffic } from '../hooks/useTraffic';
 import ScrambleText from '../components/ScrambleText';
 import { 
   ActivityIcon,
@@ -9,33 +8,7 @@ import {
 } from '../components/Icons';
 
 export default function Traffic({ addToast }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const didInitialLoadRef = useRef(false);
-
-  const fetchTraffic = useCallback(async (silent = false) => {
-    if (silent) setRefreshing(true);
-    try {
-      const res = await api.getTraffic();
-      setData(res.data);
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [addToast]);
-
-  useEffect(() => {
-    if (didInitialLoadRef.current) return;
-    didInitialLoadRef.current = true;
-    fetchTraffic();
-    const interval = setInterval(() => {
-      if (!document.hidden) fetchTraffic(true);
-    }, 10000); // 10s auto-refresh for traffic
-    return () => clearInterval(interval);
-  }, [fetchTraffic]);
+  const { data, loading, refreshing, fetchTraffic } = useTraffic({ addToast });
 
   if (loading && !data) {
     return (

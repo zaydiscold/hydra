@@ -68,12 +68,15 @@ function resolveSecrets() {
 
 const resolvedSecrets = resolveSecrets();
 
+// Mutable reference — allows runtime rotation without restart
+let _proxySecret = resolvedSecrets.proxySecret;
+
 export function getStorageEncryptionKey() {
   return resolvedSecrets.storageKey;
 }
 
 export function getProxyMasterSecret() {
-  return resolvedSecrets.proxySecret;
+  return _proxySecret;
 }
 
 export function getLocalSecretsPath() {
@@ -85,4 +88,18 @@ export function getLocalSecretsInfo() {
     secretsPath: resolvedSecrets.secretsPath,
     storageKeyLength: HEX_SECRET_LENGTH,
   };
+}
+
+/**
+ * Generate a new proxySecret, update in-memory + persist to disk.
+ * All subsequent getMasterProxyKey() / getGenericProxyKey() calls return
+ * keys derived from the new secret — no restart required.
+ */
+export function rotateProxySecret() {
+  const newHex = generateSecret();
+  _proxySecret = Buffer.from(newHex, 'hex');
+  // Preserve storageKey when writing back
+  const currentStorageKey = resolvedSecrets.storageKey.toString('hex');
+  persistSecrets({ storageKey: currentStorageKey, proxySecret: newHex });
+  return newHex;
 }

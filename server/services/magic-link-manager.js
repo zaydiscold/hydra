@@ -7,4 +7,4 @@ setInterval(() => {
   for (const [k, v] of pendingMagicLinks) {
     if (v.createdAt < cutoff) pendingMagicLinks.delete(k);
   }
-}, 60_000);
+}, 60000);

@@ -43,7 +43,7 @@ export default function PasteManagementKeyModal({ account, onClose, onDone }) {
             ✕
           </button>
         </div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
             For <strong>{account.alias}</strong>. Copy a management key from{' '}
             <a href="https://openrouter.ai/settings/management-keys" target="_blank" rel="noreferrer">
@@ -52,19 +52,24 @@ export default function PasteManagementKeyModal({ account, onClose, onDone }) {
             . Use a management key when possible; other <span className="mono">sk-or-…</span> keys are accepted if OpenRouter allows them for this account. Stored encrypted in Hydra.
           </p>
           <div className="form-group">
-            <label>OpenRouter key</label>
+            <label style={{ color: error ? 'var(--status-error)' : 'inherit' }}>
+              OpenRouter key
+            </label>
             <textarea
-              className="form-input"
+              className={`form-input ${error ? 'error' : ''}`}
               style={{ minHeight: 88, fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}
               placeholder="sk-or-mgmt-… or sk-or-v1-…"
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => {
+                setValue(e.target.value);
+                if (error) setError('');
+              }}
               spellCheck={false}
               autoComplete="off"
               autoFocus
             />
+            {error && <p className="field-error">{error}</p>}
           </div>
-          {error && <p className="form-error">{error}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel

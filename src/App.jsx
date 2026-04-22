@@ -1,17 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import './index.css';
 import * as api from './api';
 import DevBackendHint from './components/DevBackendHint';
-import Dashboard from './pages/Dashboard.jsx';
-import AccountDetail from './pages/AccountDetail.jsx';
-import Vault from './pages/Vault.jsx';
-import CodeRedemption from './pages/CodeRedemption.jsx';
-import Generator from './pages/Generator.jsx';
-import Settings from './pages/Settings.jsx';
-import PoolManager from './pages/PoolManager.jsx';
-import Traffic from './pages/Traffic.jsx';
-import BulkAuthWizard from './pages/BulkAuthWizard.jsx';
 import ErrorBoundary from './components/ErrorBoundary';
 import { 
   DashboardIcon, 
@@ -25,6 +16,16 @@ import {
   ActivityIcon,
   BulkAuthIcon
 } from './components/Icons';
+
+const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
+const AccountDetail = lazy(() => import('./pages/AccountDetail.jsx'));
+const Vault = lazy(() => import('./pages/Vault.jsx'));
+const CodeRedemption = lazy(() => import('./pages/CodeRedemption.jsx'));
+const Generator = lazy(() => import('./pages/Generator.jsx'));
+const Settings = lazy(() => import('./pages/Settings.jsx'));
+const PoolManager = lazy(() => import('./pages/PoolManager.jsx'));
+const Traffic = lazy(() => import('./pages/Traffic.jsx'));
+const BulkAuthWizard = lazy(() => import('./pages/BulkAuthWizard.jsx'));
 
 function ToastContainer({ toasts, onDismiss }) {
   return (
@@ -71,8 +72,9 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
+  const [error, setError] = useState('');
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   // ── Nuclear Reset Logic ──
   const [nukeProgress, setNukeProgress] = useState(0); // 0 to 100
@@ -130,23 +132,27 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError(null);
-    
-    // Custom Validation (Replaces browser "Fill this form" bubbles)
+    setError('');
+    const newErrors = {};
+
     if (!password) {
-      setError(isSetup ? '[REQUIRED] Choose a password' : '[REQUIRED] Enter password');
-      return;
+      newErrors.password = isSetup ? 'Create a password' : 'Password is required';
     }
-    if (isSetup && !confirm) {
-      setError('[REQUIRED] Confirm your password');
-      return;
+    if (isSetup) {
+      if (!confirm) {
+        newErrors.confirm = 'Confirm your password';
+      } else if (password !== confirm) {
+        newErrors.confirm = 'Passwords do not match';
+      }
     }
-    if (isSetup && password !== confirm) {
-      setError('[ERROR] Passwords do not match');
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
     setLoading(true);
+    setErrors({});
     try {
       const res = isSetup ? await api.setupPassword(password) : await api.login(password);
       // API wraps response: { success, data: { token }, timestamp }
@@ -192,17 +198,20 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
 
 
           <div className="form-group" style={{ position: 'relative' }}>
-            <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+            <label style={{ fontSize: '0.82rem', color: errors.password ? 'var(--status-error)' : 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
               {isSetup ? 'Create Password' : 'Password'}
             </label>
             <div style={{ position: 'relative' }}>
               <input
                 type={show ? 'text' : 'password'}
-                className="form-input"
+                className={`form-input ${errors.password ? 'error' : ''}`}
                 autoFocus
                 placeholder={isSetup ? 'Choose a password' : 'Enter your password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errors.password) setErrors(prev => ({ ...prev, password: null }));
+                }}
               />
               <button
                 type="button"
@@ -213,20 +222,25 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
                 {show ? 'HIDE' : 'SHOW'}
               </button>
             </div>
+            {errors.password && <p className="field-error">{errors.password}</p>}
           </div>
 
           {isSetup && (
             <div className="form-group">
-              <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+              <label style={{ fontSize: '0.82rem', color: errors.confirm ? 'var(--status-error)' : 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
                 Confirm Password
               </label>
               <input
                 type={show ? 'text' : 'password'}
-                className="form-input"
+                className={`form-input ${errors.confirm ? 'error' : ''}`}
                 placeholder="Confirm your password"
                 value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                onChange={(e) => {
+                  setConfirm(e.target.value);
+                  if (errors.confirm) setErrors(prev => ({ ...prev, confirm: null }));
+                }}
               />
+              {errors.confirm && <p className="field-error">{errors.confirm}</p>}
             </div>
           )}
 
@@ -297,7 +311,7 @@ const navItems = [
 ];
 
 export default function App() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
   const [toasts, setToasts] = useState([]);
@@ -485,7 +499,12 @@ export default function App() {
       ) : (
         <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
           <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
-            <div className="sidebar-logo">
+            <button
+              className="sidebar-logo"
+              onClick={() => navigate('/')}
+              title="Go to Dashboard"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', padding: 0 }}
+            >
               {/* Abstract geometric logo mark */}
               <div className="sidebar-logo-icon">
                 <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
@@ -506,7 +525,7 @@ export default function App() {
                   <span className="sidebar-version">openrouter manager</span>
                 </div>
               )}
-            </div>
+            </button>
 
             <nav className="sidebar-nav">
               {navItems.map((item) => {
@@ -530,11 +549,18 @@ export default function App() {
             <div className="sidebar-bottom">
               <button
                 className="nav-link"
-                style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', opacity: 0.6 }}
+                style={{ color: 'var(--text-tertiary)', opacity: 0.7 }}
                 onClick={() => setSidebarCollapsed(v => !v)}
                 title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
-                <span className="nav-icon">{sidebarCollapsed ? '→' : '←'}</span>
+                <span className="nav-icon">
+                  <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {sidebarCollapsed
+                      ? <><polyline points="6,4 10,8 6,12"/></>
+                      : <><polyline points="10,4 6,8 10,12"/></>
+                    }
+                  </svg>
+                </span>
                 {!sidebarCollapsed && <span>Collapse</span>}
               </button>
               <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
@@ -549,23 +575,25 @@ export default function App() {
           </aside>
 
           <main className={`main-content${sidebarCollapsed ? ' main-content--expanded' : ''}`}>
-            <div key={location.pathname} className="animate-slide-up">
-              <Routes>
-                <Route path="/" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
-                <Route path="/dashboard" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
-                <Route path="/bulk-auth" element={<BulkAuthWizard addToast={addToast} />} />
-                <Route path="/account/:accountId" element={
-                  <AccountDetail onBack={navigateBack} addToast={addToast} />
-                } />
-                <Route path="/vault" element={<Vault addToast={addToast} />} />
-                <Route path="/pool" element={<PoolManager addToast={addToast} />} />
-                <Route path="/traffic" element={<Traffic addToast={addToast} />} />
-                <Route path="/codes" element={<CodeRedemption addToast={addToast} />} />
-                <Route path="/generator" element={<Generator addToast={addToast} />} />
-                <Route path="/settings" element={<Settings addToast={addToast} onLogout={handleLogout} />} />
-                {/* Catch all to redirect to dashboard */}
-                <Route path="*" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
-              </Routes>
+            <div key={location.pathname} className="animate-fade-in">
+              <Suspense fallback={<div className="loading-screen"><div className="spinner" /></div>}>
+                <Routes>
+                  <Route path="/" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
+                  <Route path="/dashboard" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
+                  <Route path="/bulk-auth" element={<BulkAuthWizard addToast={addToast} />} />
+                  <Route path="/account/:accountId" element={
+                    <AccountDetail onBack={navigateBack} addToast={addToast} />
+                  } />
+                  <Route path="/vault" element={<Vault addToast={addToast} />} />
+                  <Route path="/pool" element={<PoolManager addToast={addToast} />} />
+                  <Route path="/traffic" element={<Traffic addToast={addToast} />} />
+                  <Route path="/codes" element={<CodeRedemption addToast={addToast} />} />
+                  <Route path="/generator" element={<Generator addToast={addToast} />} />
+                  <Route path="/settings" element={<Settings addToast={addToast} onLogout={handleLogout} />} />
+                  {/* Catch all to redirect to dashboard */}
+                  <Route path="*" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
+                </Routes>
+              </Suspense>
             </div>
           </main>
 

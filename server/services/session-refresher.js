@@ -9,12 +9,14 @@
  */
 
 import { prisma } from './db.js';
-import { updateAccountSession, logAccountEvent, getLatestClientCookie } from './store.js';
+import { updateAccountSession, logAccountEvent, getLatestClientCookie, normalizeClientCookies } from './store.js';
 import { refreshSession, extractNewClientCookie } from './clerk-auth.js';
 import { logger } from './logger.js';
+import { decrypt, encryptConfig } from './storage-codec.js';
 
 const REFRESH_WINDOW_MS = 24 * 60 * 60 * 1000; // probe within 24h of expiry
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // run every 6h
+let _sweepRunning = false;
 
 async function getConfigForAccount(account) {
   try {
@@ -25,34 +27,13 @@ async function getConfigForAccount(account) {
   }
 }
 
-/**
- * Normalize config.clientCookie / config.clientCookies into the new array format.
- * Duplicated from store.js to avoid circular import issues at module level.
- */
-function normalizeClientCookies(config) {
-  // New format already present
-  if (Array.isArray(config.clientCookies) && config.clientCookies.length > 0) {
-    return config.clientCookies;
-  }
-  // Legacy: string clientCookie → single-element array
-  const cc = config.clientCookie ? String(config.clientCookie).trim() : '';
-  if (cc && cc !== 'undefined') {
-    const issuedAt = config.clientCookieIssuedAt || new Date().toISOString();
-    return [{ cookie: cc, issuedAt }];
-  }
-  // Neither — empty array
-  return [];
-}
-
-/**
- * Get the latest (newest) client cookie string from config.
- */
-function latestClientCookie(config) {
-  const stack = normalizeClientCookies(config);
-  return stack.length > 0 ? stack[0].cookie : '';
-}
 
 export async function sweepAndRefresh() {
+  if (_sweepRunning) {
+    logger.warn('[AUTO-REFRESH] Previous sweep still running; skipping overlap');
+    return;
+  }
+  _sweepRunning = true;
   let swept = 0;
   let refreshed = 0;
   let skipped = 0;
@@ -115,7 +96,7 @@ export async function sweepAndRefresh() {
 
         // Extract fresh __client from the response Set-Cookie (if any)
         const freshClientCookie = extractNewClientCookie(refreshResult.setCookieLines);
-        const resolvedClientCookie = refreshResult.clientCookie ?? latestClientCookie(config);
+        const resolvedClientCookie = refreshResult.clientCookie ?? getLatestClientCookie(config);
 
         // Update account session — this will APPEND the new cookie via store.js stacking logic
         await updateAccountSession(
@@ -124,6 +105,7 @@ export async function sweepAndRefresh() {
           refreshResult.sessionToken ?? refreshResult.sessionCookie ?? sessionCookie,
           resolvedClientCookie,
           refreshResult.sessionExpiry ?? null,
+          { replaceClientCookies: liveStack },
         );
 
         // If the refresh also returned a fresh __client in Set-Cookie that differs,
@@ -155,18 +137,127 @@ export async function sweepAndRefresh() {
   if (swept > 0) {
     logger.info(`[AUTO-REFRESH] Sweep done — ${swept} checked, ${refreshed} refreshed, ${skipped} skipped`);
   }
+  _sweepRunning = false;
+
+  // ── Session lifetime probe pass ──────────────────────────────────────────
+  // Runs after the refresh sweep. For every account that has logged in at
+  // least once (lastLoginAt set), pings Clerk and logs elapsed time so we
+  // can empirically measure actual cookie lifetime. No extra files needed —
+  // just watch the server log for [SESSION_PROBE] lines.
+  _runSessionProbe().catch((err) =>
+    logger.warn(`[SESSION_PROBE] Probe pass failed: ${err.message}`));
 }
 
+/** Decode a JWT payload without verifying — only used to read stable Clerk sid claim. */
+function _jwtSid(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    return payload.sid || null; // Clerk's stable session id, e.g. "sess_abc123"
+  } catch {
+    return null;
+  }
+}
+
+async function _runSessionProbe() {
+  const accounts = await prisma.account.findMany({});
+  const probeAccounts = [];
+
+  for (const account of accounts) {
+    const config = await getConfigForAccount(account);
+    if (!config || !config.lastLoginAt) continue; // not logged in yet — nothing to track
+    if (config.pendingVerification) continue;      // OTP stub not verified — skip
+    probeAccounts.push({ account, config });
+  }
+
+  if (probeAccounts.length === 0) {
+    logger.info('[SESSION_PROBE] No accounts with a recorded login yet — probe will fire after first bulk login');
+    return;
+  }
+
+
+
+  for (const { account, config } of probeAccounts) {
+    try {
+      // ── Decode session ID from stored JWT (stable Clerk identifier) ──────
+      let rawJwt = '';
+      try { rawJwt = decrypt(account.sessionToken) || ''; } catch { /* no-op */ }
+      const currentSid = rawJwt ? _jwtSid(rawJwt) : null;
+
+      // ── Detect session rotation (re-login since last probe) ──────────────
+      const trackedSid   = config._probeSid      || null;
+      const trackedSince = config._probeSidSince || config.lastLoginAt;
+
+      if (currentSid && currentSid !== trackedSid) {
+        // Session rotated (or first time seen) — persist the new sid
+        const verb = trackedSid ? 'rotated' : 'first seen';
+        logger.info(
+          `[SESSION_PROBE] 🔄 session ${verb} for alias="${account.alias}" ` +
+          `old_sid=${trackedSid ?? 'none'} → new_sid=${currentSid} ` +
+          `login_at=${config.lastLoginAt}`
+        );
+        const updatedConfig = { ...config, _probeSid: currentSid, _probeSidSince: new Date().toISOString() };
+        prisma.account.update({ where: { id: account.id }, data: { config: encryptConfig(updatedConfig) } })
+          .catch((e) => logger.warn(`[SESSION_PROBE] Failed to persist sid for ${account.id}: ${e.message}`));
+      }
+
+      const sid         = currentSid || trackedSid || '(no-sid)';
+      const sinceMs     = Date.now() - new Date(trackedSince).getTime();
+      const elapsedHours = (sinceMs / 3600000).toFixed(1);
+
+      // ── Live Clerk probe ─────────────────────────────────────────────────
+      const cookieStack = normalizeClientCookies(config);
+      let status = 'no-cookie';
+      if (cookieStack.length > 0) {
+        try {
+          const result = await refreshSession(cookieStack, rawJwt);
+          status = result ? 'active' : 'expired';
+        } catch {
+          status = 'error';
+        }
+      }
+
+      // ── Log result ───────────────────────────────────────────────────────
+      if (status === 'active') {
+        logger.info(
+          `[SESSION_PROBE] ✅ active | alias="${account.alias}" sid=${sid} ` +
+          `elapsed=${elapsedHours}h since_login=${trackedSince}`
+        );
+      } else if (status === 'expired') {
+        logger.warn(
+          `[SESSION_PROBE] 🔴 DEAD | alias="${account.alias}" sid=${sid} ` +
+          `elapsed=${elapsedHours}h — session expired after ${elapsedHours} hours`
+        );
+      } else {
+        logger.warn(
+          `[SESSION_PROBE] ⚠️ ${status} | alias="${account.alias}" sid=${sid} ` +
+          `elapsed=${elapsedHours}h since_login=${trackedSince}`
+        );
+      }
+    } catch (err) {
+      logger.warn(`[SESSION_PROBE] Failed for account=${account.id} alias="${account.alias}": ${err.message}`);
+    }
+  }
+}
+
+
 let _intervalHandle = null;
+let _startupTimeoutHandle = null;
 
 export function startSessionRefresher() {
   if (_intervalHandle) return;
-  setTimeout(() => sweepAndRefresh(), 10_000);
+  _startupTimeoutHandle = setTimeout(() => {
+    _startupTimeoutHandle = null;
+    sweepAndRefresh();
+  }, 10000);
   _intervalHandle = setInterval(() => sweepAndRefresh(), INTERVAL_MS);
   logger.info(`[AUTO-REFRESH] Session refresher scheduled (every ${INTERVAL_MS / 3600000}h)`);
 }
 
 export function stopSessionRefresher() {
+  if (_startupTimeoutHandle) {
+    clearTimeout(_startupTimeoutHandle);
+    _startupTimeoutHandle = null;
+  }
   if (_intervalHandle) {
     clearInterval(_intervalHandle);
     _intervalHandle = null;

@@ -42,7 +42,8 @@
 | Field | What | Source |
 |---|---|---|
 | `sessionCookie` | `__session` JWT | Clerk FAPI response |
-| `clientCookie` | `__client` device cookie | Clerk FAPI response |
+| `clientCookie` | Latest `__client` device cookie (legacy compatibility field) | Derived from stack head |
+| `clientCookies` | Stacked `__client` cookies (`[{cookie, issuedAt}]`, newest-first) | Clerk refresh/login captures |
 | `sessionExpiry` | ISO string, estimated death time | `realisticSessionExpiry()` = now + 7 days |
 | `lastLoginAt` | When session was established | `Date.now()` at login time |
 
@@ -82,12 +83,15 @@
 4. If Clerk returns null → `'expired'`, cache result
 5. On network error → `'unknown'`
 
+**Usage split:** `GET /api/accounts/:id/session-status` is display-oriented (cached/heuristic).  
+`GET /api/accounts/:id/session-check` forces a live probe and is used for session-gated action readiness.
+
 ---
 
 ## Session Refresh
 
 ### Auto-refresh (session-refresher.js)
-- Runs every 6h (`SESSION_REFRESH_INTERVAL_MS`)
+- Runs every 6h (fixed `INTERVAL_MS` in `session-refresher.js`)
 - For each account with `__client` cookie:
   - Skip if >24h from expiry
   - If expired or expiring → try `refreshSession`
@@ -97,7 +101,8 @@
 
 ### On-demand refresh (DashboardController)
 - Dashboard load triggers refresh for accounts with `'unknown'` or `'expiring'` status
-- Uses `clerkAuth.refreshSession` same as auto-refresh
+- Uses `clerkAuth.refreshSession(cookieStackOrCookie, sessionCookie)` same as auto-refresh
+- Prunes dead stacked cookies and persists the filtered stack
 - Results cached in `getSessionStatusAsync` for 5 minutes
 
 ### ensureSession (dashboard-api.js)
@@ -107,6 +112,14 @@
   2. If `__client` cookie exists → try `refreshSession` (ghost recovery)
   3. If password stored → try `passwordLogin` (auto-recover)
   4. If none of the above → throw "no session" error
+
+---
+
+## Operational Clarification: Browser Is Not Session Keepalive
+
+Keeping an incognito/browser context open does not automatically keep Hydra sessions alive.
+
+Hydra's long-lived behavior depends on persisted vault state (`sessionCookie`, stacked `clientCookies`, `sessionExpiry`) and refresh workflows. Browser automation is only used to capture/update those cookies, not as a live session manager.
 
 ---
 
@@ -127,3 +140,15 @@
 | `REFRESH_WINDOW_MS` | 24h | `session-refresher.js` | When to attempt refresh |
 | `SESSION_REFRESH_INTERVAL_MS` | 6h | `session-refresher.js` | Auto-refresh sweep interval |
 | `ASYNC_SESSION_CACHE_MS` | 5 min | `store.js` | How long to cache async probe results |
+
+---
+
+## Cookie Persistence Bug — Fixed Apr 2026
+
+**Root cause:** `getSessionStatusAsync` in `store.js` called `refreshSession` (which makes a live Clerk API call and returns a fresh `__client` cookie), but **never persisted the returned cookie back to the DB**. The 5-minute in-memory cache hid the problem. When the cache expired, the probe retried with the stale stored cookie. If Clerk had issued a fresh cookie in the previous probe cycle (and effectively "consumed" the old one), the retry failed → false `expired`.
+
+**Observed:** Delilah account showed `expired` despite session being refreshed 4 days prior (Clerk TTL = 7 days, 3 days remaining). Session event log confirmed the Apr 10 refresh happened successfully.
+
+**Fix:** `getSessionStatusAsync` now accepts `userId` and persists fresh cookies via fire-and-forget `updateAccountSession` when `refreshSession` succeeds. Live probe paths (`probeSessionLive`) and other authoritative session checks pass `userId` through.
+
+**Also fixed:** Three `AccountController` refresh endpoints (lines 244, 448, 851) were calling `refreshSession(session.clientCookie)` — the legacy single string. They now use `session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie` to enable Exploit #14 stack traversal. Reference implementation: `dashboard-api.js:689`.

@@ -1,5 +1,6 @@
 import BaseController from './BaseController.js';
 import * as store from '../services/store.js';
+import { invalidateSessionStatusCache } from '../services/store.js';
 import * as openrouter from '../services/openrouter.js';
 import * as clerkAuth from '../services/clerk-auth.js';
 import { logger } from '../services/logger.js';
@@ -8,9 +9,10 @@ import pLimit from 'p-limit';
 
 
 // Simple in-memory cache for account snapshots
-// TTL: 30 seconds to balance freshness vs performance
+// TTL: 5 minutes — OpenRouter balance data doesn't change that fast.
+// The Refresh button (or re-auth events) invalidates per-account.
 const snapshotCache = new Map();
-const CACHE_TTL_MS = 30000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 function getCachedSnapshot(accountId) {
   const cached = snapshotCache.get(accountId);
@@ -34,6 +36,7 @@ function setCachedSnapshot(accountId, data) {
 // Invalidate cache for an account (call when keys/balance updated)
 export function invalidateSnapshotCache(accountId) {
   snapshotCache.delete(accountId);
+  invalidateSessionStatusCache(accountId);
 }
 
 // Clear entire cache (useful for testing/logout)
@@ -79,21 +82,24 @@ class DashboardController extends BaseController {
           try {
             // If stacked cookies available, pass the array; otherwise use single cookie
             const refreshInput = (stackedCookies && stackedCookies.length > 0) ? stackedCookies : cc;
-            const refreshed = await clerkAuth.refreshSession(refreshInput);
+            const refreshed = await clerkAuth.refreshSession(refreshInput, account.sessionCookie);
             if (refreshed) {
               const nextCc = refreshed.clientCookie ?? (typeof refreshInput === 'string' ? refreshInput : cc);
-              // Prune dead cookies from the stack if any were reported
-              let prunedStack = stackedCookies || [];
-              if (refreshed.deadClientCookies && refreshed.deadClientCookies.length > 0) {
-                const deadSet = new Set(refreshed.deadClientCookies.map(e => e.cookie));
-                prunedStack = prunedStack.filter(e => !deadSet.has(e.cookie));
-              }
+              const liveStack = Array.isArray(stackedCookies) && stackedCookies.length > 0
+                ? (refreshed.deadClientCookies && refreshed.deadClientCookies.length > 0
+                  ? (() => {
+                    const deadSet = new Set(refreshed.deadClientCookies.map((e) => e.cookie));
+                    return stackedCookies.filter((entry) => !deadSet.has(entry.cookie));
+                  })()
+                  : stackedCookies)
+                : [];
               await store.updateAccountSession(
                 req.user.id,
                 account.id,
                 refreshed.sessionCookie,
                 nextCc,
                 refreshed.sessionExpiry,
+                { replaceClientCookies: liveStack },
               );
               refreshedSessions = true;
               logger.info(`[DASHBOARD] Session refreshed via clientCookie (account=${account.id}, was=${meta.sessionStatus})`);
@@ -205,15 +211,16 @@ class DashboardController extends BaseController {
         { totalCredits: 0, totalUsed: 0, totalRemaining: 0, totalKeys: 0, totalActiveKeys: 0 },
       );
 
-      // Warm session status cache server-side — probe all accounts in parallel.
-      // Results included in response so frontend skips its probeAll() round-trip.
-      const liveStatuses = {};
+      // Warm display session status cache server-side (cheap/cached status).
+      // This payload is for passive UI display only.
+      const displaySessionStatuses = {};
+      const liveStatusLimit = pLimit(CONCURRENCY);
       await Promise.allSettled(
-        snapshots.map(async (snapshot) => {
+        snapshots.map((snapshot) => liveStatusLimit(async () => {
           try {
             const payload = await store.getStoredSessionStatusPayload(req.user.id, snapshot.id);
-            liveStatuses[snapshot.id] = payload.status;
-            // Merge live status into snapshot so response is immediately accurate
+            displaySessionStatuses[snapshot.id] = payload.status;
+            // Merge display status into snapshot so response is immediately accurate
             snapshot.sessionStatus = payload.status;
             // Also add lastLoginAt if not already present from meta
             if (!snapshot.lastLoginAt) {
@@ -227,10 +234,15 @@ class DashboardController extends BaseController {
           } catch {
             // Non-fatal: keep existing sessionStatus from meta
           }
-        })
+        }))
       );
 
-      return this.success(res, { accounts: snapshots, totals, liveStatuses });
+      return this.success(res, {
+        accounts: snapshots,
+        totals,
+        liveStatuses: displaySessionStatuses,
+        displaySessionStatuses,
+      });
 
     } catch (err) {
       return this.error(res, err.message);

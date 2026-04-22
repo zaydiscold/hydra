@@ -2,6 +2,16 @@ import { logger } from '../services/logger.js';
 
 export default class BaseController {
   /**
+   * Static express async handler wrapper.
+   * Passes errors to standard Express error middleware via next(err).
+   */
+  static catchAsync(fn) {
+    return (req, res, next) => {
+      Promise.resolve(fn(req, res, next)).catch(next);
+    };
+  }
+
+  /**
    * Success response handler
    */
   success(res, data, statusCode = 200) {

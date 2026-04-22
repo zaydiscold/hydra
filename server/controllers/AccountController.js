@@ -20,6 +20,7 @@ import {
   updateAccountSchema
 } from '../validators/account.js';
 
+
 /** When set, OTP/Clerk errors include UI + JSON hints; server logs use [CLERK_DEBUG_OTP]. */
 function clerkDebugOtpExtra() {
   if (process.env.CLERK_DEBUG_OTP !== '1') return {};
@@ -28,6 +29,25 @@ function clerkDebugOtpExtra() {
     clerkDebugHint:
       'Clerk trace is on (CLERK_DEBUG_OTP=1). In the terminal running the API, search for lines starting with [CLERK_DEBUG_OTP] right after this request.',
   };
+}
+
+function pruneDeadClientCookies(stack, refreshed) {
+  if (!Array.isArray(stack) || stack.length === 0) return [];
+  if (!Array.isArray(refreshed?.deadClientCookies) || refreshed.deadClientCookies.length === 0) return stack;
+  const deadSet = new Set(refreshed.deadClientCookies.map((entry) => entry.cookie));
+  return stack.filter((entry) => !deadSet.has(entry.cookie));
+}
+
+function isAuthoritativeSessionFailure(errLike) {
+  const code = String(errLike?.code || '').toUpperCase();
+  const msg = String(errLike?.message || '').toLowerCase();
+  if (code === 'OTP_REAUTH_REQUIRED') return true;
+  return (
+    msg.includes('session expired') ||
+    msg.includes('re-authenticate') ||
+    msg.includes('verification required') ||
+    msg.includes('two-factor authentication')
+  );
 }
 
 export class AccountController extends BaseController {
@@ -144,7 +164,25 @@ export class AccountController extends BaseController {
    */
   async bulkOtpStubs(req, res) {
     try {
-      const { emails } = this.validate(req.body, bulkOtpStubsSchema);
+      const { emails: rawEmails } = this.validate(req.body, bulkOtpStubsSchema);
+
+      // Expand *@domain wildcards to random aliases (e.g. *@zayd.wtf → nova4821@zayd.wtf)
+      const RANDOM_WORDS = [
+        'azure', 'cipher', 'comet', 'cosmic', 'delta', 'echo', 'ember', 'flash',
+        'frost', 'ghost', 'helix', 'ion', 'jade', 'karma', 'laser', 'lunar',
+        'mango', 'nexus', 'nova', 'onyx', 'orbit', 'pixel', 'plasma', 'pulse',
+        'quartz', 'raven', 'sigma', 'solar', 'sonic', 'spark', 'storm', 'swift',
+        'titan', 'turbo', 'ultra', 'vapor', 'vector', 'vibe', 'wave', 'xenon',
+        'zeal', 'zero', 'zeta', 'drift', 'flare', 'forge', 'glyph', 'haze',
+      ];
+      const emails = rawEmails.flatMap(entry => {
+        if (!entry.startsWith('*@')) return [entry];
+        const domain = entry.slice(2);
+        const word = RANDOM_WORDS[Math.floor(Math.random() * RANDOM_WORDS.length)];
+        const suffix = String(Math.floor(Math.random() * 9000) + 1000);
+        return [`${word}${suffix}@${domain}`];
+      });
+
       const seen = new Set();
       const unique = emails.filter((e) => {
         if (seen.has(e)) return false;
@@ -153,28 +191,32 @@ export class AccountController extends BaseController {
       });
 
       const results = [];
-      let globalIndex = 0;
-      
-      // Fetch existing accounts once so we can look up on 409
+
+      // Fetch existing accounts once so we can look up on 409 dedup
       let allAccounts = [];
       try {
         allAccounts = await store.getAccounts(req.user.id);
-      } catch (e) {
-        // ignore
+      } catch {
+        // ignore — accounts list is best-effort for 409 dedup
       }
 
-      // Get count of existing accounts to continue numbering
-      const baseCount = allAccounts.length;
+      /**
+       * Derive a display alias from an email address.
+       * admin@zayd.world → admin-zayd.world
+       * On alias collision the suffix increments: admin-zayd.world-2, -3, …
+       */
+      function emailToAlias(email, suffix = 0) {
+        const base = String(email || '').trim().toLowerCase().replace('@', '-');
+        return suffix === 0 ? base : `${base}-${suffix + 1}`;
+      }
 
       for (const email of unique) {
-        globalIndex++;
         let created = false;
         let lastError = null;
-        
-        // Try generic labeling first: "Hydra Account N"
+
+        // Try alias variants until one is free (up to 30 conflict retries)
         for (let suffix = 0; suffix < 30 && !created; suffix += 1) {
-          const num = baseCount + globalIndex + suffix;
-          const alias = suffix === 0 ? `Hydra Account ${num}` : `Hydra Account ${num}-${suffix}`;
+          const alias = emailToAlias(email, suffix);
           
           try {
             const account = await store.addAccountWithCredentials(
@@ -183,6 +225,8 @@ export class AccountController extends BaseController {
               email,
               undefined,
               'otp',
+              null,
+              { pendingVerification: true }, // hidden from dashboard until OTP completes
             );
             results.push({
               email,
@@ -195,11 +239,13 @@ export class AccountController extends BaseController {
             if (err.status === 409) {
               const msg = (err.message || '').toLowerCase();
               if (msg.includes('email already exists')) {
-                const existing = allAccounts.find((a) => a.email === email);
+                const normalizedEmail = String(email || '').toLowerCase();
+                const existing = allAccounts.find((a) => String(a.email || '').toLowerCase() === normalizedEmail);
                 if (existing) {
                   results.push({
                     email,
-                    success: true, // Auto-pick existing account
+                    success: true,
+                    reused: true, // existing account — not a new stub
                     account: { id: existing.id, alias: existing.alias, email, authMethod: existing.authMethod || 'otp' },
                   });
                 } else {
@@ -241,13 +287,16 @@ export class AccountController extends BaseController {
       // Ghost session recovery: try silent __client → __session refresh before forcing OTP
       if (session.clientCookie) {
         try {
-          const refreshed = await clerkAuth.refreshSession(session.clientCookie, session.sessionCookie);
+          const cookieInput244 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
+          const refreshed = await clerkAuth.refreshSession(cookieInput244, session.sessionCookie);
           if (refreshed?.sessionToken) {
+            const liveStack = pruneDeadClientCookies(session.clientCookies, refreshed);
             await store.updateAccountSession(
               req.user.id, req.params.id,
               refreshed.sessionToken,
               refreshed.clientCookie ?? session.clientCookie,
               refreshed.sessionExpiry ?? null,
+              { replaceClientCookies: liveStack },
             );
             await store.logAccountEvent(req.user.id, req.params.id, 'GHOST_SESSION_RECOVERED', 'Silent __client refresh succeeded');
             invalidateSnapshotCache(req.params.id);
@@ -321,6 +370,8 @@ export class AccountController extends BaseController {
       if (err.name === 'NeedSecondFactorError' && err.signInId && err.clientCookie) {
         await store.updateAccountSession(req.user.id, req.params.id, null, err.clientCookie, null);
         await store.logAccountEvent(req.user.id, req.params.id, 'OTP_REQUIRED', 'Password accepted, OTP required');
+        // 202 + top-level requiresTwoFactor: api.js checks data?.requiresTwoFactor directly.
+        // Cannot use this.success() (wraps in data: {}) without updating the frontend check.
         return res.status(202).json({
           success: true,
           requiresTwoFactor: true,
@@ -328,7 +379,7 @@ export class AccountController extends BaseController {
         });
       }
       if (err.message === 'NEEDS_2FA') {
-        return res.status(202).json({ success: true, requiresTwoFactor: true });
+        return res.status(202).json({ success: true, requiresTwoFactor: true }); // intentional raw — see above
       }
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
     }
@@ -353,14 +404,15 @@ export class AccountController extends BaseController {
       const email = req.body.email || account.email;
       if (!email) return this.error(res, 'Email required', 400);
 
-      const { signInId, clientCookie } = await clerkAuth.startEmailOTP(email);
+      const { signInId, clientCookie, isSignUp } = await clerkAuth.startEmailOTP(email);
       await store.updateAccountSession(req.user.id, req.params.id, undefined, clientCookie, undefined, {
         preserveSessionToken: true,
       });
-      await store.logAccountEvent(req.user.id, req.params.id, 'OTP_SENT', `OTP requested for ${email}`);
+      await store.logAccountEvent(req.user.id, req.params.id, 'OTP_SENT', `OTP requested for ${email}${isSignUp ? ' (new account signup)' : ''}`);
 
       return this.success(res, {
         signInId,
+        isSignUp: isSignUp ?? false,
         message: `OTP sent to ${email}`,
         remainingAttempts: loginCheck.remaining,
       });
@@ -371,7 +423,7 @@ export class AccountController extends BaseController {
 
   async verifyOTP(req, res) {
     try {
-      const { signInId, code, totpSecondFactor } = this.validate(req.body, otpVerifySchema);
+      const { signInId, code, totpSecondFactor, isSignUp } = this.validate(req.body, otpVerifySchema);
 
       const accountSession = await store.getAccountSession(req.user.id, req.params.id);
       const storedClient = accountSession.clientCookie;
@@ -390,10 +442,13 @@ export class AccountController extends BaseController {
       }
       const session = totpSecondFactor
         ? await clerkAuth.completeSecondFactor(signInId, code, accountSession.clientCookie)
-        : await clerkAuth.completeEmailOTP(signInId, code, accountSession.clientCookie);
+        : await clerkAuth.completeEmailOTP(signInId, code, accountSession.clientCookie, { isSignUp: isSignUp ?? false });
       await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry, { isNewLogin: true });
       await store.updateAccountLastSync(req.user.id, req.params.id);
       await store.logAccountEvent(req.user.id, req.params.id, 'OTP_VERIFIED', 'Signed in via OTP');
+
+      // OTP verified — unhide the account on the dashboard (was pendingVerification=true from bulkOtpStubs)
+      await store.clearPendingVerification(req.user.id, req.params.id);
 
       // Success - reset login attempts
       const { rotationManager } = await import('../services/rotation-manager.js');
@@ -445,10 +500,14 @@ export class AccountController extends BaseController {
   async refresh(req, res) {
     try {
       const session = await store.getAccountSession(req.user.id, req.params.id);
-      const refreshed = await clerkAuth.refreshSession(session.clientCookie);
+      const cookieInput448 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
+      const refreshed = await clerkAuth.refreshSession(cookieInput448, session.sessionCookie);
       if (!refreshed) return this.error(res, 'Session refresh failed — please log in again', 401);
       const cc = refreshed.clientCookie ?? session.clientCookie;
-      await store.updateAccountSession(req.user.id, req.params.id, refreshed.sessionCookie, cc, refreshed.sessionExpiry);
+      const liveStack = pruneDeadClientCookies(session.clientCookies, refreshed);
+      await store.updateAccountSession(req.user.id, req.params.id, refreshed.sessionCookie, cc, refreshed.sessionExpiry, {
+        replaceClientCookies: liveStack,
+      });
       await store.logAccountEvent(req.user.id, req.params.id, 'SESSION_REFRESHED', 'Session refreshed via Clerk API');
       return this.success(res, { sessionExpiry: refreshed.sessionExpiry, status: 'active' });
     } catch (err) {
@@ -472,8 +531,19 @@ export class AccountController extends BaseController {
   async provision(req, res) {
     try {
       const keyName = req.body?.keyName;
-      const result = await dashboardApi.createManagementKey(req.user.id, req.params.id, keyName);
+      let result;
+      try {
+        result = await dashboardApi.createManagementKey(req.user.id, req.params.id, keyName);
+      } catch (err) {
+        if (isAuthoritativeSessionFailure(err)) {
+          invalidateSnapshotCache(req.params.id);
+        }
+        throw err;
+      }
       if (result?.success === false) {
+        if (isAuthoritativeSessionFailure(result)) {
+          invalidateSnapshotCache(req.params.id);
+        }
         return this.error(
           res,
           result.message || 'Could not provision management key',
@@ -482,23 +552,9 @@ export class AccountController extends BaseController {
           { source: result.source },
         );
       }
-      
-      // Store the key in ManagementKey storage
-      if (result.key) {
-        try {
-          const { storeManagementKey } = await import('../services/management-key-store.js');
-          await storeManagementKey(req.params.id, result.key, keyName || 'Management Key', {
-            provisionedAt: new Date().toISOString(),
-            via: result.source || 'playwright'
-          });
-          
-          // Invalidate dashboard cache since we have a new management key
-          invalidateSnapshotCache(req.params.id);
-        } catch (storeErr) {
-          console.error('[provision] Failed to store key:', storeErr.message);
-          // Don't fail the request if storage fails - key was still created
-        }
-      }
+
+      // Key persistence is handled in dashboard-api persistProvisionedManagementKey.
+      if (result.key) invalidateSnapshotCache(req.params.id);
       
       return this.success(res, result);
     } catch (err) {
@@ -622,7 +678,7 @@ export class AccountController extends BaseController {
       const { getBestManagementKey } = await import('../services/management-key-store.js');
       const bestKey = await getBestManagementKey(req.params.id);
       
-      if (!bestKey) return this.error(res, 'Account has no management key — use /provision first', 400);
+      if (!bestKey) return this.error(res, 'Account has no management key — provision one from the Dashboard or Pool Manager', 400);
       try {
         assertManagementKey(bestKey.key, 'account snapshot');
       } catch (err) {
@@ -743,6 +799,28 @@ export class AccountController extends BaseController {
     }
   }
 
+  async testKey(req, res) {
+    try {
+      const { id, hash } = req.params;
+      const localKeys = await store.getLocalKeys(req.user.id, id);
+      const localKey = localKeys.find(k => k.hash === hash);
+      if (!localKey || !localKey.key) {
+        return this.error(res, 'Full key not stored locally — register the key string in Pool Manager first', 400);
+      }
+      const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        headers: { 'Authorization': `Bearer ${localKey.key}` },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const msg = data?.error?.message || data?.message || `OpenRouter returned ${response.status}`;
+        return this.error(res, msg, 400);
+      }
+      return this.success(res, { valid: true, ...data });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
   // P6 — Send Clerk magic link (email_link strategy) for one account
   async sendMagicLink(req, res) {
     try {
@@ -756,12 +834,11 @@ export class AccountController extends BaseController {
       const callbackUrl = `${proto}://${host}/api/auth/magic-callback?signInId=__SIGN_IN_ID__&accountId=${account.id}`;
       // Note: we replace __SIGN_IN_ID__ placeholder after we get it from Clerk
 
-      const { signInId, clientCookie } = await clerkAuth.sendMagicLink(email, callbackUrl.replace('__SIGN_IN_ID__', 'pending'));
+      const { signInId, clientCookie, isSignUp } = await clerkAuth.sendMagicLink(email, callbackUrl.replace('__SIGN_IN_ID__', 'pending'));
 
-      // Build real callback URL now that we have signInId
-      const realCallback = `${proto}://${host}/api/auth/magic-callback?signInId=${encodeURIComponent(signInId)}&accountId=${account.id}`;
-      // Re-send with real redirect_url — do a second prepare call with the correct URL
-      // (Clerk ignores the redirect_url value for completion but needs it in the original prepare)
+      // Build real callback URL — include isSignUp so the callback handler routes correctly
+      const isSignUpParam = isSignUp ? '&isSignUp=1' : '';
+      const realCallback = `${proto}://${host}/api/auth/magic-callback?signInId=${encodeURIComponent(signInId)}&accountId=${account.id}${isSignUpParam}`;
       // We store the pending entry so the callback can look it up
       const { pendingMagicLinks } = await import('../services/magic-link-manager.js');
       pendingMagicLinks.set(signInId, {
@@ -769,6 +846,7 @@ export class AccountController extends BaseController {
         userId: req.user.id,
         clientCookie,
         email,
+        isSignUp: isSignUp ?? false,
         createdAt: Date.now(),
       });
 
@@ -789,8 +867,68 @@ export class AccountController extends BaseController {
   // P6 — Poll status of a pending magic link
   async magicLinkStatus(req, res) {
     const signInId = req.params.signInId;
+    const { pendingMagicLinks } = await import('../services/magic-link-manager.js');
     const pending = pendingMagicLinks.get(signInId);
     if (!pending) return this.success(res, { status: 'completed_or_expired' });
     return this.success(res, { status: 'pending', email: pending.email });
+  }
+
+  /**
+   * Live session probe — bypasses the 5-minute in-memory cache.
+   * Calls Clerk directly every time; use for the manual "Check Session" button.
+   * contrast with getSessionStatus (cached, fast) used by the main dashboard list.
+   */
+  async checkSession(req, res) {
+    try {
+      const payload = await store.probeSessionLive(req.user.id, req.params.id);
+      return this.success(res, {
+        status: payload.status,
+        sessionExpiry: payload.sessionExpiry,
+        sessionDecryptFailed: payload.sessionDecryptFailed,
+        live: payload.live,
+      });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
+  }
+
+  /**
+   * Attempt silent cookie refresh. On failure, returns an error WITHOUT wiping the session.
+   * Use POST /refresh-login if you want to clear session and be prompted to re-auth.
+   */
+  async silentRefreshOnly(req, res) {
+    try {
+      const session = await store.getAccountSession(req.user.id, req.params.id);
+
+      if (!session.clientCookie) {
+        return this.error(res, 'No client cookie stored — silent refresh not possible. Use Sign In to re-authenticate.', 400);
+      }
+
+      let refreshed;
+      try {
+        const cookieInput851 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
+        refreshed = await clerkAuth.refreshSession(cookieInput851, session.sessionCookie);
+      } catch {
+        return this.error(res, 'Silent refresh failed — use Sign In to re-authenticate', 400);
+      }
+
+      if (!refreshed?.sessionToken) {
+        return this.error(res, 'Silent refresh failed — use Sign In to re-authenticate', 400);
+      }
+
+      await store.updateAccountSession(
+        req.user.id, req.params.id,
+        refreshed.sessionToken,
+        refreshed.clientCookie ?? session.clientCookie,
+        refreshed.sessionExpiry ?? null,
+        { replaceClientCookies: pruneDeadClientCookies(session.clientCookies, refreshed) },
+      );
+      await store.logAccountEvent(req.user.id, req.params.id, 'SILENT_REFRESH', 'Session refreshed silently via client cookie');
+      invalidateSnapshotCache(req.params.id);
+
+      return this.success(res, { success: true, sessionExpiry: refreshed.sessionExpiry });
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500);
+    }
   }
 }

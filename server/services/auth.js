@@ -12,6 +12,23 @@ const ADMIN_USERNAME = 'admin';
 const DATA_DIR = path.join(process.cwd(), 'data');
 let restartRequired = false;
 
+// IMPORTANT: The admin password is stored as a bcrypt hash (SALT_ROUNDS=12) in
+// data/hydra.db → User.passwordHash. The default dev password is "1111".
+//
+// If a refactor/migration changes the User table or re-creates the DB from scratch,
+// the hash won't match "1111" and the login screen will show "Invalid credentials"
+// with no way in (Nuclear Reset wipes all data — avoid it).
+//
+// Recovery without wiping data:
+//   node -e "
+//     const {PrismaClient}=require('./node_modules/.prisma/client');
+//     const b=require('./node_modules/bcryptjs');
+//     const p=new PrismaClient();
+//     b.hash('1111',12).then(h=>p.user.updateMany({data:{passwordHash:h}})).then(r=>{console.log('reset ok',r);p.\$disconnect()});
+//   "
+//
+// See also: CLAUDE.md "Password Recovery" section.
+
 function buildNukeTransaction() {
   return [
     prisma.requestLog.deleteMany(),
@@ -102,6 +119,9 @@ export async function login(password) {
 }
 
 export async function changePassword(userId, currentPassword, newPassword) {
+  // NOTE: Changing the password here updates the bcrypt hash in data/hydra.db.
+  // The dev default "1111" will no longer work after this. If you lose the new
+  // password, use the recovery command in CLAUDE.md (or the comment block above).
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error('User not found');
 

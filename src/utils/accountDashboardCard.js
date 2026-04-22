@@ -6,8 +6,7 @@ import { accountNeedsSession } from './accountSession';
  * @returns {{ badgeVariant: 'ok'|'error'|'low'|'neutral', badgeLabel: string, subtitle?: string, isReady: boolean }}
  */
 export function getAccountDashboardCardState(account) {
-  const hasCredentials = !!account.hasCredentials;
-  const needsSession = accountNeedsSession(account.sessionStatus, { hasCredentials });
+  const needsSession = accountNeedsSession(account.sessionStatus);
 
   if (account.sessionDecryptFailed || account.sessionStatus === 'error') {
     return {
@@ -30,7 +29,7 @@ export function getAccountDashboardCardState(account) {
     };
   }
 
-  if (hasCredentials && needsSession) {
+  if (needsSession) {
     return {
       badgeVariant: 'low',
       badgeLabel: 'SIGN IN',
@@ -53,7 +52,7 @@ export function getAccountDashboardCardState(account) {
   if (account.status === 'ok' && account.hasManagementKey) {
     return {
       badgeVariant: 'ok',
-      badgeLabel: 'SYNCED',
+      badgeLabel: 'KEY OK',
       isReady: true,
     };
   }

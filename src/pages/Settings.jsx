@@ -6,6 +6,7 @@ export default function Settings({ addToast }) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   const [lanUrls, setLanUrls] = useState([]);
   const [copied, setCopied] = useState(false);
 
@@ -25,6 +26,20 @@ export default function Settings({ addToast }) {
 
   async function handleChangePassword(e) {
     e.preventDefault();
+    const newErrors = {};
+    if (!oldPassword) newErrors.oldPassword = 'Current password is required';
+    if (!newPassword) {
+      newErrors.newPassword = 'New password is required';
+    } else if (newPassword.length < 4) {
+      newErrors.newPassword = 'Minimum 4 characters';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
     setLoading(true);
     try {
       await api.changePassword(oldPassword, newPassword);
@@ -33,6 +48,7 @@ export default function Settings({ addToast }) {
       setNewPassword('');
     } catch (err) {
       addToast(err.message, 'error');
+      setErrors({ submit: err.message });
     }
     setLoading(false);
   }
@@ -95,30 +111,39 @@ export default function Settings({ addToast }) {
             <LockIcon size={15} style={{ color: 'var(--accent-primary)' }} />
             <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Password</span>
           </div>
-          <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="Current password"
-              value={oldPassword}
-              onChange={e => setOldPassword(e.target.value)}
-              required
-              style={{ fontSize: '0.85rem', padding: '6px 10px' }}
-            />
-            <input
-              type="password"
-              className="form-input"
-              placeholder="New password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              required
-              minLength={4}
-              style={{ fontSize: '0.85rem', padding: '6px 10px' }}
-            />
+          <form onSubmit={handleChangePassword} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="form-group-compact">
+              <input
+                type="password"
+                className={`form-input ${errors.oldPassword ? 'error' : ''}`}
+                placeholder="Current password"
+                value={oldPassword}
+                onChange={e => {
+                  setOldPassword(e.target.value);
+                  if (errors.oldPassword) setErrors(prev => ({ ...prev, oldPassword: null }));
+                }}
+                style={{ fontSize: '0.85rem', padding: '6px 10px' }}
+              />
+              {errors.oldPassword && <p className="field-error">{errors.oldPassword}</p>}
+            </div>
+            <div className="form-group-compact">
+              <input
+                type="password"
+                className={`form-input ${errors.newPassword ? 'error' : ''}`}
+                placeholder="New password"
+                value={newPassword}
+                onChange={e => {
+                  setNewPassword(e.target.value);
+                  if (errors.newPassword) setErrors(prev => ({ ...prev, newPassword: null }));
+                }}
+                style={{ fontSize: '0.85rem', padding: '6px 10px' }}
+              />
+              {errors.newPassword && <p className="field-error">{errors.newPassword}</p>}
+            </div>
             <button type="submit" className="btn btn-primary btn-sm" disabled={loading} style={{ alignSelf: 'flex-start', marginTop: 2 }}>
               {loading ? <><div className="spinner-sm" /> Updating…</> : 'Update Password'}
             </button>
-            <p style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', margin: 0 }}>
+            <p style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
               Changing password signs out your current session.
             </p>
           </form>

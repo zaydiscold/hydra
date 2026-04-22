@@ -18,9 +18,15 @@ export const bulkAddSchema = z.object({
 
 const MAX_BULK_OTP_STUBS = 150;
 
+// Accepts real emails AND *@domain wildcards (expanded to random aliases server-side)
 export const bulkOtpStubsSchema = z.object({
   emails: z
-    .array(z.string().trim().toLowerCase().email('Invalid email'))
+    .array(
+      z.string().trim().toLowerCase().refine(
+        v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || /^\*@[^\s@]+\.[^\s@]+$/.test(v),
+        { message: 'Each entry must be a valid email or *@domain wildcard' }
+      )
+    )
     .min(1, 'At least one email is required')
     .max(MAX_BULK_OTP_STUBS, `At most ${MAX_BULK_OTP_STUBS} emails per request`),
 });
@@ -65,4 +71,6 @@ export const otpVerifySchema = z.object({
   code: z.string().length(6, 'OTP must be exactly 6 characters'),
   /** Complete TOTP after password sign-in (Clerk needs_second_factor). */
   totpSecondFactor: z.boolean().optional(),
+  /** True when the email is new to OpenRouter — routes through Clerk sign_up instead of sign_in. */
+  isSignUp: z.boolean().optional(),
 });

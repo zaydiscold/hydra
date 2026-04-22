@@ -138,7 +138,7 @@ async function launchSignupFlow(task) {
       }
       
       await emailInput.fill(task.metadata.email);
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(500);
 
       // Try multiple continue button selectors
       const continueSelectors = [
@@ -251,7 +251,7 @@ async function finalizeOtpSubmission(task, otpCode) {
         logger.info(`[Account Generator] Short-lived session detected (${Math.round((initialExpiryMs - nowMs)/1000)}s), activating long-lived session...`);
         
         // Wait for Clerk propagation (OTP sessions take 2-4 seconds to propagate)
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 1000));
         
         // Try to refresh using the client cookie AND expired session to get a proper session
         const refreshed = await refreshSession(allDeviceCookies, sessionCookie);

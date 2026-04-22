@@ -6,6 +6,22 @@ import * as openrouter from '../services/openrouter.js';
 import { syncApiKeys } from '../services/dashboard-api.js';
 import { rotationManager } from '../services/rotation-manager.js';
 import { assertManagementKey, assertStandardKey } from '../services/key-utils.js';
+import { rotateProxySecret } from '../services/local-secrets.js';
+
+// Cache OpenRouter listKeys results per account — 2 min TTL.
+// Pool Manager hits this on every page load; no need to hammer OR on every visit.
+const _liveKeysCache = new Map(); // accountId → { keys, expiresAt }
+const LIVE_KEYS_TTL_MS = 2 * 60 * 1000;
+
+function getCachedLiveKeys(accountId) {
+  const entry = _liveKeysCache.get(accountId);
+  if (!entry || Date.now() > entry.expiresAt) { _liveKeysCache.delete(accountId); return null; }
+  return entry.keys;
+}
+
+function setCachedLiveKeys(accountId, keys) {
+  _liveKeysCache.set(accountId, { keys, expiresAt: Date.now() + LIVE_KEYS_TTL_MS });
+}
 
 class PoolController extends BaseController {
   extractValidatedKeyHash(payload) {
@@ -48,12 +64,15 @@ class PoolController extends BaseController {
             };
           }
 
-          // Fetch live key list from OpenRouter (always array from openrouter.listKeys; guard for safety)
-          const liveKeysRaw = await openrouter.listKeys(account.managementKey);
-          const liveKeys = Array.isArray(liveKeysRaw) ? liveKeysRaw : [];
-
-          // Sync metadata to local DB (upsert without overwriting key strings)
-          await store.syncKeysFromOpenRouter(req.user.id, account.id, liveKeys);
+          // Fetch live key list from OpenRouter — cached 2 min to avoid hammering OR on every page load.
+          let liveKeys = getCachedLiveKeys(account.id);
+          if (!liveKeys) {
+            const liveKeysRaw = await openrouter.listKeys(account.managementKey);
+            liveKeys = Array.isArray(liveKeysRaw) ? liveKeysRaw : [];
+            setCachedLiveKeys(account.id, liveKeys);
+            // Sync metadata to DB only on cache miss (live fetch)
+            await store.syncKeysFromOpenRouter(req.user.id, account.id, liveKeys);
+          }
 
           // Get local DB records to merge isPooled + hasKeyString
           const localKeys = await store.getLocalKeys(req.user.id, account.id);
@@ -236,12 +255,20 @@ class PoolController extends BaseController {
 
   // --- NEW-2: Proxy Status Check ---
   async getStatus(req, res) {
-    const status = await rotationManager.getStatusAsync();
-    return res.json({
+    let pooled = 0, available = 0, cooldowns = 0;
+    try {
+      const status = await rotationManager.getStatusAsync();
+      pooled = status.totalPooled;
+      available = status.available;
+      cooldowns = status.activeCooldowns;
+    } catch {
+      // Pool not loaded yet or DB hiccup — still return online so UI buttons don't lock
+    }
+    return this.success(res, {
       proxy: 'online',
-      pooled: status.totalPooled,
-      available: status.available,
-      cooldowns: status.activeCooldowns,
+      pooled,
+      available,
+      cooldowns,
       uptime: Math.floor(process.uptime()),
     });
   }
@@ -445,6 +472,25 @@ class PoolController extends BaseController {
         lastSync: stats.lastSyncAt ?? null,
         activeKeys: stats.totalPooled ?? 0,
         cooldownMap: stats.cooldownMap ?? {},
+      });
+    } catch (err) {
+      return this.error(res, err.message);
+    }
+  }
+
+  /**
+   * POST /api/pool/rotate-master-key
+   * Regenerate the proxySecret that drives sk-hydra-* and sk-proj-* keys.
+   * Takes effect immediately — no restart required.
+   */
+  async rotateMasterKey(req, res) {
+    try {
+      rotateProxySecret();
+      const newMasterKey = store.getMasterProxyKey();
+      const port = process.env.PORT || 3001;
+      return this.success(res, {
+        masterKey: newMasterKey,
+        endpoint: `http://localhost:${port}/v1`,
       });
     } catch (err) {
       return this.error(res, err.message);

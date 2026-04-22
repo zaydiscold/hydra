@@ -121,7 +121,17 @@ export async function getAccountSnapshot(managementKey) {
       total: safeKeys.length,
       active: activeKeys.length,
       disabled: disabledKeys.length,
-      list: safeKeys.map(k => ({ hash: k.hash, name: k.name, label: k.label, usage: k.usage, disabled: k.disabled })),
+      list: safeKeys.map(k => ({
+        hash: k.hash,
+        name: k.name,
+        label: k.label,
+        usage: k.usage,
+        usage_monthly: k.usage_monthly ?? k.usage ?? 0,
+        limit: k.limit ?? null,
+        limit_remaining: (k.limit != null) ? Math.max(0, k.limit - (k.usage_monthly ?? k.usage ?? 0)) : null,
+        created_at: k.created_at,
+        disabled: k.disabled,
+      })),
     }
   };
 }

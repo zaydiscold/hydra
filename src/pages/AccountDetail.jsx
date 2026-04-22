@@ -4,7 +4,7 @@ import * as api from '../api';
 import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
 import SessionDot from '../components/SessionDot';
-import { accountNeedsSession } from '../utils/accountSession';
+import { accountNeedsSession, canProvisionWithSession, isSessionProbePending } from '../utils/accountSession';
 import {
   WalletIcon,
   CreditsIcon,
@@ -26,13 +26,23 @@ function CreateKeyModal({ accountId, onClose, onCreated }) {
   const [limit, setLimit] = useState('');
   const [limitReset, setLimitReset] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState({});
   const [createdKey, setCreatedKey] = useState(null);
   const [copied, setCopied] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError('');
+    const newErrors = {};
+    if (!name.trim()) {
+      newErrors.name = 'Key Name is required';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
     setLoading(true);
     try {
       const data = { name: name.trim() };
@@ -42,7 +52,7 @@ function CreateKeyModal({ accountId, onClose, onCreated }) {
       setCreatedKey(res.key);
       onCreated();
     } catch (err) {
-      setError(err.message);
+      setErrors({ submit: err.message });
     }
     setLoading(false);
   }
@@ -87,19 +97,22 @@ function CreateKeyModal({ accountId, onClose, onCreated }) {
           <h3>Create New API Key</h3>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label>Key Name</label>
             <input
               type="text"
-              className="form-input"
+              className={`form-input ${errors.name ? 'error' : ''}`}
               placeholder="e.g., Claude-Agent, Cursor, Dev..."
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
+              onChange={(e) => {
+                setName(e.target.value);
+                if (errors.name) setErrors(prev => ({ ...prev, name: null }));
+              }}
               autoFocus
               spellCheck={false}
             />
+            {errors.name && <p className="field-error">{errors.name}</p>}
           </div>
           <div className="form-group">
             <label>Spending Limit (USD) — Optional</label>
@@ -126,11 +139,11 @@ function CreateKeyModal({ accountId, onClose, onCreated }) {
               <option value="monthly">Monthly</option>
             </select>
           </div>
-          {error && <p style={{ color: 'var(--status-error)', fontSize: '0.85rem', marginBottom: 'var(--space-md)' }}>{error}</p>}
+          {errors.submit && <p className="form-error">{errors.submit}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? <><div className="spinner" /> Creating...</> : 'Create Key'}
+              {loading ? <><div className="spinner-sm" /> Creating...</> : 'Create Key'}
             </button>
           </div>
         </form>
@@ -162,6 +175,10 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const [actionLoading, setActionLoading] = useState({});
   const initialFetchDone = useRef(false);
 
+  // Live Clerk session probe — overrides stale heuristic from getAccounts()
+  const [liveSessionStatus, setLiveSessionStatus] = useState(null);
+  const [sessionProbing, setSessionProbing] = useState(false);
+
   // Edit alias
   const [editingAlias, setEditingAlias] = useState(false);
   const [aliasInput, setAliasInput] = useState('');
@@ -170,6 +187,9 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   // Key reveal / copy
   const [revealedKeys, setRevealedKeys] = useState(new Set());
   const [copiedKey, setCopiedKey] = useState(null);
+
+  // Key test status: { [hash]: { loading, valid, error } }
+  const [testKeyStatus, setTestKeyStatus] = useState({});
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   // Mgmt key reveal
@@ -180,6 +200,15 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   // Management keys storage (New)
   const [managementKeys, setManagementKeys] = useState([]);
   const [loadingMgmtKeys, setLoadingMgmtKeys] = useState(false);
+  const [managementKeysLoaded, setManagementKeysLoaded] = useState(false);
+  const [managementKeysLoadError, setManagementKeysLoadError] = useState('');
+
+  // Import management key
+  const [showImport, setShowImport] = useState(false);
+  const [importKey, setImportKey] = useState('');
+  const [importName, setImportName] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState('');
 
   // Confirm modals
   const [deleteKeyConfirm, setDeleteKeyConfirm] = useState(null); // { hash, name }
@@ -214,21 +243,38 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const fetchManagementKeys = useCallback(async () => {
     if (!resolvedAccountId) return;
     setLoadingMgmtKeys(true);
+    setManagementKeysLoadError('');
     try {
       const res = await api.getManagementKeys(resolvedAccountId);
-      // Deduplicate by hash (same key may appear under multiple names)
       const raw = res.data?.keys || [];
+      // Canonical identity is row id from backend; do not assume hash is present.
       const seen = new Set();
-      setManagementKeys(raw.filter(k => {
-        if (!k.hash || seen.has(k.hash)) return false;
-        seen.add(k.hash);
+      setManagementKeys(raw.filter((k) => {
+        const identity = k?.id || `${k?.name || ''}:${k?.createdAt || ''}:${k?.preview || ''}`;
+        if (seen.has(identity)) return false;
+        seen.add(identity);
         return true;
       }));
+      setManagementKeysLoaded(true);
     } catch (err) {
       console.error('[ACCOUNT_DETAIL] Failed to fetch management keys:', err.message);
-      setManagementKeys([]);
+      setManagementKeysLoadError(err.message || 'Failed to load management keys');
+      setManagementKeysLoaded(true);
     } finally {
       setLoadingMgmtKeys(false);
+    }
+  }, [resolvedAccountId]);
+
+  const probeSession = useCallback(async () => {
+    if (!resolvedAccountId) return;
+    setSessionProbing(true);
+    try {
+      const res = await api.checkSessionLive(resolvedAccountId);
+      setLiveSessionStatus(res.data?.status ?? null);
+    } catch {
+      // Non-fatal; stale heuristic stays as fallback
+    } finally {
+      setSessionProbing(false);
     }
   }, [resolvedAccountId]);
 
@@ -247,11 +293,13 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         fetchSnapshot();
         // Also fetch stored management keys (new)
         fetchManagementKeys();
+        // Live Clerk probe — overrides stale heuristic
+        probeSession();
       })();
       initialFetchDone.current = true;
     }
   // accountMeta intentionally not a dependency: we only want the initial decision once.
-  }, [resolvedAccountId, fetchSnapshot, fetchMeta, fetchManagementKeys, addToast, onBack]);
+  }, [resolvedAccountId, fetchSnapshot, fetchMeta, fetchManagementKeys, probeSession, addToast, onBack]);
 
   async function handleToggleKey(hash, currentDisabled) {
     setActionLoading((p) => ({ ...p, [hash]: true }));
@@ -325,6 +373,18 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     setTimeout(() => setCopiedKey(null), 2000);
   }
 
+  async function handleTestKey(hash) {
+    setTestKeyStatus((p) => ({ ...p, [hash]: { loading: true } }));
+    try {
+      const res = await api.testKey(resolvedAccountId, hash);
+      setTestKeyStatus((p) => ({ ...p, [hash]: { loading: false, valid: true, data: res.data } }));
+      setTimeout(() => setTestKeyStatus((p) => { const n = { ...p }; delete n[hash]; return n; }), 6000);
+    } catch (err) {
+      setTestKeyStatus((p) => ({ ...p, [hash]: { loading: false, valid: false, error: err.message } }));
+      setTimeout(() => setTestKeyStatus((p) => { const n = { ...p }; delete n[hash]; return n; }), 6000);
+    }
+  }
+
   async function handleDeleteAccount() {
     setDeleteAccountConfirm(true);
   }
@@ -358,6 +418,37 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     setActionLoading((p) => ({ ...p, __provision: false }));
   }
 
+  async function handleImportKey(e) {
+    e.preventDefault();
+    if (!importKey.startsWith('sk-or-v1-')) {
+      setImportError('Key must start with sk-or-v1-');
+      return;
+    }
+    setImportLoading(true);
+    setImportError('');
+    try {
+      await api.importManagementKey(resolvedAccountId, importKey.trim(), importName.trim() || 'Imported Key');
+      addToast('Management key imported', 'success');
+      setShowImport(false);
+      setImportKey('');
+      setImportName('');
+      await fetchManagementKeys();
+    } catch (err) {
+      setImportError(api.formatApiErrorMessage ? api.formatApiErrorMessage(err) : (err?.response?.data?.error || err.message || 'Import failed'));
+    }
+    setImportLoading(false);
+  }
+
+  async function handleRevokeKey(keyId) {
+    try {
+      await api.revokeManagementKey(resolvedAccountId, keyId);
+      addToast('Management key revoked', 'success');
+      await fetchManagementKeys();
+    } catch (err) {
+      addToast(api.formatApiErrorMessage ? api.formatApiErrorMessage(err) : 'Revoke failed', 'error');
+    }
+  }
+
   if (loading && !snapshot) {
     return (
       <div className="loading-overlay">
@@ -367,60 +458,334 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     );
   }
 
+  // Degraded view: management key exists but snapshot failed (OpenRouter unreachable / key revoked).
+  // Key management still works — show the page with an error banner instead of the "sign in first" empty state.
+  if (!snapshot && accountMeta?.hasManagementKey) {
+    const displayStatus = liveSessionStatus ?? accountMeta?.sessionStatus;
+    return (
+      <>
+        <div className="page-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <ShieldIcon size={28} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+            <button
+              className="btn btn-ghost"
+              style={{ padding: '3px 7px', minHeight: 'unset', fontSize: '0.7rem', opacity: 0.5, marginRight: 4 }}
+              onClick={onBack}
+            >
+              ← back
+            </button>
+            <h2 style={{ margin: 0 }}>{accountMeta.alias}</h2>
+          </div>
+          <p style={{ margin: 0 }}>Account details and API key management</p>
+        </div>
+
+        {/* Error banner */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          marginBottom: 'var(--space-md)',
+          padding: '10px 14px',
+          background: 'rgba(255,170,0,0.07)',
+          border: '1px solid var(--status-warning)',
+          fontSize: '0.82rem', color: 'var(--status-warning)',
+        }}>
+          <span style={{ flexShrink: 0 }}>⚠</span>
+          <span>
+            Balance snapshot unavailable — {loadError || 'OpenRouter API unreachable or key revoked'}.{' '}
+            Key management is still functional.
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={fetchSnapshot}
+            disabled={loading}
+            style={{ marginLeft: 'auto', flexShrink: 0 }}
+          >
+            {loading ? '…' : '↻ Retry'}
+          </button>
+        </div>
+
+        {/* Identity strip */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          marginBottom: 'var(--space-lg)',
+          padding: '10px 14px',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-subtle)',
+        }}>
+          <SessionDot
+            status={displayStatus}
+            hasManagementKey={!!accountMeta.hasManagementKey}
+            hasCredentials={!!accountMeta.hasCredentials}
+          />
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+            {accountMeta.email || '—'}
+          </span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+            {resolvedAccountId}
+          </span>
+          {displayStatus && (
+            <span style={{
+              marginLeft: 'auto', fontSize: '0.65rem', fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.07em',
+              color: displayStatus === 'active' ? 'var(--status-success)'
+                : displayStatus === 'expiring' ? 'var(--status-warning)'
+                : 'var(--text-tertiary)',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+              {liveSessionStatus ? '[LIVE]' : '[CACHED]'} {displayStatus}
+              <button
+                type="button"
+                onClick={probeSession}
+                disabled={sessionProbing}
+                title="Re-probe session status from Clerk"
+                style={{
+                  background: 'none', border: 'none', cursor: sessionProbing ? 'default' : 'pointer',
+                  padding: '0 2px', fontSize: '0.75rem', color: 'var(--text-tertiary)',
+                  opacity: sessionProbing ? 0.4 : 0.7,
+                }}
+              >
+                {sessionProbing ? '…' : '↻'}
+              </button>
+            </span>
+          )}
+          {accountMeta.hasCredentials && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setLoginModalOpen(true)}
+              title="Re-authenticate via email OTP or password"
+            >
+              [UNLOCK] Re-auth
+            </button>
+          )}
+        </div>
+
+        {/* Management keys */}
+        <div style={{ marginBottom: 'var(--space-md)', border: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
+              {loadingMgmtKeys ? '…' : '↻'}
+            </button>
+          </div>
+          {managementKeysLoadError && (
+            <div className="account-detail-inline-status account-detail-inline-status--error">
+              <span>Management key list failed to load.</span>
+              <span style={{ color: 'var(--text-secondary)' }}>{managementKeysLoadError}</span>
+              <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
+                {loadingMgmtKeys ? '…' : 'Retry'}
+              </button>
+            </div>
+          )}
+          {managementKeysLoaded && !managementKeysLoadError && managementKeys.length === 0 && !loadingMgmtKeys && (
+            <div className="account-detail-empty-inline">
+              <div>No management keys in Hydra.</div>
+              <div style={{ color: 'var(--text-tertiary)' }}>Provision a new one or import an existing key from OpenRouter.</div>
+              <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
+                Reload keys
+              </button>
+            </div>
+          )}
+          {managementKeys.map((key) => (
+            <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-card)', borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontWeight: 500 }}>{key.name}</span>
+              <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>{key.status}</span>
+              <code style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{key.preview}</code>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{formatDate(key.createdAt)}</span>
+              {key.status === 'active' && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginLeft: 'auto', color: 'var(--status-error)', fontSize: '0.7rem' }}
+                  onClick={() => handleRevokeKey(key.id)}
+                >
+                  Revoke
+                </button>
+              )}
+            </div>
+          ))}
+          <div style={{ padding: '6px 10px' }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setShowImport(v => !v)}
+              style={{ marginTop: 8 }}
+            >
+              {showImport ? 'Cancel' : '+ Import existing key'}
+            </button>
+            {showImport && (
+              <form onSubmit={handleImportKey} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="sk-or-v1-..."
+                  value={importKey}
+                  onChange={e => setImportKey(e.target.value)}
+                  spellCheck={false}
+                  autoComplete="off"
+                  data-1p-ignore
+                  disabled={importLoading}
+                />
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Key name (optional)"
+                  value={importName}
+                  onChange={e => setImportName(e.target.value)}
+                  disabled={importLoading}
+                />
+                {importError && <p className="field-error">{importError}</p>}
+                <button type="submit" className="btn btn-primary btn-sm" disabled={importLoading || !importKey}>
+                  {importLoading ? 'Importing…' : 'Import Key'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+
+        {/* Snapshot placeholder */}
+        <div style={{
+          padding: '24px 16px', marginBottom: 'var(--space-md)',
+          border: '1px dashed var(--border-subtle)',
+          textAlign: 'center',
+          fontSize: '0.82rem', color: 'var(--text-tertiary)',
+        }}>
+          Balance and API key data unavailable — snapshot fetch failed.
+          <br />
+          <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+            API keys can still be created and deleted via the management key once the snapshot is restored.
+          </span>
+        </div>
+
+        <div className="account-detail-actions account-detail-actions--end" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 'var(--space-md)' }}>
+          <button type="button" className="btn btn-secondary" onClick={onBack}>← Back</button>
+          <button type="button" className="btn btn-danger" onClick={handleDeleteAccount} style={{ marginLeft: 'auto' }}>
+            <TrashIcon size={14} style={{ marginRight: 6 }} />
+            Remove from Hydra
+          </button>
+        </div>
+
+        {loginModalOpen && accountMeta && (
+          <LoginAccountModal
+            account={accountMeta}
+            onClose={() => setLoginModalOpen(false)}
+            onDone={async (msg) => {
+              addToast(msg, 'success');
+              setLoginModalOpen(false);
+              await fetchMeta();
+              await fetchSnapshot();
+            }}
+          />
+        )}
+        {deleteAccountConfirm && (
+          <div className="modal-overlay" onClick={() => setDeleteAccountConfirm(false)}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-title">Remove account from Hydra?</div>
+              <p className="modal-body">This only removes the account from Hydra — your OpenRouter account, keys, and credits are not affected.</p>
+              <div className="modal-actions">
+                <button className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
+                <button className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   if (!snapshot) {
     const hasEmail = !!accountMeta?.email;
+    const sessionStatus = liveSessionStatus ?? accountMeta?.sessionStatus;
     const needsSession =
       hasEmail
-      && accountNeedsSession(accountMeta?.sessionStatus, {
-        hasCredentials: accountMeta?.hasCredentials,
-      });
+      && accountNeedsSession(sessionStatus);
+    // Can provision if session is alive and key is missing — no longer gates on hasCredentials
+    // (user may have a live session without stored creds)
     const canProvisionAfterAuth =
-      !!accountMeta?.hasCredentials
-      && !accountMeta?.hasManagementKey
-      && !needsSession;
+      !!accountMeta
+      && !accountMeta.hasManagementKey
+      && !needsSession
+      && canProvisionWithSession(sessionStatus)
+      && !isSessionProbePending(sessionStatus);
+
+    // Show Sign In only when the session is actually missing/expired.
+    // If the session is active (NEEDS KEY state), Sign In would be confusing and misleading.
+    // 'unknown' → probe in flight; show Sign In as a fallback in case probe comes back expired.
+    const canTryAuth = hasEmail && (needsSession || sessionStatus === 'unknown' || !sessionStatus);
+
+    // Translate raw API errors into human-readable guidance
+    const humanError = (() => {
+      const raw = loadError || '';
+      if (raw.includes('no management key') || raw.includes('provision'))
+        return needsSession
+          ? 'This account needs to be signed in before a management key can be provisioned.'
+          : canProvisionAfterAuth
+          ? 'Session is active — click Provision Key to set up a management key automatically.'
+          : 'This account needs a management key. Sign in first, then provision one.';
+      if (raw.includes('session') || raw.includes('auth') || raw.includes('401'))
+        return 'Session expired or missing. Sign in to restore access.';
+      if (raw) return raw;
+      return 'This account needs attention before it can be fully loaded.';
+    })();
+
+    // Status pill — tells operator at a glance what state the account is in
+    const statusPill = (() => {
+      if (!hasEmail) return { label: 'NO EMAIL', color: 'var(--text-tertiary)' };
+      if (sessionStatus === 'active' && !accountMeta?.hasManagementKey)
+        return { label: 'NEEDS KEY', color: 'var(--status-warning)' };
+      if (sessionStatus === 'active') return { label: 'ACTIVE', color: 'var(--status-success)' };
+      if (sessionStatus === 'expiring') return { label: 'SESSION EXPIRING', color: 'var(--status-warning)' };
+      if (sessionStatus === 'unknown') return { label: 'CHECKING…', color: 'var(--text-tertiary)' };
+      return { label: 'SIGN IN REQUIRED', color: 'var(--status-error)' };
+    })();
 
     return (
       <>
         <div className="empty-state animate-spring" style={{ marginTop: 'var(--space-xl)' }}>
           <div className="empty-state-icon pulsar">[ACCOUNT]</div>
-          <h3>{accountMeta?.alias || 'Account'}</h3>
-          <p style={{ maxWidth: 520 }}>
-            {loadError || 'This account can’t be opened yet.'}
+          <h3 style={{ marginBottom: 6 }}>{accountMeta?.alias || 'Account'}</h3>
+
+          {/* Status pill */}
+          <div style={{ marginBottom: 'var(--space-md)' }}>
+            <span style={{
+              display: 'inline-block',
+              fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', fontFamily: 'var(--font-mono)',
+              color: statusPill.color,
+              border: `1px solid ${statusPill.color}`,
+              padding: '2px 8px',
+            }}>
+              {statusPill.label}
+            </span>
+          </div>
+
+          <p style={{ maxWidth: 440, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            {humanError}
           </p>
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 'var(--space-md)' }}>
+          <div className="account-detail-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 'var(--space-md)' }}>
             <button type="button" className="btn btn-secondary" onClick={onBack}>
               ← Back
             </button>
-            {needsSession && accountMeta && (
+            {canTryAuth && (
               <button type="button" className="btn btn-secondary" onClick={() => setLoginModalOpen(true)}>
-                [UNLOCK] Authenticate
+                Sign In
               </button>
             )}
             {canProvisionAfterAuth && (
               <button type="button" className="btn btn-primary" onClick={handleProvisionKey} disabled={!!actionLoading.__provision}>
-                {actionLoading.__provision ? 'Provisioning…' : '[AUTO] Provision Key'}
+                {actionLoading.__provision ? 'Provisioning…' : 'Provision Key'}
               </button>
             )}
             <button type="button" className="btn btn-danger" onClick={handleDeleteAccount}>
-              <TrashIcon size={16} style={{ marginRight: 8 }} />
-              Delete from Hydra
+              <TrashIcon size={14} style={{ marginRight: 6 }} />
+              Remove from Hydra
             </button>
           </div>
 
-          {needsSession && (
-            <p style={{ marginTop: 'var(--space-md)', fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
-              Authenticate first (email OTP or password), then provision a management key. You can also use the <strong>Dashboard</strong> or <strong>Key Manager</strong>.
-            </p>
-          )}
-          {!accountMeta?.hasCredentials && hasEmail && (
-            <p style={{ marginTop: 'var(--space-md)', fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
-              This account has no sign-in path stored. Re-add it with Email/OTP or password.
-            </p>
-          )}
           {!hasEmail && (
-            <p style={{ marginTop: 'var(--space-md)', fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
-              This account has no email stored. Re-add it with Email/OTP, or delete it from Hydra.
+            <p style={{ marginTop: 'var(--space-md)', fontSize: '0.82rem', color: 'var(--text-tertiary)' }}>
+              No email address on record. Remove this account and re-add it with an email address.
             </p>
           )}
         </div>
@@ -514,7 +879,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         border: '1px solid var(--border-subtle)',
       }}>
         <SessionDot
-          status={accountMeta?.sessionStatus}
+          status={liveSessionStatus ?? accountMeta?.sessionStatus}
           hasManagementKey={!!accountMeta?.hasManagementKey}
           hasCredentials={!!accountMeta?.hasCredentials}
         />
@@ -524,17 +889,34 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
           {resolvedAccountId}
         </span>
-        {accountMeta?.sessionStatus && (
-          <span style={{
-            marginLeft: 'auto', fontSize: '0.65rem', fontWeight: 700,
-            textTransform: 'uppercase', letterSpacing: '0.07em',
-            color: accountMeta.sessionStatus === 'active' ? 'var(--status-success)'
-              : accountMeta.sessionStatus === 'expiring' ? 'var(--status-warning)'
-              : 'var(--text-tertiary)',
-          }}>
-            {accountMeta.sessionStatus}
-          </span>
-        )}
+        {(liveSessionStatus || accountMeta?.sessionStatus) && (() => {
+          const displayStatus = liveSessionStatus ?? accountMeta?.sessionStatus;
+          return (
+            <span style={{
+              marginLeft: 'auto', fontSize: '0.65rem', fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.07em',
+              color: displayStatus === 'active' ? 'var(--status-success)'
+                : displayStatus === 'expiring' ? 'var(--status-warning)'
+                : 'var(--text-tertiary)',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+              {liveSessionStatus ? '[LIVE]' : '[CACHED]'} {displayStatus}
+              <button
+                type="button"
+                onClick={probeSession}
+                disabled={sessionProbing}
+                title="Re-probe session status from Clerk"
+                style={{
+                  background: 'none', border: 'none', cursor: sessionProbing ? 'default' : 'pointer',
+                  padding: '0 2px', fontSize: '0.75rem', color: 'var(--text-tertiary)',
+                  opacity: sessionProbing ? 0.4 : 0.7,
+                }}
+              >
+                {sessionProbing ? '…' : '↻'}
+              </button>
+            </span>
+          );
+        })()}
         {accountMeta?.hasCredentials && (
           <button
             type="button"
@@ -546,9 +928,62 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           </button>
         )}
       </div>
+      {(accountMeta?.lastLoginAt || accountMeta?.sessionExpiry || liveSessionStatus) && (() => {
+        const loginAt = accountMeta.lastLoginAt ? new Date(accountMeta.lastLoginAt) : null;
+        const refreshedAt = accountMeta.sessionRefreshedAt ? new Date(accountMeta.sessionRefreshedAt) : null;
+        const expiresAt = accountMeta.sessionExpiry ? new Date(accountMeta.sessionExpiry) : null;
+        const now = new Date();
+        const msPerDay = 86400000;
+        const ageMs = loginAt ? now - loginAt : null;
+        const ttlMs = loginAt && expiresAt ? expiresAt - loginAt : null;
+        const remainMs = expiresAt ? expiresAt - now : null;
+        const ageDays = ageMs != null ? (ageMs / msPerDay).toFixed(1) : null;
+        const ttlDays = ttlMs != null ? (ttlMs / msPerDay).toFixed(0) : null;
+        const remainDays = remainMs != null ? (remainMs / msPerDay).toFixed(1) : null;
+        const isPast = remainMs != null && remainMs < 0;
+        return (
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
+            {liveSessionStatus && (
+              <div style={{ marginBottom: 2 }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Observed by live probe
+                </span>
+                <span style={{ marginLeft: 6, color: 'var(--text-primary)' }}>
+                  session is <strong style={{ color: 'var(--text-secondary)' }}>{liveSessionStatus}</strong> now
+                </span>
+              </div>
+            )}
+            {expiresAt && remainMs != null && (
+              <div style={{ marginBottom: 3 }}>
+                {isPast ? (
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--status-error)' }}>
+                    Estimated expiry passed {Math.abs(remainDays)}d ago
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700,
+                    color: remainMs < msPerDay * 2 ? 'var(--status-warning)' : 'var(--status-success)' }}>
+                    Estimated expiry: {remainDays}d remaining
+                  </span>
+                )}
+                <span style={{ marginLeft: 6 }}>
+                  ({isPast ? 'expired' : 'expires'} {expiresAt.toLocaleDateString()})
+                </span>
+              </div>
+            )}
+            {loginAt && (
+              <div>Estimated login: <strong style={{ color: 'var(--text-secondary)' }}>{loginAt.toLocaleDateString()}</strong> · {ageDays}d ago
+                {refreshedAt && refreshedAt.getTime() !== loginAt?.getTime() && (
+                  <span> · refreshed {refreshedAt.toLocaleDateString()}</span>
+                )}
+              </div>
+            )}
+            {ttlDays && <div style={{ color: 'var(--text-tertiary)', marginTop: 2 }}>Estimated TTL from stored session data: {ttlDays}d</div>}
+          </div>
+        );
+      })()}
 
       {/* Management keys */}
-      {(snapshot.managementKeyPreview || managementKeys.length > 0) && (
+      {(snapshot.managementKeyPreview || managementKeys.length > 0 || managementKeysLoadError || loadingMgmtKeys || managementKeysLoaded) && (
         <div style={{ marginBottom: 'var(--space-md)', border: '1px solid var(--border-subtle)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
             <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -580,8 +1015,71 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>{key.status}</span>
               <code style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{key.preview}</code>
               <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{formatDate(key.createdAt)}</span>
+              {key.status === 'active' && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginLeft: 'auto', color: 'var(--status-error)', fontSize: '0.7rem' }}
+                  onClick={() => handleRevokeKey(key.id)}
+                >
+                  Revoke
+                </button>
+              )}
             </div>
           ))}
+          {managementKeysLoadError && (
+            <div className="account-detail-inline-status account-detail-inline-status--error">
+              <span>Management key list failed to load.</span>
+              <span style={{ color: 'var(--text-secondary)' }}>{managementKeysLoadError}</span>
+              <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
+                {loadingMgmtKeys ? '…' : 'Retry'}
+              </button>
+            </div>
+          )}
+          {managementKeysLoaded && !managementKeysLoadError && managementKeys.length === 0 && !loadingMgmtKeys && (
+            <div className="account-detail-empty-inline">
+              <div>No management keys in Hydra.</div>
+              <div style={{ color: 'var(--text-tertiary)' }}>Provision a new one or import an existing key from OpenRouter.</div>
+              <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
+                Reload keys
+              </button>
+            </div>
+          )}
+          <div style={{ padding: '6px 10px' }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setShowImport(v => !v)}
+              style={{ marginTop: 8 }}
+            >
+              {showImport ? 'Cancel' : '+ Import existing key'}
+            </button>
+            {showImport && (
+              <form onSubmit={handleImportKey} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="sk-or-v1-..."
+                  value={importKey}
+                  onChange={e => setImportKey(e.target.value)}
+                  spellCheck={false}
+                  autoComplete="off"
+                  data-1p-ignore
+                  disabled={importLoading}
+                />
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Key name (optional)"
+                  value={importName}
+                  onChange={e => setImportName(e.target.value)}
+                  disabled={importLoading}
+                />
+                {importError && <p className="field-error">{importError}</p>}
+                <button type="submit" className="btn btn-primary btn-sm" disabled={importLoading || !importKey}>
+                  {importLoading ? 'Importing…' : 'Import Key'}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       )}
 
@@ -671,7 +1169,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           <table className="table">
             <thead>
               <tr>
-                <th><div className="icon-inline" style={{ marginRight: 8 }}><KeyIcon size={14} /></div>Name</th>
+                <th>Name</th>
                 <th>Label</th>
                 <th>Status</th>
                 <th>Usage (Monthly)</th>
@@ -706,14 +1204,16 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                             {revealedKeys.has(key.hash) ? <EyeOffIcon size={12} /> : <EyeIcon size={12} />}
                           </button>
                         )}
-                        <button
-                          className="btn btn-ghost"
-                          style={{ padding: '2px 4px', minHeight: 'unset', opacity: key.hasKeyString ? 0.8 : 0.35 }}
-                          title={key.hasKeyString ? 'Copy key' : 'Full key not stored — paste it in Pool Manager first'}
-                          onClick={() => key.hasKeyString && copyKey(key.hash, key.plaintextKey || key.label)}
-                        >
-                          {copiedKey === key.hash ? <span style={{ fontSize: '0.7rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={12} />}
-                        </button>
+                        {key.hasKeyString && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ padding: '2px 4px', minHeight: 'unset' }}
+                            title="Copy key"
+                            onClick={() => copyKey(key.hash, key.plaintextKey || key.label)}
+                          >
+                            {copiedKey === key.hash ? <span style={{ fontSize: '0.7rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={12} />}
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td>
@@ -737,6 +1237,23 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <div className="action-bar-group" style={{ justifyContent: 'flex-end' }}>
+                        {key.hasKeyString && (() => {
+                          const ts = testKeyStatus[key.hash];
+                          return (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleTestKey(key.hash)}
+                              disabled={ts?.loading}
+                              title="Test key against OpenRouter"
+                              style={ts && !ts.loading ? { color: ts.valid ? 'var(--status-success)' : 'var(--status-error)' } : {}}
+                            >
+                              {ts?.loading ? <><div className="spinner" style={{ width: 10, height: 10 }} /> Testing…</>
+                               : ts?.valid ? '✓ Valid'
+                               : ts && !ts.valid ? '✗ Invalid'
+                               : 'Test'}
+                            </button>
+                          );
+                        })()}
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={() => handleToggleKey(key.hash, isKeyDisabled)}

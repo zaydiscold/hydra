@@ -28,6 +28,8 @@ class SystemController extends BaseController {
     return this.success(res, { enabled: proxyGate.enabled });
   }
 
+
+
   async toggleProxy(req, res) {
     const { enabled } = req.body;
     if (typeof enabled !== 'boolean') {

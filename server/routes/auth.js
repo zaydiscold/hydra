@@ -35,8 +35,6 @@ router.get('/magic-callback', async (req, res) => {
     const { pendingMagicLinks } = await import('../services/magic-link-manager.js');
     const clerkAuth = await import('../services/clerk-auth.js');
     const store = await import('../services/store.js');
-    const { logger } = await import('../services/logger.js');
-
     const pending = pendingMagicLinks.get(signInId);
     if (!pending) {
       return res.status(410).send(`
@@ -48,8 +46,9 @@ router.get('/magic-callback', async (req, res) => {
       `);
     }
 
-    // Complete the email_link sign-in — pass the __clerk_ticket token if Clerk embedded it in the redirect URL
-    const session = await clerkAuth.completeEmailLink(signInId, pending.clientCookie, clerkTicket);
+    // Complete the email_link sign-in/sign-up — pass the __clerk_ticket token if Clerk embedded it in the redirect URL
+    const isSignUpBool = pending.isSignUp === true || req.query.isSignUp === '1';
+    const session = await clerkAuth.completeEmailLink(signInId, pending.clientCookie, clerkTicket, { isSignUp: isSignUpBool });
     await store.updateAccountSession(
       pending.userId,
       pending.accountId,

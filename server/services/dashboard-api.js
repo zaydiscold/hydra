@@ -13,18 +13,22 @@ import {
   isSessionValid,
   signInWithPassword,
   refreshSession,
-  validateSession,
   NeedSecondFactorError,
   openRouterDashboardDeviceCookies,
   openRouterPlaywrightDeviceCookies,
-  areCloudflareCookiesExpired,
-  extractCloudflareCookieExpirations,
-  mergeCloudflareCookieExpirations,
 } from './clerk-auth.js';
 import * as store from './store.js';
-import { storeManagementKey } from './management-key-store.js';
 import { getCredits } from './openrouter.js';
 import { runInBatches } from './batch-runner.js';
+
+import {
+  truncateForLog,
+  extractManagementKeyFromResponseBody,
+  normalizeDiscoveredCreateRoute,
+  decodeJwtPayloadUnsafe,
+  redactSensitiveForProvisionLog,
+  MGMT_KEY_RE
+} from '../utils/dashboard-utils.js';
 
 const OR_ORIGIN = (() => {
   try {
@@ -45,7 +49,6 @@ const OR_HOSTNAME = (() => {
 /** Management key material in tRPC JSON or page text (OpenRouter prefix).
  * NOTE: OpenRouter management keys use 'sk-or-v1-' prefix, NOT 'sk-or-mgmt-'
  */
-const MGMT_KEY_RE = /sk-or-v1-[A-Za-z0-9_.-]+/;
 
 /**
  * Next.js Server Action ID for management key creation on OpenRouter.
@@ -215,104 +218,11 @@ function provisionNetworkLogEnabled() {
   return config.HYDRA_PROVISION_NETWORK_LOG || provisionDebugArtifactsEnabled();
 }
 
-function truncateForLog(s, max = 2000) {
-  if (!s || typeof s !== 'string') return '';
-  return s.length > max ? `${s.slice(0, max)}…[truncated]` : s;
-}
 
 /**
  * Extract sk-or-v1-* (management key) from raw tRPC response text: regex first, then JSON batch / result shapes.
  */
-function findManagementKeyDeep(value, depth = 0) {
-  if (depth > 14 || value === null || value === undefined) return null;
-  if (typeof value === 'string') {
-    const m = value.normalize('NFC').match(MGMT_KEY_RE);
-    return m ? m[0] : null;
-  }
-  if (typeof value !== 'object') return null;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const k = findManagementKeyDeep(item, depth + 1);
-      if (k) return k;
-    }
-    return null;
-  }
-  const direct =
-    value.key ??
-    value.managementKey ??
-    value.apiKey ??
-    value.secret ??
-    value.token ??
-    value.management_key ??
-    value.api_key;
-  if (typeof direct === 'string' && direct.startsWith('sk-or-v1-')) return direct;
-  for (const v of Object.values(value)) {
-    const k = findManagementKeyDeep(v, depth + 1);
-    if (k) return k;
-  }
-  return null;
-}
 
-function extractManagementKeyFromResponseBody(body) {
-  if (!body || typeof body !== 'string') return null;
-  body = body.normalize('NFC');
-  // Use global match to find ALL occurrences — the RSC/server-action response may contain the
-  // masked preview key FIRST (e.g. "sk-or-v1-0b5...ecf") followed by the full key later in the
-  // payload. body.match() (non-global) would stop at the masked first match and reject it,
-  // missing the full key. matchAll finds every candidate; we return the first valid one.
-  const allMatches = [...body.matchAll(/sk-or-v1-[A-Za-z0-9_.-]+/g)].map(m => m[0]);
-  for (const potentialKey of allMatches) {
-    if (potentialKey.includes('...') || potentialKey.length < 40) {
-      console.error(`[dashboard-api] extractManagementKeyFromResponseBody: skipping masked/short match (len=${potentialKey.length}): ${potentialKey.slice(0, 20)}…`);
-      continue;
-    }
-    return potentialKey;
-  }
-  if (allMatches.length > 0 && !allMatches.some(k => !k.includes('...') && k.length >= 40)) {
-    console.error(`[dashboard-api] extractManagementKeyFromResponseBody: found ${allMatches.length} key-like match(es) but all masked/short`);
-    return null;
-  }
-  try {
-    const data = JSON.parse(body);
-    const fromPayload = (d) => {
-      if (!d || typeof d !== 'object') return null;
-      const key =
-        d.key ??
-        d.managementKey ??
-        d.apiKey ??
-        d.secret ??
-        d.token ??
-        d.management_key ??
-        d.api_key;
-      // Reject masked/preview keys from JSON payloads too
-      if (typeof key === 'string' && key.startsWith('sk-or-v1-')) {
-        if (key.includes('...') || key.length < 40) {
-          console.error(`[dashboard-api] fromPayload: rejecting masked/preview key (length: ${key.length})`);
-          return null;
-        }
-        return key;
-      }
-      return null;
-    };
-    if (Array.isArray(data)) {
-      for (const item of data) {
-        const inner = item?.result?.data?.json ?? item?.result?.data ?? item?.result;
-        const k = fromPayload(inner) ?? findManagementKeyDeep(item) ?? findManagementKeyDeep(inner);
-        if (k) return k;
-      }
-    }
-    if (data?.result) {
-      const inner = data.result?.data?.json ?? data.result?.data;
-      const k = fromPayload(inner);
-      if (k) return k;
-    }
-    const deep = findManagementKeyDeep(data);
-    if (deep) return deep;
-  } catch {
-    /* not JSON */
-  }
-  return null;
-}
 
 async function persistProvisionedManagementKey(userId, accountId, key, source = 'unknown') {
   if (!key || typeof key !== 'string' || !key.startsWith('sk-or-v1-')) {
@@ -332,13 +242,12 @@ async function persistProvisionedManagementKey(userId, accountId, key, source = 
     throw err;
   }
 
-  // Save to both systems for compatibility
-  // 1. Legacy: Account config (for backward compatibility)
-  await store.updateAccountManagementKey(userId, accountId, key);
-  
-  // 2. New: ManagementKey table (for new API endpoints)
-  await storeManagementKey(accountId, key, `Hydra Auto Key (${source})`);
-  
+  // Canonical save: ManagementKey table via store abstraction.
+  await store.updateAccountManagementKey(userId, accountId, key, {
+    name: `Hydra Auto Key (${source})`,
+    metadata: { source },
+  });
+
   // Verify it was saved
   const saved = await store.getAccountWithKey(userId, accountId);
   if (!saved?.managementKey || saved.managementKey !== key) {
@@ -352,16 +261,6 @@ async function persistProvisionedManagementKey(userId, accountId, key, source = 
 /**
  * Batched tRPC URLs use `/api/trpc/a.b,c.d` — persist a single procedure name for trpcCall replay.
  */
-function normalizeDiscoveredCreateRoute(pathSegment) {
-  if (!pathSegment) return null;
-  const decoded = decodeURIComponent(pathSegment.split('?')[0] || '');
-  const parts = decoded.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length <= 1) return decoded || null;
-  const prefer = parts.find((p) => /create/i.test(p) && /management|key/i.test(p));
-  if (prefer) return prefer;
-  const createish = parts.find((p) => /create/i.test(p));
-  return createish || parts[0];
-}
 
 async function writeProvisionNetworkLog(accountId, lines) {
   if (!lines.length) return;
@@ -392,16 +291,6 @@ function provisionStepLog(accountId, message, extra = undefined) {
 }
 
 /** Decode JWT payload (no signature verify) — for OR_BASE vs session sanity checks only. */
-function decodeJwtPayloadUnsafe(jwt) {
-  if (!jwt || typeof jwt !== 'string') return null;
-  try {
-    const parts = jwt.split('.');
-    if (parts.length < 2) return null;
-    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-  } catch {
-    return null;
-  }
-}
 
 /** H8: Log OR_BASE / origin and warn on hostname drift; log unexpected JWT iss when verbose. */
 function logProvisionOpenRouterBase(accountId, sessionCookie) {
@@ -424,11 +313,6 @@ function logProvisionOpenRouterBase(accountId, sessionCookie) {
 }
 
 /** Strip key-like material from stderr previews (management + standard key prefixes). */
-function redactSensitiveForProvisionLog(s, max = 480) {
-  if (!s || typeof s !== 'string') return '';
-  const clipped = s.length > max ? `${s.slice(0, max)}…` : s;
-  return clipped.replace(/sk-or-[a-z0-9_.-]{8,}/gi, '[REDACTED]');
-}
 
 const PROVISION_DEBUG_DIR_BASENAME = 'hydra-provision-debug';
 
@@ -655,92 +539,12 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
  * @param {string} responseText - The response body
  * @returns {string|null} - The extracted key or null
  */
-function extractManagementKeyFromServerActionResponse(responseText) {
-  if (!responseText || typeof responseText !== 'string') {
-    return null;
-  }
-
-  // Try direct regex match first
-  const directMatch = responseText.match(MGMT_KEY_RE);
-  if (directMatch) {
-    return directMatch[0];
-  }
-
-  // RSC format uses special delimiters and encoding
-  // Try to find JSON-encoded keys in the response
-  try {
-    // Look for JSON strings that might contain the key
-    const jsonStringPattern = /"((?:[^"\\]|\\.)*)"/g;
-    let match;
-    while ((match = jsonStringPattern.exec(responseText)) !== null) {
-      const decoded = match[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-      const keyMatch = decoded.match(MGMT_KEY_RE);
-      if (keyMatch) {
-        return keyMatch[0];
-      }
-    }
-  } catch {
-    // Ignore parsing errors
-  }
-
-  // Try to parse as RSC payload chunks
-  // RSC uses format like: "0:{...}" or "1:[...]" with newlines
-  try {
-    const chunks = responseText.split('\n').filter(line => line.trim());
-    for (const chunk of chunks) {
-      // Remove leading chunk ID if present (e.g., "0:")
-      const jsonPart = chunk.replace(/^\d+:/, '');
-      try {
-        const data = JSON.parse(jsonPart);
-        const key = findKeyInObject(data);
-        if (key) return key;
-      } catch {
-        // Not valid JSON, try regex on raw chunk
-        const keyMatch = chunk.match(MGMT_KEY_RE);
-        if (keyMatch) return keyMatch[0];
-      }
-    }
-  } catch {
-    // Ignore parsing errors
-  }
-
-  return null;
-}
 
 /**
  * Recursively search for management key in parsed object
  * @param {any} obj - The object to search
  * @returns {string|null} - The found key or null
  */
-function findKeyInObject(obj) {
-  if (!obj || typeof obj !== 'object') {
-    return null;
-  }
-
-  // Check if this object has a key field
-  const keyFields = ['key', 'managementKey', 'apiKey', 'api_key', 'secret', 'token', 'value'];
-  for (const field of keyFields) {
-    const value = obj[field];
-    if (typeof value === 'string' && value.startsWith('sk-or-v1-')) {
-      return value;
-    }
-  }
-
-  // Recurse into arrays and objects
-  if (Array.isArray(obj)) {
-    for (const item of obj) {
-      const found = findKeyInObject(item);
-      if (found) return found;
-    }
-  } else {
-    for (const key of Object.keys(obj)) {
-      const found = findKeyInObject(obj[key]);
-      if (found) return found;
-    }
-  }
-
-  return null;
-}
 
 async function captureProvisionDebugArtifacts(page, accountId) {
   const url = page.url();
@@ -792,7 +596,7 @@ const _jwtCache = new Map(); // sessionCookie → { token, expiresAt }
  */
 export async function getFreshJwt(sessionCookie, clientCookie) {
   const cached = _jwtCache.get(sessionCookie);
-  if (cached && Date.now() < cached.expiresAt - 10_000) {
+  if (cached && Date.now() < cached.expiresAt - 10000) {
     return cached.token;
   }
   try {
@@ -821,7 +625,7 @@ export async function getFreshJwt(sessionCookie, clientCookie) {
     const jwt = session?.last_active_token?.jwt ?? session?.jwt ?? null;
 
     if (jwt) {
-      _jwtCache.set(sessionCookie, { token: jwt, expiresAt: Date.now() + 30_000 });
+      _jwtCache.set(sessionCookie, { token: jwt, expiresAt: Date.now() + 30000 });
       return jwt;
     }
 
@@ -878,7 +682,22 @@ export async function ensureSession(userId, accountId) {
         console.log(`[ensureSession] JWT expires in ${Math.round(remainingMs/1000)}s, refreshing proactively`);
         const refreshed = await refreshSession(refreshInput14, session.sessionCookie);
         if (refreshed) {
-          await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, refreshed.clientCookie ?? session.clientCookie, refreshed.sessionExpiry);
+          const liveStack = Array.isArray(session.clientCookies) && session.clientCookies.length > 0
+            ? (Array.isArray(refreshed.deadClientCookies) && refreshed.deadClientCookies.length > 0
+              ? (() => {
+                const deadSet = new Set(refreshed.deadClientCookies.map((entry) => entry.cookie));
+                return session.clientCookies.filter((entry) => !deadSet.has(entry.cookie));
+              })()
+              : session.clientCookies)
+            : [];
+          await store.updateAccountSession(
+            userId,
+            accountId,
+            refreshed.sessionCookie,
+            refreshed.clientCookie ?? session.clientCookie,
+            refreshed.sessionExpiry,
+            { replaceClientCookies: liveStack },
+          );
           return { sessionCookie: refreshed.sessionCookie, clientCookie: refreshed.clientCookie ?? session.clientCookie };
         }
       }
@@ -899,7 +718,17 @@ export async function ensureSession(userId, accountId) {
     const refreshed = await refreshSession(refreshInput14b, session.sessionCookie);
     if (refreshed) {
       const cc = refreshed.clientCookie ?? session.clientCookie;
-      await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, cc, refreshed.sessionExpiry);
+      const liveStack = Array.isArray(session.clientCookies) && session.clientCookies.length > 0
+        ? (Array.isArray(refreshed.deadClientCookies) && refreshed.deadClientCookies.length > 0
+          ? (() => {
+            const deadSet = new Set(refreshed.deadClientCookies.map((entry) => entry.cookie));
+            return session.clientCookies.filter((entry) => !deadSet.has(entry.cookie));
+          })()
+          : session.clientCookies)
+        : [];
+      await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, cc, refreshed.sessionExpiry, {
+        replaceClientCookies: liveStack,
+      });
       return { sessionCookie: refreshed.sessionCookie, clientCookie: cc };
     }
     console.log(`[ensureSession] __client refresh failed, __client may be expired`);
@@ -2118,7 +1947,6 @@ function trpcPathLooksLikeManagementKeyCreate(pathSegment) {
  * immediately so we catch it before it closes or the network wait times out.
  */
 async function captureKeyFromPageImmediate(page, accountId) {
-  const keyRe = /sk-or-v1-[A-Za-z0-9_.-]+/g;
   const isValidKey = (k) => k && !k.includes('...') && k.length >= 40;
 
   // 1. DOM evaluate: check ALL input values and visible text nodes (most reliable)

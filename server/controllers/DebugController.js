@@ -11,7 +11,7 @@
 import BaseController from './BaseController.js';
 import * as store from '../services/store.js';
 import { getCredits } from '../services/openrouter.js';
-import { OR_BASE, config } from '../config.js';
+import { OR_BASE } from '../config.js';
 import { logger } from '../services/logger.js';
 import { trpcCall, getFreshJwt } from '../services/dashboard-api.js';
 import { refreshSession } from '../services/clerk-auth.js';
@@ -245,13 +245,15 @@ class DebugController extends BaseController {
       }
 
       let sessionCookie = session.sessionCookie;
-      const clientCookie = session.clientCookie;
+      // Prefer stacked array over legacy single-string field.
+      const cookieInput = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
+      const clientCookie = session.clientCookie; // kept for header construction below
 
       // Pre-refresh the session before probing — `getFreshJwt` only reads Clerk's client object
       // which may show empty sessions even when the stored JWT is valid. `refreshSession` uses
       // Set-Cookie from Clerk's response which actually gives us a fresh JWT.
       try {
-        const refreshed = await refreshSession(clientCookie, sessionCookie);
+        const refreshed = await refreshSession(cookieInput, sessionCookie);
         if (refreshed?.sessionCookie) {
           sessionCookie = refreshed.sessionCookie;
           // Persist so subsequent calls benefit too
@@ -426,10 +428,13 @@ class DebugController extends BaseController {
       const session = await store.getAccountSession(req.user.id, accountId);
       const account = await store.getAccountWithKey(req.user.id, accountId);
 
-      if (!session?.clientCookie) return this.error(res, 'No client cookie stored for this account', 400);
+      // Check both stacked array and legacy string — either suffices
+      const hasAnyCookie = session?.clientCookie || session?.clientCookies?.length > 0;
+      if (!hasAnyCookie) return this.error(res, 'No client cookie stored for this account', 400);
 
       const CLERK_BASE_URL = 'https://clerk.openrouter.ai/v1';
-      const clientCookie = session.clientCookie;
+      // Use best available: newest in stack, or legacy string
+      const clientCookie = session.clientCookies?.[0]?.cookie || session.clientCookie;
       const cookieHeader = clientCookie.includes('=') ? clientCookie : `__client=${clientCookie}`;
 
       // Probe Clerk directly with the stored __client cookie

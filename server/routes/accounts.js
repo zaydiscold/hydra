@@ -8,37 +8,39 @@ const controller = new AccountController();
 // Use .bind(controller) to preserve 'this' context if needed, or stick to arrow functions
 router.get('/', requireUnlocked, controller.catchAsync(controller.getAccounts));
 router.post('/', requireUnlocked, controller.catchAsync(controller.addAccount));
-router.post('/with-credentials', requireUnlocked, (req, res) => controller.addAccountWithCredentials(req, res));
-router.post('/bulk', requireUnlocked, (req, res) => controller.bulkAdd(req, res));
-router.post('/bulk-otp-stubs', requireUnlocked, (req, res) => controller.bulkOtpStubs(req, res));
+router.post('/with-credentials', requireUnlocked, controller.catchAsync(controller.addAccountWithCredentials));
+router.post('/bulk', requireUnlocked, controller.catchAsync(controller.bulkAdd));
+router.post('/bulk-otp-stubs', requireUnlocked, controller.catchAsync(controller.bulkOtpStubs));
 
-router.post('/:id/detect-auth', requireUnlocked, (req, res) => controller.detectAuth(req, res));
-router.post('/:id/login', requireUnlocked, (req, res) => controller.login(req, res));
-router.post('/:id/otp/start', requireUnlocked, (req, res) => controller.startOTP(req, res));
-router.post('/:id/otp/verify', requireUnlocked, (req, res) => controller.verifyOTP(req, res));
+router.post('/:id/detect-auth', requireUnlocked, controller.catchAsync(controller.detectAuth));
+router.post('/:id/login', requireUnlocked, controller.catchAsync(controller.login));
+router.post('/:id/otp/start', requireUnlocked, controller.catchAsync(controller.startOTP));
+router.post('/:id/otp/verify', requireUnlocked, controller.catchAsync(controller.verifyOTP));
 
-router.post('/:id/provision', requireUnlocked, (req, res) => controller.provision(req, res));
-router.post('/provision-all', requireUnlocked, (req, res) => controller.provisionAll(req, res));
+router.post('/:id/provision', requireUnlocked, controller.catchAsync(controller.provision));
+router.post('/provision-all', requireUnlocked, controller.catchAsync(controller.provisionAll));
 
-router.post('/:id/refresh', requireUnlocked, (req, res) => controller.refresh(req, res));
-router.post('/:id/refresh-login', requireUnlocked, (req, res) => controller.refreshAccountLogin(req, res));
-router.get('/:id/session-status', requireUnlocked, (req, res) => controller.getSessionStatus(req, res));
+router.post('/:id/refresh', requireUnlocked, controller.catchAsync(controller.refresh));
+router.post('/:id/refresh-login', requireUnlocked, controller.catchAsync(controller.refreshAccountLogin));
+router.get('/:id/session-status', requireUnlocked, controller.catchAsync(controller.getSessionStatus));
+router.get('/:id/session-check', requireUnlocked, controller.catchAsync(controller.checkSession));
+router.post('/:id/silent-refresh', requireUnlocked, controller.catchAsync(controller.silentRefreshOnly));
 
-router.patch('/:id', requireUnlocked, (req, res) => controller.updateAccount(req, res));
-router.delete('/:id', requireUnlocked, (req, res) => controller.deleteAccount(req, res));
-router.get('/:id/snapshot', requireUnlocked, (req, res) => controller.getSnapshot(req, res));
-router.get('/:id/management-key', requireUnlocked, (req, res) => controller.getManagementKey(req, res));
+router.patch('/:id', requireUnlocked, controller.catchAsync(controller.updateAccount));
+router.delete('/:id', requireUnlocked, controller.catchAsync(controller.deleteAccount));
+router.get('/:id/snapshot', requireUnlocked, controller.catchAsync(controller.getSnapshot));
+router.get('/:id/management-key', requireUnlocked, controller.catchAsync(controller.getManagementKey));
 
 // New management key storage endpoints
-router.get('/:id/management-keys', requireUnlocked, (req, res) => controller.listManagementKeys(req, res));
-router.post('/:id/management-keys/store', requireUnlocked, (req, res) => controller.storeProvisionedKey(req, res));
-router.get('/:id/management-keys/best', requireUnlocked, (req, res) => controller.getBestManagementKey(req, res));
-router.delete('/:id/management-keys/:keyId', requireUnlocked, (req, res) => controller.deleteManagementKey(req, res));
+router.get('/:id/management-keys', requireUnlocked, controller.catchAsync(controller.listManagementKeys));
+router.post('/:id/management-keys/store', requireUnlocked, controller.catchAsync(controller.storeProvisionedKey));
+router.get('/:id/management-keys/best', requireUnlocked, controller.catchAsync(controller.getBestManagementKey));
+router.delete('/:id/management-keys/:keyId', requireUnlocked, controller.catchAsync(controller.deleteManagementKey));
 
-router.get('/:id/balance', requireUnlocked, (req, res) => controller.getBalance(req, res));
+router.get('/:id/balance', requireUnlocked, controller.catchAsync(controller.getBalance));
 
 // P6 — Magic link (email_link strategy)
-router.post('/:id/magic-link/send', requireUnlocked, (req, res) => controller.sendMagicLink(req, res));
-router.get('/:id/magic-link/status/:signInId', requireUnlocked, (req, res) => controller.magicLinkStatus(req, res));
+router.post('/:id/magic-link/send', requireUnlocked, controller.catchAsync(controller.sendMagicLink));
+router.get('/:id/magic-link/status/:signInId', requireUnlocked, controller.catchAsync(controller.magicLinkStatus));
 
 export default router;
