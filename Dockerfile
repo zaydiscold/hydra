@@ -22,21 +22,31 @@ RUN npx prisma generate
 RUN npm run build
 
 # ============================================================
-# Stage 2: Production Runtime (Playwright Runner)
-# Uses the official Playwright image which ships Chromium + deps
-# for Ubuntu Jammy. npm ci runs HERE to ensure native C++ bindings
-# (sqlite3, bcryptjs) compile against the runtime OS — NOT copied
-# from the Alpine builder (which would cause ABI mismatch crashes).
+# Stage 2: Production Runtime (node:20-bookworm)
+#
+# MIGRATION NOTE (2026-04-21):
+# Was: mcr.microsoft.com/playwright:v1.58.2-jammy (~2.1GB bundled Chromium)
+# Now: node:20-bookworm (~500MB) + on-demand Chromium (~350MB) = ~1.1GB total
+#
+# Why bookworm: node:20-jammy no longer exists on Docker Hub. bookworm is
+# Debian 12, glibc-based (not Alpine/musl), so native C++ addons link correctly.
+#
+# Why no tini: Node 20 handles SIGTERM fine. Also avoids apt-get which was
+# failing with 403 Forbidden from deb.debian.org behind Docker Desktop proxy.
+#
+# Why no --with-deps: node:20-bookworm already includes most Chromium system
+# libraries. --with-deps runs apt-get which fails in this Docker environment.
+# If Chromium crashes at runtime, install deps manually in the container.
+#
+# Layer order is load-bearing — npm ci MUST run BEFORE playwright install.
 # ============================================================
-FROM mcr.microsoft.com/playwright:v1.58.2-jammy AS runtime
+FROM node:20-bookworm AS runtime
 
 WORKDIR /app
 
-# Install tini as a proper init system for signal forwarding & zombie reaping.
-# (When using docker-compose with `init: true`, tini is redundant but harmless.)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini \
-    && rm -rf /var/lib/apt/lists/*
+# Skip tini, Node 20 handles SIGTERM fine via exec in entrypoint.
+# This avoids apt-get hitting 403 from deb.debian.org behind Docker Desktop proxy.
+# See docs/HTTP_SIGNUP_MIGRATION.md for full context.
 
 # Production environment defaults
 ENV NODE_ENV=production \
@@ -46,11 +56,18 @@ ENV NODE_ENV=production \
     HYDRA_PLAYWRIGHT_NO_SANDBOX=1 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-# Install ONLY production dependencies inside the Jammy environment
+# Install ONLY production dependencies inside the Bookworm environment.
 # This ensures native C++ addons (bcryptjs, sqlite3/Prisma) link against
 # the correct glibc — the #1 cause of crashes in V1 Dockerfile.
 COPY package*.json ./
 RUN npm ci --omit=dev
+
+# Install Chromium for Playwright fallback (dashboard-api provisioning path).
+# Must run AFTER npm ci so the playwright binary exists in node_modules/.bin.
+# node:20-bookworm already includes most Chromium system deps (libglib2.0, libdbus-1-3, etc.)
+# so we skip --with-deps (which runs apt-get and can fail behind Docker Desktop proxy).
+# If you get runtime Chromium errors, add --with-deps back and fix the proxy first.
+RUN npx playwright install chromium
 
 # Generate Prisma client against the runtime OS
 COPY prisma ./prisma
@@ -72,9 +89,7 @@ RUN mkdir -p /app/data
 EXPOSE 3001
 VOLUME ["/app/data"]
 
-# Use tini as init to properly forward signals and reap zombies.
-# If running via docker-compose with init:true, this is belt-and-suspenders.
-ENTRYPOINT ["tini", "--"]
+ENTRYPOINT ["node", "--"]
 
 # Entrypoint runs Prisma schema sync then starts Node
 CMD ["docker-entrypoint.sh"]

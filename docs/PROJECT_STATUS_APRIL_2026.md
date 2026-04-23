@@ -22,6 +22,13 @@
   - `POST /api/accounts/:id/management-keys/store` - Manual store
 - **UI integration** - Stored keys displayed in AccountDetail.jsx
 
+#### 3. HTTP Signup Migration (IN PROGRESS — see docs/HTTP_SIGNUP_MIGRATION.md)
+- **Goal:** Replace Playwright browser automation with Clerk FAPI HTTP calls for account signup
+- **Status:** Code complete on branch `feat/http-signup-migration`. Smoke test pending.
+- **Files changed:** `account-generator.js` (HTTP-primary + Playwright fallback), `otp-generator.js` (5 bug fixes), `Dockerfile` (slimmed base image)
+- **Impact:** Drops ~45s Playwright startup to ~2s FAPI round-trip. Docker image ~2.1GB → ~1.1GB.
+- **Next:** Run `npm run dev` → Generator page → confirm HTTP path works → commit
+
 #### 3. Pool Manager Hardening (NEW)
 - **Failure tracking per key**:
   - `MAX_RETRIES = 10` for proxy failures (keeps keys longer)

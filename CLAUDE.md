@@ -1,5 +1,30 @@
 # Hydra — Claude Code Instructions
 
+## 🏗️ Recent Work & Where to Pick Up
+
+**Last session:** 2026-04-21 | **Branch:** `feat/http-signup-migration`
+
+### What just happened
+- `server/services/account-generator.js` — rewritten: HTTP-primary signup via Clerk FAPI (`detectAuthMethod → startEmailOTP → completeEmailOTP`), Playwright kept as named fallback only. File is heavily commented with migration notes.
+- `server/services/otp-generator.js` — fixed 5 dead/broken API calls (`createTask → startInteractive`, `createAccount → addAccountWithCredentials`, `cleanup → cancel`, missing `serializeTask` wrap, raw-string cookie type mismatch). Still dead code (nothing imports it) but now actually functional if wired up.
+- `Dockerfile` — base image changed `playwright:v1.58.2-jammy` → `node:20-bookworm`. tini removed (apt-get fails behind Docker Desktop proxy). `--with-deps` removed (bookworm already has Chromium libs). On-demand `npx playwright install chromium` after `npm ci`.
+
+### Current state
+- Code: complete and commented
+- Git: `Dockerfile`, `otp-generator.js` modified (unstaged). `account-generator.js` was already committed in a prior session. `docs/HTTP_SIGNUP_MIGRATION.md` is untracked.
+- Docker build: works (no more apt-get 403)
+- Dev smoke test: **NOT RUN YET** — this is the blocker
+
+### What to do next
+1. `npm run dev` → open Generator page → start a job → confirm logs show `detecting_account → sending_otp → awaiting_otp` (NOT `launching_browser`)
+2. Submit a real OTP → confirm `verifying_otp → saving_profile → provisioning_key → completed`
+3. `git add` + commit the unstaged changes + untracked doc
+4. See `docs/HTTP_SIGNUP_MIGRATION.md` for full architecture, API signatures, error matrix
+5. See `~/.claude/plans/hydra_http_migration.md` for the living plan with exact terminal commands
+6. See `~/.claude/plans/hydra_http_migration_session_log.md` for blow-by-blow session log
+
+---
+
 ## Do not be lazy
 
 Do not be lazy. We are the hardest workers; that's what separates the boys from the men. If you see something wrong, fix it — don't note it, don't table it, fix it. A loose wire left alone doesn't stay loose — it arcs, it shorts, it takes down the whole circuit. Every skipped fix is technical debt that compounds. Every "good enough" is a lie you'll pay for later. Be paranoid. Assume something is wrong. Check the wiring.
