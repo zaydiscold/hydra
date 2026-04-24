@@ -173,7 +173,7 @@ async function ensureBuild() {
     try {
       run('npm run build');
       success('Build complete');
-    } catch (err) {
+    } catch {
       error('Build failed! Check vite.config.js and try again.');
       process.exit(1);
     }

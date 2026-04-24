@@ -1,24 +1,26 @@
 /**
  * Account Generator Service
  *
- * MIGRATION NOTE (2026-04-21):
- * This file was migrated from Playwright-primary to HTTP-primary signup.
- * The old Playwright browser automation is still present as *_Playwright fallback
- * functions — they are invoked only when Clerk FAPI calls fail with network errors.
+ * NOTE (2026-04-24): OpenRouter's Clerk instance now requires CAPTCHA for
+ * /client/sign_ups. New account signup therefore cannot be pure HTTP.
+ * Hydra still uses direct Clerk FAPI calls for existing-account email OTP and
+ * session materialization, and falls back to Playwright for CAPTCHA-gated signup.
  *
- * New flow (HTTP, ~2s):
+ * The Clerk FAPI functions (detectAuthMethod, startEmailOTP, completeEmailOTP, etc.)
+ * remain in clerk-auth.js and are actively used for:
+ *   - Existing account sign-in
+ *   - Session refresh
+ *   - Password authentication
+ * They are not sufficient for new account signup while CAPTCHA is enabled.
+ *
+ * Flow:
+ * Existing account HTTP flow:
  *   detecting_account → sending_otp → awaiting_otp → verifying_otp →
  *   [activating_session] → saving_profile → provisioning_key → completed
  *
- * Fallback flow (Playwright, ~45s):
- *   falling_back_to_browser → launching_browser → navigating_signup → ...
- *
- * CRITICAL: The isSignUp flag from startEmailOTP() MUST be forwarded to
- * completeEmailOTP(). If lost, new accounts hit the wrong Clerk endpoint
- * (sign_ins vs sign_ups) and fail permanently.
- *
- * API surface (exports) is UNCHANGED — GeneratorController calls the same
- * 5 functions: startSignupJob, submitOtpForJob, getSignupJob, heartbeatJob, cleanupJob.
+ * New account flow:
+ *   detecting_account → falling_back_to_browser → launching_browser →
+ *   navigating_signup → awaiting_otp → submitting_otp → completed
  */
 
 /* global document */
@@ -29,20 +31,18 @@ import { logger } from './logger.js';
 import { taskSupervisor } from './task-supervisor.js';
 import { USER_AGENT, OR_BASE } from '../config.js';
 
-// clerk-auth.js already reverse-engineered the full Clerk FAPI.
-// These functions handle the HTTP signup path without any browser.
 import {
-  detectAuthMethod,     // Probes if email is new (sign_up) or existing (sign_in)
-  startEmailOTP,        // Sends OTP email via Clerk FAPI
-  completeEmailOTP,     // Verifies OTP code, returns __session cookie
-  getJwtExpiry,         // Decodes JWT exp claim without a library
-  openRouterDashboardDeviceCookies, // Converts cookie string → [{cookie, issuedAt}] array
-  refreshSession,       // Upgrades short-lived JWTs to long-lived sessions
+  detectAuthMethod,
+  startEmailOTP,
+  completeEmailOTP,
+  getJwtExpiry,
+  openRouterDashboardDeviceCookies,
+  refreshSession,
 } from './clerk-auth.js';
 
 // TTL was 2 min (sized for Playwright browser startup + OTP wait).
-// Now 5 min — we only need time for the user to check email and type the OTP code.
-// The HTTP path (detectAuthMethod + startEmailOTP) completes in under 2 seconds.
+// 5 min leaves enough time for the user to check email and type the OTP code
+// while still cleaning up browser resources promptly.
 const GENERATOR_TTL_MS = 5 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 45 * 1000;
 const OTP_WAIT_TIMEOUT_MS = 30 * 1000;
@@ -170,7 +170,7 @@ async function launchSignupFlowPlaywright(task) {
           emailInput = locator;
           logger.info(`[Account Generator] Found email input using: ${selector}`);
           break;
-        } catch (e) {
+        } catch {
           // Try next selector
         }
       }
@@ -206,7 +206,7 @@ async function launchSignupFlowPlaywright(task) {
             clicked = true;
             break;
           }
-        } catch (e) {
+        } catch {
           // Try next
         }
       }
@@ -356,8 +356,9 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP-primary signup flow — uses Clerk FAPI directly (~2s vs ~45s Playwright).
-// Falls back to Playwright on non-retryable network errors only.
+// HTTP-first generator flow. Existing-account OTP can be completed with direct
+// Clerk FAPI requests. Brand-new signup is CAPTCHA-gated upstream, so unknown
+// accounts fall back to the browser path.
 // ---------------------------------------------------------------------------
 
 async function launchSignupFlow(task) {
@@ -365,14 +366,17 @@ async function launchSignupFlow(task) {
     try {
       taskSupervisor.updateTask(task.taskId, { status: 'detecting_account' });
 
-      // detectAuthMethod probes /client/sign_ins — if email is new it returns isSignUp:true.
-      // We run this first so we can fall back to Playwright before wasting an OTP send
-      // if Clerk's FAPI is down. Note: startEmailOTP calls detectAuthMethod internally,
-      // so this is technically a double round-trip. Acceptable for resilience.
+      let authInfo;
       try {
-        await detectAuthMethod(task.metadata.email);
+        authInfo = await detectAuthMethod(task.metadata.email);
       } catch (fapiErr) {
-        logger.warn(`[Account Generator] FAPI detectAuthMethod failed: ${fapiErr.message} — falling back to browser`);
+        logger.warn(`[Account Generator] FAPI detectAuthMethod failed for ${task.metadata.email}: ${fapiErr.message} — falling back to browser`);
+        taskSupervisor.updateTask(task.taskId, { status: 'falling_back_to_browser' });
+        return launchSignupFlowPlaywright(task);
+      }
+
+      if (authInfo?.isSignUp) {
+        logger.warn(`[Account Generator] Clerk reported sign-up for ${task.metadata.email}, but sign_up preparation is CAPTCHA-gated — falling back to browser`);
         taskSupervisor.updateTask(task.taskId, { status: 'falling_back_to_browser' });
         return launchSignupFlowPlaywright(task);
       }
@@ -382,14 +386,11 @@ async function launchSignupFlow(task) {
       try {
         otpInfo = await startEmailOTP(task.metadata.email);
       } catch (fapiErr) {
-        logger.warn(`[Account Generator] FAPI startEmailOTP failed: ${fapiErr.message} — falling back to browser`);
+        logger.warn(`[Account Generator] FAPI startEmailOTP failed for ${task.metadata.email}: ${fapiErr.message} — falling back to browser`);
         taskSupervisor.updateTask(task.taskId, { status: 'falling_back_to_browser' });
         return launchSignupFlowPlaywright(task);
       }
 
-      // Store OTP session state for finalizeOtpSubmission to use later.
-      // signInId works for both sign_in and sign_up paths (sign_up stores signUpId here).
-      // httpMode:true signals closeGeneratorResources that there's no browser to clean up.
       taskSupervisor.attachResources(task.taskId, {
         signInId: otpInfo.signInId,
         clientCookie: otpInfo.clientCookie,
@@ -398,7 +399,7 @@ async function launchSignupFlow(task) {
       });
 
       taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });
-      logger.info(`[Account Generator] OTP sent to ${task.metadata.email}, isSignUp=${otpInfo.isSignUp}`);
+      logger.info(`[Account Generator] OTP sent to ${task.metadata.email} via Clerk FAPI`);
     } catch (err) {
       logger.error(`[Account Generator] Launch failed: ${err.message}`);
       await taskSupervisor.fail(task.taskId, err);
@@ -410,9 +411,9 @@ async function launchSignupFlow(task) {
 async function finalizeOtpSubmission(task, otpCode) {
   const promise = (async () => {
     try {
-      // Detect which path created this task. Playwright fallback sets task.resources.browser
-      // and does NOT set httpMode. HTTP path sets httpMode:true and no browser.
-      if (task.resources?.browser && !task.resources?.httpMode) {
+      // HTTP tasks carry signInId/clientCookie in resources. Browser fallback
+      // tasks carry page/context/browser and complete through Playwright.
+      if (!task.resources?.httpMode) {
         return finalizeOtpSubmissionPlaywright(task, otpCode);
       }
 
@@ -423,10 +424,6 @@ async function finalizeOtpSubmission(task, otpCode) {
 
       taskSupervisor.updateTask(task.taskId, { status: 'verifying_otp' });
 
-      // CRITICAL: isSignUp MUST be forwarded. It determines which Clerk endpoint is called:
-      //   isSignUp=true  → POST /client/sign_ups/:id/attempt_email_address_verification
-      //   isSignUp=false → POST /client/sign_ins/:id/attempt_first_factor
-      // If you lose this flag, new accounts will fail with "sign_in not found" or similar.
       const session = await completeEmailOTP(signInId, otpCode, clientCookie, { isSignUp });
 
       if (!session?.sessionCookie) {
