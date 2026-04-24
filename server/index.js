@@ -103,6 +103,12 @@ app.use((req, res, next) => {
 // Global Error Handler (Last stage)
 app.use(errorHandler);
 
+// ─── ELECTRON_MIGRATION ───
+// TODO: PAIN_POINTS.md #3 — gracefulShutdown calls process.exit() unconditionally.
+// This kills the entire Electron app when embedded. Refactor to accept
+// { exit: boolean } option. When exit=false, resolve promise instead of exiting.
+// Terminal callers pass exit=true; Electron passes exit=false.
+// ─── END ELECTRON_MIGRATION ───
 async function gracefulShutdown(source = 'unknown') {
   if (shutdownInFlight) return;
   shutdownInFlight = true;
@@ -118,6 +124,9 @@ async function gracefulShutdown(source = 'unknown') {
     logger.error(`[SHUTDOWN] Task supervisor shutdown failed: ${err.message}`);
   }
 
+// ─── ELECTRON_MIGRATION ───
+// TODO: PAIN_POINTS.md #3 — Remove all process.exit() calls below. Use
+// { exit: true } option from callers instead. Electron callers need exit=false.
   if (!server) {
     process.exit(0);
     return;
@@ -137,16 +146,21 @@ async function gracefulShutdown(source = 'unknown') {
     logger.warn('[SHUTDOWN] Forced exit after timeout');
     process.exit(1);
   }, 5000).unref();
+// ─── END ELECTRON_MIGRATION ───
 }
 
 async function bootstrap() {
   try {
     validateConfig();
     await enforceLegacyStorageReset();
+// ─── ELECTRON_MIGRATION ───
+// TODO: PAIN_POINTS.md #3 — Remove process.exit(1). Throw error instead so
+// caller (electron/main.js or server/standalone.js) can handle it gracefully.
   } catch (err) {
     logger.error(err.message);
     process.exit(1);
   }
+// ─── END ELECTRON_MIGRATION ───
 
   taskSupervisor.start();
   startPinger();
@@ -180,8 +194,16 @@ async function bootstrap() {
   });
 }
 
+// ─── ELECTRON_MIGRATION ───
+// TODO: PAIN_POINTS.md #1 — Remove auto-bootstrap call. Export bootstrap() for
+// callers (electron/main.js, server/standalone.js) to invoke explicitly.
 bootstrap();
+// ─── END ELECTRON_MIGRATION ───
 
+// ─── ELECTRON_MIGRATION ───
+// TODO: PAIN_POINTS.md #2 — Remove SIGINT/SIGTERM handlers. Electron main process
+// manages its own lifecycle. Move handlers to server/standalone.js for terminal path.
+// Also conflicts with gracefulShutdown calling process.exit() unconditionally.
 process.on('SIGINT', () => {
   void gracefulShutdown('SIGINT');
 });

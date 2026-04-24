@@ -22,6 +22,13 @@
   - `POST /api/accounts/:id/management-keys/store` - Manual store
 - **UI integration** - Stored keys displayed in AccountDetail.jsx
 
+#### 3. HTTP Signup Migration (HYBRID — see docs/HTTP_SIGNUP_MIGRATION.md)
+- **Goal:** Replace browser automation with Clerk FAPI HTTP calls wherever Clerk permits it.
+- **Status:** Direct HTTP works for existing-account OTP/session flows. Brand-new signup is CAPTCHA-gated upstream (`captcha_missing_token`) and falls back to Playwright.
+- **Files changed:** `account-generator.js` (HTTP existing-account path + explicit browser fallback), `otp-generator.js` (5 bug fixes), `Dockerfile` (slimmed base image)
+- **Impact:** Existing-account OTP avoids browser startup; new account generation still needs Playwright while OpenRouter keeps signup CAPTCHA enabled. Docker image target remains ~1.1GB.
+- **Next:** If pure HTTP signup is revisited, capture a legitimate browser-issued CAPTCHA token handoff or confirm OpenRouter has disabled signup CAPTCHA.
+
 #### 3. Pool Manager Hardening (NEW)
 - **Failure tracking per key**:
   - `MAX_RETRIES = 10` for proxy failures (keeps keys longer)

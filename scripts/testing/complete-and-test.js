@@ -36,6 +36,7 @@ async function needsOtpCompletion(account) {
 }
 
 // Complete OTP sign-in
+// eslint-disable-next-line no-unused-vars
 async function completeOtp(account, otpCode) {
   log(`🔐 Completing OTP for ${account.alias}...`);
   
@@ -45,7 +46,9 @@ async function completeOtp(account, otpCode) {
     let config = {};
     try {
       config = JSON.parse(decrypt(acc.config));
-    } catch(e) {}
+    } catch {
+      // Missing or malformed config is non-fatal; start a fresh OTP flow.
+    }
     
     // Start OTP flow
     const startRes = await clerkAuth.startEmailOTP(account.email);
@@ -238,7 +241,9 @@ async function testRequestBased(account) {
         log(`  ✅ REQUEST-BASED WORKS! ${url}`);
         return true;
       }
-    } catch(e) {}
+    } catch {
+      // Try next candidate endpoint.
+    }
   }
   
   log(`  ❌ All endpoints return HTML (React SPA)`);

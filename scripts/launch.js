@@ -173,7 +173,7 @@ async function ensureBuild() {
     try {
       run('npm run build');
       success('Build complete');
-    } catch (err) {
+    } catch {
       error('Build failed! Check vite.config.js and try again.');
       process.exit(1);
     }
@@ -202,6 +202,12 @@ async function startServer(port) {
   step('Starting Hydra server...');
 
   const cmd = isWindows ? 'node' : 'node';
+  // ─── ELECTRON_MIGRATION ───
+  // TODO: PAIN_POINTS.md #7 — After server/index.js auto-bootstrap is removed,
+  // spawning 'node server/index.js' will exit immediately (nothing to run).
+  // Fix: import bootstrap directly and call it, OR spawn server/standalone.js.
+  // Also remove child-process stdout/stderr streaming since it'll run in-process.
+  // ─── END ELECTRON_MIGRATION ───
   const serverProc = spawn(cmd, ['server/index.js'], {
     cwd: __dirname,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -270,6 +276,11 @@ ${c.reset}
     setTimeout(() => openBrowser(`http://localhost:${port}`), 800);
 
     // Keep process alive — exit when server does
+    // ─── ELECTRON_MIGRATION ───
+    // TODO: PAIN_POINTS.md #2 / #7 — These signal handlers conflict with
+    // Electron's lifecycle. After moving to in-process bootstrap(), remove
+    // these and let the caller handle signals.
+    // ─── END ELECTRON_MIGRATION ───
     process.on('SIGINT', () => {
       log('⏹', 'Shutting down Hydra...', c.yellow);
       serverProc.kill('SIGTERM');

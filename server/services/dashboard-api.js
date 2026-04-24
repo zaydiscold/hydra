@@ -2210,6 +2210,13 @@ function playwrightProvisionLaunchOptions() {
 }
 
 async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, trpcPhaseSummary = {}) {
+  // ─── ELECTRON_MIGRATION ───
+  // TODO: PAIN_POINTS.md #9 — chromium.launch() won't find browser binary in
+  // packaged Electron app. Playwright downloads to cache dir, not node_modules.
+  // Fix: set PLAYWRIGHT_BROWSERS_PATH env + bundle Chromium in extraResources.
+  // Or use HYDRA_PLAYWRIGHT_CHANNEL=chrome for system Chrome.
+  // Or connectOverCDP to existing Chrome (HYDRA_PLAYWRIGHT_CDP_ENDPOINT).
+  // ─── END ELECTRON_MIGRATION ───
   const { chromium } = await import('playwright');
   const cdpUrl = config.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim();
   let connectMode = 'launch';
@@ -3177,6 +3184,10 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
 }
 
 async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code) {
+  // ─── ELECTRON_MIGRATION ───
+  // TODO: PAIN_POINTS.md #9 — Same Playwright binary issue as createManagementKeyViaPlaywright.
+  // chromium.launch({ headless }) won't find bundled Chromium in packaged app.
+  // ─── END ELECTRON_MIGRATION ───
   const { chromium } = await import('playwright');
   const headless = !config.HYDRA_PLAYWRIGHT_HEADED;
   const browser = await chromium.launch({ headless });
@@ -3400,6 +3411,10 @@ export async function syncApiKeys(userId, accountId) {
 }
 
 async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
+  // ─── ELECTRON_MIGRATION ───
+  // TODO: PAIN_POINTS.md #9 — Same Playwright binary issue. chromium.launch()
+  // won't find bundled Chromium in packaged Electron app.
+  // ─── END ELECTRON_MIGRATION ───
   const { chromium } = await import('playwright');
   const headless = !config.HYDRA_PLAYWRIGHT_HEADED;
   const browser = await chromium.launch({ headless });
