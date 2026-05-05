@@ -27,10 +27,50 @@ const CODES = {
 
   // Connection / runtime
   P1000: { tag: 'DB_AUTH', summary: 'database authentication failed', fix: 'check DATABASE_URL credentials' },
-  P1001: { tag: 'DB_CONN', summary: 'cannot reach database', fix: 'check DATABASE_URL host/port' },
+  P1001: { tag: 'DB_CONN', summary: 'cannot reach database', fix: 'check DATABASE_URL host/port; verify the path is readable and the engine binary exists' },
   P1008: { tag: 'DB_TIMEOUT', summary: 'query timeout', fix: 'add an index or paginate results' },
   P1017: { tag: 'DB_CONN', summary: 'connection closed by server', fix: 'reconnect; if recurring, check pool size' },
 };
+
+/**
+ * Pattern-based classification for errors that Prisma doesn't assign a known
+ * error code to, or that come through as generic SQLite-level errors.
+ *
+ * These are checked AFTER known Prisma error codes, so explicit Prisma codes
+ * always take precedence.
+ */
+const ERROR_PATTERNS = [
+  {
+    pattern: /readonly|SQLITE_READONLY|attempt to write a readonly database/i,
+    tag: 'DB_READONLY',
+    summary: 'database is read-only',
+    fix: 'check file permissions on the database file and its parent directory; ensure the user running Hydra has write access',
+  },
+  {
+    pattern: /SQLITE_BUSY|database is locked/i,
+    tag: 'DB_BUSY',
+    summary: 'database is locked by another process',
+    fix: 'close any other Hydra instances, Prisma Studio, or sqlite3 sessions; if on a network filesystem (NFS/SMB), move the DB to a local disk',
+  },
+  {
+    pattern: /disk I\/O error|SQLITE_IOERR|ENOSPC|no space left/i,
+    tag: 'DB_DISK',
+    summary: 'disk I/O error or out of space',
+    fix: 'check available disk space on the volume where the database lives; verify the disk is healthy',
+  },
+  {
+    pattern: /SQLITE_CORRUPT|database disk image is malformed/i,
+    tag: 'DB_CORRUPT',
+    summary: 'database file is corrupt',
+    fix: 'restore from the most recent backup (hydra.db.backup-*) or delete the database and relaunch to start fresh',
+  },
+  {
+    pattern: /SQLITE_CANTOPEN|unable to open database/i,
+    tag: 'DB_CONN',
+    summary: 'cannot open database file',
+    fix: 'check that the parent directory exists and is accessible; verify DATABASE_URL path',
+  },
+];
 
 /**
  * Classify a thrown Prisma error.
@@ -56,9 +96,16 @@ export function classifyPrismaError(err) {
     return { ...known, code, raw, ...extra };
   }
 
-  // Second: pattern-match the message text for unknown-code errors
-  // Prisma sometimes throws PrismaClientKnownRequestError without a `.code`,
-  // or PrismaClientValidationError where the message is the only signal.
+  // Second: pattern-match the message text for unknown-code errors.
+  // Includes SQLite-level errors (SQLITE_READONLY, SQLITE_BUSY, etc.) that
+  // Prisma doesn't assign a known error code to.
+  for (const ep of ERROR_PATTERNS) {
+    if (ep.pattern.test(raw)) {
+      return { tag: ep.tag, summary: ep.summary, fix: ep.fix, code: code || 'SQLITE', raw };
+    }
+  }
+
+  // Third: legacy substring matches for backwards compatibility
   if (/column\s+.+?does not exist/i.test(raw)) {
     const m = raw.match(/column\s+`?([\w.]+)`?\s+does not exist/i);
     return {

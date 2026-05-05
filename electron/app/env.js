@@ -51,7 +51,10 @@ export function setupEnvironment(appParam) {
   // Bug #9: URL-encode the path — macOS paths contain spaces ("Application Support")
   // that break Prisma's file: URL parsing on some platforms.
   const rawPath = path.join(appRef.getPath('userData'), 'hydra.db');
-  const normalized = rawPath.replace(/\\/g, '/'); // Windows backslashes → forward
+  let normalized = rawPath.replace(/\\/g, '/');
+  // #84: encodeURI does not encode # and ? — escape them manually
+  // so Prisma's file: URL parser doesn't misinterpret them as fragment/query.
+  normalized = normalized.replace(/#/g, '%23').replace(/\?/g, '%3F');
   process.env.DATABASE_URL = 'file:' + encodeURI(normalized);
   process.env.HYDRA_EMBEDDED = '1';
   if (!isDev && !process.env.NODE_ENV) {
@@ -70,10 +73,32 @@ export async function ensurePackagedRuntimeState() {
 
   if (isDev) return summary;
 
-  const { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } = await import('node:fs');
+  const { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, statfsSync } = await import('node:fs');
   const { randomBytes } = await import('node:crypto');
   const userData = app.getPath('userData');
-  mkdirSync(userData, { recursive: true });
+
+  // #79: Guard against full disk — mkdirSync can throw ENOSPC.
+  // Also check available space before writing.
+  try {
+    mkdirSync(userData, { recursive: true });
+  } catch (e) {
+    summary.errors.push('cannot create userData directory: ' + e.message);
+    summary.jwtSecret = 'existing';
+    summary.db = 'skipped';
+    return summary;
+  }
+
+  // Pre-flight: check disk space. If less than 10MB free, warn.
+  try {
+    const stats = statfsSync(userData);
+    const freeBytes = stats.bsize * stats.bfree;
+    const freeMB = Math.round(freeBytes / (1024 * 1024));
+    if (freeMB < 10) {
+      summary.errors.push(`disk space critical: only ${freeMB}MB free on the userData volume — writes may fail`);
+    }
+  } catch {
+    // statfsSync may not be available everywhere; best-effort only
+  }
 
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'hydra-dev-secret-unsafe') {
     const secretPath = path.join(userData, 'jwt-secret');
