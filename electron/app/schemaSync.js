@@ -58,27 +58,104 @@ export async function markSchemaSynced() {
   }
 }
 
+/**
+ * PID-based migration lock with TTL / stale-lock detection.
+ *
+ * The lock file contains `PID:TIMESTAMP`.  On acquisition we check:
+ *  - Is the PID still alive?  (process.kill(pid, 0) on POSIX)
+ *  - Has the lock exceeded LOCK_TTL (60 s)?
+ *
+ * If either is true the lock is considered stale and we break it.
+ * This prevents a crash-during-self-heal from permanently blocking future
+ * schema syncs (the orphaned-lock bug).
+ */
+const LOCK_TTL_MS = 60_000;
+
+async function readLockPayload(lockPath) {
+  try {
+    const { readFileSync } = await import('node:fs');
+    const raw = readFileSync(lockPath, 'utf-8');
+    const [pidStr, tsStr] = raw.trim().split(':');
+    return { pid: Number(pidStr), ts: Number(tsStr) };
+  } catch { return null; }
+}
+
+function isPidAlive(pid) {
+  if (!pid || pid <= 0) return false;
+  try {
+    // Signal 0 does not kill; it just checks existence (POSIX).
+    process.kill(pid, 0);
+    return true;
+  } catch { return false; }
+}
+
+async function acquireMigrationLock(lockPath) {
+  const { openSync, writeSync, closeSync, unlinkSync, existsSync } = await import('node:fs');
+
+  if (existsSync(lockPath)) {
+    const payload = await readLockPayload(lockPath);
+    const isStale =
+      payload &&
+      (Date.now() - payload.ts > LOCK_TTL_MS || !isPidAlive(payload.pid));
+    if (isStale) {
+      console.warn(
+        `[electron] migration lock at ${lockPath} is stale ` +
+        `(pid=${payload.pid}, age=${Date.now() - payload.ts}ms) — breaking lock`,
+      );
+      try { unlinkSync(lockPath); } catch { /* another process may have cleaned it */ }
+    }
+  }
+
+  try {
+    const fd = openSync(lockPath, 'wx');
+    writeSync(fd, `${process.pid}:${Date.now()}`);
+    return fd;
+  } catch (e) {
+    if (e.code === 'EEXIST') {
+      // If we tried to break a stale lock but another process re-created it,
+      // treat as genuinely locked (don't loop — avoid lock contention).
+      console.warn(`[electron] migration lock held by another process at ${lockPath}; skipping db-self-heal`);
+    }
+    throw e;
+  }
+}
+
 async function runSelfHealSync() {
   console.warn('[electron] falling back to db-self-heal');
   const lockPath = path.join(app.getPath('userData'), 'hydra.db.migration.lock');
   let lockFd = null;
   try {
-    const { closeSync, copyFileSync, existsSync, openSync, unlinkSync } = await import('node:fs');
+    const { closeSync, copyFileSync, existsSync, unlinkSync } = await import('node:fs');
     try {
-      lockFd = openSync(lockPath, 'wx');
+      lockFd = await acquireMigrationLock(lockPath);
     } catch (e) {
-      if (e.code === 'EEXIST') {
-        console.warn(`[electron] migration lock already exists at ${lockPath}; skipping db-self-heal`);
-        return false;
-      }
+      if (e.code === 'EEXIST') return false;
       throw e;
     }
     const { runSelfHeal } = await import('../../server/lib/db-self-heal.js');
     const dbPath = path.join(app.getPath('userData'), 'hydra.db');
     if (existsSync(dbPath)) {
+      // ── Bug #7 fix: WAL checkpoint + backup WAL/SHM ──────────────
+      const { execFileSync } = await import('node:child_process');
+      try {
+        execFileSync('sqlite3', [dbPath, 'PRAGMA wal_checkpoint(TRUNCATE);'], {
+          stdio: 'pipe',
+          timeout: 15_000,
+        });
+      } catch {
+        // sqlite3 may not be available; the copy is still useful without checkpoint
+      }
+
       const backupPath = `${dbPath}.backup-${new Date().toISOString().replace(/[:.]/g, '-')}`;
       copyFileSync(dbPath, backupPath);
-      console.log(`[electron] backed up database before self-heal: ${backupPath}`);
+      // Also copy WAL/SHM if they exist so the backup is complete
+      for (const suffix of ['-wal', '-shm']) {
+        const sidecar = dbPath + suffix;
+        if (existsSync(sidecar)) {
+          copyFileSync(sidecar, backupPath + suffix);
+        }
+      }
+      console.log(`[electron] backed up database (with WAL/SHM) before self-heal: ${backupPath}`);
     }
     const summary = await runSelfHeal({ dbPath, migrationsDir: MIGRATIONS_DIR, log: (m) => console.log(m) });
     console.log(`[electron] db-self-heal: ${summary.applied} applied, ${summary.skipped} already present, ${summary.errors} errors`);
