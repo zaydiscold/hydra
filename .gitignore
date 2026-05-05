@@ -34,8 +34,13 @@ auth.json
 # SQLite Database
 *.db
 *.db-journal
+*.db-wal
 *.sqlite
 prisma/dev.db
+
+# Recon / capture artifacts
+capture-*.json
+capture-*.png
 
 # Cursor hook runtime state (local; changes every session)
 .cursor/hooks/state/
