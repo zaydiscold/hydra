@@ -185,7 +185,7 @@ async function listGenerated() {
         console.log(`    ${f}  (${kb} KB)`);
       }
     }
-  } catch (_) { /* ignore */ }
+  } catch { /* ignore */ }
 }
 
 main().catch(err => {

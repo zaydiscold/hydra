@@ -45,12 +45,12 @@ const bootstrapSql = `
 -- ───────────────────────────────────────────
 -- This SQL is a hand-maintained copy of the schema DDL from
 --   prisma/schema.prisma
--- It is ONLY used when `prisma db push` fails (e.g., sqlite3 CLI
+-- It is ONLY used when \`prisma db push\` fails (e.g., sqlite3 CLI
 -- fallback).  It is stale by definition — if you add/change a table,
 -- column, index, or constraint in schema.prisma you MUST update this
 -- block to match, otherwise the fallback path will create a DB that
 -- doesn't reflect the current schema.  Consider this a last resort.
--- Run `node scripts/validate-fallback-sql.mjs` to check consistency.
+-- Run \`node scripts/validate-fallback-sql.mjs\` to check consistency.
 -- ───────────────────────────────────────────
 PRAGMA foreign_keys=OFF;
 DROP TABLE IF EXISTS "ManagementKey";

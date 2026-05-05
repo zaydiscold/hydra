@@ -4,12 +4,24 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist', 'release', 'build', 'node_modules'] },
+  {
+    ignores: [
+      'dist',
+      'release',
+      'build',
+      'node_modules',
+      // One-off recon + manual testing scratchpads — not production code.
+      // They use top-of-file `assert`/etc imports for ad-hoc REPL-style runs.
+      'scripts/recon/**',
+      'scripts/testing/**',
+      'server/tests/**',
+    ],
+  },
   // Browser/React Config
   {
     files: ['src/**/*.{js,jsx}'],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 2022,
       globals: globals.browser,
       parserOptions: {
         ecmaVersion: 'latest',
@@ -35,9 +47,9 @@ export default [
   },
   // Node/Server Config
   {
-    files: ['server/**/*.js', 'scripts/**/*.js'],
+    files: ['server/**/*.{js,mjs}', 'scripts/**/*.{js,mjs}'],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 2022,
       globals: {
         ...globals.node,
       },
