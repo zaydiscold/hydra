@@ -25,6 +25,7 @@ process.env.HYDRA_EMBEDDED = '1';
 // ─── 2. State ──────────────────────────────────────────────────────────────
 let mainWindow = null;
 let gracefulShutdown = null;
+let windowURL = null;  // cached for activate / macOS dock re-open
 let shuttingDown = false;
 
 // ─── 3. First-Launch: Migrate legacy data ──────────────────────────────────
@@ -39,15 +40,25 @@ async function firstLaunchSetup() {
 
   // Always sync schema (adds new columns, non-destructive)
   const { execSync } = await import('node:child_process');
+  const prismaBin = path.join('node_modules', '.bin', 'prisma');
+  const dbPushArgs = ['prisma', 'db', 'push', '--skip-generate'];
+  const execOpts = { cwd: process.cwd(), stdio: 'pipe', timeout: 15000 };
+
+  // Try npx first (works in dev and when npx is on PATH), fall back to
+  // node_modules/.bin/prisma for packaged Electron where npx may be absent.
+  let synced = false;
   try {
-    execSync('npx prisma db push --skip-generate', {
-      cwd: process.cwd(),
-      stdio: 'pipe',
-      timeout: 15000,
-    });
-    console.log('[electron] Database schema synced');
-  } catch (err) {
-    console.warn('[electron] Schema sync failed:', err.message);
+    execSync(`npx ${dbPushArgs.join(' ')}`, execOpts);
+    synced = true;
+    console.log('[electron] Database schema synced (via npx)');
+  } catch (_npxErr) {
+    try {
+      execSync(`"${prismaBin}" ${dbPushArgs.slice(1).join(' ')}`, execOpts);
+      synced = true;
+      console.log('[electron] Database schema synced (via node_modules/.bin/prisma)');
+    } catch (_binErr) {
+      console.warn('[electron] Schema sync failed via npx and node_modules/.bin/prisma:', _binErr.message);
+    }
   }
 }
 
@@ -63,19 +74,16 @@ app.whenReady().then(async () => {
     const { setupAppMenu } = await import('./menus/appMenu.js');
     setupAppMenu();
 
-    // Import and bootstrap server
+    // Import and bootstrap server — single call for dev AND prod
     const server = await import('../server/index.js');
     gracefulShutdown = server.gracefulShutdown;
 
-    const port = isDev ? 3001 : await server.bootstrap({ port: 33100, silent: false }).then(s => s.address().port);
+    const PORT = isDev ? 3001 : 33100;
+    const s = await server.bootstrap({ port: PORT, silent: false });
+    const expressPort = s.address()?.port ?? PORT;
 
-    if (isDev) {
-      await server.bootstrap({ port, silent: false });
-    }
-
-    const url = isDev
-      ? 'http://localhost:5173'
-      : `http://localhost:${port}`;
+    const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+    windowURL = isDev ? VITE_DEV_SERVER_URL : `http://localhost:${expressPort}`;
 
     // ─── IPC Handlers (registered before window creation) ─────────────────
     ipcMain.handle('native:get-version', () => app.getVersion());
@@ -103,7 +111,7 @@ app.whenReady().then(async () => {
     mainWindow.once('ready-to-show', () => mainWindow.show());
     mainWindow.on('closed', () => { mainWindow = null; });
 
-    await mainWindow.loadURL(url);
+    await mainWindow.loadURL(windowURL);
   } catch (err) {
     console.error('[electron] Failed to start Hydra:', err);
     dialog.showErrorBox('Hydra Startup Error', err.message || String(err));
@@ -116,13 +124,15 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) {
+  if (mainWindow === null && windowURL) {
     mainWindow = new BrowserWindow({
       width: 1440, height: 900,
       webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
     mainWindow.on('closed', () => { mainWindow = null; });
-    mainWindow.loadURL('http://localhost:3001');
+    mainWindow.loadURL(windowURL).catch(err => {
+      console.error('[electron] Activate loadURL failed:', err.message);
+    });
   }
 });
 
