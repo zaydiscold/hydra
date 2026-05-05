@@ -307,3 +307,45 @@ volumes:
 
 ## Next Steps for Execution
 With these edge cases documented, we can confidently create the `.dockerignore`, `Dockerfile`, and `docker-compose.yml`, followed by the exact code modifications to `server/index.js` and `account-generator.js`.
+
+---
+
+## Errata — 2026-05-05
+
+Two production-blocking bugs found and fixed during a device-agnostic audit.
+
+### 1. `Dockerfile` ENTRYPOINT/CMD pair was broken
+
+**Symptom:** `docker compose up` exits immediately with a JS SyntaxError trying to parse `#!/bin/bash`.
+
+**Cause:** The Dockerfile had:
+```dockerfile
+ENTRYPOINT ["node", "--"]
+CMD ["docker-entrypoint.sh"]
+```
+Docker concatenates these into `node -- docker-entrypoint.sh`, which asks Node to interpret a bash script as JavaScript. Node parses `#!/bin/bash` as a syntax error and exits.
+
+**Fix:**
+```dockerfile
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+```
+The bash entrypoint already does `exec node server/standalone.js` on its last line, so PID 1 still ends up as Node. SIGTERM forwarding is provided by `init: true` in `docker-compose.yml`.
+
+### 2. `docker-entrypoint.sh` was not resilient to schema-sync failure
+
+**Symptom:** A transient Prisma push failure (network blip during `prisma generate`, locked DB during a backup) crashed the container at boot. Combined with `restart: unless-stopped`, the container would loop-crash forever, and the operator couldn't `docker exec` in to investigate.
+
+**Cause:** `set -e` made the entire script abort on the first non-zero exit, including from `npx prisma db push`.
+
+**Fix:** Switched from `set -e` to `set -uo pipefail` and explicitly handle the prisma push exit code — log a warning and continue. The Node server's own `db-self-heal` fallback (in `server/lib/db-self-heal.js`) replays migration SQL idempotently at boot, so the container starts even if the Prisma CLI step fails.
+
+### Quick verification
+
+```bash
+# clean rebuild + run
+docker compose build --no-cache
+docker compose up
+
+# expect: schema sync log (or warn), then "[Hydra] Starting Hydra server..."
+# expect: HTTP 200 from `curl http://localhost:3001/`
+```
