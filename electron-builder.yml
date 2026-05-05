@@ -83,15 +83,32 @@ win:
     - target: nsis
       arch:
         - x64
+        - arm64
   icon: desktop/icons/icon.ico
   publisherName: Hydra
   legalTrademarks: Hydra
+  # Code signing — uncomment and set these env vars to avoid SmartScreen warnings:
+  #   CSC_LINK            = path/to/certificate.pfx
+  #   CSC_KEY_PASSWORD    = password for the certificate
+  #   CSC_FOR_PULL_REQUEST= true  (if using CI)
+  # certificateFile: path/to/certificate.pfx
+  # certificatePassword: '%CSC_KEY_PASSWORD%'
+  # See: https://www.electron.build/code-signing
 
 linux:
   target:
     - target: AppImage
       arch:
         - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+    - target: rpm
+      arch:
+        - x64
+        - arm64
   icon: desktop/icons/icon.png
   category: Utility
   synopsis: OpenRouter Fleet Manager
