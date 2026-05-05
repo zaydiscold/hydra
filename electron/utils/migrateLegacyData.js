@@ -17,8 +17,13 @@ export async function migrateIfNeeded() {
   const userData = process.env.HYDRA_DATA_DIR;
   if (!userData) return;
 
-  // If userData already has files, migration already happened
-  if (existsSync(userData) && readdirSync(userData).length > 0) return;
+  const userDB = path.join(userData, 'hydra.db');
+
+  // If userData already has a real hydra.db (not just Electron artifacts), skip
+  if (existsSync(userDB) && statSync(userDB).size > 4096) {
+    console.log('[MIGRATION] User database exists, skipping');
+    return;
+  }
 
   // If legacy dir doesn't exist, nothing to migrate
   if (!existsSync(LEGACY_DIR)) {
@@ -26,17 +31,30 @@ export async function migrateIfNeeded() {
     return;
   }
 
+  // Check legacy DB exists
+  const legacyDB = path.join(LEGACY_DIR, 'hydra.db');
+  if (!existsSync(legacyDB)) {
+    mkdirSync(userData, { recursive: true });
+    return;
+  }
+
   mkdirSync(userData, { recursive: true });
 
+  // Copy the database first (most important)
+  copyFileSync(legacyDB, userDB);
+  console.log(`[MIGRATION] Copied hydra.db (${statSync(legacyDB).size} bytes)`);
+
+  // Copy remaining files (secrets, proxy-gate, redemption-log)
   const files = readdirSync(LEGACY_DIR);
   for (const file of files) {
+    if (file === 'hydra.db') continue; // already copied
     const src = path.join(LEGACY_DIR, file);
     const dest = path.join(userData, file);
-    const stats = statSync(src);
-    if (stats.isFile()) {
+    if (statSync(src).isFile()) {
       copyFileSync(src, dest);
+      console.log(`[MIGRATION] Copied ${file}`);
     }
   }
 
-  console.log(`[MIGRATION] Copied ${files.length} files from ${LEGACY_DIR} to ${userData}`);
+  console.log(`[MIGRATION] Migration complete — ${userDB}`);
 }
