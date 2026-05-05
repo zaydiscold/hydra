@@ -2,6 +2,7 @@ import { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react'
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import './index.css';
 import * as api from './api';
+import { logger } from './lib/client-logger.js';
 import DevBackendHint from './components/DevBackendHint';
 import ErrorBoundary from './components/ErrorBoundary';
 import { 
@@ -14,7 +15,8 @@ import {
   PowerIcon,
   NetworkIcon,
   ActivityIcon,
-  BulkAuthIcon
+  BulkAuthIcon,
+  InfoIcon
 } from './components/Icons';
 
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
@@ -23,6 +25,7 @@ const Vault = lazy(() => import('./pages/Vault.jsx'));
 const CodeRedemption = lazy(() => import('./pages/CodeRedemption.jsx'));
 const Generator = lazy(() => import('./pages/Generator.jsx'));
 const Settings = lazy(() => import('./pages/Settings.jsx'));
+const Diagnostics = lazy(() => import('./pages/Diagnostics.jsx'));
 const PoolManager = lazy(() => import('./pages/PoolManager.jsx'));
 const Traffic = lazy(() => import('./pages/Traffic.jsx'));
 const BulkAuthWizard = lazy(() => import('./pages/BulkAuthWizard.jsx'));
@@ -348,7 +351,8 @@ const navItems = [
   { id: 'codes', label: 'Redeem', icon: <TicketIcon size={18} />, path: '/codes' },
   { id: 'generator', label: 'Generator', icon: <GeneratorIcon size={18} />, path: '/generator' },
   { id: 'traffic', label: 'Traffic', icon: <ActivityIcon size={18} />, path: '/traffic' },
-  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} />, path: '/settings' }
+  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} />, path: '/settings' },
+  { id: 'diagnostics', label: 'Diagnostics', icon: <InfoIcon size={18} />, path: '/diagnostics' }
 ];
 
 export default function App() {
@@ -425,7 +429,7 @@ export default function App() {
         setAuthState('setup');
       }
     } catch (err) {
-      console.warn('Auth check failed:', err.message);
+      logger.warn('Auth check failed:', err.message);
       setAuthError(
         import.meta.env.DEV
           ? 'Hydra backend is offline. From the project folder run npm run dev (starts API + UI), then refresh this page.'
@@ -610,14 +614,30 @@ export default function App() {
                 </span>
                 {!sidebarCollapsed && <span>Collapse</span>}
               </button>
-              <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
-                <span className="nav-icon"><LockIcon size={18} /></span>
-                {!sidebarCollapsed && <span>Lock</span>}
-              </button>
-              <button className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
-                <span className="nav-icon"><PowerIcon size={18} /></span>
-                {!sidebarCollapsed && <span>Shutdown</span>}
-              </button>
+              {typeof window !== 'undefined' && window.hydraNative && (
+                <>
+                  <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
+                    <span className="nav-icon">🔒</span>
+                    {!sidebarCollapsed && <span>Lock Vault</span>}
+                  </button>
+                  <button className="nav-link" style={{ color: 'var(--status-error)' }} onClick={() => window.close()} title="Quit">
+                    <span className="nav-icon"><PowerIcon size={18} /></span>
+                    {!sidebarCollapsed && <span>Quit</span>}
+                  </button>
+                </>
+              )}
+              {!(typeof window !== 'undefined' && window.hydraNative) && (
+                <>
+                  <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
+                    <span className="nav-icon"><LockIcon size={18} /></span>
+                    {!sidebarCollapsed && <span>Lock</span>}
+                  </button>
+                  <button className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
+                    <span className="nav-icon"><PowerIcon size={18} /></span>
+                    {!sidebarCollapsed && <span>Shutdown</span>}
+                  </button>
+                </>
+              )}
             </div>
           </aside>
 
@@ -637,6 +657,7 @@ export default function App() {
                   <Route path="/codes" element={<CodeRedemption addToast={addToast} />} />
                   <Route path="/generator" element={<Generator addToast={addToast} />} />
                   <Route path="/settings" element={<Settings addToast={addToast} onLogout={handleLogout} />} />
+                  <Route path="/diagnostics" element={<Diagnostics addToast={addToast} />} />
                   {/* Catch all to redirect to dashboard */}
                   <Route path="*" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
                 </Routes>
