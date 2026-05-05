@@ -7,8 +7,8 @@
     "hydra": "bin/hydra.mjs"
   },
   "scripts": {
-    "dev": "node scripts/free-dev-ports.mjs && concurrently -n server,client -c blue,green \"node server/index.js\" \"vite --host\"",
-    "start": "node launch.js",
+    "dev": "node scripts/free-dev-ports.mjs && concurrently -n server,client -c blue,green \"node server/standalone.js\" \"vite --host\"",
+    "start": "node scripts/launch.js",
     "setup": "npm install && npx prisma db push --accept-data-loss && npx prisma generate && npm run build",
     "server": "node server/index.js",
     "client": "vite --host",
@@ -17,6 +17,12 @@
     "test:session-expiry": "DATABASE_URL=file:./prisma/dev.db node --test server/tests/session-expiry-effective.test.mjs",
     "test:ensure-session-backfill": "DATABASE_URL=file:./prisma/dev.db node --experimental-test-module-mocks --test server/tests/ensure-session-backfill.test.mjs",
     "test:otp-smoke": "node scripts/otp-start-smoke.mjs",
+    "test:electron-server-extract": "node --test server/tests/electron-server-extract.test.mjs",
+    "test:electron-launch-compat": "node --test server/tests/electron-launch-compat.test.mjs",
+    "test:electron-data-path": "node --test server/tests/electron-data-path.test.mjs",
+    "test:management-key-backfill": "DATABASE_URL=file:./prisma/dev.db node --test server/tests/management-key-backfill.test.mjs",
+    "pretest": "npx prisma db push --accept-data-loss && npx prisma generate",
+    "test": "npm run test:session-expiry && npm run test:ensure-session-backfill",
     "check:clerk": "node scripts/check-clerk-connectivity.mjs",
     "preview": "vite preview"
   },
