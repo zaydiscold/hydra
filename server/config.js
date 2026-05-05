@@ -16,8 +16,23 @@ const configSchema = z.object({
   PORT: z.coerce.number().default(3001),
   HYDRA_SERVER_PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  JWT_SECRET: z.string().min(1, 'JWT_SECRET is required').default('hydra-dev-secret-unsafe'),
+  DATABASE_URL: z
+    .string()
+    .min(1, 'DATABASE_URL is required')
+    .refine(
+      (url) => url.startsWith('file:') || url.startsWith('postgres'),
+      'DATABASE_URL must start with file: (SQLite) or postgres (PostgreSQL)',
+    )
+    .refine(
+      (url) => !url.includes('#') && !url.includes('?'),
+      'DATABASE_URL contains # or ? which can break Prisma file: URL parsing — use URL-encoded paths',
+    ),
+  JWT_SECRET: z
+    .string()
+    .min(1, 'JWT_SECRET is required')
+    .transform(s => s.trim())
+    .refine(s => s.length >= 16, 'JWT_SECRET must be at least 16 characters')
+    .default('hydra-dev-secret-unsafe'),
   /** Master lock-screen JWT lifetime (jsonwebtoken `expiresIn`, e.g. 8h, 7d, 30d). */
   HYDRA_MASTER_JWT_TTL: z.string().min(1).max(48).default('30d'),
   LOCAL_STORAGE_KEY: optionalHexSecret,

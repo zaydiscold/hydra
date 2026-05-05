@@ -51,7 +51,10 @@ export function setupEnvironment(appParam) {
   // Bug #9: URL-encode the path — macOS paths contain spaces ("Application Support")
   // that break Prisma's file: URL parsing on some platforms.
   const rawPath = path.join(appRef.getPath('userData'), 'hydra.db');
-  const normalized = rawPath.replace(/\\/g, '/'); // Windows backslashes → forward
+  let normalized = rawPath.replace(/\\/g, '/');
+  // #84: encodeURI does not encode # and ? — escape them manually
+  // so Prisma's file: URL parser doesn't misinterpret them as fragment/query.
+  normalized = normalized.replace(/#/g, '%23').replace(/\?/g, '%3F');
   process.env.DATABASE_URL = 'file:' + encodeURI(normalized);
   process.env.HYDRA_EMBEDDED = '1';
   if (!isDev && !process.env.NODE_ENV) {
