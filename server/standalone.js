@@ -6,15 +6,12 @@
  * registers SIGINT/SIGTERM handlers, and starts the server on the
  * configured port (env PORT or 3001 via server/config.js).
  *
- * ─── ELECTRON_MIGRATION ───
  * This is the terminal-only entry point. Electron uses electron/main.js
- * which imports bootstrap/gracefulShutdown directly and manages its own
- * lifecycle — do NOT add Electron-specific code here.
- * ─── END ELECTRON_MIGRATION ───
+ * which imports bootstrap/gracefulShutdown directly and manages its own lifecycle.
  */
 import { bootstrap, gracefulShutdown } from './index.js';
 
-const port = process.env.PORT || 3001;
+const port = Number(process.env.PORT) || 3001;
 
 async function main() {
   const shutdown = async (signal) => {
@@ -26,7 +23,7 @@ async function main() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   try {
-    await bootstrap();
+    await bootstrap({ port });
   } catch (err) {
     console.error(`[standalone] Bootstrap failed: ${err.message}`);
     await gracefulShutdown('bootstrap-error', { exit: true });

@@ -9,11 +9,6 @@ import { logger } from './logger.js';
 
 const SALT_ROUNDS = 12;
 const ADMIN_USERNAME = 'admin';
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #5 — Replace process.cwd() with:
-//   process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data')
-// Same pattern needed in: local-secrets.js, proxy-gate.js, redemption-log.js
-// ─── END ELECTRON_MIGRATION ───
 const DATA_DIR = process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data');
 let restartRequired = false;
 

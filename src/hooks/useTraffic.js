@@ -26,7 +26,9 @@ export function useTraffic({ addToast }) {
     fetchTraffic();
     const interval = setInterval(() => {
       if (!document.hidden) fetchTraffic(true);
-    }, 10000); // 10s auto-refresh for traffic
+    }, 30000); // 30s auto-refresh; the /api/pool/traffic query is heavy
+               // (findMany take:100 + groupBy on RequestLog). 6×/min drove
+               // measurable CPU heat — 2×/min is plenty for an ops dashboard.
     return () => clearInterval(interval);
   }, [fetchTraffic]);
 

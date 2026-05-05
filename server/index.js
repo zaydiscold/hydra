@@ -120,13 +120,7 @@ app.use((req, res, next) => {
 
 // Global Error Handler (Last stage)
 app.use(errorHandler);
-
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #3 — gracefulShutdown calls process.exit() unconditionally.
-// This kills the entire Electron app when embedded. Refactor to accept
-// { exit: boolean } option. When exit=false, resolve promise instead of exiting.
-// Terminal callers pass exit=true; Electron passes exit=false.
-// ─── END ELECTRON_MIGRATION ───
+// When exit=false, resolves promise instead of calling process.exit().
 async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5000 } = {}) {
   if (shutdownInFlight) return true;
   shutdownInFlight = true;
@@ -203,7 +197,7 @@ async function bootstrap({ port, silent } = {}) {
       if (!silent) {
         logger.info(`  Hydra Server live on port ${listenPort}`);
         logger.info(`  Environment: ${config.NODE_ENV}`);
-        logger.info(`  Network: http://0.0.0.0:${listenPort}`);
+        logger.info(`  Network: http://${host}:${listenPort}${host === '127.0.0.1' ? ' (loopback only)' : ''}`);
         try {
           const hydraKey    = getMasterProxyKey();
           const genericKey  = getGenericProxyKey();

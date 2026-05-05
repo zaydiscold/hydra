@@ -1,37 +1,64 @@
 appId: com.zayd.hydra
 productName: Hydra
 copyright: Copyright © 2026
-asar: true
+# asar disabled — see electron/builders/afterPack.js comment.
+# Prisma's @prisma/client/default.js does `require('.prisma/client')` which
+# walks up node_modules looking for the dotfile dir. electron-builder filters
+# `.prisma` out of node_modules globs by default and there's no reliable
+# pattern to opt back in. Disabling asar makes module resolution work
+# normally; the cold-start penalty on macOS APFS is ~30–50 ms (noise).
+asar: false
+afterPack: ./electron/builders/afterPack.js
+
+# Patterns that ship to the packaged app.
+#
+# IMPORTANT: we deliberately do NOT include `node_modules/**/*` here.
+# Listing it would override electron-builder's built-in production-only
+# pruning (which strips devDependencies, README/CHANGELOG, source files,
+# .bin shims, Python caches, etc.) and balloon the package by ~400 MB.
+#
+# By omitting node_modules entirely, electron-builder uses its default
+# production-pruned ruleset and only ships actual `dependencies`.
+#
+# We then opt back in explicitly for prisma's *generated* client which
+# lives at node_modules/.prisma/* — a dotfile dir that the default
+# glob would otherwise miss.
+files:
+  - dist/**/*
+  - server/**/*
+  - "!server/tests/**/*"
+  - "!server/scripts/**/*"
+  - prisma/schema.prisma
+  - prisma/migrations/**/*
+  - electron/**/*
+  - "!electron/tests/**/*"
+  - package.json
+  # `.prisma` is a dotfile dir; electron-builder's default node_modules glob
+  # excludes it. Match with the `**/` prefix that bypasses that filter.
+  - "**/node_modules/.prisma/**/*"
+  - "**/node_modules/@prisma/**/*"
+
+# Native binaries that need to live OUTSIDE the asar so dlopen() works.
 asarUnpack:
-  - node_modules/@prisma/client/**
-  - node_modules/.prisma/**
-  - node_modules/playwright/.local-browsers/**
-  - prisma/**
+  - "**/node_modules/.prisma/**/*"
+  - "**/node_modules/@prisma/**/*"
+  - "prisma/**/*"
 
 directories:
   output: release
   buildResources: desktop
 
-files:
-  - dist/**/*
-  - server/**/*
-  - prisma/**/*
-  - electron/**/*
-  - node_modules/**/*
-  - package.json
-
 extraResources:
-  - from: "prisma/"
-    to: "prisma/"
-    filter:
-      - "template.db"
-      - "dev.db"
-      - "schema.prisma"
+  - from: prisma/schema.prisma
+    to: prisma/schema.prisma
+  - from: prisma/migrations
+    to: prisma/migrations
 
 mac:
   target:
     - target: dmg
-      arch: [x64, arm64]
+      arch:
+        - arm64
   icon: desktop/icons/icon.icns
   category: public.app-category.utilities
   hardenedRuntime: true
@@ -43,14 +70,16 @@ mac:
 win:
   target:
     - target: nsis
-      arch: [x64]
+      arch:
+        - x64
   icon: desktop/icons/icon.ico
   publisherName: Hydra
 
 linux:
   target:
     - target: AppImage
-      arch: [x64]
+      arch:
+        - x64
   icon: desktop/icons/icon.png
   category: Utility
 
@@ -59,4 +88,3 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  license: LICENSE.txt

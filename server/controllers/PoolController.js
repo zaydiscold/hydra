@@ -446,7 +446,15 @@ class PoolController extends BaseController {
 
       return this.success(res, { logs, metrics });
     } catch (err) {
-      return this.error(res, err.message);
+      const { classifyPrismaError, formatPrismaError } = await import('../lib/prisma-error.js');
+      const { logger } = await import('../services/logger.js');
+      const c = classifyPrismaError(err);
+      logger.error(formatPrismaError(err, 'getTraffic'));
+      return this.error(res, c.summary, 500, c.code || 'DB_ERROR', {
+        tag: c.tag,
+        fix: c.fix,
+        column: c.columnHint,
+      });
     }
   }
 

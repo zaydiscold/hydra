@@ -33,6 +33,8 @@ const configSchema = z.object({
   HYDRA_PLAYWRIGHT_HEADED: z.boolean().default(false),
   /** Optional Playwright browser channel, e.g. `chrome` for system Chrome (less bot friction than bundled Chromium). */
   HYDRA_PLAYWRIGHT_CHANNEL: z.string().min(1).optional(),
+  /** Explicit path to Chromium/Chrome executable for Playwright. Overrides channel and bundled Chromium lookup. */
+  HYDRA_PLAYWRIGHT_EXECUTABLE_PATH: z.string().min(1).optional(),
   /**
    * Chrome DevTools endpoint for Playwright `connectOverCDP` (e.g. `http://127.0.0.1:9222` or the `webSocketDebuggerUrl` from `/json/version`).
    * When set, Hydra does not launch bundled Chromium for provision.
@@ -78,6 +80,7 @@ try {
     CLERK_REFERER: process.env.CLERK_REFERER,
     HYDRA_PLAYWRIGHT_HEADED: parseBoolean(process.env.HYDRA_PLAYWRIGHT_HEADED),
     HYDRA_PLAYWRIGHT_CHANNEL: process.env.HYDRA_PLAYWRIGHT_CHANNEL?.trim() || undefined,
+    HYDRA_PLAYWRIGHT_EXECUTABLE_PATH: process.env.HYDRA_PLAYWRIGHT_EXECUTABLE_PATH?.trim() || undefined,
     HYDRA_PLAYWRIGHT_CDP_ENDPOINT: process.env.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim() || undefined,
     HYDRA_PROVISION_DEBUG: parseBoolean(process.env.HYDRA_PROVISION_DEBUG),
     HYDRA_PROVISION_NETWORK_LOG: parseBoolean(process.env.HYDRA_PROVISION_NETWORK_LOG),
@@ -87,11 +90,7 @@ try {
     HYDRA_REDEEM_ACTION_HASH: process.env.HYDRA_REDEEM_ACTION_HASH?.trim() || undefined,
   });
 } catch (err) {
-  // ─── ELECTRON_MIGRATION ───
-  // DONE: PAIN_POINTS.md #4 — Replaced process.exit(1) with thrown error.
-  // In Electron this is caught by the caller (electron/main.js wraps server
-  // import in try/catch and shows a native dialog).
-  // ─── END ELECTRON_MIGRATION ───
+  // In Electron, caught by electron/main.js try/catch which shows a native dialog.
   const msg = `Invalid environment variables: ${JSON.stringify(err.issues ?? err.errors ?? err.message)}`;
   console.error(msg);
   throw new Error(msg);

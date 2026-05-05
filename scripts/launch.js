@@ -7,12 +7,13 @@
 
 import { execSync } from 'child_process';
 import { existsSync, copyFileSync, statSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'net';
 import { bootstrap, gracefulShutdown } from '../server/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ ${c.dim}  OpenRouter API & Account Manager${c.reset}
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function run(cmd, opts = {}) {
   return execSync(cmd, { 
-    cwd: __dirname, 
+    cwd: PROJECT_ROOT, 
     stdio: opts.silent ? 'pipe' : 'inherit',
     ...opts 
   });
@@ -87,8 +88,8 @@ function openBrowser(url) {
 // ─── Steps ────────────────────────────────────────────────────────────────────
 async function checkDependencies() {
   step('Checking dependencies...');
-  const nodeModulesPath = join(__dirname, 'node_modules');
-  const pkgLockPath = join(__dirname, 'package-lock.json');
+  const nodeModulesPath = join(PROJECT_ROOT, 'node_modules');
+  const pkgLockPath = join(PROJECT_ROOT, 'package-lock.json');
   const npmLockInModules = join(nodeModulesPath, '.package-lock.json');
 
   let needsInstall = !existsSync(nodeModulesPath);
@@ -113,8 +114,8 @@ async function checkDependencies() {
 
 function checkEnv() {
   step('Checking environment...');
-  const envPath = join(__dirname, '.env');
-  const envExamplePath = join(__dirname, '.env.example');
+  const envPath = join(PROJECT_ROOT, '.env');
+  const envExamplePath = join(PROJECT_ROOT, '.env.example');
   
   if (!existsSync(envPath)) {
     if (existsSync(envExamplePath)) {
@@ -143,7 +144,7 @@ async function runMigrations() {
 
 async function ensureBuild() {
   step('Checking production build...');
-  const distPath = join(__dirname, 'dist');
+  const distPath = join(PROJECT_ROOT, 'dist');
   const distIndexPath = join(distPath, 'index.html');
 
   if (!existsSync(distIndexPath)) {
@@ -179,10 +180,6 @@ async function checkPort() {
 async function startServer(port) {
   step('Starting Hydra server...');
 
-  // ─── ELECTRON_MIGRATION ───
-  // Phase 1: in-process bootstrap replaces spawn('node server/index.js').
-  // Server runs in the same process — no more child-process stdout/stderr streaming.
-  // ─── END ELECTRON_MIGRATION ───
   await bootstrap({ port });
 
   success(`Hydra is running at http://localhost:${port}`);
@@ -212,14 +209,7 @@ ${c.reset}
   ${c.dim}Press Ctrl+C to stop the server${c.reset}
 `);
 
-    // Open browser after a short delay to let the server settle
-    setTimeout(() => openBrowser(`http://localhost:${port}`), 800);
-
-    // ─── ELECTRON_MIGRATION ───
-    // Phase 1: gracefulShutdown replaces process.exit in signal handlers.
-    // Uses { exit: true } so the process still exits in standalone mode.
-    // Electron callers will pass { exit: false }.
-    // ─── END ELECTRON_MIGRATION ───
+    openBrowser(`http://localhost:${port}`);
     process.on('SIGINT', () => {
       log('⏹', 'Shutting down Hydra...', c.yellow);
       gracefulShutdown('SIGINT', { exit: true });

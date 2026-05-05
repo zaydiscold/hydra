@@ -61,7 +61,7 @@ Files checked:
 | Finding | Status |
 |---|---|
 | `AGENTS.md` (root) vs `docs/AGENTS.md` | Intentional. Root is thin redirect to `CLAUDE.md`; `docs/` has full briefing. |
-| `4 - 27/` directory (session notes + `integration-gate.mjs`) | Historical session artifacts. `integration-gate.mjs` was a Phase 1 validation gate, not referenced from `package.json`. Not active code — left as archive. |
+| `docs/2026-04-27/` directory | Archived session notes, audits (SKEPTIC, LINT, FLEET), and consolidation logs from the Electron migration sprint. The runnable validation gate moved to `scripts/integration-gate.mjs`. |
 | No `.tmp`, `.bak`, `.old`, or `TODO` files found | ✅ Clean |
 | No duplicate `.js`/`.mjs` source files | ✅ Clean |
 

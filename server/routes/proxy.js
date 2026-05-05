@@ -155,7 +155,8 @@ function logRequest(keyHash, model, status, latencyMs, tokens = {}, clientHint =
       }
     }
 
-    logger.error(`[PROXY] Failed to write RequestLog: ${err.message}`);
+    const { formatPrismaError } = await import('../lib/prisma-error.js');
+    logger.error(`[PROXY] ${formatPrismaError(err, 'write RequestLog')}`);
   });
 }
 
@@ -186,7 +187,8 @@ async function createRequestLog(keyHash, model, status, latencyMs, clientHint = 
         // fall through
       }
     }
-    logger.error(`[PROXY] Failed to create RequestLog placeholder: ${err.message}`);
+    const { formatPrismaError } = await import('../lib/prisma-error.js');
+    logger.error(`[PROXY] ${formatPrismaError(err, 'create RequestLog placeholder')}`);
     return null;
   }
 }

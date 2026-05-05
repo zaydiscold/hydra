@@ -413,8 +413,19 @@ export default function App() {
   }, [navigate]);
 
   const handleShutdown = useCallback(() => setShutdownConfirm(true), []);
+  const handleHideToBackground = useCallback(async () => {
+    setShutdownConfirm(false);
+    const result = await window.hydraNative?.hideWindow?.();
+    if (!result?.ok) {
+      addToast('Close the window to keep Hydra running in the background.', 'info');
+    }
+  }, [addToast]);
   const handleShutdownConfirmed = useCallback(async () => {
     setShutdownConfirm(false);
+    if (window.hydraNative?.quitApp) {
+      try { await window.hydraNative.quitApp(); } catch { /* fall through */ }
+      return;
+    }
     try { await api.shutdownServer(); } catch { /* ok */ }
     setAuthState('shutdown');
   }, []);
@@ -603,9 +614,12 @@ export default function App() {
             <div className="modal-overlay" onClick={() => setShutdownConfirm(false)}>
               <div className="modal-box" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-title">Shut down Hydra?</div>
-                <p className="modal-body">The background server will stop. You can restart it from the terminal.</p>
+                <p className="modal-body">Quit stops the local proxy. Hide keeps Hydra running in the background so clients can keep using it.</p>
                 <div className="modal-actions">
                   <button className="btn btn-ghost" onClick={() => setShutdownConfirm(false)}>Cancel</button>
+                  {window.hydraNative?.hideWindow && (
+                    <button className="btn btn-secondary" onClick={handleHideToBackground}>Hide Window</button>
+                  )}
                   <button className="btn btn-danger" onClick={handleShutdownConfirmed}>Shut down</button>
                 </div>
               </div>

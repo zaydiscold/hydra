@@ -8,9 +8,15 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+**/node_modules/
 dist
 dist-ssr
 *.local
+
+# Electron build output (electron-builder)
+release/
+# Click-to-launch symlink to release/mac-arm64/Hydra.app
+/Hydra.app
 
 # Environment Variables and Secrets
 .env
@@ -46,3 +52,7 @@ prisma/dev.db
 *.sw?
 
 /src/generated/prisma
+
+# Heavy local media/build workspaces
+videos/remotion-project/node_modules/
+videos/remotion-project/out/

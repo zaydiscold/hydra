@@ -80,7 +80,7 @@ async function run() {
     assertPattern(src, /HYDRA_EMBEDDED/, 'must set HYDRA_EMBEDDED');
     assertPattern(src, /BrowserWindow/, 'must create BrowserWindow');
     assertPattern(src, /gracefulShutdown/, 'must use gracefulShutdown');
-    assertPattern(src, /iconPath/, 'must set icon path');
+    assertPattern(src, /ICON_PATH|iconPath/, 'must set icon path');
   });
 
   check('E: electron/preload.js uses contextBridge', () => {
