@@ -11,6 +11,8 @@ import { app, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 
+import { getWindowURL, getExpressPort } from './state.js';
+
 function ok(data) { return { ok: true, data }; }
 function err(message, code) { return { ok: false, error: message, code }; }
 
@@ -65,7 +67,10 @@ export function registerIpcHandlers({ windowURL, onHideWindow, onQuitApp } = {})
 
   ipcMain.handle('native:get-status', async () => {
     try { return ok({
-      serverUrl: windowURL,
+      serverUrl: getWindowURL() ?? windowURL ?? null,
+      // Item #76: surface the actual chosen Express port (may differ from
+      // the dev preferred 3001 if EADDRINUSE forced a random-port fallback).
+      expressPort: getExpressPort(),
       embedded: process.env.HYDRA_EMBEDDED === '1',
       packaged: app.isPackaged,
     }); } catch (e) { return err(e.message); }

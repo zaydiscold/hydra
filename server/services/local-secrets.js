@@ -1,8 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 import { config } from '../config.js';
 import { getDataDir, getDataPath } from '../lib/data-dir.js';
+import { logger } from './logger.js';
 
 const DATA_DIR = getDataDir();
 const SECRETS_PATH = getDataPath('local-secrets.json');
@@ -66,7 +67,68 @@ function resolveSecrets() {
   };
 }
 
-const resolvedSecrets = resolveSecrets();
+// Item #37: wrap module-level resolve in try/catch so a corrupted secrets file
+// doesn't crash the entire server at import time.
+//
+// IMPORTANT: only quarantine + regenerate on errors that GENUINELY indicate
+// file corruption (bad JSON syntax, hex parse failure). Transient I/O errors
+// (EBUSY, EACCES, EAGAIN) must re-throw — silently regenerating secrets in
+// those cases would orphan every encrypted account blob the user owns.
+function isCorruptionError(error) {
+  if (!error) return false;
+  if (error instanceof SyntaxError) return true;  // JSON.parse failure
+  // resolveSecrets() throws plain Error('invalid hex...') on hex decode fail.
+  // Match defensively but specifically.
+  const msg = error.message || '';
+  return /invalid hex|malformed|unexpected token|JSON/i.test(msg);
+}
+
+function safeResolveSecrets() {
+  try {
+    return resolveSecrets();
+  } catch (error) {
+    if (!isCorruptionError(error)) {
+      // Transient I/O / permissions / disk error — surface, do NOT regenerate.
+      logger.error({
+        source: 'local-secrets',
+        event: 'resolve_failed_transient',
+        message: `[SECRETS] Could not load local-secrets.json: ${error.message}. NOT regenerating — re-throw so the operator can recover.`,
+        stack: error.stack,
+        code: error.code,
+      });
+      throw error;
+    }
+
+    let quarantinedPath = null;
+    if (existsSync(SECRETS_PATH)) {
+      try {
+        quarantinedPath = `${SECRETS_PATH}.corrupt-${Date.now()}`;
+        renameSync(SECRETS_PATH, quarantinedPath);
+      } catch (renameErr) {
+        logger.error({
+          source: 'local-secrets',
+          event: 'corrupt_quarantine_failed',
+          message: `[SECRETS] Could not rename corrupt secrets file: ${renameErr.message}`,
+          stack: renameErr.stack,
+        });
+      }
+    }
+
+    logger.error({
+      source: 'local-secrets',
+      event: 'secrets_regenerated',
+      message: `[SECRETS] Corrupt local-secrets.json detected (${error.constructor.name}: ${error.message}) — regenerating fresh secrets. Encrypted account blobs from before this point are unrecoverable.`,
+      secretsPath: SECRETS_PATH,
+      quarantinedPath,
+      state: 'secrets-regenerated',
+    });
+
+    // Second attempt with corrupt file moved aside — should succeed.
+    return resolveSecrets();
+  }
+}
+
+const resolvedSecrets = safeResolveSecrets();
 
 // Mutable reference — allows runtime rotation without restart
 let _proxySecret = resolvedSecrets.proxySecret;

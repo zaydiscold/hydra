@@ -6,7 +6,7 @@
  *   - build/electron/chromium/<platform-specific Playwright Chromium payload>
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { homedir, platform } from 'node:os';
+import { arch as osArch, homedir, platform } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -78,13 +78,41 @@ if (!chromiumSrc) {
 
 rmSync(CHROMIUM_OUT, { recursive: true, force: true });
 mkdirSync(CHROMIUM_OUT, { recursive: true });
-for (const child of ['chrome-mac', 'chrome-mac-arm64', 'chrome-linux', 'chrome-win']) {
-  const source = resolve(chromiumSrc, child);
-  if (existsSync(source)) {
-    cpSync(source, resolve(CHROMIUM_OUT, child), { recursive: true, dereference: true });
+
+// Pick ONLY the Chromium subdir matching the build target's platform+arch.
+// Dev machines often have multiple platform caches from cross-testing — copying
+// all of them balloons the package by hundreds of MB.
+//
+// Override with HYDRA_BUILD_TARGET (e.g. "darwin-arm64", "linux-x64", "win32-x64")
+// when cross-building; defaults to the host platform/arch.
+function resolveChromiumChild() {
+  const target = process.env.HYDRA_BUILD_TARGET || `${platform()}-${osArch()}`;
+  switch (target) {
+    case 'darwin-arm64':
+      return 'chrome-mac-arm64';
+    case 'darwin-x64':
+      return 'chrome-mac';
+    case 'linux-x64':
+    case 'linux-arm64':
+      return 'chrome-linux';
+    case 'win32-x64':
+    case 'win32-ia32':
+    case 'win32-arm64':
+      return 'chrome-win';
+    default:
+      throw new Error(`[prepare-electron-resources] unsupported build target: ${target}`);
   }
 }
-console.log(`[prepare-electron-resources] copied ${basename(chromiumSrc)} to ${CHROMIUM_OUT}`);
+const wantedChild = resolveChromiumChild();
+const wantedSrc = resolve(chromiumSrc, wantedChild);
+if (!existsSync(wantedSrc)) {
+  throw new Error(
+    `[prepare-electron-resources] expected Chromium subdir ${wantedChild} not found at ${wantedSrc}.\n` +
+    `Run \`npx playwright install chromium\` on this platform first, or set HYDRA_BUILD_TARGET to match an installed cache.`
+  );
+}
+cpSync(wantedSrc, resolve(CHROMIUM_OUT, wantedChild), { recursive: true, dereference: true });
+console.log(`[prepare-electron-resources] copied ${basename(chromiumSrc)}/${wantedChild} to ${CHROMIUM_OUT}`);
 
 // ── Chromium validation: verify copied directory contains expected executables ──
 const chromiumBinCandidates = [

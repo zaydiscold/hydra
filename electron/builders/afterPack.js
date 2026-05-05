@@ -82,20 +82,33 @@ export default async function afterPack(context) {
   // Only ship the engine binary for THIS build's platform+arch; the others
   // are ~20 MB each and uselessly inflate the package.
   const wantedEngine = engineNameFor(platform, arch);
+  // Generated bundler-specific JS shims that ship inside .prisma/client/.
+  // We use only the native Node engine — these are dead weight and confuse
+  // bundlers that follow conditional exports.
+  const deadPrismaClientJs = new Set(['browser.js', 'edge.js', 'wasm.js']);
+  let keptCount = 0;
   cpSync(sourcePrismaDir, targetPrismaDir, {
     recursive: true,
     dereference: true,
     filter: (src) => {
       // Drop foreign engine binaries
       if (src.endsWith('.dylib.node') || src.endsWith('.so.node') || src.endsWith('.dll.node')) {
-        return path.basename(src) === wantedEngine;
+        const keep = path.basename(src) === wantedEngine;
+        if (keep) keptCount += 1;
+        return keep;
       }
       // Drop wasm/edge-runtime variants — we only use the native engine
       if (src.endsWith('.wasm') || src.includes('wasm-')) return false;
+      // Drop dead JS shims for non-Node runtimes (browser/edge/wasm)
+      const base = path.basename(src);
+      if (deadPrismaClientJs.has(base)) return false;
+      // Drop generated wasm/edge query_engine_bg.* sidecars (e.g. .js, .wasm-base64.js, .d.ts)
+      if (base.startsWith('query_engine_bg.')) return false;
+      keptCount += 1;
       return true;
     },
   });
-  console.log(`[afterPack] ✅ copied .prisma → ${targetPrismaDir} (${wantedEngine} only)`);
+  console.log(`[afterPack] ✅ copied .prisma → ${targetPrismaDir} (${wantedEngine} only, ${keptCount} files kept)`);
 
   prunePrismaClientRuntime(unpackedNodeModules);
 

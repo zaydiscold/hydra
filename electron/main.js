@@ -15,7 +15,7 @@ import {
 } from './app/env.js';
 import {
   getMainWindow, getSplashWindow, getWindowURL, getForceQuit, getShuttingDown, getGracefulShutdown, getTray,
-  setMainWindow, setSplashWindow, setWindowURL, setForceQuit, setGracefulShutdown, setShuttingDown, setTray,
+  setMainWindow, setSplashWindow, setWindowURL, setExpressPort, setForceQuit, setGracefulShutdown, setShuttingDown, setTray,
   openExternalUrl, showAndFocusMainWindow, trackedChildren,
 } from './app/state.js';
 import { createSplashWindow, createMainWindow } from './app/windows.js';
@@ -83,9 +83,33 @@ app.whenReady().then(async () => {
     const server = await import('../server/index.js');
     setGracefulShutdown(server.gracefulShutdown);
 
-    const PORT = isDev ? 3001 : 0;
-    const s = await server.bootstrap({ port: PORT, silent: !isDev });
+    // Item #76: in dev we prefer port 3001 for stable URLs (Vite proxy targets,
+    // bookmarks, terminal hot-pasted curl commands), but a stale Vite/Hydra
+    // or any other process holding 3001 used to crash the entire app with
+    // EADDRINUSE.  Fall back to an OS-assigned random port instead, log
+    // clearly which port was actually selected, and surface it via state so
+    // the IPC status helper can report the real listen port to renderers.
+    const PREFERRED_DEV_PORT = 3001;
+    const PORT = isDev ? PREFERRED_DEV_PORT : 0;
+    let s;
+    try {
+      s = await server.bootstrap({ port: PORT, silent: !isDev });
+    } catch (bootErr) {
+      if (isDev && bootErr?.code === 'EADDRINUSE') {
+        console.warn(`[electron] Port ${PREFERRED_DEV_PORT} already in use — falling back to random port. ` +
+          'Hint: a stale Vite or Hydra dev server may still be bound. Run `lsof -i :3001` to investigate.');
+        s = await server.bootstrap({ port: 0, silent: !isDev });
+      } else {
+        throw bootErr;
+      }
+    }
     const expressPort = s.address()?.port ?? PORT;
+    setExpressPort(expressPort);
+    if (isDev && expressPort !== PREFERRED_DEV_PORT) {
+      console.log(`[electron] Hydra dev server bound to port ${expressPort} (preferred ${PREFERRED_DEV_PORT} was busy).`);
+    } else {
+      console.log(`[electron] Hydra dev server bound to port ${expressPort}.`);
+    }
 
     const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
     const url = isDev ? VITE_DEV_SERVER_URL : `http://localhost:${expressPort}`;

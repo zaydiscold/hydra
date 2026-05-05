@@ -1,7 +1,7 @@
 appId: com.zayd.hydra
 productName: Hydra
 copyright: Copyright © 2026
-artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 # asar disabled — see electron/builders/afterPack.js comment.
 # Prisma's @prisma/client/default.js does `require('.prisma/client')` which
 # walks up node_modules looking for the dotfile dir. electron-builder filters
@@ -29,8 +29,10 @@ files:
   - server/**/*
   - "!server/tests/**/*"
   - "!server/scripts/**/*"
-  - prisma/schema.prisma
-  - prisma/migrations/**/*
+  # NOTE: prisma/schema.prisma and prisma/migrations/** are intentionally NOT
+  # listed here — they are shipped via `extraResources:` below and resolved at
+  # runtime via `process.resourcesPath` in the packaged app. Listing in both
+  # places duplicates the files inside the bundle.
   - electron/**/*
   - "!electron/tests/**/*"
   - package.json
@@ -45,11 +47,9 @@ files:
   - "!capture-*.png"
   - "!*.db"
 
-# Native binaries that need to live OUTSIDE the asar so dlopen() works.
-asarUnpack:
-  - "**/node_modules/.prisma/**/*"
-  - "**/node_modules/@prisma/**/*"
-  - "prisma/**/*"
+# (asarUnpack removed — `asar: false` above makes it a no-op. Re-add if we
+# ever flip back to `asar: true` so the Prisma native engine + @prisma/client
+# live outside the asar where dlopen() / require() can resolve them.)
 
 directories:
   output: release

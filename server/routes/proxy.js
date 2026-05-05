@@ -221,6 +221,7 @@ class SseUsageObserver extends Transform {
     this._buffer = '';
     this._usage = null;
     this._extractedModel = null;
+    this._sawDone = false;
   }
 
   _transform(chunk, _encoding, callback) {
@@ -253,7 +254,10 @@ class SseUsageObserver extends Transform {
         .filter(Boolean);
 
       for (const dataLine of dataLines) {
-        if (dataLine === '[DONE]') continue;
+        if (dataLine === '[DONE]') {
+          this._sawDone = true;
+          continue;
+        }
         try {
           const parsed = JSON.parse(dataLine);
           if (parsed?.usage) this._usage = parsed.usage;
@@ -269,6 +273,8 @@ class SseUsageObserver extends Transform {
   get usage() { return this._usage; }
   /** The last `model` string extracted from SSE frames (or null). */
   get extractedModel() { return this._extractedModel; }
+  /** True iff a `data: [DONE]` sentinel was observed in the stream. */
+  get sawDone() { return this._sawDone; }
 }
 
 // ─── Main proxy handler ───────────────────────────────────────────────────────
@@ -513,6 +519,25 @@ router.use(async (req, res) => {
           if (err) {
             logger.error(`[PROXY] Stream pipeline failed: ${err.message}`);
           }
+
+          // Item #26: if the upstream stream errors OR closes prematurely
+          // (no final `data: [DONE]` sentinel), inject an OpenAI-compatible
+          // error frame + DONE marker so clients (Cursor, OpenAI SDK, etc.)
+          // see a definite end state instead of hanging on a truncated stream.
+          // Guard with writableEnded so we never write after the response closed.
+          const sawDone = sseObserver?.sawDone === true;
+          if ((err || !sawDone) && res && !res.writableEnded) {
+            try {
+              const reason = err?.message || 'upstream stream closed prematurely';
+              const errorFrame = `data: ${JSON.stringify({ error: { message: reason, code: 'STREAM_INTERRUPTED' } })}\n\n`;
+              res.write(errorFrame);
+              res.write('data: [DONE]\n\n');
+              res.end();
+            } catch (writeErr) {
+              logger.warn(`[PROXY] Failed to write SSE error frame: ${writeErr.message}`);
+            }
+          }
+
           updateRequestLog(requestLog?.id, finalModel, latency, finalUsage);
         });
         return;

@@ -12,6 +12,7 @@ let _splashWindow = null;
 let _tray = null;
 let _gracefulShutdown = null;
 let _windowURL = null;
+let _expressPort = null;
 let _forceQuit = false;
 let _closePromptPending = false;
 let _shuttingDown = false;
@@ -22,6 +23,7 @@ export function getSplashWindow()        { return _splashWindow; }
 export function getTray()                { return _tray; }
 export function getGracefulShutdown()    { return _gracefulShutdown; }
 export function getWindowURL()           { return _windowURL; }
+export function getExpressPort()         { return _expressPort; }
 export function getForceQuit()           { return _forceQuit; }
 export function getClosePromptPending()  { return _closePromptPending; }
 export function getShuttingDown()        { return _shuttingDown; }
@@ -31,6 +33,7 @@ export function setSplashWindow(w)       { _splashWindow = w; }
 export function setTray(t)               { _tray = t; }
 export function setGracefulShutdown(fn)  { _gracefulShutdown = fn; }
 export function setWindowURL(url)        { _windowURL = url; }
+export function setExpressPort(p)        { _expressPort = p; }
 export function setForceQuit(v)          { _forceQuit = v; }
 export function setClosePromptPending(v) { _closePromptPending = v; }
 export function setShuttingDown(v)       { _shuttingDown = v; }

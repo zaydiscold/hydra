@@ -126,10 +126,17 @@ async function run() {
     assertPattern(src, /contextBridge/, 'must use contextBridge');
   });
 
-  check('F: electron-builder.yml has asarUnpack', () => {
+  check('F: electron-builder.yml has asar config for Prisma native engine', () => {
     assertFile('electron-builder.yml', 'builder config');
     const src = readFileSync(resolve(ROOT, 'electron-builder.yml'), 'utf-8');
-    assertPattern(src, /asarUnpack/, 'must configure asarUnpack');
+    // Either `asar: false` (current) OR an active `asarUnpack:` block (future)
+    // is acceptable — both ensure dlopen() can find the Prisma native engine.
+    // A bare `asarUnpack` mention inside a comment does not count.
+    const asarFalse = /^\s*asar:\s*false\b/m.test(src);
+    const asarUnpackActive = /^\s*asarUnpack:\s*$/m.test(src);
+    if (!asarFalse && !asarUnpackActive) {
+      throw new Error('must configure either `asar: false` or an `asarUnpack:` block');
+    }
   });
 
   check('G: package.json has Electron deps + scripts', () => {
