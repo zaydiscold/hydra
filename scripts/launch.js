@@ -132,26 +132,22 @@ function checkEnv() {
 
 async function runMigrations() {
   step('Checking database...');
-  // Try db push first (idempotent, like Electron's syncSchemaWithFallback)
   try {
-    run('npx prisma db push --skip-generate', { silent: true });
-    success('Database ready (db push)');
-    return;
-  } catch (pushErr) {
-    warn(`db push failed: ${pushErr.message?.slice(0, 100)}`);
-    info('Falling back to prisma migrate deploy...');
-  }
-  // Fall back to migrate deploy
-  try {
-    run('npx prisma migrate deploy', { silent: true });
-    success('Database ready (migrate deploy)');
+    const dbUrl = process.env.DATABASE_URL || 'file:' + join(PROJECT_ROOT, 'prisma', 'dev.db');
+    const dbPath = dbUrl.replace(/^file:/, '');
+    const { runSelfHeal } = await import('../server/lib/db-self-heal.js');
+    const migrationsDir = join(PROJECT_ROOT, 'prisma', 'migrations');
+    const summary = await runSelfHeal({ dbPath, migrationsDir, log: (m) => info(m) });
+    success('Database ready (' + summary.applied + ' applied, ' + summary.skipped + ' skipped)');
+    if (summary.errors > 0) {
+      warn('Migration errors:\\n  ' + summary.errorDetails.join('\\n  '));
+    }
   } catch (err) {
-    error('Database migration failed. Resolve migration errors before launching.');
+    error('Database self-heal failed. Resolve migration errors before launching.');
     info(err.message?.slice(0, 200));
     process.exit(1);
   }
 }
-
 async function ensureBuild() {
   step('Checking production build...');
   const distPath = join(PROJECT_ROOT, 'dist');
