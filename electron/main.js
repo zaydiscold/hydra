@@ -44,6 +44,8 @@ const SCHEMA_PATH = path.join(isDev ? APP_ROOT : RESOURCES_PATH, 'prisma', 'sche
 const MIGRATIONS_DIR = path.join(isDev ? APP_ROOT : RESOURCES_PATH, 'prisma', 'migrations');
 const PRISMA_BIN = path.join(APP_ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'prisma.cmd' : 'prisma');
 const ICON_PATH = path.join(__dirname, '..', 'desktop', 'icons', 'icon.png');
+const LOCAL_UI_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const EXTERNAL_URL_ALLOWLIST = new Set(['github.com']);
 
 if (process.platform === 'darwin' && isDev) {
   app.dock?.setIcon(ICON_PATH);
@@ -61,6 +63,35 @@ if (!isDev && !process.env.NODE_ENV) {
   process.env.NODE_ENV = 'production';
 }
 
+async function ensurePackagedRuntimeState() {
+  if (isDev) return;
+
+  const { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } = await import('node:fs');
+  const { randomBytes } = await import('node:crypto');
+  const userData = app.getPath('userData');
+  mkdirSync(userData, { recursive: true });
+
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'hydra-dev-secret-unsafe') {
+    const secretPath = path.join(userData, 'jwt-secret');
+    let secret = null;
+    if (existsSync(secretPath)) {
+      secret = readFileSync(secretPath, 'utf-8').trim();
+    }
+    if (!secret) {
+      secret = randomBytes(32).toString('hex');
+      writeFileSync(secretPath, secret, { mode: 0o600 });
+    }
+    process.env.JWT_SECRET = secret;
+  }
+
+  const dbPath = path.join(userData, 'hydra.db');
+  const emptyDbPath = path.join(RESOURCES_PATH, 'data', 'empty-hydra.db');
+  if (!existsSync(dbPath) && existsSync(emptyDbPath)) {
+    copyFileSync(emptyDbPath, dbPath);
+    console.log(`[electron] initialized database from bundled empty DB: ${dbPath}`);
+  }
+}
+
 // ─── 3. State ───────────────────────────────────────────────────────────────
 let mainWindow = null;
 let splashWindow = null;
@@ -69,7 +100,26 @@ let gracefulShutdown = null;
 let windowURL = null;
 let shuttingDown = false;
 let forceQuit = false;
+let closePromptPending = false;
 const trackedChildren = new Set();  // every spawn'd subprocess we want to tear down
+
+function isAllowedExternalUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'https:' && EXTERNAL_URL_ALLOWLIST.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function openExternalUrl(rawUrl) {
+  if (!isAllowedExternalUrl(rawUrl)) {
+    console.warn(`[electron] blocked external URL: ${rawUrl}`);
+    return false;
+  }
+  await shell.openExternal(rawUrl);
+  return true;
+}
 
 function isHydraAuxiliaryProcess(command) {
   if (!command.includes('prisma studio')) return false;
@@ -131,11 +181,20 @@ function createTray() {
     const menu = Menu.buildFromTemplate([
       { label: 'Show Hydra', click: showAndFocusMainWindow },
       { type: 'separator' },
+      { label: `Status: ${windowURL ? 'proxy running' : 'starting'}`, enabled: false },
+      { label: windowURL ? `Proxy URL: ${windowURL}/v1` : 'Proxy URL: starting', enabled: false },
+      { type: 'separator' },
       { label: 'Open Logs Folder', click: () => shell.openPath(app.getPath('logs')) },
       { label: 'Open Data Folder', click: () => shell.openPath(app.getPath('userData')) },
       { type: 'separator' },
       {
-        label: 'Quit Hydra',
+        label: 'Hide Window',
+        click: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+        },
+      },
+      {
+        label: 'Quit Hydra Completely',
         click: () => {
           forceQuit = true;
           app.quit();
@@ -234,7 +293,16 @@ async function syncSchemaWithFallback() {
     child.on('exit', () => trackedChildren.delete(child));
   });
 
-  // 1. Local prisma binary
+  // Packaged apps do not reliably ship a usable Prisma CLI/.bin shim.
+  // Use the embedded self-heal path first there; reserve CLI sync for dev.
+  if (!isDev) {
+    if (await runSelfHealSync()) {
+      await markSchemaSynced();
+    }
+    return;
+  }
+
+  // 1. Local prisma binary (dev only)
   if (existsSync(PRISMA_BIN)) {
     if (await tryPushAsync('local prisma', PRISMA_BIN, ['db', 'push', '--skip-generate', `--schema=${SCHEMA_PATH}`], APP_ROOT)) {
       await markSchemaSynced();
@@ -253,16 +321,21 @@ async function syncSchemaWithFallback() {
   }
 
   // 3. Self-heal: replay migration SQL idempotently
+  if (await runSelfHealSync()) await markSchemaSynced();
+}
+
+async function runSelfHealSync() {
   console.warn('[electron] falling back to db-self-heal');
   try {
     const { runSelfHeal } = await import('../server/lib/db-self-heal.js');
     const dbPath = path.join(app.getPath('userData'), 'hydra.db');
     const summary = await runSelfHeal({ dbPath, migrationsDir: MIGRATIONS_DIR, log: (m) => console.log(m) });
     console.log(`[electron] db-self-heal: ${summary.applied} applied, ${summary.skipped} already present, ${summary.errors} errors`);
-    if (summary.errors === 0) await markSchemaSynced();
     if (summary.errors > 0) console.error('[electron] db-self-heal errors:\n  ' + summary.errorDetails.join('\n  '));
+    return summary.errors === 0;
   } catch (e) {
     console.error('[electron] db-self-heal failed completely:', e.message);
+    return false;
   }
 }
 
@@ -286,7 +359,13 @@ function createSplashWindow() {
     alwaysOnTop: true,
     resizable: false,
     icon: ICON_PATH,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+    },
   });
 
   const splashLetters = 'HYDRAPROXY01011'.split('');
@@ -344,9 +423,15 @@ function registerIpcHandlers() {
         logs: app.getPath('logs'),
         downloads: app.getPath('downloads'),
         documents: app.getPath('documents'),
+        serverUrl: windowURL,
       });
     } catch (e) { return err(e.message); }
   });
+  ipcMain.handle('native:get-status', async () => ok({
+    serverUrl: windowURL,
+    embedded: process.env.HYDRA_EMBEDDED === '1',
+    packaged: app.isPackaged,
+  }));
   ipcMain.handle('native:open-path', async (_event, targetPath) => {
     if (typeof targetPath !== 'string') return err('targetPath must be a string', 'BAD_ARG');
     if (!isPathAllowed(targetPath)) return err(`path not in allowlist: ${targetPath}`, 'PATH_DENIED');
@@ -385,17 +470,21 @@ function createMainWindow({ show = false } = {}) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       spellcheck: false,
       backgroundThrottling: true,
     },
     show,
   });
 
-  win.on('close', (event) => {
+  win.on('close', async (event) => {
     if (forceQuit || shuttingDown) return;
 
     event.preventDefault();
-    const choice = dialog.showMessageBoxSync(win, {
+    if (closePromptPending) return;
+    closePromptPending = true;
+    const { response } = await dialog.showMessageBox(win, {
       type: 'question',
       buttons: ['Keep Proxy Running', 'Quit Hydra', 'Cancel'],
       defaultId: 0,
@@ -404,13 +493,15 @@ function createMainWindow({ show = false } = {}) {
       message: 'Keep Hydra running in the background?',
       detail: 'The window will close, but the local server and proxy stay online. Choose Quit Hydra to stop the proxy.',
     });
+    closePromptPending = false;
 
-    if (choice === 0) {
+    if (win.isDestroyed()) return;
+    if (response === 0) {
       win.hide();
       return;
     }
 
-    if (choice === 1) {
+    if (response === 1) {
       forceQuit = true;
       app.quit();
     }
@@ -418,6 +509,31 @@ function createMainWindow({ show = false } = {}) {
 
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
+  });
+
+  const isAllowedLocalUrl = (rawUrl) => {
+    try {
+      const parsed = new URL(rawUrl);
+      const expected = windowURL ? new URL(windowURL) : null;
+      return parsed.protocol === 'http:' &&
+        LOCAL_UI_HOSTS.has(parsed.hostname) &&
+        expected &&
+        parsed.origin === expected.origin;
+    } catch {
+      return false;
+    }
+  };
+
+  win.webContents.on('will-navigate', (event, targetUrl) => {
+    if (isAllowedLocalUrl(targetUrl)) return;
+    event.preventDefault();
+    console.warn(`[electron] blocked navigation outside Hydra UI: ${targetUrl}`);
+  });
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedLocalUrl(url)) return { action: 'allow' };
+    void openExternalUrl(url);
+    return { action: 'deny' };
   });
 
   return win;
@@ -430,6 +546,7 @@ app.whenReady().then(async () => {
     createSplashWindow();
 
     await killKnownHydraAuxiliaryProcesses('startup sweep');
+    await ensurePackagedRuntimeState();
 
     // Quick sentinel check (just read a file, no heavy work)
     const needsSync = await shouldSyncSchema();
@@ -443,11 +560,24 @@ app.whenReady().then(async () => {
 
     const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
     windowURL = isDev ? VITE_DEV_SERVER_URL : `http://localhost:${expressPort}`;
+    console.log(`[electron] Hydra UI listening at ${windowURL}`);
 
     registerIpcHandlers();
 
     const { setupAppMenu } = await import('./menus/appMenu.js');
-    setupAppMenu();
+    setupAppMenu({
+      isDev,
+      openExternalUrl,
+      getServerUrl: () => windowURL,
+      showAndFocusMainWindow,
+      hideWindow: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+      },
+      quitCompletely: () => {
+        forceQuit = true;
+        app.quit();
+      },
+    });
 
     // Tray icon — keeps Hydra reachable from the menu bar even when the
     // main window is hidden ("Keep Proxy Running" in the close dialog).

@@ -65,6 +65,7 @@ Hydra also runs as a native desktop app via Electron:
 - **`npm run dev:electron`** — Development mode: runs Vite HMR alongside `electron .`. The Electron window loads `http://localhost:5173` with full HMR support. Best for testing Electron-specific APIs (IPC, native menus, window behavior).
 - **`npx electron .`** — Production/preview mode: runs the Electron app serving the built `dist/` files. Requires `npm run build` first. Use this to verify the exact artifact users will install.
 - **`npm run electron:build`** — Packages the app into platform installers (`.dmg` on macOS, `.exe` on Windows, `.AppImage` on Linux).
+- The default macOS package target in `electron-builder.yml` is Apple Silicon (`arm64`) only. Build `--x64` or `--universal` explicitly if an Intel Mac release is required.
 
 The `npm run dev` (browser) path is preserved and remains the primary workflow for daily frontend/backend iteration. See [**ELECTRON_MIGRATION_STATUS.md**](ELECTRON_MIGRATION_STATUS.md) for full details.
 

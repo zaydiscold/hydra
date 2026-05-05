@@ -46,13 +46,35 @@ if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1
 }
 
 // Standard middleware
-app.use(cors());
 app.use(express.json());
+const embeddedAllowedOrigins = new Set([
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+]);
+app.use(cors(process.env.HYDRA_EMBEDDED === '1'
+  ? {
+      origin(origin, callback) {
+        if (!origin) return callback(null, true);
+        try {
+          const parsed = new URL(origin);
+          if ((parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') && embeddedAllowedOrigins.has(parsed.origin)) {
+            return callback(null, true);
+          }
+        } catch {
+          // Fall through to denial.
+        }
+        return callback(new Error(`CORS denied for origin: ${origin}`));
+      },
+      credentials: true,
+    }
+  : undefined));
 
 // CSP middleware for Electron embedded mode — restrict to self
 if (process.env.HYDRA_EMBEDDED) {
   app.use((_req, res, next) => {
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:*");
+    // Vite's production build still emits inline style/script bootstrap in a few places.
+    // Keep unsafe-inline documented here until the renderer build is migrated to nonce/hash CSP.
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* ws://127.0.0.1:*");
     next();
   });
 }
@@ -70,6 +92,14 @@ app.use('/api/webhooks', webhookRoutes);
 
 // --- System Routes ---
 app.post('/api/shutdown', requireUnlocked, (req, res) => {
+  if (process.env.HYDRA_EMBEDDED === '1' && req.body?.confirm !== 'SHUTDOWN_HYDRA') {
+    return res.status(400).json({
+      success: false,
+      error: 'Shutdown confirmation token required',
+      code: 'SHUTDOWN_CONFIRM_REQUIRED',
+    });
+  }
+  logger.warn('[SHUTDOWN] API shutdown requested');
   res.json({ success: true, message: 'Server shutting down' });
   void gracefulShutdown('api', { exit: !process.env.HYDRA_EMBEDDED });
 });

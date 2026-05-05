@@ -31,7 +31,9 @@
     "preview:static": "npm run build && node server/standalone.js",
     "start:electron": "npm run preview:electron",
     "dev:electron": "concurrently -k \"vite\" \"electron .\"",
-    "electron:build": "npm run build && electron-builder",
+    "electron:prepare": "node scripts/prepare-electron-resources.mjs",
+    "electron:build": "npm run build && npm run electron:prepare && electron-builder",
+    "electron:smoke": "node scripts/smoke-electron-package.mjs",
     "gate": "node scripts/integration-gate.mjs",
     "postinstall": "electron-builder install-app-deps"
   },

@@ -18,7 +18,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,19 +39,129 @@ console.log(`[build-empty-db] Output: ${EMPTY_DB_PATH}`);
 
 // Push the schema to a temporary database file, creating all tables (empty)
 const tempDb = resolve(DATA_DIR, '.hydra-empty-temp.db');
+const tempSql = resolve(DATA_DIR, '.hydra-empty-temp.sql');
+const bootstrapSql = `
+PRAGMA foreign_keys=OFF;
+DROP TABLE IF EXISTS "ManagementKey";
+DROP TABLE IF EXISTS "RequestLog";
+DROP TABLE IF EXISTS "CachedModel";
+DROP TABLE IF EXISTS "Discovery";
+DROP TABLE IF EXISTS "Key";
+DROP TABLE IF EXISTS "Account";
+DROP TABLE IF EXISTS "User";
+
+CREATE TABLE "User" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "username" TEXT NOT NULL,
+  "passwordHash" TEXT NOT NULL,
+  "tokenVersion" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE "Account" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "openRouterId" TEXT,
+  "alias" TEXT NOT NULL,
+  "sessionToken" TEXT NOT NULL,
+  "config" TEXT,
+  "userId" TEXT NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "lastKnownBalance" REAL,
+  "totalCredits" REAL,
+  "lastKnownBalanceAt" DATETIME,
+  CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE "Key" (
+  "hash" TEXT NOT NULL PRIMARY KEY,
+  "key" TEXT,
+  "label" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "isProvisioningKey" BOOLEAN NOT NULL DEFAULT false,
+  "disabled" BOOLEAN NOT NULL DEFAULT false,
+  "isPooled" BOOLEAN NOT NULL DEFAULT false,
+  "limit" REAL,
+  "limitRemaining" REAL,
+  "limitReset" TEXT,
+  "usage" REAL,
+  "usageMonthly" REAL,
+  "accountId" TEXT NOT NULL,
+  CONSTRAINT "Key_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE "Discovery" (
+  "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'singleton',
+  "data" TEXT NOT NULL,
+  "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE "CachedModel" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "ctx" INTEGER,
+  "category" TEXT,
+  "ownedBy" TEXT,
+  "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE "RequestLog" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "keyHash" TEXT,
+  "model" TEXT NOT NULL,
+  "status" INTEGER NOT NULL,
+  "latencyMs" INTEGER NOT NULL,
+  "promptTokens" INTEGER,
+  "completionTokens" INTEGER,
+  "clientHint" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "RequestLog_keyHash_fkey" FOREIGN KEY ("keyHash") REFERENCES "Key" ("hash") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE TABLE "ManagementKey" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "accountId" TEXT NOT NULL,
+  "encryptedKey" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'active',
+  "metadata" TEXT,
+  "lastUsedAt" DATETIME,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL,
+  CONSTRAINT "ManagementKey_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+CREATE INDEX "Account_userId_idx" ON "Account"("userId");
+CREATE INDEX "Account_openRouterId_idx" ON "Account"("openRouterId");
+CREATE INDEX "Key_accountId_idx" ON "Key"("accountId");
+CREATE INDEX "RequestLog_createdAt_idx" ON "RequestLog"("createdAt");
+CREATE INDEX "RequestLog_status_createdAt_idx" ON "RequestLog"("status", "createdAt");
+CREATE INDEX "RequestLog_keyHash_createdAt_idx" ON "RequestLog"("keyHash", "createdAt");
+CREATE INDEX "ManagementKey_accountId_status_idx" ON "ManagementKey"("accountId", "status");
+CREATE INDEX "ManagementKey_createdAt_idx" ON "ManagementKey"("createdAt");
+PRAGMA foreign_keys=ON;
+`;
+
 try {
-  execSync(
-    `npx prisma db push --schema="${SCHEMA_PATH}" --accept-data-loss --force-reset`,
-    {
-      cwd: PROJECT_ROOT,
-      env: {
-        ...process.env,
-        DATABASE_URL: `file:${tempDb}`,
+  try {
+    execSync(
+      `npx prisma db push --schema="${SCHEMA_PATH}" --accept-data-loss --force-reset`,
+      {
+        cwd: PROJECT_ROOT,
+        env: {
+          ...process.env,
+          DATABASE_URL: `file:${tempDb}`,
+        },
+        stdio: 'pipe',
+        timeout: 60_000,
       },
-      stdio: 'pipe',
-      timeout: 60_000,
-    },
-  );
+    );
+  } catch (err) {
+    console.warn(`[build-empty-db] Prisma db push failed; falling back to sqlite3 bootstrap (${err.stderr || err.message})`);
+    writeFileSync(tempSql, bootstrapSql);
+    execSync(`sqlite3 "${tempDb}" < "${tempSql}"`, { cwd: PROJECT_ROOT, stdio: 'pipe', timeout: 30_000 });
+  }
 
   // Copy the freshly-pushed database to the final empty-db path
   copyFileSync(tempDb, EMPTY_DB_PATH);
@@ -63,9 +173,11 @@ try {
 } finally {
   // Clean up the temporary database
   try {
-    if (existsSync(tempDb)) {
-      execSync(`rm -f "${tempDb}" "${tempDb}-journal" "${tempDb}-wal" "${tempDb}-shm"`);
-    }
+    rmSync(tempDb, { force: true });
+    rmSync(`${tempDb}-journal`, { force: true });
+    rmSync(`${tempDb}-wal`, { force: true });
+    rmSync(`${tempDb}-shm`, { force: true });
+    rmSync(tempSql, { force: true });
   } catch {
     // best effort cleanup
   }

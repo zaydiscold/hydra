@@ -104,6 +104,9 @@ function resolveBundledChromium() {
     // macOS: bundled inside Chromium.app
     join(resourcePath, 'chromium', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
     join(resourcePath, 'chromium', 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(resourcePath, 'chromium', 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(resourcePath, 'chromium', 'chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join(resourcePath, 'chromium', 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
     // Linux / Windows: plain executable
     join(resourcePath, 'chromium', 'chrome'),
     join(resourcePath, 'chromium', 'chromium'),

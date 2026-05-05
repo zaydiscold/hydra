@@ -49,6 +49,10 @@ directories:
   buildResources: desktop
 
 extraResources:
+  - from: build/electron/data
+    to: data
+  - from: build/electron/chromium
+    to: chromium
   - from: prisma/schema.prisma
     to: prisma/schema.prisma
   - from: prisma/migrations

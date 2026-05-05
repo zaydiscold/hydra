@@ -93,6 +93,8 @@ Platform-specific assets and build resources for the Electron desktop build.
 - **`vite.config.js`** — Build configuration for the frontend assets.
 - **`electron-builder.yml`** — Electron packaging configuration (dmg, nsis, AppImage).
 - **`electron/main.js`** — Electron entry point (`"main"` in package.json).
+- **`scripts/prepare-electron-resources.mjs`** — Generates packaged Electron resources (`empty-hydra.db` and bundled Playwright Chromium) before `electron-builder`.
+- **`scripts/smoke-electron-package.mjs`** — Validates the unpacked package contract: Prisma engine, migrations/schema, empty DB, Chromium, and app size.
 
 ## 🔁 Runtime Flow
 
