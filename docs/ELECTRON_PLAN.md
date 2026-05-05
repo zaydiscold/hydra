@@ -1,6 +1,8 @@
 # Electron Distribution Plan
 
-**Status:** Not started | **Priority:** P1 (after Docker) | **Estimated effort:** half day
+> **⚠️ SUPERSEDED** — This document has been superseded by [ELECTRON_MASTER_PLAN.md](./ELECTRON_MASTER_PLAN.md) and [ELECTRON_MIGRATION_STATUS.md](./ELECTRON_MIGRATION_STATUS.md). The Electron implementation is complete. This file is kept for historical reference only.
+
+**Status:** ✅ Done | **Priority:** P1 (completed)<br>
 **Progression:** Docker (`DOCKER_PLAN.md`) → GitHub + ghcr.io → Electron (this)
 **Dependency:** Requires Docker's static-file-serving server change first
 

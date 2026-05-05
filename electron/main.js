@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
+app.setName('Hydra');  // Set app name before window creation
 
 // ─── 1. Environment Setup (MUST be before any server import) ───────────────
 process.env.HYDRA_DATA_DIR = app.getPath('userData');
@@ -35,21 +36,17 @@ async function firstLaunchSetup() {
     console.warn('[electron] Legacy data migration skipped:', err.message);
   }
 
-  // Only push schema if NO database exists yet (migration didn't bring one, or fresh install)
-  const { existsSync } = await import('node:fs');
-  const dbPath = path.join(app.getPath('userData'), 'hydra.db');
-  if (!existsSync(dbPath)) {
-    const { execSync } = await import('node:child_process');
-    try {
-      execSync('npx prisma db push --accept-data-loss --skip-generate', {
-        cwd: process.cwd(),
-        stdio: 'pipe',
-        timeout: 15000,
-      });
-      console.log('[electron] Fresh database created');
-    } catch (err) {
-      console.warn('[electron] Prisma db push failed:', err.message);
-    }
+  // Always sync schema (adds new columns, non-destructive)
+  const { execSync } = await import('node:child_process');
+  try {
+    execSync('npx prisma db push --skip-generate', {
+      cwd: process.cwd(),
+      stdio: 'pipe',
+      timeout: 15000,
+    });
+    console.log('[electron] Database schema synced');
+  } catch (err) {
+    console.warn('[electron] Schema sync failed:', err.message);
   }
 }
 

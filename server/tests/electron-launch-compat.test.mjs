@@ -181,14 +181,16 @@ mock.module(new URL('../routes/debug.js',     import.meta.url).href, { defaultEx
 // 3.  Import the server module (mocks are now active)
 // ---------------------------------------------------------------------------
 
-const { app, bootstrap, gracefulShutdown, server } = await import('../index.js');
+const mod = await import('../index.js');
+const { app, bootstrap, gracefulShutdown } = mod;
 
 // ---------------------------------------------------------------------------
 // 4.  Lifecycle helpers
 // ---------------------------------------------------------------------------
 
 function getPort() {
-  const addr = server?.address();
+  const srv = mod.server;
+  const addr = srv?.address();
   if (!addr) return null;
   if (typeof addr === 'string') return addr;    // unix socket
   return addr.port;

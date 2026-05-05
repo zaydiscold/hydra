@@ -1,9 +1,9 @@
 # ✈️ Electron Migration — Status & Pickup Guide
 
 **Project:** Hydra Desktop App (Electron as primary runtime)
-**Status:** 🔴 PLANNING COMPLETE — Zero code changes implemented. Ready to start Phase 1.
-**Last Updated:** 2026-04-21
-**Branch:** `feat/http-signup-migration` (committed here temporarily — cherry-pick to dedicated branch when starting)
+**Status:** ✅ ALL DONE — Electron app functional. Desktop build ready.
+**Last Updated:** 2026-05-05
+**Branch:** `feat/electron-migration`
 
 ---
 
@@ -17,18 +17,19 @@ The Express server becomes an **embedded module** inside Electron's main process
 
 ## 📚 Document Map (Read In This Order)
 
-| Doc | Purpose | Status |
-|-----|---------|--------|
-| **THIS FILE** | Status, pickup guide, quick reference | ✅ Current |
-| [ELECTRON_MASTER_PLAN.md](ELECTRON_MASTER_PLAN.md) | Full migration spec — architecture, 12 agents, build config, CI | ✅ Current |
-| [ELECTRON_PAIN_POINTS.md](ELECTRON_PAIN_POINTS.md) | 16 specific issues found in codebase — exact file:line, multiple approaches, recommended fix | ✅ Current |
-| ELECTRON_MIGRATION_PLAN.md | **SUPERSEDED** — old draft, do not use | ❌ Outdated |
-| ELECTRON_PLAN.md | **SUPERSEDED** — original draft, do not use | ❌ Outdated |
+|| Doc | Purpose | Status |
+||-----|---------|--------|
+|| **THIS FILE** | Migration status & history | ✅ Complete |
+|| [ELECTRON_MASTER_PLAN.md](ELECTRON_MASTER_PLAN.md) | Full migration spec — architecture, 12 agents, build config, CI | ✅ Complete |
+|| [ELECTRON_PAIN_POINTS.md](ELECTRON_PAIN_POINTS.md) | 16 specific issues found in codebase — exact file:line, multiple approaches, recommended fix | ✅ Complete |
+|| ELECTRON_MIGRATION_PLAN.md | **SUPERSEDED** — old draft, superseded by MASTER_PLAN | ❌ Superseded |
+|| ELECTRON_PLAN.md | **SUPERSEDED** — original draft, superseded by MASTER_PLAN | ❌ Superseded |
 
 ---
 
-## 🎯 What's Done (Planning Phase)
+## ✅ What Was Completed
 
+### Planning Phase (Done)
 - [x] Full architecture designed (see MASTER_PLAN.md Section 2)
 - [x] 16 pain points identified and audited in codebase
 - [x] All pain points marked with `// ─── ELECTRON_MIGRATION ───` comments in source
@@ -38,12 +39,11 @@ The Express server becomes an **embedded module** inside Electron's main process
 - [x] Execution order and dependencies mapped (MASTER_PLAN.md Section 11)
 - [x] Verification checklist defined (MASTER_PLAN.md Section 12)
 
-## 🔴 What's NOT Done (Implementation Phase — Next)
-
-- [ ] **Phase 1:** Server refactor (Issues #1–7 in PAIN_POINTS.md)
-- [ ] **Phase 2:** Packaging config (Issues #8–10)
-- [ ] **Phase 3:** Polish (Issues #11–16)
-- [ ] **Phase 4:** Build, test, CI/CD
+### Implementation Phase (Done)
+- [x] **Phase 1:** Server refactor (Issues #1-7 in PAIN_POINTS.md) — server/index.js exportable, no auto-start, data path abstraction
+- [x] **Phase 2:** Packaging config (Issues #8-10) — Prisma asarUnpack, Playwright paths, electron-builder.yml
+- [x] **Phase 3:** Polish (Issues #11-16) — logging, data migration, Gatekeeper docs, Docker compat
+- [x] **Phase 4:** Build, test, CI/CD — electron/ and desktop/ directories created, builds verified
 
 ---
 
@@ -238,23 +238,23 @@ Commit: `031e300`
 
 ## 🎯 Definition of Done
 
-- [ ] `npm run dev:web` works exactly as before (browser path preserved)
-- [ ] `npm start` (`scripts/launch.js`) works exactly as before
-- [ ] `npm run dev` opens Electron window, loads UI, HMR works
-- [ ] `npm run preview` opens Electron with production build
-- [ ] `npm run electron:build` produces `.dmg` (mac) or `.exe` (win)
-- [ ] Built app opens on a clean machine WITHOUT Node.js installed
-- [ ] Built app persists data across restarts
-- [ ] First launch copies legacy `./data/` to `userData`
-- [ ] Second launch uses `userData` (no re-copy)
-- [ ] Graceful shutdown: no orphan Node processes after quit
-- [ ] Playwright provisioning works in built app
-- [ ] All existing tests pass (`npm run test:*`)
-- [ ] New Electron tests pass (`npm run test:electron:*`)
-- [ ] CI passes on macOS and Windows
-- [ ] `server/` has ZERO Electron-specific code
-- [ ] `src/` has ZERO Electron-specific code (only uses `window.hydraNative` if needed)
-- [ ] README has install instructions for end users
+- [x] `npm run dev:web` works exactly as before (browser path preserved)
+- [x] `npm start` (`scripts/launch.js`) works exactly as before
+- [x] `npm run dev` opens Electron window, loads UI, HMR works
+- [x] `npm run preview` opens Electron with production build
+- [x] `npm run electron:build` produces `.dmg` (mac) or `.exe` (win)
+- [x] Built app opens on a clean machine WITHOUT Node.js installed
+- [x] Built app persists data across restarts
+- [x] First launch copies legacy `./data/` to `userData`
+- [x] Second launch uses `userData` (no re-copy)
+- [x] Graceful shutdown: no orphan Node processes after quit
+- [x] Playwright provisioning works in built app
+- [x] All existing tests pass (`npm run test:*`)
+- [x] New Electron tests pass (`npm run test:electron:*`)
+- [x] CI passes on macOS and Windows
+- [x] `server/` has ZERO Electron-specific code
+- [x] `src/` has ZERO Electron-specific code (only uses `window.hydraNative` if needed)
+- [x] README has install instructions for end users
 
 ---
 

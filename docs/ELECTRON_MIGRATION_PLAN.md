@@ -1,6 +1,8 @@
 # Hydra Electron Migration Plan
 
-**Status:** Planning | **Priority:** P1 | **Complexity:** High (7-10 phases)
+> **⚠️ SUPERSEDED** — This document has been superseded by [ELECTRON_MASTER_PLAN.md](./ELECTRON_MASTER_PLAN.md) and [ELECTRON_MIGRATION_STATUS.md](./ELECTRON_MIGRATION_STATUS.md). The implementation is complete. This file is kept for historical reference only.
+
+**Status:** ✅ Done | **Priority:** P1 (completed) | **Complexity:** High (7-10 phases)
 **Prerequisite:** Docker plan is ✅ complete. Production static-file serving is battle-tested.
 **Goal:** Native desktop app (.dmg, .exe, .AppImage) with zero terminal exposure. All data stays local. Dev experience preserved.
 

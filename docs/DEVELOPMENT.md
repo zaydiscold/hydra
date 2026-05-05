@@ -58,6 +58,16 @@ A normal browser tab **cannot** launch `node server/index.js` on your machine (s
 
 Deeper comparison of options (Electron, Docker, etc.) lives in [**HYDRA_LAUNCH_RESEARCH.md**](HYDRA_LAUNCH_RESEARCH.md).
 
+### Electron Desktop Mode
+
+Hydra also runs as a native desktop app via Electron:
+
+- **`npm run dev:electron`** — Development mode: runs Vite HMR alongside `electron .`. The Electron window loads `http://localhost:5173` with full HMR support. Best for testing Electron-specific APIs (IPC, native menus, window behavior).
+- **`npx electron .`** — Production/preview mode: runs the Electron app serving the built `dist/` files. Requires `npm run build` first. Use this to verify the exact artifact users will install.
+- **`npm run electron:build`** — Packages the app into platform installers (`.dmg` on macOS, `.exe` on Windows, `.AppImage` on Linux).
+
+The `npm run dev` (browser) path is preserved and remains the primary workflow for daily frontend/backend iteration. See [**ELECTRON_MIGRATION_STATUS.md**](ELECTRON_MIGRATION_STATUS.md) for full details.
+
 **Related docs:** How the SPA handles a down backend (no new routes) — [**ARCHITECTURE_DEEP_DIVE.md**](ARCHITECTURE_DEEP_DIVE.md) (*Development: backend-down UX*); `src/api.js` error shape — [**API_REFERENCE.md**](API_REFERENCE.md) (*Frontend API client*); Express route list unchanged — [**SERVER_ARCHITECTURE.md**](SERVER_ARCHITECTURE.md) (*Development vs production*).
 
 ### Restart Guidance
