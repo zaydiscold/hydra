@@ -151,7 +151,7 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
   });
 }
 
-async function bootstrap() {
+async function bootstrap({ port, silent } = {}) {
   try {
     validateConfig();
     await enforceLegacyStorageReset();
@@ -170,25 +170,32 @@ async function bootstrap() {
     logger.warn(`[POOL] Eager load failed (no accounts yet?): ${err.message}`);
   });
 
-  server = app.listen(config.PORT, '0.0.0.0', () => {
-    logger.info(`  🐉 Hydra Server live on port ${config.PORT}`);
-    logger.info(`  Environment: ${config.NODE_ENV}`);
-    logger.info(`  Network: http://0.0.0.0:${config.PORT}`);
-    try {
-      const hydraKey    = getMasterProxyKey();
-      const genericKey  = getGenericProxyKey();
-      const base        = `http://localhost:${config.PORT}/v1`;
-      logger.info('');
-      logger.info('  ┌─ Proxy Keys ───────────────────────────────────────────────────────────────────────────────────────┐');
-      logger.info(`  │  Hydra branded   : ${hydraKey}`);
-      logger.info(`  │  OpenAI-compat   : ${genericKey}`);
-      logger.info(`  │  Base URL        : ${base}`);
-      logger.info('  │  Use either key as "Authorization: Bearer *** in Cursor / any client.  │');
-      logger.info('  └──────────────────────────────────────────────────────────────────────────────────────┘');
-      logger.info('');
-    } catch (keyErr) {
-      logger.warn(`  [PROXY] Could not derive proxy keys (vault not yet initialised?): ${keyErr.message}`);
-    }
+  const listenPort = port ?? config.PORT;
+
+  server = await new Promise((resolve, reject) => {
+    const s = app.listen(listenPort, '0.0.0.0', () => {
+      if (!silent) {
+        logger.info(`  Hydra Server live on port ${listenPort}`);
+        logger.info(`  Environment: ${config.NODE_ENV}`);
+        logger.info(`  Network: http://0.0.0.0:${listenPort}`);
+        try {
+          const hydraKey    = getMasterProxyKey();
+          const genericKey  = getGenericProxyKey();
+          const base        = `http://localhost:${listenPort}/v1`;
+          logger.info('');
+          logger.info('  Proxy Keys:');
+          logger.info(`  Hydra branded   : ${hydraKey}`);
+          logger.info(`  OpenAI-compat   : ${genericKey}`);
+          logger.info(`  Base URL        : ${base}`);
+          logger.info('  Use either key as Authorization: Bearer *** in Cursor / any client.');
+          logger.info('');
+        } catch (keyErr) {
+          logger.warn(`  [PROXY] Could not derive proxy keys (vault not yet initialised?): ${keyErr.message}`);
+        }
+      }
+      resolve(s);
+    });
+    s.on('error', reject);
   });
 
   return server;
