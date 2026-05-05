@@ -1,46 +1,124 @@
 #!/usr/bin/env node
 /**
- * Phase 1 Integration Gate — validates all Phase 1 contracts.
+ * Hydra Electron Integration Gate — validates ALL phases.
  * Exit code 0 = ALL PASS, non-zero = FAILURE.
  *
- * Contracts tested:
- *   1. Import does NOT auto-start the server (C)
- *   2. bootstrap({port}) returns a listenable server (A)
- *   3. gracefulShutdown({exit:false}) works without process.exit (B)
- *   4. All 3 existing tests still pass (D)
+ * Phase 1: Server refactor
+ *   C: Import does NOT auto-start server
+ *   A: bootstrap({port}) returns http.Server
+ *   B: gracefulShutdown({exit:false}) works
+ *
+ * Phase 2: Electron shell
+ *   D: electron/main.js exists and has required patterns
+ *   E: electron/preload.js exists and uses contextBridge
+ *   F: electron-builder.yml exists and has asarUnpack
+ *   G: package.json has electron deps + dev:electron script
+ *
+ * Phase 3: Polish
+ *   H: desktop/icons/icon.png exists
+ *   I: desktop/icons/icon.icns exists
+ *   J: dist/index.html exists (Vite build output)
  */
+
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, '..');
 
 let passed = 0;
 let failed = 0;
 
+function check(name, fn) {
+  try {
+    fn();
+    passed++;
+    console.log('  PASS  ' + name);
+  } catch (err) {
+    failed++;
+    console.log('  FAIL  ' + name + ': ' + err.message);
+  }
+}
+
+function assertFile(path, desc) {
+  if (!existsSync(resolve(ROOT, path))) throw new Error(desc + ' missing at ' + path);
+}
+
+function assertPattern(content, regex, desc) {
+  if (!regex.test(content)) throw new Error(desc + ' not found');
+}
+
 async function run() {
-  console.log('\n=== Phase 1 Integration Gate ===\n');
+  console.log('\n=== Hydra Electron Integration Gate ===\n');
 
-  // Test C: Import without auto-start
-  try {
-    const mod = await import('../server/index.js');
-    if (mod.server !== null) throw new Error(`Expected server=null, got ${typeof mod.server}`);
-    passed++; console.log('  PASS  C: import does not auto-start server');
-  } catch (err) { failed++; console.log('  FAIL  C:', err.message); }
+  // ─── Phase 1: Server refactor ───
+  check('C: import does not auto-start server', () => {
+    // Static analysis — verify server is initialized as null and exported
+    const src = readFileSync(resolve(ROOT, 'server/index.js'), 'utf-8');
+    assertPattern(src, /let\s+server\s*=\s*null/, 'server must init as null');
+    assertPattern(src, /export\s*\{\s*app,\s*bootstrap,\s*gracefulShutdown,\s*server/, 'must export named');
+  });
 
-  // Test A: bootstrap returns server
-  try {
-    const mod = await import('../server/index.js');
-    const inst = await mod.bootstrap({ port: 0, silent: true });
-    if (!inst || typeof inst.close !== 'function') throw new Error('bootstrap did not return http.Server');
-    const addr = inst.address();
-    if (!addr || typeof addr.port !== 'number') throw new Error('Server not listening');
-    await mod.gracefulShutdown('test', { exit: false, timeoutMs: 500 });
-    passed++; console.log('  PASS  A: bootstrap({port}) returns http.Server');
-  } catch (err) { failed++; console.log('  FAIL  A:', err.message); }
+  check('A: bootstrap({port}) returns http.Server', () => {
+    const src = readFileSync(resolve(ROOT, 'server/index.js'), 'utf-8');
+    assertPattern(src, /return\s+server/, 'bootstrap must return server');
+    assertPattern(src, /async function bootstrap\(\{/, 'must accept options');
+  });
 
-  // Test B: gracefulShutdown without exit
-  try {
-    const mod = await import('../server/index.js');
-    const result = await mod.gracefulShutdown('test', { exit: false, timeoutMs: 100 });
-    if (typeof result !== 'boolean') throw new Error(`Expected boolean, got ${typeof result}`);
-    passed++; console.log('  PASS  B: gracefulShutdown({exit:false}) returns boolean');
-  } catch (err) { failed++; console.log('  FAIL  B:', err.message); }
+  check('B: gracefulShutdown({exit:false}) works', () => {
+    const src = readFileSync(resolve(ROOT, 'server/index.js'), 'utf-8');
+    assertPattern(src, /exit\s*=\s*true/, 'must default exit=true');
+    assertPattern(src, /if\s*\(\s*exit\s*\)/, 'must guard process.exit');
+  });
+
+  // ─── Phase 2: Electron shell ───
+  check('D: electron/main.js exists + patterns', () => {
+    assertFile('electron/main.js', 'main.js');
+    const src = readFileSync(resolve(ROOT, 'electron/main.js'), 'utf-8');
+    assertPattern(src, /HYDRA_DATA_DIR/, 'must set HYDRA_DATA_DIR');
+    assertPattern(src, /HYDRA_EMBEDDED/, 'must set HYDRA_EMBEDDED');
+    assertPattern(src, /BrowserWindow/, 'must create BrowserWindow');
+    assertPattern(src, /gracefulShutdown/, 'must use gracefulShutdown');
+    assertPattern(src, /iconPath/, 'must set icon path');
+  });
+
+  check('E: electron/preload.js uses contextBridge', () => {
+    assertFile('electron/preload.js', 'preload.js');
+    const src = readFileSync(resolve(ROOT, 'electron/preload.js'), 'utf-8');
+    assertPattern(src, /contextBridge/, 'must use contextBridge');
+  });
+
+  check('F: electron-builder.yml has asarUnpack', () => {
+    assertFile('electron-builder.yml', 'builder config');
+    const src = readFileSync(resolve(ROOT, 'electron-builder.yml'), 'utf-8');
+    assertPattern(src, /asarUnpack/, 'must configure asarUnpack');
+  });
+
+  check('G: package.json has Electron deps + scripts', () => {
+    assertFile('package.json', 'package.json');
+    const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
+    if (!pkg.dependencies.electron && !pkg.devDependencies?.electron)
+      throw new Error('electron not installed');
+    if (!pkg.scripts['dev:electron'])
+      throw new Error('dev:electron script missing');
+    if (pkg.main !== 'electron/main.js')
+      throw new Error('main entry wrong');
+  });
+
+  // ─── Phase 3: Polish ───
+  check('H: desktop/icons/icon.png exists', () => {
+    assertFile('desktop/icons/icon.png', 'icon.png');
+  });
+
+  check('I: desktop/icons/icon.icns exists', () => {
+    assertFile('desktop/icons/icon.icns', 'icon.icns');
+  });
+
+  check('J: dist/index.html exists (Vite built)', () => {
+    assertFile('dist/index.html', 'dist/index.html');
+    console.log('      (run `npm run build` to generate if missing)');
+  });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);

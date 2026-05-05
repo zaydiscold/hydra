@@ -17,6 +17,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
 app.setName('Hydra');  // Set app name before window creation
 
+// Icon path (used for dock, window, and about panel)
+const iconPath = path.join(__dirname, '..', 'desktop', 'icons', 'icon.png');
+
+// Set macOS dock icon in dev mode (packaged builds use electron-builder config)
+if (process.platform === 'darwin' && isDev) {
+  app.dock?.setIcon(iconPath);
+}
+
 // ─── 1. Environment Setup (MUST be before any server import) ───────────────
 process.env.HYDRA_DATA_DIR = app.getPath('userData');
 process.env.DATABASE_URL = 'file:' + path.join(app.getPath('userData'), 'hydra.db');
@@ -99,6 +107,7 @@ app.whenReady().then(async () => {
       minWidth: 1024,
       minHeight: 640,
       title: 'Hydra',
+      icon: iconPath,
       webPreferences: {
         preload: preloadPath,
         contextIsolation: true,
@@ -127,6 +136,7 @@ app.on('activate', () => {
   if (mainWindow === null && windowURL) {
     mainWindow = new BrowserWindow({
       width: 1440, height: 900,
+      icon: iconPath,
       webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
     mainWindow.on('closed', () => { mainWindow = null; });
