@@ -89,11 +89,23 @@ export default function Settings({ addToast }) {
   async function copyUrl() {
     try {
       await navigator.clipboard.writeText(primaryUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch {
-      addToast('Failed to copy to clipboard', 'error');
+      // Fallback for non-secure contexts (e.g., HTTP in Electron)
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = primaryUrl;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        addToast('Failed to copy to clipboard', 'error');
+      }
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
