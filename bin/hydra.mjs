@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Hydra CLI — global `hydra` after `npm link` in this repo.
- *   hydra              → production-style launch (launch.js)
+ *   hydra              → show help + usage
+ *   hydra start        → production-style launch (launch.js)
  *   hydra dev          → Vite + Express (npm run dev)
  *   hydra doctor       → print system info
  *   hydra logs         → print last 50 lines of log file
@@ -10,7 +11,7 @@
  *   hydra help         → usage
  */
 import { spawn, execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir, platform, arch, hostname, totalmem, cpus } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -50,6 +51,38 @@ function getLogPath() {
   return join(getDataDir(), 'hydra.log');
 }
 
+/**
+ * Recursively compute the total size of a directory (in bytes).
+ * Uses iterative DFS to avoid stack overflow on deep trees.
+ */
+function dirSizeSync(dir) {
+  let total = 0;
+  const stack = [dir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync(current);
+    } catch {
+      continue; // skip inaccessible directories
+    }
+    for (const name of entries) {
+      const full = join(current, name);
+      try {
+        const st = statSync(full);
+        if (st.isDirectory()) {
+          stack.push(full);
+        } else {
+          total += st.size;
+        }
+      } catch {
+        // skip inaccessible files
+      }
+    }
+  }
+  return total;
+}
+
 function getPkgVersion() {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
   return pkg.version || 'unknown';
@@ -66,7 +99,7 @@ if (sub === 'help' || sub === '-h' || sub === '--help') {
     hydra balance [id]        Total live balance, or balance for one account
 
   Process
-    hydra                     Start production-style server (launch.js)
+    hydra start               Start production-style server (launch.js)
     hydra dev                 Start Vite + Express for development
     hydra logs                Print last 50 lines of the log file
 
@@ -80,8 +113,10 @@ if (sub === 'help' || sub === '-h' || sub === '--help') {
     --json                    Machine-readable JSON output
 
 Install once from the repo root:
-  npm link
-Then run \`hydra\` from any directory (links to this clone).`);
+  npm link       (or: npm run link)
+
+This links \`hydra\` globally to this clone so it works from any directory.
+Run it again to update if you switch branches or pull updates.`);
   process.exit(0);
 }
 
@@ -104,21 +139,59 @@ if (managerCommands.has(sub)) {
   }
 }
 
-if (sub === 'dev') {
+if (sub === 'start') {
+  runNodeLaunch();
+} else if (sub === 'dev') {
   runNpmDev();
 } else if (sub === 'doctor') {
   const dataDir = getDataDir();
-  let diskInfo = 'N/A';
+  let dataDirSize = 'N/A';
+  let diskFree = 'N/A';
   try {
     if (existsSync(dataDir)) {
-      const st = statSync(dataDir);
-      diskInfo = `${(st.size / 1024 / 1024).toFixed(2)} MB (dir size)`;
+      const sizeBytes = dirSizeSync(dataDir);
+      dataDirSize = `${(sizeBytes / 1024 / 1024).toFixed(2)} MB (recursive content size)`;
     } else {
-      diskInfo = 'data dir does not exist yet';
+      dataDirSize = 'data dir does not exist yet';
     }
   } catch (e) {
-    diskInfo = `error: ${e.message}`;
+    dataDirSize = `error: ${e.message}`;
   }
+
+  // Get free disk space on the volume containing dataDir.
+  try {
+    const { execSync } = await import('node:child_process');
+    if (process.platform === 'win32') {
+      // Windows: use wmic to get free space
+      const drive = dataDir.charAt(0).toUpperCase() + ':';
+      const out = execSync(`wmic LogicalDisk where "DeviceID='${drive}'" get FreeSpace /value`, {
+        timeout: 5000,
+        encoding: 'utf-8',
+        windowsHide: true,
+      });
+      const match = out.match(/FreeSpace=(\d+)/);
+      if (match) {
+        diskFree = `${(Number(match[1]) / 1024 / 1024 / 1024).toFixed(2)} GB free`;
+      }
+    } else {
+      // macOS/Linux: use df
+      const out = execSync(`df -k "${dataDir}"`, { timeout: 5000, encoding: 'utf-8' });
+      const lines = out.trim().split('\n');
+      if (lines.length >= 2) {
+        const cols = lines[1].split(/\s+/);
+        // df -k output: Filesystem 1K-blocks Used Available Use% Mounted on
+        if (cols.length >= 4) {
+          const availKb = Number(cols[3]);
+          if (!isNaN(availKb)) {
+            diskFree = `${(availKb / 1024 / 1024).toFixed(2)} GB free`;
+          }
+        }
+      }
+    }
+  } catch {
+    diskFree = 'unavailable (permissions or platform limitation)';
+  }
+
   console.log(`Hydra System Info
 ─────────────────
 Node.js:        ${process.version}
@@ -127,7 +200,8 @@ Hostname:       ${hostname()}
 CPUs:           ${cpus().length} cores
 Total Memory:   ${(totalmem() / 1024 / 1024 / 1024).toFixed(1)} GB
 Data Directory: ${dataDir}
-Disk Info:      ${diskInfo}
+Data Dir Size:  ${dataDirSize}
+Disk Free:      ${diskFree}
 Root:           ${root}`);
   process.exit(0);
 } else if (sub === 'logs') {
@@ -155,5 +229,7 @@ Root:           ${root}`);
   console.error(`Unknown command: ${sub}\nRun hydra help for usage.`);
   process.exit(1);
 } else {
-  runNodeLaunch();
+  // Default: show help (use `hydra start` for production server)
+  console.log(`Hydra CLI\n\n  Usage: hydra <command>\n\n  Run 'hydra help' for full usage, or 'hydra start' to launch the server.`);
+  process.exit(0);
 }
