@@ -14,6 +14,7 @@ dist-ssr
 *.local
 
 # Electron build output (electron-builder)
+build/
 release/
 # Click-to-launch symlink to release/mac-arm64/Hydra.app
 /Hydra.app

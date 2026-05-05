@@ -170,7 +170,15 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
   }
 
   return new Promise((resolve) => {
+    const forceExitTimer = setTimeout(() => {
+      logger.warn('[SHUTDOWN] Forced exit after timeout');
+      if (exit) process.exit(1);
+      resolve(false);
+    }, timeoutMs);
+    forceExitTimer.unref?.();
+
     server.close((err) => {
+      clearTimeout(forceExitTimer);
       if (err) {
         logger.error(`[SHUTDOWN] HTTP server close failed: ${err.message}`);
         if (exit) process.exit(1);
@@ -181,12 +189,6 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
       if (exit) process.exit(0);
       resolve(true);
     });
-
-    setTimeout(() => {
-      logger.warn('[SHUTDOWN] Forced exit after timeout');
-      if (exit) process.exit(1);
-      resolve(false);
-    }, timeoutMs);
   });
 }
 
