@@ -1,6 +1,7 @@
 appId: com.zayd.hydra
 productName: Hydra
 copyright: Copyright © 2026
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 # asar disabled — see electron/builders/afterPack.js comment.
 # Prisma's @prisma/client/default.js does `require('.prisma/client')` which
 # walks up node_modules looking for the dotfile dir. electron-builder filters
@@ -37,6 +38,12 @@ files:
   # excludes it. Match with the `**/` prefix that bypasses that filter.
   - "**/node_modules/.prisma/**/*"
   - "**/node_modules/@prisma/**/*"
+  - "!scratch/**"
+  - "!.scratch/**"
+  - "!.claude/**"
+  - "!capture-*.json"
+  - "!capture-*.png"
+  - "!*.db"
 
 # Native binaries that need to live OUTSIDE the asar so dlopen() works.
 asarUnpack:
@@ -78,6 +85,7 @@ win:
         - x64
   icon: desktop/icons/icon.ico
   publisherName: Hydra
+  legalTrademarks: Hydra
 
 linux:
   target:
@@ -86,9 +94,16 @@ linux:
         - x64
   icon: desktop/icons/icon.png
   category: Utility
+  synopsis: OpenRouter Fleet Manager
+  description: Manage multiple OpenRouter accounts from a single dashboard.
+  desktop:
+    Name: Hydra
+    Comment: OpenRouter Fleet Manager
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
+  installerIcon: desktop/icons/icon.ico
+  uninstallerIcon: desktop/icons/icon.ico
