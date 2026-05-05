@@ -5,6 +5,7 @@
  * graceful server shutdown, and force exit.
  */
 import { killKnownHydraAuxiliaryProcesses } from '../utils/cleanupAuxProcesses.js';
+import { getTray, setTray } from './state.js';
 
 /**
  * Kill all tracked child processes (e.g. prisma db push spawns).
@@ -36,6 +37,19 @@ export async function shutdownEverything({ reason, trackedChildren, gracefulShut
   console.log(`[electron] shutdown initiated: ${reason}`);
   killTrackedChildren(trackedChildren);
   await killKnownHydraAuxiliaryProcesses(reason);
+
+  // Explicitly destroy the tray so the menu-bar slot releases immediately.
+  // Without this, macOS sometimes keeps a "ghost" tray icon for a few seconds
+  // after the app exits while Chromium tears down the GPU/helper processes.
+  try {
+    const tray = getTray();
+    if (tray && !tray.isDestroyed()) {
+      tray.destroy();
+      setTray(null);
+    }
+  } catch (e) {
+    console.warn('[electron] tray destroy failed:', e.message);
+  }
   try {
     if (gracefulShutdown) await gracefulShutdown(reason, { exit: false, timeoutMs: 3000 });
   } catch (e) {

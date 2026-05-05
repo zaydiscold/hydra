@@ -89,7 +89,12 @@ RUN mkdir -p /app/data
 EXPOSE 3001
 VOLUME ["/app/data"]
 
-ENTRYPOINT ["node", "--"]
-
-# Entrypoint runs Prisma schema sync then starts Node
-CMD ["docker-entrypoint.sh"]
+# CRITICAL: ENTRYPOINT must be the entrypoint script (which runs Prisma schema
+# sync then `exec node server/standalone.js`). Earlier shape was
+#   ENTRYPOINT ["node", "--"]
+#   CMD ["docker-entrypoint.sh"]
+# which concatenates to `node -- docker-entrypoint.sh` — Node tries to parse
+# a bash script as JS and the container exits with a SyntaxError on first run.
+# `init: true` in docker-compose.yml provides PID 1 / SIGTERM forwarding, so
+# we don't need a Node-as-init shim here.
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
