@@ -60,15 +60,42 @@ export async function markSchemaSynced() {
 
 async function runSelfHealSync() {
   console.warn('[electron] falling back to db-self-heal');
+  const lockPath = path.join(app.getPath('userData'), 'hydra.db.migration.lock');
+  let lockFd = null;
   try {
+    const { closeSync, copyFileSync, existsSync, openSync, unlinkSync } = await import('node:fs');
+    try {
+      lockFd = openSync(lockPath, 'wx');
+    } catch (e) {
+      if (e.code === 'EEXIST') {
+        console.warn(`[electron] migration lock already exists at ${lockPath}; skipping db-self-heal`);
+        return false;
+      }
+      throw e;
+    }
     const { runSelfHeal } = await import('../../server/lib/db-self-heal.js');
     const dbPath = path.join(app.getPath('userData'), 'hydra.db');
+    if (existsSync(dbPath)) {
+      const backupPath = `${dbPath}.backup-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+      copyFileSync(dbPath, backupPath);
+      console.log(`[electron] backed up database before self-heal: ${backupPath}`);
+    }
     const summary = await runSelfHeal({ dbPath, migrationsDir: MIGRATIONS_DIR, log: (m) => console.log(m) });
     console.log(`[electron] db-self-heal: ${summary.applied} applied, ${summary.skipped} already present, ${summary.errors} errors`);
     if (summary.errors > 0) console.error('[electron] db-self-heal errors:\n  ' + summary.errorDetails.join('\n  '));
+    closeSync(lockFd);
+    lockFd = null;
+    unlinkSync(lockPath);
     return summary.errors === 0;
   } catch (e) {
     console.error('[electron] db-self-heal failed completely:', e.message);
+    try {
+      const { closeSync, unlinkSync } = await import('node:fs');
+      if (lockFd !== null) closeSync(lockFd);
+      unlinkSync(lockPath);
+    } catch {
+      // Best-effort lock cleanup.
+    }
     return false;
   }
 }
