@@ -272,8 +272,11 @@ app.on('activate', () => {
 
 // ─── Shutdown ──────────────────────────────────────────────────────────────
 app.on('before-quit', (event) => {
-  if (shuttingDownRef.value) return;
+  // #4: Always prevent default quit so Electron doesn't force-kill us mid-shutdown.
+  // The guard check comes AFTER preventDefault — otherwise a second quit signal
+  // skips preventDefault, instantly terminates the process, and leaks resources.
   event.preventDefault();
+  if (shuttingDownRef.value) return;
   shutdownEverything({
     reason: 'before-quit',
     trackedChildren,
