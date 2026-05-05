@@ -20,7 +20,7 @@
   /* Typography Colors */
   --text-primary: #ffffff;
   --text-secondary: #a0a0a0;
-  --text-tertiary: #606060;
+  --text-tertiary: #888888;
   --text-inverse: #000000;
 
   /* Accents - Cyberpunk EDM */
@@ -65,6 +65,48 @@
   /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.16, 1, 0.3, 1);
   --transition-normal: 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Light Mode (prefers-color-scheme: light) ── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: #f5f5f7;
+    --bg-secondary: #e8e8ed;
+    --bg-tertiary: #dcdce2;
+
+    --bg-card: rgba(255, 255, 255, 0.88);
+    --bg-card-hover: rgba(255, 255, 255, 0.96);
+    --bg-glass: rgba(0, 0, 0, 0.04);
+
+    --bg-input: #ffffff;
+
+    --border-subtle: rgba(0, 0, 0, 0.1);
+    --border-medium: rgba(0, 0, 0, 0.25);
+    --border-accent: #cc00cc;
+
+    --text-primary: #1a1a1e;
+    --text-secondary: #585860;
+    --text-tertiary: #787880;
+    --text-inverse: #ffffff;
+
+    --accent-primary: #cc00cc;
+    --accent-primary-glow: rgba(204, 0, 204, 0.3);
+    --accent-secondary: #0088aa;
+    --accent-secondary-glow: rgba(0, 136, 170, 0.3);
+
+    --status-success: #008855;
+    --status-warning: #aa6600;
+    --status-error: #cc1144;
+    --status-info: #0077aa;
+    --status-ice: #005566;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+    --shadow-md: 0 3px 8px rgba(0, 0, 0, 0.18);
+    --shadow-glass: 0 4px 16px rgba(0, 0, 0, 0.1);
+    --shadow-glow: 0 0 12px var(--accent-primary-glow);
+    --shadow-success-glow: 0 0 12px rgba(0, 136, 85, 0.25);
+    --shadow-error-glow: 0 0 12px rgba(204, 17, 68, 0.25);
+  }
 }
 
 /* ========= RESET & BASE ========= */
