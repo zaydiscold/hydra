@@ -24,7 +24,10 @@
     "pretest": "npx prisma db push --accept-data-loss && npx prisma generate",
     "test": "npm run test:session-expiry && npm run test:ensure-session-backfill",
     "check:clerk": "node scripts/check-clerk-connectivity.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:electron": "concurrently -k \"vite\" \"electron .\"",
+    "electron:build": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
@@ -58,10 +61,13 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
-    "prisma": "^6.19.2"
+    "prisma": "^6.19.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-log": "^5.1.1"
   },
   "description": "Hydra is a professional, high-intensity local management dashboard for OpenRouter account fleets. It provides a single, locally-secured interface to manage balances, rotate API keys, and perform bulk operations across dozens of accounts simultaneously.",
-  "main": "eslint.config.js",
+  "main": "electron/main.js",
   "directories": {
     "doc": "docs"
   },
