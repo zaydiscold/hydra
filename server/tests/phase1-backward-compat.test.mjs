@@ -103,6 +103,9 @@ test('electron/main.js: sets HYDRA_DATA_DIR before server import', () => {
   const src = readSource('../../electron/main.js');
   assertPatternIn('main.js', src, /HYDRA_DATA_DIR/, 'must set HYDRA_DATA_DIR');
   assertPatternIn('main.js', src, /app\.getPath\('userData'\)/, 'must use userData path');
+  assertPatternIn('main.js', src, /HYDRA_EMBEDDED/, 'must set HYDRA_EMBEDDED for dotenv bypass');
+  assertPatternIn('main.js', src, /migrateIfNeeded/, 'must call legacy data migration');
+  assertPatternIn('main.js', src, /setupAppMenu/, 'must set up app menu');
 });
 
 test('electron/preload.js: uses contextBridge', () => {
