@@ -27,11 +27,29 @@ let gracefulShutdown = null;
 
 // ─── 3. First-Launch: Migrate legacy data ──────────────────────────────────
 async function firstLaunchSetup() {
+  // Migrate legacy data FIRST (so existing hydra.db gets copied before any push)
   try {
-    const { default: migrate } = await import('./utils/migrateLegacyData.js');
-    await migrate();
+    const { migrateIfNeeded } = await import('./utils/migrateLegacyData.js');
+    await migrateIfNeeded();
   } catch (err) {
     console.warn('[electron] Legacy data migration skipped:', err.message);
+  }
+
+  // Only push schema if NO database exists yet (migration didn't bring one, or fresh install)
+  const { existsSync } = await import('node:fs');
+  const dbPath = path.join(app.getPath('userData'), 'hydra.db');
+  if (!existsSync(dbPath)) {
+    const { execSync } = await import('node:child_process');
+    try {
+      execSync('npx prisma db push --accept-data-loss --skip-generate', {
+        cwd: process.cwd(),
+        stdio: 'pipe',
+        timeout: 15000,
+      });
+      console.log('[electron] Fresh database created');
+    } catch (err) {
+      console.warn('[electron] Prisma db push failed:', err.message);
+    }
   }
 }
 
