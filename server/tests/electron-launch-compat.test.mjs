@@ -190,11 +190,23 @@ const { app, bootstrap, gracefulShutdown } = mod;
 // ---------------------------------------------------------------------------
 
 function getPort() {
-  const srv = mod.server;
+  const srv = getServer();
   const addr = srv?.address();
   if (!addr) return null;
   if (typeof addr === 'string') return addr;    // unix socket
   return addr.port;
+}
+
+function getServer() {
+  return mod.server;
+}
+
+async function closeServerDirectly() {
+  const srv = getServer();
+  if (!srv?.address()) return;
+  await new Promise((resolve, reject) => {
+    srv.close((err) => (err ? reject(err) : resolve()));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +214,8 @@ function getPort() {
 // ---------------------------------------------------------------------------
 
 /** Reset environment after all tests. */
-after(() => {
+after(async () => {
+  await closeServerDirectly();
   Object.assign(process.env, ORIGINAL_ENV);
 });
 
@@ -212,7 +225,7 @@ test('server can start on a configurable port', async () => {
 
   await bootstrap();
 
-  const addr = server.address();
+  const addr = getServer().address();
   assert.ok(addr, 'server.address() should return a value after bootstrap');
   assert.equal(addr.port, targetPort, `server should bind to ${targetPort}`);
 });
@@ -230,7 +243,7 @@ test('gracefulShutdown({ exit: false }) cleans up without killing the process', 
   // Verify the server is actually closed.
   // After close, server._handle is null (internal Node state).
   assert.ok(
-    !server._handle || server._handle === null,
+    !getServer()._handle || getServer()._handle === null,
     'HTTP server should be closed after gracefulShutdown',
   );
 });
@@ -251,11 +264,9 @@ test('server binds to port 0 (random port) and port is discoverable', async () =
 
   // Close the server directly (gracefulShutdown would return true immediately
   // because shutdownInFlight is already true).
-  await new Promise((resolve, reject) => {
-    server.close((err) => (err ? reject(err) : resolve()));
-  });
+  await closeServerDirectly();
 
   // Verify closure
-  assert.ok(!server._handle || server._handle === null,
+  assert.ok(!getServer()._handle || getServer()._handle === null,
     'server should be fully closed');
 });

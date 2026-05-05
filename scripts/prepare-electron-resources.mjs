@@ -101,6 +101,8 @@ const foundBin = chromiumBinCandidates.find((p) => existsSync(p));
 if (foundBin) {
   console.log(`[prepare-electron-resources] Chromium binary found: ${foundBin}`);
 } else {
-  console.warn(`[prepare-electron-resources] WARNING: No Chromium executable found in ${CHROMIUM_OUT}`);
-  console.warn(`[prepare-electron-resources] Checked: ${chromiumBinCandidates.join(', ')}`);
+  throw new Error(
+    `[prepare-electron-resources] no Chromium executable found in ${CHROMIUM_OUT}\n` +
+    `Checked:\n  ${chromiumBinCandidates.join('\n  ')}`
+  );
 }
