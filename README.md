@@ -29,10 +29,21 @@ Hydra is designed for zero-friction deployment — no terminal mastery required.
 
 Hydra requires **Node.js 18+**. Download it from: [nodejs.org](https://nodejs.org).
 
-### 2. Launching
+### 2. Launching Hydra
 
-- **Mac/Linux**: Double-click `Start Hydra.command`.
-- **Windows**: Double-click `Start Hydra.bat`.
+Use the launcher that matches the build you want:
+
+| Launcher | What it does |
+| --- | --- |
+| `Hydra.app` | Packaged Electron app. Starts the embedded local server and opens the native desktop UI. |
+| `Launch Hydra.command` | macOS launcher for this repo clone. Good for local production-style startup without opening a terminal first. |
+| `npm start` | Production-style terminal startup via `scripts/launch.js`. Builds if needed, syncs the local DB schema, starts Express, then opens the browser UI. |
+| `npm run preview` / `npm run preview:electron` | Builds the Vite frontend and launches Electron against the built app. |
+| `npm run preview:web` | Old Vite preview behavior for frontend-only preview. |
+| `npm run preview:static` | Builds the frontend and runs the standalone Express server. |
+| `npm run start:electron` | Production equivalent of the Electron preview flow. |
+
+Legacy launchers such as `Start Hydra.command` / `Start Hydra.bat` may exist in older checkouts, but the current macOS repo launcher is `Launch Hydra.command`.
 
 ### 3. Access Dashboard
 

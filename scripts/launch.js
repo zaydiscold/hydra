@@ -133,7 +133,7 @@ function checkEnv() {
 async function runMigrations() {
   step('Checking database...');
   try {
-    run('npx prisma migrate deploy', { silent: true });
+    run('npx prisma db push --skip-generate', { silent: true });
     success('Database ready');
   } catch (err) {
     error('Database migration failed. Resolve migration errors before launching.');

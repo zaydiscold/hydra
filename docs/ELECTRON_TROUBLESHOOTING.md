@@ -15,14 +15,35 @@
 
 **Fix:** Delete `~/Library/Application Support/hydra/hydra.db` and restart. The app will create a fresh database.
 
+## Prisma cannot find `.prisma/client/default`
+
+**Symptom:** Packaged Electron starts, then crashes or logs an error like:
+
+```text
+Cannot find module '.prisma/client/default'
+```
+
+**Cause:** Electron Builder's default `node_modules` file matching can filter dotfile directories such as `node_modules/.prisma/`. Prisma's generated client expects that directory to exist next to packaged `node_modules`, so the packaged app cannot load its native query engine even though the source checkout works.
+
+**Current workaround:**
+
+1. `electron-builder.yml` keeps `asar: false` so Prisma's normal module lookup works in the packaged app layout.
+2. `electron/builders/afterPack.js` copies `node_modules/.prisma` into the packaged app after Electron Builder finishes its pruning pass.
+3. The same `afterPack` hook keeps only the native Prisma engine for the target platform and prunes unused Prisma runtime variants so the workaround does not balloon the app.
+
+**Do not remove `asar: false` casually.** If you re-enable asar, verify Prisma startup in a packaged `.app` and confirm `.prisma/client` plus the target `libquery_engine-*.node` file exist in the final resources layout.
+
 ## Playwright can't find Chromium
 
 **Symptom:** Account generation fails with "browserType.launch: Executable doesn't exist"
 
 **Fixes:**
-1. Set `HYDRA_PLAYWRIGHT_CHANNEL=chrome` env var to use system Chrome
-2. Or set `HYDRA_PLAYWRIGHT_CDP_ENDPOINT=http://127.0.0.1:9222` to connect to existing Chrome
-3. In dev: run `npx playwright install chromium`
+1. Set `HYDRA_PLAYWRIGHT_EXECUTABLE_PATH=/path/to/Chrome` to force a specific browser binary.
+2. Set `HYDRA_PLAYWRIGHT_CHANNEL=chrome` to use system Chrome.
+3. Set `HYDRA_PLAYWRIGHT_CDP_ENDPOINT=http://127.0.0.1:9222` to connect to an existing Chrome instance for management-key provisioning.
+4. In dev: run `npx playwright install chromium`.
+
+Packaged Electron scans known Chromium locations under `process.resourcesPath`, but the current build does not bundle Chromium by default to keep the app thinner.
 
 ## Accounts not showing after Electron launch
 

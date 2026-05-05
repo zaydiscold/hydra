@@ -71,6 +71,42 @@ let shuttingDown = false;
 let forceQuit = false;
 const trackedChildren = new Set();  // every spawn'd subprocess we want to tear down
 
+function isHydraAuxiliaryProcess(command) {
+  if (!command.includes('prisma studio')) return false;
+  return (
+    command.includes(APP_ROOT) ||
+    command.includes('/node_modules/.bin/prisma studio') ||
+    command.includes('prisma studio --port 5555') ||
+    command.includes('prisma studio --browser none')
+  );
+}
+
+async function killKnownHydraAuxiliaryProcesses(reason) {
+  if (process.platform === 'win32') return;
+  try {
+    const { execFile } = await import('node:child_process');
+    const output = await new Promise((resolve) => {
+      execFile('ps', ['-axo', 'pid=,command='], { timeout: 3000 }, (_err, stdout) => resolve(stdout || ''));
+    });
+    const ownPid = process.pid;
+    for (const line of output.split('\n')) {
+      const match = line.trim().match(/^(\d+)\s+(.+)$/);
+      if (!match) continue;
+      const pid = Number(match[1]);
+      const command = match[2];
+      if (!pid || pid === ownPid || !isHydraAuxiliaryProcess(command)) continue;
+      try {
+        process.kill(pid, 'SIGTERM');
+        console.log(`[electron] stopped auxiliary process ${pid} (${reason}): ${command}`);
+      } catch (e) {
+        console.warn(`[electron] failed to stop auxiliary process ${pid}: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    console.warn('[electron] auxiliary process sweep failed:', e.message);
+  }
+}
+
 /** Show + focus the main window, restoring the dock if it was hidden. */
 function showAndFocusMainWindow() {
   if (process.platform === 'darwin') app.dock?.show();
@@ -253,13 +289,16 @@ function createSplashWindow() {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
 
-  const glyphs = Array.from({ length: 22 }, (_, i) => {
+  const splashLetters = 'HYDRAPROXY01011'.split('');
+  const glyphs = Array.from({ length: 34 }, (_, i) => {
     const x = 3 + ((i * 17) % 94);
-    const duration = 4.6 + ((i % 6) * 0.45);
-    const delay = -((i * 0.41) % 4.8);
-    const opacity = 0.16 + ((i % 5) * 0.04);
-    const text = i % 3 === 0 ? 'HYDRA' : i % 3 === 1 ? 'PROXY' : '01011';
-    return `<span style="--x:${x};--t:${duration}s;--d:${delay}s;--o:${opacity}">${text}</span>`;
+    const duration = 5.2 + ((i % 7) * 0.42);
+    const delay = -((i * 0.37) % 5.4);
+    const opacity = 0.18 + ((i % 5) * 0.035);
+    const size = 18 + ((i % 6) * 6);
+    const spin = (i % 2 === 0 ? -1 : 1) * (8 + ((i % 7) * 4));
+    const text = splashLetters[i % splashLetters.length];
+    return `<span style="--x:${x};--t:${duration}s;--d:${delay}s;--o:${opacity};--s:${size}px;--r:${spin}deg">${text}</span>`;
   }).join('');
 
   const splashHTML = `
@@ -268,7 +307,7 @@ function createSplashWindow() {
       .frame{position:absolute;inset:10px;border-radius:22px;background:linear-gradient(145deg,rgba(8,11,20,.96),rgba(16,4,28,.98) 50%,rgba(4,21,29,.96));border:1px solid rgba(255,255,255,.12);box-shadow:0 28px 90px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.12);overflow:hidden}
       .frame:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 24% 20%,rgba(88,166,255,.22),transparent 28%),radial-gradient(circle at 78% 18%,rgba(255,77,109,.18),transparent 30%),linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:auto,auto,100% 7px;pointer-events:none}
       .rain{position:absolute;inset:-140px 0 0;mask-image:linear-gradient(transparent,#000 16%,#000 76%,transparent)}
-      .rain span{position:absolute;left:calc(var(--x) * 1%);top:-160px;width:18px;color:rgba(130,226,255,var(--o));font:700 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;text-orientation:upright;writing-mode:vertical-rl;text-shadow:0 0 18px rgba(77,208,255,.72);animation:fall var(--t) linear infinite;animation-delay:var(--d)}
+      .rain span{position:absolute;left:calc(var(--x) * 1%);top:-90px;color:rgba(130,226,255,var(--o));font:950 var(--s)/1 -apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;text-shadow:0 0 18px rgba(77,208,255,.72);transform:rotate(var(--r));animation:fall var(--t) cubic-bezier(.25,.72,.22,1) infinite;animation-delay:var(--d)}
       .content{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
       .mark{position:relative;width:116px;height:116px;margin:0 auto 20px;border-radius:30px;background:linear-gradient(135deg,rgba(255,77,109,.92),rgba(121,92,255,.86) 48%,rgba(48,213,200,.88));box-shadow:0 20px 56px rgba(83,77,255,.28),0 0 0 1px rgba(255,255,255,.22) inset;display:grid;place-items:center}
       .mark:before{content:"";position:absolute;inset:10px;border-radius:24px;background:rgba(4,7,13,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.16)}
@@ -277,7 +316,7 @@ function createSplashWindow() {
       .sub{font-size:13px;font-weight:600;color:rgba(232,242,255,.68);margin-bottom:22px}
       .bar{width:154px;height:5px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;margin:0 auto}
       .bar i{display:block;width:48%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#4dd0ff,#ff4d6d);box-shadow:0 0 18px rgba(77,208,255,.8);animation:sweep 1.35s ease-in-out infinite}
-      @keyframes fall{from{transform:translateY(0)}to{transform:translateY(560px)}}
+      @keyframes fall{0%{transform:translateY(-80px) rotate(var(--r));opacity:0}10%{opacity:1}74%{opacity:.8}100%{transform:translateY(560px) rotate(calc(var(--r) * -1));opacity:0}}
       @keyframes sweep{0%{transform:translateX(-110%)}55%{transform:translateX(105%)}100%{transform:translateX(230%)}}
     </style></head><body><div class="frame"><div class="rain">${glyphs}</div><div class="content"><div><div class="mark"></div><h1>HYDRA</h1><div class="sub">Starting local proxy</div><div class="bar"><i></i></div></div></div></div></body></html>`;
   splashWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(splashHTML));
@@ -390,6 +429,8 @@ app.whenReady().then(async () => {
     // Splash IMMEDIATELY so the user sees something while we boot.
     createSplashWindow();
 
+    await killKnownHydraAuxiliaryProcesses('startup sweep');
+
     // Quick sentinel check (just read a file, no heavy work)
     const needsSync = await shouldSyncSchema();
 
@@ -473,6 +514,7 @@ async function shutdownEverything(reason) {
   shuttingDown = true;
   console.log(`[electron] shutdown initiated: ${reason}`);
   killTrackedChildren();
+  await killKnownHydraAuxiliaryProcesses(reason);
   try {
     if (gracefulShutdown) await gracefulShutdown(reason, { exit: false, timeoutMs: 3000 });
   } catch (e) {
