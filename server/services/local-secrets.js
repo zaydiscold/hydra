@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, openSync, writeSync, fsyncSync, closeSync } from 'node:fs';
 
 import { config } from '../config.js';
 import { getDataDir, getDataPath } from '../lib/data-dir.js';
@@ -39,11 +39,21 @@ function loadPersistedSecrets() {
 }
 
 function persistSecrets(secrets) {
-  mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(SECRETS_PATH, `${JSON.stringify(secrets, null, 2)}\n`, {
-    encoding: 'utf8',
-    mode: 0o600,
-  });
+  // #51: Restrict DATA_DIR to owner-only (0o700) to prevent world-readable
+  // secrets. The default mkdir mode is 0o777 modified by umask, which can
+  // leave the directory world-readable on some systems.
+  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  // #55: Open with fd to fsync after write — prevents truncated/corrupt
+  // secrets file on crash. Without fsync, the OS may cache the write
+  // indefinitely, and a power loss or kernel panic yields an empty or
+  // partially-written secrets file.
+  const fd = openSync(SECRETS_PATH, 'w', 0o600);
+  try {
+    writeSync(fd, `${JSON.stringify(secrets, null, 2)}\n`);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function resolveSecrets() {

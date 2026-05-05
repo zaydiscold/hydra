@@ -121,8 +121,19 @@ if (proxyRateLimitDisabled) {
 app.use('/api/auth/', authLimiter, authRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
+// #88: Rate-limit the shutdown endpoint to prevent authenticated attackers
+// from repeatedly shutting down the server. Only 3 shutdown requests per
+// 15-minute window per IP are allowed.
+const shutdownLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many shutdown requests. Please wait before trying again.' },
+});
+
 // --- System Routes ---
-app.post('/api/shutdown', requireUnlocked, (req, res) => {
+app.post('/api/shutdown', shutdownLimiter, requireUnlocked, (req, res) => {
   if (process.env.HYDRA_EMBEDDED === '1' && req.body?.confirm !== 'SHUTDOWN_HYDRA') {
     return res.status(400).json({
       success: false,

@@ -20,8 +20,8 @@ const configSchema = z.object({
     .string()
     .min(1, 'DATABASE_URL is required')
     .refine(
-      (url) => url.startsWith('file:') || url.startsWith('postgres'),
-      'DATABASE_URL must start with file: (SQLite) or postgres (PostgreSQL)',
+      (url) => url.startsWith('file:') || url.startsWith('postgres://') || url.startsWith('postgresql://'),
+      'DATABASE_URL must start with file: (SQLite), postgres://, or postgresql://',
     )
     .refine(
       (url) => !url.includes('#') && !url.includes('?'),
@@ -30,8 +30,8 @@ const configSchema = z.object({
   JWT_SECRET: z
     .string()
     .min(1, 'JWT_SECRET is required')
-    .transform(s => s.trim())
-    .refine(s => s.length >= 16, 'JWT_SECRET must be at least 16 characters')
+    .transform((s) => s.trim())
+    .refine((s) => s.length >= 32, 'JWT_SECRET must be at least 32 characters after trimming')
     .default('hydra-dev-secret-unsafe'),
   /** Master lock-screen JWT lifetime (jsonwebtoken `expiresIn`, e.g. 8h, 7d, 30d). */
   HYDRA_MASTER_JWT_TTL: z.string().min(1).max(48).default('30d'),

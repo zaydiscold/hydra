@@ -14,7 +14,9 @@ import { getTray, setTray } from './state.js';
 export function killTrackedChildren(trackedChildren) {
   for (const child of trackedChildren) {
     try {
-      child.kill('SIGTERM');
+      // #75: Windows has no SIGTERM — child.kill() with no signal name
+      // defaults to SIGTERM on POSIX and TerminateProcess on Windows.
+      child.kill();
     } catch { /* already dead */ }
   }
   trackedChildren.clear();

@@ -82,6 +82,26 @@ async function readLockPayload(lockPath) {
 
 function isPidAlive(pid) {
   if (!pid || pid <= 0) return false;
+  // #92: process.kill(pid, 0) is POSIX-only. On Windows it always throws
+  // EPERM, which made isPidAlive() always return false — meaning orphaned
+  // migration locks were only cleaned by TTL expiry (60s), not by PID check.
+  // On Windows we use a different approach: check if the process exists via
+  // tasklist or by attempting to open it.
+  if (process.platform === 'win32') {
+    try {
+      // On Windows, process.kill with any signal besides 0 will throw
+      // if the process doesn't exist. We try kill(pid) which throws
+      // ESRCH if the pid doesn't exist, and EPERM if it does.
+      process.kill(pid, 0);
+      // If we reach here on Windows, the pid exists (unusual, but possible
+      // with certain privileges). Fall through.
+    } catch (e) {
+      // On Windows: EPERM usually means the process exists (no permission
+      // to signal it). ESRCH means the process does NOT exist.
+      if (e.code === 'EPERM') return true;
+      return false;
+    }
+  }
   try {
     // Signal 0 does not kill; it just checks existence (POSIX).
     process.kill(pid, 0);

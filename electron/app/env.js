@@ -110,6 +110,12 @@ export async function ensurePackagedRuntimeState() {
       secret = randomBytes(32).toString('hex');
       try {
         writeFileSync(secretPath, secret, { mode: 0o600 });
+        // #50: On POSIX, writeFileSync's mode option is only applied when
+        // creating a new file. If the file already exists (e.g. created by
+        // an older version without mode restriction), old permissions are
+        // preserved. Explicit chmod enforces 0o600 every time we write.
+        const { chmodSync } = await import('node:fs');
+        chmodSync(secretPath, 0o600);
         summary.jwtSecret = 'created';
       } catch (e) {
         summary.errors.push('jwt-secret write failed: ' + e.message);
@@ -144,6 +150,13 @@ export async function ensurePackagedRuntimeState() {
     }
   } else if (existsSync(dbPath)) {
     summary.db = 'existing';
+  } else if (!existsSync(emptyDbPath)) {
+    // #56: Bundled empty DB is missing (broken build, corrupted resources).
+    // Without it, the app starts with no database — first query will 500.
+    // Log a clear error so the operator knows what went wrong.
+    summary.errors.push('db init failed: bundled empty DB not found at ' + emptyDbPath);
+    summary.db = 'skipped';
+    console.error(`[electron] FATAL: Bundled empty database not found at ${emptyDbPath}. The app cannot initialize the database.`);
   }
 
   return summary;
