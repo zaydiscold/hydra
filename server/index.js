@@ -30,7 +30,8 @@ import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
 import { startSessionRefresher, stopSessionRefresher } from './services/session-refresher.js';
 import { proxyGate } from './services/proxy-gate.js';
 import { rotationManager } from './services/rotation-manager.js';
-import { disconnectPrisma } from './services/db.js';
+// NOTE: disconnectPrisma is dynamically imported in gracefulShutdown to avoid
+// Node v25 ESM mock cache bug with electron-launch-compat test
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -212,7 +213,8 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
   // and the DB is left in a consistent state. Previously this was never called
   // during shutdown, relying on process exit for cleanup.
   try {
-    await disconnectPrisma();
+  const { disconnectPrisma } = await import('./services/db.js');
+  await disconnectPrisma();
     logger.info('[SHUTDOWN] Prisma disconnected');
   } catch (err) {
     logger.error(`[SHUTDOWN] Prisma disconnect failed: ${err.message}`);

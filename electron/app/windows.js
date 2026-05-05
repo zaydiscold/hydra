@@ -35,29 +35,48 @@ export function createSplashWindow() {
     },
   });
 
-  // ── Symbol pool: hex, crypto, Hydra-themed ───────────────────────────
-  const hex = '0123456789ABCDEF'.split('');
-  const symbols = ['∂', '∆', '∅', '∞', '±', '∏', '∑', 'Ω', 'π', 'Ψ', '∮', '∇'];
-  const keys = ['SK-', '0x', '::', '//', '||', '##', '--', '++', '&&', '<>'];
-  const binary = ['01', '10', '00', '11', '0010', '1101', '0101', '1011'];
-  const allChars = [...hex, ...symbols, ...keys, ...binary];
+  // ── Symbol pool: thematic for an LLM proxy ───────────────────────────
+  // Model identifiers, route paths, status codes, and Hydra-mythos hints
+  // (multi-headed serpent → "head/N"). Mixed lengths keep the visual rhythm
+  // varied; mixed prefixes (`anthropic/`, `openai/`) read as "we route many
+  // providers" — exactly what Hydra is.
+  const models = [
+    'claude-sonnet-4.5', 'claude-opus-4.7', 'gpt-4o', 'gpt-4.1',
+    'gemini-2.0-flash', 'gemini-2.5-pro', 'llama-4', 'llama-3.3',
+    'mistral-large', 'deepseek-r1', 'qwen-3', 'grok-2',
+    'mixtral-8x22b', 'command-r-plus', 'phi-4',
+  ];
+  const providers = ['anthropic/', 'openai/', 'google/', 'meta-llama/', 'mistralai/'];
+  const routes = ['/v1/chat', '/v1/models', '/v1/keys', 'POST', 'GET', '200 ok', '429 try', 'sk-hydra…'];
+  const mythos = ['head/1', 'head/3', 'head/7', 'pool/12', 'Ω', 'π', 'Ψ', '∇', '⌬', '⏣'];
+  const allTokens = [...models, ...providers, ...routes, ...mythos];
 
   // ── Generate particles — varied sizes, speeds, opacities, paths ───────
+  // Smaller font ceiling than before because tokens are wider than single chars
+  // (a 24px provider/model string would clip the card). Tighter opacity range
+  // so dense areas don't muddy the foreground content.
   const particleTypes = ['rain', 'drift', 'spiral', 'pulse'];
-  const particleCount = 48;
+  const particleCount = 42;
   const particles = Array.from({ length: particleCount }, (_, i) => {
     const type = particleTypes[i % particleTypes.length];
-    const x = 3 + ((i * 17) % 94);
+    const token = allTokens[(i * 7) % allTokens.length];
+    // Compose provider+model occasionally for the "anthropic/claude-…" look
+    const text = (i % 5 === 0 && i % 2 === 0)
+      ? providers[(i * 3) % providers.length] + models[(i * 11) % models.length]
+      : token;
+    const x = 3 + ((i * 17) % 88);
     const y = -10 - ((i * 23) % 80);
-    const size = 14 + ((i % 7) * 5);
-    const opacity = 0.12 + ((i % 9) * 0.04);
-    const duration = 4 + ((i % 8) * 1.3) + Math.random() * 2;
+    // Tokens are wider than single chars — keep size modest
+    const size = 9 + ((i % 5) * 2);
+    const opacity = 0.08 + ((i % 7) * 0.03);
+    const duration = 5 + ((i % 8) * 1.4) + Math.random() * 2;
     const delay = -(i * 0.31 % 8);
-    const hue = (180 + (i * 23) % 140);
-    const char = allChars[i % allChars.length];
+    // Hue band biased toward the brand: pinks, purples, cyans
+    const hue = (260 + (i * 31) % 100);
     const spinDir = (i % 2 === 0 ? 1 : -1);
-    const spinDeg = 15 + ((i % 11) * 8);
-    return `<span class="p ${type}" style="--x:${x};--y:${y};--s:${size}px;--o:${opacity};--t:${duration}s;--d:${delay}s;--h:${hue};--r:${spinDir * spinDeg}deg">${char}</span>`;
+    // Less spin than letters had — token strings look weird at 90° rotation
+    const spinDeg = 4 + ((i % 7) * 2);
+    return `<span class="p ${type}" style="--x:${x};--y:${y};--s:${size}px;--o:${opacity};--t:${duration}s;--d:${delay}s;--h:${hue};--r:${spinDir * spinDeg}deg">${text}</span>`;
   }).join('');
 
   const splashHTML = '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\' \'unsafe-inline\'"><style>'
