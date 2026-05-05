@@ -30,6 +30,7 @@ import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
 import { startSessionRefresher, stopSessionRefresher } from './services/session-refresher.js';
 import { proxyGate } from './services/proxy-gate.js';
 import { rotationManager } from './services/rotation-manager.js';
+import { disconnectPrisma } from './services/db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -194,6 +195,16 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
     await taskSupervisor.shutdown();
   } catch (err) {
     logger.error(`[SHUTDOWN] Task supervisor shutdown failed: ${err.message}`);
+  }
+
+  // #92: Disconnect the Prisma singleton so active WAL connections are closed
+  // and the DB is left in a consistent state. Previously this was never called
+  // during shutdown, relying on process exit for cleanup.
+  try {
+    await disconnectPrisma();
+    logger.info('[SHUTDOWN] Prisma disconnected');
+  } catch (err) {
+    logger.error(`[SHUTDOWN] Prisma disconnect failed: ${err.message}`);
   }
 
   if (!server) {
