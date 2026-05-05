@@ -6,11 +6,13 @@ The support bundle feature collects diagnostic information for troubleshooting H
 
 | Category | Details |
 |----------|---------|
-| **Version info** | Hydra app version, Electron version, Node.js version, platform/arch |
-| **OS info** | OS type, release, hostname (sanitized) |
-| **Logs** | Application logs from `~/Library/Logs/Hydra/main.log` (macOS) or equivalent |
-| **Config** | Non-sensitive environment variables (`NODE_ENV`, `HYDRA_PORT`, feature flags) |
-| **Resource paths** | `process.resourcesPath`, `userData` directory location |
+| **Version info** | Hydra app version (from `VITE_APP_VERSION` or Electron native) |
+| **OS info** | Platform string (from Electron native or `navigator.platform`) |
+| **Data directory** | `userData` path (Electron-only) |
+| **Runtime mode** | Packaged (Electron), Dev (Electron), or Browser |
+| **Proxy status** | Enabled or Disabled |
+| **Server health** | Uptime, pool key counts (pooled, available, cooldowns) |
+| **Timestamp** | ISO 8601 generation time |
 
 ## What's NOT Included
 
@@ -19,12 +21,15 @@ The support bundle feature collects diagnostic information for troubleshooting H
 - ❌ API keys, management keys, session tokens
 - ❌ Account data, balance information
 - ❌ JWT secrets, encryption keys
+- ❌ Application log files
+- ❌ Environment variables
+- ❌ Electron/Node.js version details
 
 ## How to Generate
 
 1. Open Hydra
-2. Navigate to **Settings** → **Diagnostics**
-3. Click **"Copy Support Bundle"**
+2. Navigate to **Diagnostics**
+3. Click **"Support Bundle"**
 4. The bundle is copied to your clipboard as structured text. Paste it into a support ticket, GitHub issue, or DM.
 
 ## Manual Access
@@ -61,7 +66,7 @@ Contains `hydra.db`, `local-secrets.json`, and other runtime data. **Do not shar
 
 Common checks when reviewing a support bundle:
 
-1. **Version mismatch** — compare Hydra/Electron/Node versions against known-good releases
+1. **Version mismatch** — compare Hydra version against known-good releases
 2. **Port conflicts** — verify no other process is bound to the port
 3. **Missing resources** — confirm `prisma/schema.prisma`, `chromium/`, and `data/empty-hydra.db` exist in resources
 4. **Permission errors** — check that the user can read/write the data directory

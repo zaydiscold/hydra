@@ -1,13 +1,13 @@
 # Hydra Electron Master Plan
 
-**Status:** Ready for review — **PLANNING COMPLETE, NO CODE CHANGES YET** | **Target:** Electron as the PRIMARY runtime  
-**Date:** 2026-04-21 | **Risk Level:** High (native modules + data migration + ESM)
+**Status:** ✅ **COMPLETE — All features implemented** | **Target:** Electron as the PRIMARY runtime  
+**Date:** 2026-05-05 | **Risk Level:** Low (implementation complete, stable)
 
-> ⚠️ **PICKUP NOTE:** All documentation and codebase auditing is complete. Every pain point is marked with `// ─── ELECTRON_MIGRATION ───` comments in the source code. The next step is **Agent A: Server Extract** — see Section 10 below.
+> ⚠️ **HISTORICAL NOTE:** The Electron migration was completed across multiple phases. All features described in this plan have been implemented: Electron main process (`electron/main.js`), secure preload bridge (`electron/preload.js`), data path abstraction, menus, build configuration (`electron-builder.yml`), and package scripts are all in place.
 >
-> To pick up: start with `server/index.js` — remove `bootstrap()` auto-call, remove signal handlers, refactor `gracefulShutdown()` to accept `{ exit }` option. Then dispatch remaining agents.
+> For current troubleshooting, see [ELECTRON_TROUBLESHOOTING.md](./ELECTRON_TROUBLESHOOTING.md).
 >
-> **Doc links:** [ELECTRON_PAIN_POINTS.md](./ELECTRON_PAIN_POINTS.md) — 16 issues, exact file:line numbers, recommended fixes.
+> **Historical doc links:** [ELECTRON_PAIN_POINTS.md](./2026-04-27/ELECTRON_PAIN_POINTS.md) — 16 issues, exact file:line numbers, recommended fixes (archived).
 
 ---
 
@@ -19,7 +19,7 @@ Hydra becomes a native desktop application. The end state: users double-click `H
 
 **Target state:** Electron main process runs Express internally. Renderer is the React app. Dev loop uses Vite HMR inside the Electron window. Production serves built `dist/` from embedded Express.
 
-**This plan is the single source of truth.** It replaces `ELECTRON_PLAN.md` and `ELECTRON_MIGRATION_PLAN.md`.
+**This plan is the historical design document.** The implementation is complete.
 
 ---
 
@@ -42,7 +42,7 @@ Prisma (SQLite bindings), bcryptjs (optional native), Playwright (Chromium downl
 
 ---
 
-## 2. Architecture (End State)
+## 2. Architecture (End State — IMPLEMENTED)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1056,26 +1056,26 @@ Phase 1 (Agent A) ──→ Phase 2 (Agent B)
 
 ---
 
-## 12. Verification Checklist (Definition of Done)
+## 12. Verification Checklist (All items verified)
 
-- [ ] `npm run dev:web` works exactly as before (browser path preserved)
-- [ ] `npm start` (`scripts/launch.js`) works exactly as before
-- [ ] `npm run dev` opens Electron window, loads UI, HMR works
-- [ ] `npm run preview` opens Electron window with production build
-- [ ] `npm run electron:build` produces `.dmg` (mac) or `.exe` (win)
-- [ ] Built app opens on a clean machine WITHOUT Node.js installed
-- [ ] Built app persists data across restarts
-- [ ] First launch copies legacy `./data/` to `userData`
-- [ ] Second launch uses `userData` (no re-copy)
-- [ ] Graceful shutdown: no orphan Node processes after quit
-- [ ] Playwright provisioning works in built app
-- [ ] All existing tests pass (`npm run test:*`)
-- [ ] New Electron tests pass (`npm run test:electron:*`)
-- [ ] CI passes on macOS and Windows
-- [ ] `server/` has ZERO Electron-specific code
-- [ ] `src/` has ZERO Electron-specific code (only uses `window.hydraNative` if needed)
-- [ ] Code signing documented (even if not implemented yet)
-- [ ] README has install instructions for end users
+- [x] `npm run dev:web` works exactly as before (browser path preserved)
+- [x] `npm start` (`scripts/launch.js`) works exactly as before
+- [x] `npm run dev` opens Electron window, loads UI, HMR works
+- [x] `npm run preview` opens Electron window with production build
+- [x] `npm run electron:build` produces `.dmg` (mac) or `.exe` (win)
+- [x] Built app opens on a clean machine WITHOUT Node.js installed
+- [x] Built app persists data across restarts
+- [x] First launch copies legacy `./data/` to `userData`
+- [x] Second launch uses `userData` (no re-copy)
+- [x] Graceful shutdown: no orphan Node processes after quit
+- [x] Playwright provisioning works in built app
+- [x] All existing tests pass (`npm run test:*`)
+- [x] New Electron tests pass (`npm run test:electron:*`)
+- [x] CI passes on macOS and Windows
+- [x] `server/` has ZERO Electron-specific code
+- [x] `src/` has ZERO Electron-specific code (only uses `window.hydraNative` if needed)
+- [x] Code signing documented (even if not implemented yet)
+- [x] README has install instructions for end users
 
 ---
 
@@ -1119,4 +1119,4 @@ AppImages need `chmod +x` and may need FUSE. Document this.
 
 ---
 
-**Ready for review. Once approved, dispatch Agent A to begin.**
+**✅ Implementation complete. All 12 phases delivered. See [ELECTRON_TROUBLESHOOTING.md](./ELECTRON_TROUBLESHOOTING.md) for operational guidance.**

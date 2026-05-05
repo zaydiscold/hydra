@@ -202,6 +202,7 @@ Implemented in `server/routes/codes.js` and `server/controllers/CodeController.j
 | `errorCode` | Meaning |
 | --- | --- |
 | `REDEEM_PROMO_INVALID` | Upstream rejected the code (invalid, expired, already used, bad request on redeem procedure, or Playwright saw an invalid-code style message). |
+| `REDEEM_MAX_USES` | Code is valid but has reached its maximum number of redemptions. Upstream message: "code has reached maximum redemptions". Distinct from `REDEEM_PROMO_INVALID` — the code WAS redeemable, just fully claimed. |
 | `REDEEM_SESSION` | Auth/session problem (401/403, expired session, 2FA required, etc.). |
 | `REDEEM_RATE_LIMIT` | HTTP 429 from OpenRouter. |
 | `REDEEM_FORM_UNAVAILABLE` | Playwright could not find a redeem form. |

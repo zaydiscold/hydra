@@ -465,6 +465,13 @@ export default function App() {
       addToast('Close the window to keep Hydra running in the background.', 'info');
     }
   }, [addToast]);
+  const handleQuit = useCallback(async () => {
+    if (window.hydraNative?.quitApp) {
+      try { await window.hydraNative.quitApp(); } catch { /* fall through */ }
+      return;
+    }
+    window.close();
+  }, []);
   const handleShutdownConfirmed = useCallback(async () => {
     setShutdownConfirm(false);
     if (window.hydraNative?.quitApp) {
@@ -620,7 +627,7 @@ export default function App() {
                     <span className="nav-icon">🔒</span>
                     {!sidebarCollapsed && <span>Lock Vault</span>}
                   </button>
-                  <button className="nav-link" style={{ color: 'var(--status-error)' }} onClick={() => window.close()} title="Quit">
+                  <button className="nav-link" style={{ color: 'var(--status-error)' }} onClick={handleQuit} title="Quit">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Quit</span>}
                   </button>

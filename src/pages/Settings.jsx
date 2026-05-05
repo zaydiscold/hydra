@@ -91,7 +91,9 @@ export default function Settings({ addToast }) {
       await navigator.clipboard.writeText(primaryUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { /* noop */ }
+    } catch {
+      addToast('Failed to copy to clipboard', 'error');
+    }
   }
 
   return (
