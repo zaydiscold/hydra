@@ -5,11 +5,12 @@
  * Handles: deps install, env setup, DB migrations, build, server start, browser open.
  */
 
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import { existsSync, copyFileSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'net';
+import { bootstrap, gracefulShutdown } from '../server/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isWindows = process.platform === 'win32';
@@ -71,29 +72,6 @@ function isPortFree(port) {
     server.once('error', () => resolve(false));
     server.once('listening', () => { server.close(); resolve(true); });
     server.listen(port, '127.0.0.1');
-  });
-}
-
-function waitForPort(port, timeoutMs = 30000) {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const check = () => {
-      const socket = createServer();
-      socket.once('error', () => {
-        // Port is in use = server is up!
-        resolve();
-      });
-      socket.once('listening', () => {
-        socket.close();
-        if (Date.now() - start > timeoutMs) {
-          reject(new Error('Server did not start within 30 seconds'));
-        } else {
-          setTimeout(check, 300);
-        }
-      });
-      socket.listen(port, '127.0.0.1');
-    };
-    check();
   });
 }
 
@@ -201,51 +179,13 @@ async function checkPort() {
 async function startServer(port) {
   step('Starting Hydra server...');
 
-  const cmd = isWindows ? 'node' : 'node';
   // ─── ELECTRON_MIGRATION ───
-  // TODO: PAIN_POINTS.md #7 — After server/index.js auto-bootstrap is removed,
-  // spawning 'node server/index.js' will exit immediately (nothing to run).
-  // Fix: import bootstrap directly and call it, OR spawn server/standalone.js.
-  // Also remove child-process stdout/stderr streaming since it'll run in-process.
+  // Phase 1: in-process bootstrap replaces spawn('node server/index.js').
+  // Server runs in the same process — no more child-process stdout/stderr streaming.
   // ─── END ELECTRON_MIGRATION ───
-  const serverProc = spawn(cmd, ['server/index.js'], {
-    cwd: __dirname,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: false,
-    env: { ...process.env, NODE_ENV: 'production' },
-  });
-
-  // Stream server output with pretty prefix
-  serverProc.stdout.on('data', (data) => {
-    data.toString().trim().split('\n').forEach(line => {
-      if (line.trim()) process.stdout.write(`${c.dim}  [server] ${c.reset}${line}\n`);
-    });
-  });
-
-  serverProc.stderr.on('data', (data) => {
-    data.toString().trim().split('\n').forEach(line => {
-      if (line.trim()) process.stdout.write(`${c.red}  [error]  ${c.reset}${line}\n`);
-    });
-  });
-
-  serverProc.on('exit', (code) => {
-    if (code !== 0 && code !== null) {
-      error(`Server exited with code ${code}`);
-      process.exit(code);
-    }
-  });
-
-  // Wait for the server to be ready
-  step('Waiting for server to be ready...');
-  try {
-    await waitForPort(port);
-  } catch {
-    error('Server did not start in time. Check the logs above.');
-    process.exit(1);
-  }
+  await bootstrap({ port });
 
   success(`Hydra is running at http://localhost:${port}`);
-  return serverProc;
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -260,9 +200,9 @@ async function main() {
     await ensureBuild();
     
     const port = await checkPort();
-    const serverProc = await startServer(port);
-    
-    console.log(`
+    await startServer(port);
+
+    console.log(`\n
 ${c.green}${c.bold}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   ✓ Hydra is live!
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -275,20 +215,17 @@ ${c.reset}
     // Open browser after a short delay to let the server settle
     setTimeout(() => openBrowser(`http://localhost:${port}`), 800);
 
-    // Keep process alive — exit when server does
     // ─── ELECTRON_MIGRATION ───
-    // TODO: PAIN_POINTS.md #2 / #7 — These signal handlers conflict with
-    // Electron's lifecycle. After moving to in-process bootstrap(), remove
-    // these and let the caller handle signals.
+    // Phase 1: gracefulShutdown replaces process.exit in signal handlers.
+    // Uses { exit: true } so the process still exits in standalone mode.
+    // Electron callers will pass { exit: false }.
     // ─── END ELECTRON_MIGRATION ───
     process.on('SIGINT', () => {
       log('⏹', 'Shutting down Hydra...', c.yellow);
-      serverProc.kill('SIGTERM');
-      process.exit(0);
+      gracefulShutdown('SIGINT', { exit: true });
     });
     process.on('SIGTERM', () => {
-      serverProc.kill('SIGTERM');
-      process.exit(0);
+      gracefulShutdown('SIGTERM', { exit: true });
     });
 
   } catch (err) {
