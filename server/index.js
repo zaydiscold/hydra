@@ -28,7 +28,6 @@ import { taskSupervisor } from './services/task-supervisor.js';
 import { enforceLegacyStorageReset } from './services/legacy-storage.js';
 import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
 import { startSessionRefresher, stopSessionRefresher } from './services/session-refresher.js';
-import { prisma, disconnectPrisma } from './services/db.js';
 import { proxyGate } from './services/proxy-gate.js';
 import { rotationManager } from './services/rotation-manager.js';
 
@@ -196,8 +195,6 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
   } catch (err) {
     logger.error(`[SHUTDOWN] Task supervisor shutdown failed: ${err.message}`);
   }
-
-  await disconnectPrisma();
 
   if (!server) {
     logger.info('[SHUTDOWN] No server to close');
