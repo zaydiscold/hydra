@@ -1,0 +1,62 @@
+appId: com.zayd.hydra
+productName: Hydra
+copyright: Copyright © 2026
+asar: true
+asarUnpack:
+  - node_modules/@prisma/client/**
+  - node_modules/.prisma/**
+  - node_modules/playwright/.local-browsers/**
+  - prisma/**
+
+directories:
+  output: release
+  buildResources: desktop
+
+files:
+  - dist/**/*
+  - server/**/*
+  - prisma/**/*
+  - electron/**/*
+  - node_modules/**/*
+  - package.json
+
+extraResources:
+  - from: "prisma/"
+    to: "prisma/"
+    filter:
+      - "template.db"
+      - "dev.db"
+      - "schema.prisma"
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  icon: desktop/icons/icon.icns
+  category: public.app-category.utilities
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: desktop/entitlements.mac.plist
+  entitlementsInherit: desktop/entitlements.mac.plist
+  darkModeSupport: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: desktop/icons/icon.ico
+  publisherName: Hydra
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  icon: desktop/icons/icon.png
+  category: Utility
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  license: LICENSE.txt
