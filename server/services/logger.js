@@ -1,13 +1,26 @@
+import path from 'node:path';
 import winston from 'winston';
 
 const { combine, timestamp, printf, colorize } = winston.format;
 
+const icons = {
+  error: '❌',
+  warn: '⚠️',
+  info: 'ℹ️',
+  http: '🌐',
+  verbose: '📝',
+  debug: '🔍',
+  silly: '🎭',
+};
+
 /**
  * Custom log format for Hydra.
- * 🐉 [INFO] 2026-03-25T12:00:00Z: Server started on port 3001
+ * Dev:  🔍 [debug] 2026-03-25 12:00:00: message
+ * Prod: DEBUG 2026-03-25 12:00:00: message
  */
 const hydraFormat = printf(({ level, message, timestamp, stack }) => {
-  return `🐉 [${level}] ${timestamp}: ${stack || message}`;
+  const levelIcon = process.env.NODE_ENV === 'production' ? level.toUpperCase() : (icons[level] || level);
+  return `🐉 ${levelIcon} ${timestamp}: ${stack || message}`;
 });
 
 /**
@@ -37,8 +50,25 @@ function resolveLogLevel() {
  * The primary logger for the Hydra Server.
  * In development, it logs to the console with colors.
  * In production, it logs to the console (standard out) for easy cloud platform capture.
+ * When HYDRA_DATA_DIR is set, also writes to a file transport at HYDRA_DATA_DIR/hydra.log.
  * Override log level anytime via LOG_LEVEL env var (e.g. LOG_LEVEL=debug).
  */
+const transports = [
+  new winston.transports.Console(),
+];
+
+if (process.env.HYDRA_DATA_DIR) {
+  transports.push(new winston.transports.File({
+    filename: path.join(process.env.HYDRA_DATA_DIR, 'hydra.log'),
+    format: combine(
+      timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+      printf(({ level, message, timestamp, stack }) => {
+        return `${level.toUpperCase()} ${timestamp}: ${stack || message}`;
+      })
+    ),
+  }));
+}
+
 export const logger = winston.createLogger({
   level: resolveLogLevel(),
   format: combine(
@@ -46,9 +76,7 @@ export const logger = winston.createLogger({
     colorize(),
     hydraFormat
   ),
-  transports: [
-    new winston.transports.Console()
-  ]
+  transports,
 });
 
 // Polyfill for standard console calls if needed, though explicit logger usage is preferred.

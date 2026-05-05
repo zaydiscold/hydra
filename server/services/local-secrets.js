@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
 
 import { config } from '../config.js';
-const DATA_DIR = process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data');
-const SECRETS_PATH = path.join(DATA_DIR, 'local-secrets.json');
+import { getDataDir, getDataPath } from '../lib/data-dir.js';
+
+const DATA_DIR = getDataDir();
+const SECRETS_PATH = getDataPath('local-secrets.json');
 const HEX_SECRET_LENGTH = 64;
 
 function normalizeSecret(secret, name) {

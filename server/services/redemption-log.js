@@ -7,7 +7,11 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-const DATA_DIR = process.env.HYDRA_DATA_DIR || join(process.cwd(), 'data');
+
+import { logger } from './logger.js';
+import { getDataDir } from '../lib/data-dir.js';
+
+const DATA_DIR = getDataDir();
 const LOG_PATH = join(DATA_DIR, 'redemption-log.json');
 const MAX_RECORDS = 100;
 
@@ -35,7 +39,7 @@ export function addRedemptionRecord({ code, accountId, accountAlias, success, me
     writeFileSync(LOG_PATH, JSON.stringify(existing.slice(0, MAX_RECORDS), null, 2), 'utf-8');
   } catch (err) {
     // Non-fatal — log write failures should never break the redemption flow
-    console.warn('[REDEMPTION-LOG] Failed to write log:', err.message);
+    logger.warn('[REDEMPTION-LOG] Failed to write log:', err.message);
   }
 }
 

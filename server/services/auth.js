@@ -1,15 +1,15 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fs from 'node:fs/promises';
-import path from 'node:path';
 
 import { prisma } from './db.js';
 import { config } from '../config.js';
 import { logger } from './logger.js';
+import { getDataDir } from '../lib/data-dir.js';
 
 const SALT_ROUNDS = 12;
 const ADMIN_USERNAME = 'admin';
-const DATA_DIR = process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data');
+const DATA_DIR = getDataDir();
 let restartRequired = false;
 
 // IMPORTANT: The admin password is stored as a bcrypt hash (SALT_ROUNDS=12) in

@@ -14,6 +14,7 @@ const optionalHexSecret = z
 
 const configSchema = z.object({
   PORT: z.coerce.number().default(3001),
+  HYDRA_SERVER_PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required').default('hydra-dev-secret-unsafe'),
@@ -65,6 +66,7 @@ let parsedConfig;
 try {
   parsedConfig = configSchema.parse({
     PORT: process.env.PORT,
+    HYDRA_SERVER_PORT: process.env.HYDRA_SERVER_PORT,
     NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL,
     JWT_SECRET: process.env.JWT_SECRET,
