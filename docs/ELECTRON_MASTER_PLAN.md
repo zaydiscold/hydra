@@ -104,19 +104,24 @@ hydra/
 ├── electron/                       # NEW — Electron shell only
 │   ├── main.js                     # Main process entry
 │   ├── preload.js                  # Secure renderer bridge
-│   ├── electron.vite.config.js     # Bundler config for main/preload
+│   ├── app/
+│   │   ├── windows.js              # BrowserWindow factory
+│   │   ├── ipc.js                  # IPC handler registration
+│   │   ├── env.js                  # Environment setup
+│   │   ├── shutdown.js             # Graceful shutdown
+│   │   └── schemaSync.js           # Schema synchronization
 │   ├── utils/
-│   │   ├── paths.js                # userData, logs, temp paths
-│   │   ├── getFreePort.js          # TCP port discovery
-│   │   └── migrateLegacyData.js    # One-time data migration
+│   │   ├── migrateLegacyData.js    # One-time data migration
+│   │   └── cleanupAuxProcesses.js  # Aux process cleanup
 │   ├── menus/
-│   │   ├── appMenu.js              # macOS app menu template
-│   │   └── contextMenu.js          # Right-click context menu
-│   └── builders/
-│       ├── entitlements.mac.plist  # macOS code signing
-│       └── afterPack.js            # Post-pack native module fixup
+│   │   └── appMenu.js              # macOS app menu template
+│   ├── builders/
+│   │   └── afterPack.js            # Post-pack native module fixup
+│   └── tests/
+│       └── main-process.test.mjs   # Main process tests
 │
 ├── desktop/                        # NEW — Desktop assets only
+│   ├── entitlements.mac.plist      # macOS code signing
 │   └── icons/
 │       ├── icon.png                # 1024x1024 source
 │       ├── icon.icns               # macOS bundle (generated)
