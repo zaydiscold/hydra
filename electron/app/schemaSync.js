@@ -80,7 +80,7 @@ async function readLockPayload(lockPath) {
   } catch { return null; }
 }
 
-function isPidAlive(pid) {
+async function isPidAlive(pid) {
   if (!pid || pid <= 0) return false;
   // #92: process.kill(pid, 0) is POSIX-only. On Windows it always throws
   // EPERM, which made isPidAlive() always return false — meaning orphaned
@@ -104,6 +104,17 @@ function isPidAlive(pid) {
   }
   try {
     // Signal 0 does not kill; it just checks existence (POSIX).
+    // On Windows, signal 0 is not supported — we use tasklist instead.
+    if (process.platform === 'win32') {
+      const { execFileSync } = await import('node:child_process');
+      const out = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], {
+        timeout: 3000,
+        encoding: 'utf-8',
+        windowsHide: true,
+      });
+      // tasklist output contains the PID if the process exists
+      return out.includes(String(pid));
+    }
     process.kill(pid, 0);
     return true;
   } catch { return false; }
@@ -116,7 +127,7 @@ async function acquireMigrationLock(lockPath) {
     const payload = await readLockPayload(lockPath);
     const isStale =
       payload &&
-      (Date.now() - payload.ts > LOCK_TTL_MS || !isPidAlive(payload.pid));
+      (Date.now() - payload.ts > LOCK_TTL_MS || !(await isPidAlive(payload.pid)));
     if (isStale) {
       console.warn(
         `[electron] migration lock at ${lockPath} is stale ` +
