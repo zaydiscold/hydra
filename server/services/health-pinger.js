@@ -1,6 +1,6 @@
 import { rotationManager } from './rotation-manager.js';
 import { logger } from './logger.js';
-import { OR_BASE } from '../config.js';
+import { config, OR_BASE } from '../config.js';
 
 // How often to test a random key in the background (default 5 mins)
 const PING_INTERVAL = 5 * 60 * 1000;
@@ -33,7 +33,7 @@ async function pingRandomKey() {
       headers: {
         'Authorization': `Bearer ${keyEntry.keyString}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost:3001',
+        'HTTP-Referer': `http://localhost:${config.PORT}`,
       },
       // 1-token cheap payload
       body: JSON.stringify({

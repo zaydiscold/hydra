@@ -36,7 +36,7 @@ if (!values.cookie) {
 
 const COOKIE_HEADER  = values.cookie;
 const INTERVAL_MS    = parseInt(values.interval, 10) * 60 * 1000;
-const OUT_PATH       = resolve(process.cwd(), values.out);
+const OUT_PATH       = resolve(process.env.HYDRA_DATA_DIR || process.cwd(), values.out);
 const CLERK_FRONTEND = 'https://clerk.openrouter.ai'; // adjust if different env
 
 // ── Output file bootstrap ─────────────────────────────────────────────────────

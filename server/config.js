@@ -14,6 +14,7 @@ const optionalHexSecret = z
 
 const configSchema = z.object({
   PORT: z.coerce.number().default(3001),
+  HYDRA_SERVER_PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required').default('hydra-dev-secret-unsafe'),
@@ -33,6 +34,8 @@ const configSchema = z.object({
   HYDRA_PLAYWRIGHT_HEADED: z.boolean().default(false),
   /** Optional Playwright browser channel, e.g. `chrome` for system Chrome (less bot friction than bundled Chromium). */
   HYDRA_PLAYWRIGHT_CHANNEL: z.string().min(1).optional(),
+  /** Explicit path to Chromium/Chrome executable for Playwright. Overrides channel and bundled Chromium lookup. */
+  HYDRA_PLAYWRIGHT_EXECUTABLE_PATH: z.string().min(1).optional(),
   /**
    * Chrome DevTools endpoint for Playwright `connectOverCDP` (e.g. `http://127.0.0.1:9222` or the `webSocketDebuggerUrl` from `/json/version`).
    * When set, Hydra does not launch bundled Chromium for provision.
@@ -63,6 +66,7 @@ let parsedConfig;
 try {
   parsedConfig = configSchema.parse({
     PORT: process.env.PORT,
+    HYDRA_SERVER_PORT: process.env.HYDRA_SERVER_PORT,
     NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL,
     JWT_SECRET: process.env.JWT_SECRET,
@@ -78,6 +82,7 @@ try {
     CLERK_REFERER: process.env.CLERK_REFERER,
     HYDRA_PLAYWRIGHT_HEADED: parseBoolean(process.env.HYDRA_PLAYWRIGHT_HEADED),
     HYDRA_PLAYWRIGHT_CHANNEL: process.env.HYDRA_PLAYWRIGHT_CHANNEL?.trim() || undefined,
+    HYDRA_PLAYWRIGHT_EXECUTABLE_PATH: process.env.HYDRA_PLAYWRIGHT_EXECUTABLE_PATH?.trim() || undefined,
     HYDRA_PLAYWRIGHT_CDP_ENDPOINT: process.env.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim() || undefined,
     HYDRA_PROVISION_DEBUG: parseBoolean(process.env.HYDRA_PROVISION_DEBUG),
     HYDRA_PROVISION_NETWORK_LOG: parseBoolean(process.env.HYDRA_PROVISION_NETWORK_LOG),
@@ -87,13 +92,10 @@ try {
     HYDRA_REDEEM_ACTION_HASH: process.env.HYDRA_REDEEM_ACTION_HASH?.trim() || undefined,
   });
 } catch (err) {
-  // ─── ELECTRON_MIGRATION ───
-  // TODO: PAIN_POINTS.md #4 — Replace process.exit(1) with thrown error.
-  // In Electron this kills the entire app silently. electron/main.js should
-  // wrap the server import in try/catch and show a native dialog instead.
-  // ─── END ELECTRON_MIGRATION ───
-  console.error('Invalid environment variables:', err.issues ?? err.errors ?? err);
-  process.exit(1);
+  // In Electron, caught by electron/main.js try/catch which shows a native dialog.
+  const msg = `Invalid environment variables: ${JSON.stringify(err.issues ?? err.errors ?? err.message)}`;
+  console.error(msg);
+  throw new Error(msg);
 }
 
 export const config = parsedConfig;

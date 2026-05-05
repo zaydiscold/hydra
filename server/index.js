@@ -40,13 +40,44 @@ let shutdownInFlight = false;
 
 // Trust the Docker internal bridge / reverse proxy to prevent rate-limit global lockouts
 // (Gotcha #1: Without this, all Docker requests appear from 172.x.x.x → rate limiter locks out ALL users)
-if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1') {
+// MEDIUM #20: Also trust proxy when embedded in Electron (HYDRA_EMBEDDED)
+if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1' || process.env.HYDRA_EMBEDDED === '1') {
   app.set('trust proxy', 1);
 }
 
 // Standard middleware
-app.use(cors());
 app.use(express.json());
+const embeddedAllowedOrigins = new Set([
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+]);
+app.use(cors(process.env.HYDRA_EMBEDDED === '1'
+  ? {
+      origin(origin, callback) {
+        if (!origin) return callback(null, true);
+        try {
+          const parsed = new URL(origin);
+          if ((parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') && embeddedAllowedOrigins.has(parsed.origin)) {
+            return callback(null, true);
+          }
+        } catch {
+          // Fall through to denial.
+        }
+        return callback(new Error(`CORS denied for origin: ${origin}`));
+      },
+      credentials: true,
+    }
+  : undefined));
+
+// CSP middleware for Electron embedded mode — restrict to self
+if (process.env.HYDRA_EMBEDDED) {
+  app.use((_req, res, next) => {
+    // Vite's production build still emits inline style/script bootstrap in a few places.
+    // Keep unsafe-inline documented here until the renderer build is migrated to nonce/hash CSP.
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* ws://127.0.0.1:*");
+    next();
+  });
+}
 
 // --- Rate Limiting ---
 const authLimiter = rateLimit({
@@ -61,8 +92,16 @@ app.use('/api/webhooks', webhookRoutes);
 
 // --- System Routes ---
 app.post('/api/shutdown', requireUnlocked, (req, res) => {
+  if (process.env.HYDRA_EMBEDDED === '1' && req.body?.confirm !== 'SHUTDOWN_HYDRA') {
+    return res.status(400).json({
+      success: false,
+      error: 'Shutdown confirmation token required',
+      code: 'SHUTDOWN_CONFIRM_REQUIRED',
+    });
+  }
+  logger.warn('[SHUTDOWN] API shutdown requested');
   res.json({ success: true, message: 'Server shutting down' });
-  void gracefulShutdown('api');
+  void gracefulShutdown('api', { exit: !process.env.HYDRA_EMBEDDED });
 });
 
 // --- Protected Routes ---
@@ -94,7 +133,16 @@ app.use((req, res, next) => {
   
   res.sendFile(join(distPath, 'index.html'), (err) => {
     if (err) {
-      // In dev, 404 is fine. In prod, this is a configuration issue.
+      // MEDIUM #18: Log when dist/index.html is missing (SPA 404).
+      // In dev it's normal; in prod/packaged builds it's a configuration issue.
+      const indexPath = join(distPath, 'index.html');
+      logger.error({
+        source: 'spa_handler',
+        event: 'index_html_missing',
+        message: `[SPA] dist/index.html not found at ${indexPath}: ${err.message}`,
+        stack: err.stack,
+        code: err.code,
+      });
       next();
     }
   });
@@ -102,15 +150,9 @@ app.use((req, res, next) => {
 
 // Global Error Handler (Last stage)
 app.use(errorHandler);
-
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #3 — gracefulShutdown calls process.exit() unconditionally.
-// This kills the entire Electron app when embedded. Refactor to accept
-// { exit: boolean } option. When exit=false, resolve promise instead of exiting.
-// Terminal callers pass exit=true; Electron passes exit=false.
-// ─── END ELECTRON_MIGRATION ───
-async function gracefulShutdown(source = 'unknown') {
-  if (shutdownInFlight) return;
+// When exit=false, resolves promise instead of calling process.exit().
+async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5000 } = {}) {
+  if (shutdownInFlight) return true;
   shutdownInFlight = true;
 
   logger.info(`[SHUTDOWN] Starting graceful shutdown (${source})`);
@@ -124,43 +166,41 @@ async function gracefulShutdown(source = 'unknown') {
     logger.error(`[SHUTDOWN] Task supervisor shutdown failed: ${err.message}`);
   }
 
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #3 — Remove all process.exit() calls below. Use
-// { exit: true } option from callers instead. Electron callers need exit=false.
   if (!server) {
-    process.exit(0);
-    return;
+    logger.info('[SHUTDOWN] No server to close');
+    if (exit) process.exit(0);
+    return true;
   }
 
-  server.close(err => {
-    if (err) {
-      logger.error(`[SHUTDOWN] HTTP server close failed: ${err.message}`);
-      process.exit(1);
-      return;
-    }
-    logger.info('[SHUTDOWN] Hydra stopped cleanly');
-    process.exit(0);
-  });
+  return new Promise((resolve) => {
+    server.close((err) => {
+      if (err) {
+        logger.error(`[SHUTDOWN] HTTP server close failed: ${err.message}`);
+        if (exit) process.exit(1);
+        resolve(false);
+        return;
+      }
+      logger.info('[SHUTDOWN] Hydra stopped cleanly');
+      if (exit) process.exit(0);
+      resolve(true);
+    });
 
-  setTimeout(() => {
-    logger.warn('[SHUTDOWN] Forced exit after timeout');
-    process.exit(1);
-  }, 5000).unref();
-// ─── END ELECTRON_MIGRATION ───
+    setTimeout(() => {
+      logger.warn('[SHUTDOWN] Forced exit after timeout');
+      if (exit) process.exit(1);
+      resolve(false);
+    }, timeoutMs);
+  });
 }
 
-async function bootstrap() {
+async function bootstrap({ port, silent } = {}) {
   try {
     validateConfig();
     await enforceLegacyStorageReset();
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #3 — Remove process.exit(1). Throw error instead so
-// caller (electron/main.js or server/standalone.js) can handle it gracefully.
   } catch (err) {
     logger.error(err.message);
-    process.exit(1);
+    throw err;
   }
-// ─── END ELECTRON_MIGRATION ───
 
   taskSupervisor.start();
   startPinger();
@@ -169,45 +209,46 @@ async function bootstrap() {
 
   // Eagerly load the rotation pool so it's ready before first proxy request
   rotationManager.reload().catch(err => {
-    logger.warn(`[POOL] Eager load failed (no accounts yet?): ${err.message}`);
+    // HIGH #13: Structured error logging for rotationManager failures
+    logger.error({
+      source: 'rotationManager.reload',
+      event: 'eager_load_failed',
+      message: `[POOL] Eager load failed: ${err.message}`,
+      stack: err.stack,
+      code: err.code,
+    });
   });
 
-  server = app.listen(config.PORT, '0.0.0.0', () => {
-    logger.info(`  🐉 Hydra Server live on port ${config.PORT}`);
-    logger.info(`  Environment: ${config.NODE_ENV}`);
-    logger.info(`  Network: http://0.0.0.0:${config.PORT}`);
-    try {
-      const hydraKey    = getMasterProxyKey();
-      const genericKey  = getGenericProxyKey();
-      const base        = `http://localhost:${config.PORT}/v1`;
-      logger.info('');
-      logger.info('  ┌─ Proxy Keys ──────────────────────────────────────────────────────────────┐');
-      logger.info(`  │  Hydra branded   : ${hydraKey}`);
-      logger.info(`  │  OpenAI-compat   : ${genericKey}`);
-      logger.info(`  │  Base URL        : ${base}`);
-      logger.info('  │  Use either key as "Authorization: Bearer <key>" in Cursor / any client.  │');
-      logger.info('  └───────────────────────────────────────────────────────────────────────────┘');
-      logger.info('');
-    } catch (keyErr) {
-      logger.warn(`  [PROXY] Could not derive proxy keys (vault not yet initialised?): ${keyErr.message}`);
-    }
+  const listenPort = port ?? config.PORT;
+  const host = process.env.HYDRA_EMBEDDED ? '127.0.0.1' : '0.0.0.0';
+
+  server = await new Promise((resolve, reject) => {
+    const s = app.listen(listenPort, host, () => {
+      if (!silent) {
+        logger.info(`  Hydra Server live on port ${listenPort}`);
+        logger.info(`  Environment: ${config.NODE_ENV}`);
+        logger.info(`  Network: http://${host}:${listenPort}${host === '127.0.0.1' ? ' (loopback only)' : ''}`);
+        try {
+          const hydraKey    = getMasterProxyKey();
+          const genericKey  = getGenericProxyKey();
+          const base        = `http://localhost:${listenPort}/v1`;
+          logger.info('');
+          logger.info('  Proxy Keys:');
+          logger.info(`  Hydra branded   : ${hydraKey}`);
+          logger.info(`  OpenAI-compat   : ${genericKey}`);
+          logger.info(`  Base URL        : ${base}`);
+          logger.info('  Use either key as Authorization: Bearer *** in Cursor / any client.');
+          logger.info('');
+        } catch (keyErr) {
+          logger.warn(`  [PROXY] Could not derive proxy keys (vault not yet initialised?): ${keyErr.message}`);
+        }
+      }
+      resolve(s);
+    });
+    s.on('error', reject);
   });
+
+  return server;
 }
 
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #1 — Remove auto-bootstrap call. Export bootstrap() for
-// callers (electron/main.js, server/standalone.js) to invoke explicitly.
-bootstrap();
-// ─── END ELECTRON_MIGRATION ───
-
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #2 — Remove SIGINT/SIGTERM handlers. Electron main process
-// manages its own lifecycle. Move handlers to server/standalone.js for terminal path.
-// Also conflicts with gracefulShutdown calling process.exit() unconditionally.
-process.on('SIGINT', () => {
-  void gracefulShutdown('SIGINT');
-});
-
-process.on('SIGTERM', () => {
-  void gracefulShutdown('SIGTERM');
-});
+export { app, bootstrap, gracefulShutdown, server };

@@ -1,0 +1,36 @@
+#!/usr/bin/env node
+/**
+ * Hydra standalone server entry point (terminal / launch.js).
+ *
+ * Thin wrapper that imports bootstrap + gracefulShutdown from ./index.js,
+ * registers SIGINT/SIGTERM handlers, and starts the server on the
+ * configured port (env PORT or 3001 via server/config.js).
+ *
+ * This is the terminal-only entry point. Electron uses electron/main.js
+ * which imports bootstrap/gracefulShutdown directly and manages its own lifecycle.
+ */
+import { bootstrap, gracefulShutdown } from './index.js';
+
+const port = Number(process.env.PORT) || 3001;
+
+async function main() {
+  const shutdown = async (signal) => {
+    console.log(`\n[standalone] Received ${signal} — shutting down...`);
+    await gracefulShutdown(signal);
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+  try {
+    await bootstrap({ port });
+  } catch (err) {
+    console.error(`[standalone] Bootstrap failed: ${err.message}`);
+    await gracefulShutdown('bootstrap-error', { exit: true });
+  }
+}
+
+main().catch(err => {
+  console.error(`[standalone] Unhandled error: ${err.message}`);
+  process.exit(1);
+});

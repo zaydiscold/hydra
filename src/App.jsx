@@ -2,6 +2,7 @@ import { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react'
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import './index.css';
 import * as api from './api';
+import { logger } from './lib/client-logger.js';
 import DevBackendHint from './components/DevBackendHint';
 import ErrorBoundary from './components/ErrorBoundary';
 import { 
@@ -14,7 +15,8 @@ import {
   PowerIcon,
   NetworkIcon,
   ActivityIcon,
-  BulkAuthIcon
+  BulkAuthIcon,
+  InfoIcon
 } from './components/Icons';
 
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
@@ -23,6 +25,7 @@ const Vault = lazy(() => import('./pages/Vault.jsx'));
 const CodeRedemption = lazy(() => import('./pages/CodeRedemption.jsx'));
 const Generator = lazy(() => import('./pages/Generator.jsx'));
 const Settings = lazy(() => import('./pages/Settings.jsx'));
+const Diagnostics = lazy(() => import('./pages/Diagnostics.jsx'));
 const PoolManager = lazy(() => import('./pages/PoolManager.jsx'));
 const Traffic = lazy(() => import('./pages/Traffic.jsx'));
 const BulkAuthWizard = lazy(() => import('./pages/BulkAuthWizard.jsx'));
@@ -64,6 +67,47 @@ function GlobalLoadingBar() {
 
   if (!loading) return null;
   return <div className="global-nprogress" />;
+}
+
+function HydraLoadFrame({ tone = 'normal', title = 'HYDRA', status = 'INITIALIZING', detail, compact = false }) {
+  const letters = 'HYDRA PROXY 01011'.replaceAll(' ', '').split('');
+  const glyphs = Array.from({ length: compact ? 18 : 34 }, (_, i) => {
+    const char = letters[i % letters.length];
+    const x = 4 + ((i * 19) % 92);
+    const fall = 5.8 + ((i % 7) * 0.52);
+    const delay = -((i * 0.37) % 5.2);
+    const size = 18 + ((i % 5) * 7);
+    const spin = (i % 2 === 0 ? -1 : 1) * (8 + (i % 6) * 5);
+    return (
+      <span
+        key={`${char}-${i}`}
+        style={{
+          '--x': x,
+          '--fall': `${fall}s`,
+          '--delay': `${delay}s`,
+          '--size': `${size}px`,
+          '--spin': `${spin}deg`,
+        }}
+      >
+        {char}
+      </span>
+    );
+  });
+
+  return (
+    <div className={`hydra-load-frame hydra-load-frame--${tone}${compact ? ' hydra-load-frame--compact' : ''}`}>
+      <div className="hydra-letter-rain" aria-hidden="true">{glyphs}</div>
+      <div className="hydra-load-card">
+        <div className="hydra-load-mark" aria-hidden="true">
+          <div className="hydra-load-mark-core">H</div>
+        </div>
+        <h1>{title}</h1>
+        <div className="hydra-load-status">{status}</div>
+        {detail && <p className="hydra-load-detail">{detail}</p>}
+        <div className="hydra-load-meter" aria-hidden="true"><i /></div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Auth Screen ─────────────────────────────────────────────────────────────
@@ -307,7 +351,8 @@ const navItems = [
   { id: 'codes', label: 'Redeem', icon: <TicketIcon size={18} />, path: '/codes' },
   { id: 'generator', label: 'Generator', icon: <GeneratorIcon size={18} />, path: '/generator' },
   { id: 'traffic', label: 'Traffic', icon: <ActivityIcon size={18} />, path: '/traffic' },
-  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} />, path: '/settings' }
+  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} />, path: '/settings' },
+  { id: 'diagnostics', label: 'Diagnostics', icon: <InfoIcon size={18} />, path: '/diagnostics' }
 ];
 
 export default function App() {
@@ -384,7 +429,7 @@ export default function App() {
         setAuthState('setup');
       }
     } catch (err) {
-      console.warn('Auth check failed:', err.message);
+      logger.warn('Auth check failed:', err.message);
       setAuthError(
         import.meta.env.DEV
           ? 'Hydra backend is offline. From the project folder run npm run dev (starts API + UI), then refresh this page.'
@@ -413,8 +458,19 @@ export default function App() {
   }, [navigate]);
 
   const handleShutdown = useCallback(() => setShutdownConfirm(true), []);
+  const handleHideToBackground = useCallback(async () => {
+    setShutdownConfirm(false);
+    const result = await window.hydraNative?.hideWindow?.();
+    if (!result?.ok) {
+      addToast('Close the window to keep Hydra running in the background.', 'info');
+    }
+  }, [addToast]);
   const handleShutdownConfirmed = useCallback(async () => {
     setShutdownConfirm(false);
+    if (window.hydraNative?.quitApp) {
+      try { await window.hydraNative.quitApp(); } catch { /* fall through */ }
+      return;
+    }
     try { await api.shutdownServer(); } catch { /* ok */ }
     setAuthState('shutdown');
   }, []);
@@ -429,9 +485,7 @@ export default function App() {
   if (authState === 'loading') {
     return (
       <div className="center-container">
-        <h1 className="hydra-logo-text mb-xl glow-text">HYDRA</h1>
-        <div className="spinner spinner-lg mb-md"></div>
-        <p className="loading-text" style={{ letterSpacing: '8px' }}>INITIALIZING</p>
+        <HydraLoadFrame status="INITIALIZING" detail="Starting local dashboard and proxy" />
       </div>
     );
   }
@@ -440,9 +494,7 @@ export default function App() {
   if (authState === 'shutdown') {
     return (
       <div className="center-container">
-        <h1 className="hydra-logo-text mb-xl glow-text" style={{ color: 'var(--status-error)' }}>HYDRA</h1>
-        <p className="loading-text" style={{ color: 'var(--text-secondary)' }}>SERVER OFFLINE</p>
-        <p style={{ marginTop: '1rem', color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>You may now close this tab safely.</p>
+        <HydraLoadFrame tone="error" status="SERVER OFFLINE" detail="You may now close this tab safely." />
       </div>
     );
   }
@@ -451,11 +503,11 @@ export default function App() {
   if (authState === 'restart') {
     return (
       <div className="center-container">
-        <h1 className="hydra-logo-text mb-xl glow-text" style={{ color: 'var(--status-warning)' }}>HYDRA</h1>
-        <p className="loading-text" style={{ color: 'var(--text-secondary)' }}>RESTART REQUIRED</p>
-        <p style={{ marginTop: '1rem', color: 'var(--text-tertiary)', fontSize: '0.85rem', maxWidth: 520, textAlign: 'center' }}>
-          {authError || 'Restart the Hydra server once to regenerate local secrets, then refresh this page.'}
-        </p>
+        <HydraLoadFrame
+          tone="warning"
+          status="RESTART REQUIRED"
+          detail={authError || 'Restart the Hydra server once to regenerate local secrets, then refresh this page.'}
+        />
       </div>
     );
   }
@@ -464,9 +516,8 @@ export default function App() {
   if (authState === 'offline') {
     return (
       <div className="center-container">
-        <h1 className="hydra-logo-text mb-xl glow-text" style={{ color: 'var(--status-error)' }}>HYDRA</h1>
-        <p className="loading-text" style={{ color: 'var(--text-secondary)' }}>SERVER OFFLINE</p>
-        <div style={{ marginTop: '1rem', color: 'var(--text-tertiary)', fontSize: '0.85rem', maxWidth: 520, textAlign: 'center' }}>
+        <HydraLoadFrame tone="error" status="SERVER OFFLINE" detail={authError || 'Start the local Hydra server to continue.'} />
+        <div style={{ marginTop: '1rem', color: 'var(--text-tertiary)', fontSize: '0.85rem', maxWidth: 520, textAlign: 'center', position: 'relative', zIndex: 2 }}>
           <DevBackendHint
             message={authError || 'Start the local Hydra server to continue.'}
             copyCommand={import.meta.env.DEV ? api.HYDRA_DEV_START_COMMAND : ''}
@@ -563,20 +614,36 @@ export default function App() {
                 </span>
                 {!sidebarCollapsed && <span>Collapse</span>}
               </button>
-              <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
-                <span className="nav-icon"><LockIcon size={18} /></span>
-                {!sidebarCollapsed && <span>Lock</span>}
-              </button>
-              <button className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
-                <span className="nav-icon"><PowerIcon size={18} /></span>
-                {!sidebarCollapsed && <span>Shutdown</span>}
-              </button>
+              {typeof window !== 'undefined' && window.hydraNative && (
+                <>
+                  <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
+                    <span className="nav-icon">🔒</span>
+                    {!sidebarCollapsed && <span>Lock Vault</span>}
+                  </button>
+                  <button className="nav-link" style={{ color: 'var(--status-error)' }} onClick={() => window.close()} title="Quit">
+                    <span className="nav-icon"><PowerIcon size={18} /></span>
+                    {!sidebarCollapsed && <span>Quit</span>}
+                  </button>
+                </>
+              )}
+              {!(typeof window !== 'undefined' && window.hydraNative) && (
+                <>
+                  <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
+                    <span className="nav-icon"><LockIcon size={18} /></span>
+                    {!sidebarCollapsed && <span>Lock</span>}
+                  </button>
+                  <button className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
+                    <span className="nav-icon"><PowerIcon size={18} /></span>
+                    {!sidebarCollapsed && <span>Shutdown</span>}
+                  </button>
+                </>
+              )}
             </div>
           </aside>
 
           <main className={`main-content${sidebarCollapsed ? ' main-content--expanded' : ''}`}>
             <div key={location.pathname} className="animate-fade-in">
-              <Suspense fallback={<div className="loading-screen"><div className="spinner" /></div>}>
+              <Suspense fallback={<HydraLoadFrame compact status="LOADING VIEW" detail="Preparing workspace" />}>
                 <Routes>
                   <Route path="/" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
                   <Route path="/dashboard" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
@@ -590,6 +657,7 @@ export default function App() {
                   <Route path="/codes" element={<CodeRedemption addToast={addToast} />} />
                   <Route path="/generator" element={<Generator addToast={addToast} />} />
                   <Route path="/settings" element={<Settings addToast={addToast} onLogout={handleLogout} />} />
+                  <Route path="/diagnostics" element={<Diagnostics addToast={addToast} />} />
                   {/* Catch all to redirect to dashboard */}
                   <Route path="*" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
                 </Routes>
@@ -603,9 +671,12 @@ export default function App() {
             <div className="modal-overlay" onClick={() => setShutdownConfirm(false)}>
               <div className="modal-box" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-title">Shut down Hydra?</div>
-                <p className="modal-body">The background server will stop. You can restart it from the terminal.</p>
+                <p className="modal-body">Quit stops the local proxy. Hide keeps Hydra running in the background so clients can keep using it.</p>
                 <div className="modal-actions">
                   <button className="btn btn-ghost" onClick={() => setShutdownConfirm(false)}>Cancel</button>
+                  {window.hydraNative?.hideWindow && (
+                    <button className="btn btn-secondary" onClick={handleHideToBackground}>Hide Window</button>
+                  )}
                   <button className="btn btn-danger" onClick={handleShutdownConfirmed}>Shut down</button>
                 </div>
               </div>

@@ -1,16 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
 
 import { config } from '../config.js';
+import { getDataDir, getDataPath } from '../lib/data-dir.js';
 
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #5 — Replace process.cwd() with:
-//   process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data')
-// Same pattern needed in: auth.js, proxy-gate.js, redemption-log.js
-// ─── END ELECTRON_MIGRATION ───
-const DATA_DIR = path.join(process.cwd(), 'data');
-const SECRETS_PATH = path.join(DATA_DIR, 'local-secrets.json');
+const DATA_DIR = getDataDir();
+const SECRETS_PATH = getDataPath('local-secrets.json');
 const HEX_SECRET_LENGTH = 64;
 
 function normalizeSecret(secret, name) {

@@ -19,4 +19,4 @@ npx prisma db push --accept-data-loss=false
 # 3. Hand off to Node process, substituting the shell
 # exec ensures Node receives SIGTERM directly (tini forwards it)
 echo "[Hydra] Starting Hydra server..."
-exec node server/index.js
+exec node server/standalone.js

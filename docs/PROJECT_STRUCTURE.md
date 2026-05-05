@@ -37,6 +37,28 @@ The backend is a Node.js Express server that manages the local SQLite database v
 - **`middleware/`** — Authentication (JWT), logging (Winston), and rate limiting.
 - **`validators/`** — Zod schemas for request validation.
 
+### 🖥️ Desktop Shell (`/electron`)
+
+The Electron shell that wraps the web app as a native desktop application.
+
+- **`main.js`** — Electron main process: sets platform-native paths, starts embedded Express server, creates BrowserWindow, handles app lifecycle (window-all-closed, before-quit, activate).
+- **`preload.js`** — Secure renderer bridge via `contextBridge` exposing `appVersion`, `appPaths`, `platform`. `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
+- **`utils/migrateLegacyData.js`** — One-time migration from `./data/` to platform `userData` on first Electron launch.
+- **`menus/appMenu.js`** — macOS app menu bar configuration.
+- **`builders/afterPack.js`** — Post-packaging hook for electron-builder.
+- **`builders/entitlements.mac.plist`** — macOS code signing entitlements.
+- **`tests/main-process.test.mjs`** — Test suite for Electron main process.
+
+### 🎨 Desktop Assets (`/desktop`)
+
+Platform-specific assets and build resources for the Electron desktop build.
+
+- **`icons/icon.png`** — 1024x1024 source icon.
+- **`icons/icon.icns`** — macOS icon bundle.
+- **`icons/icon.ico`** — Windows icon bundle.
+- **`icons/README.md`** — Icon generation notes.
+- **`entitlements.mac.plist`** — macOS code signing entitlements (build resources copy).
+
 ### 🗄️ Database (`/prisma`)
 
 - **`schema.prisma`** — The source of truth for the local data model (User, Account, Key, RequestLog).
@@ -69,10 +91,16 @@ The backend is a Node.js Express server that manages the local SQLite database v
 - **`bin/hydra.mjs`** — Optional global CLI (`hydra`, `hydra dev`) after `npm link` in the repo root.
 - **`Start Hydra.command` / `.bat`** — User-facing shortcuts for starting the application.
 - **`vite.config.js`** — Build configuration for the frontend assets.
+- **`electron-builder.yml`** — Electron packaging configuration (dmg, nsis, AppImage).
+- **`electron/main.js`** — Electron entry point (`"main"` in package.json).
+- **`scripts/prepare-electron-resources.mjs`** — Generates packaged Electron resources (`empty-hydra.db` and bundled Playwright Chromium) before `electron-builder`.
+- **`scripts/smoke-electron-package.mjs`** — Validates the unpacked package contract: Prisma engine, migrations/schema, empty DB, Chromium, and app size.
 
 ## 🔁 Runtime Flow
 
-- `npm run dev` starts two processes with `concurrently`: the Vite client on `http://localhost:5173` and the Express API on `http://localhost:3001`.
+- `npm run dev` starts two processes with `concurrently`: the Vite client on `http://localhost:5173` and the Express API on `http://localhost:3001` (browser path).
+- `npm run dev:electron` starts concurrently with Vite + Electron (`electron .`), loading Vite HMR inside the Electron window.
+- `npx electron .` launches production-mode Electron (requires `npm run build` first).
 - Frontend edits under `src/` usually hot-reload through Vite.
 - Backend edits under `server/` require restarting the `npm run dev` process so Node loads the new code.
 - `npm start` uses `launch.js` to bootstrap the production-style server flow and serves the built client from `dist/`.

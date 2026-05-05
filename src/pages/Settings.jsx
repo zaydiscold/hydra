@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as api from '../api';
-import { LockIcon, NetworkIcon, SettingsIcon } from '../components/Icons';
+import { LockIcon, NetworkIcon, SettingsIcon, InfoIcon, RefreshIcon, CopyIcon } from '../components/Icons';
 
 export default function Settings({ addToast }) {
+  const navigate = useNavigate();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [lanUrls, setLanUrls] = useState([]);
   const [copied, setCopied] = useState(false);
+
+  // Electron native info
+  const [nativeInfo, setNativeInfo] = useState(null);
+  const [nativeLoading, setNativeLoading] = useState(true);
+  const isElectron = typeof window !== 'undefined' && window.hydraNative;
 
   const fallbackUrl = useMemo(
     () => `http://${window.location.hostname || 'localhost'}:3001/v1`,
@@ -23,6 +30,32 @@ export default function Settings({ addToast }) {
       .catch(() => {});
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!isElectron) {
+      setNativeLoading(false);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const [versionRes, platformRes, pathsRes] = await Promise.allSettled([
+          window.hydraNative.appVersion(),
+          window.hydraNative.platform(),
+          window.hydraNative.appPaths(),
+        ]);
+        if (mounted) {
+          setNativeInfo({
+            version: versionRes.status === 'fulfilled' ? versionRes.value?.data : null,
+            platform: platformRes.status === 'fulfilled' ? platformRes.value?.data : null,
+            paths: pathsRes.status === 'fulfilled' ? pathsRes.value?.data : null,
+          });
+        }
+      } catch { /* fine */ }
+      if (mounted) setNativeLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [isElectron]);
 
   async function handleChangePassword(e) {
     e.preventDefault();
@@ -149,6 +182,42 @@ export default function Settings({ addToast }) {
           </form>
         </div>
 
+      </div>
+
+      {/* Electron Native Info */}
+      {isElectron && !nativeLoading && nativeInfo && (
+        <div className="card" style={{ padding: 'var(--space-md)', marginTop: 'var(--space-md)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <NetworkIcon size={15} style={{ color: 'var(--accent-primary)' }} />
+            <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>System Info</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+            {nativeInfo.version && (
+              <div><span style={{ color: 'var(--text-tertiary)' }}>Version: </span>{nativeInfo.version}</div>
+            )}
+            {nativeInfo.platform && (
+              <div><span style={{ color: 'var(--text-tertiary)' }}>Platform: </span>{nativeInfo.platform}</div>
+            )}
+            {nativeInfo.paths?.userData && (
+              <div><span style={{ color: 'var(--text-tertiary)' }}>Data Dir: </span><code style={{ fontSize: '0.75rem', color: 'var(--accent-primary)' }}>{nativeInfo.paths.userData}</code></div>
+            )}
+            {nativeInfo.paths?.logs && (
+              <div><span style={{ color: 'var(--text-tertiary)' }}>Logs Dir: </span><code style={{ fontSize: '0.75rem', color: 'var(--accent-primary)' }}>{nativeInfo.paths.logs}</code></div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Diagnostics link */}
+      <div style={{ marginTop: 'var(--space-lg)', paddingTop: 'var(--space-md)', borderTop: '1px solid var(--border-subtle)' }}>
+        <button
+          className="btn btn-ghost"
+          onClick={() => navigate('/diagnostics')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}
+        >
+          <InfoIcon size={14} />
+          View Diagnostics &amp; Support Bundle
+        </button>
       </div>
     </>
   );

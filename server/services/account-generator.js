@@ -24,7 +24,7 @@
  */
 
 /* global document */
-import { chromium } from 'playwright';
+import { resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
 import * as store from './store.js';
 import * as dashboardApi from './dashboard-api.js';
 import { logger } from './logger.js';
@@ -121,11 +121,8 @@ async function launchSignupFlowPlaywright(task) {
       if (process.env.HYDRA_PLAYWRIGHT_NO_SANDBOX === '1') {
         launchArgs.push('--no-sandbox', '--disable-setuid-sandbox');
       }
-      // ─── ELECTRON_MIGRATION ───
-      // TODO: PAIN_POINTS.md #9 — Same Playwright binary issue. chromium.launch()
-      // won't find bundled Chromium in packaged Electron app.
-      // ─── END ELECTRON_MIGRATION ───
-      const browser = await chromium.launch({ headless: true, args: launchArgs });
+      const { chromium } = await import('playwright');
+      const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true, args: launchArgs }));
       const context = await browser.newContext({ userAgent: USER_AGENT });
       const page = await context.newPage();
       taskSupervisor.attachResources(task.taskId, { browser, context, page });

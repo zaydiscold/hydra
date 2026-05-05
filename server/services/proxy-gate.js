@@ -9,12 +9,10 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #5 — Replace process.cwd() with:
-//   process.env.HYDRA_DATA_DIR || join(process.cwd(), 'data')
-// Same pattern needed in: local-secrets.js, auth.js, redemption-log.js
-// ─── END ELECTRON_MIGRATION ───
-const DATA_DIR = join(process.cwd(), 'data');
+import { logger } from './logger.js';
+import { getDataDir } from '../lib/data-dir.js';
+
+const DATA_DIR = getDataDir();
 const STATE_FILE = join(DATA_DIR, 'proxy-gate.json');
 
 function loadPersistedState() {
@@ -32,7 +30,7 @@ function persistState(enabled) {
     writeFileSync(STATE_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
   } catch (err) {
     // Non-fatal — log but don't crash
-    console.warn(`[proxy-gate] Failed to persist state: ${err.message}`);
+    logger.warn(`[proxy-gate] Failed to persist state: ${err.message}`);
   }
 }
 

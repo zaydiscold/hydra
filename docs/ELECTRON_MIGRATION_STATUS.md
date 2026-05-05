@@ -1,270 +1,42 @@
-# ✈️ Electron Migration — Status & Pickup Guide
+# Electron Migration Status
 
-**Project:** Hydra Desktop App (Electron as primary runtime)
-**Status:** 🔴 PLANNING COMPLETE — Zero code changes implemented. Ready to start Phase 1.
-**Last Updated:** 2026-04-21
-**Branch:** `feat/http-signup-migration` (committed here temporarily — cherry-pick to dedicated branch when starting)
+**Last updated:** 2026-05-05  
+**Status:** ✅ Complete
 
----
+## Summary
 
-## 📋 What Is This?
+Hydra is now a native desktop application running on Electron. All migration items have been implemented and verified. The app ships as a self-contained package (macOS DMG, Windows NSIS installer, Linux AppImage) with no external dependencies.
 
-Hydra currently runs as a Node.js Express server + Vite React frontend in the browser. This migration makes it a **native desktop application**: users double-click `Hydra.app` (macOS) or `Hydra.exe` (Windows). No terminal, no browser tab, no `npm install`.
+### What was done
 
-The Express server becomes an **embedded module** inside Electron's main process. The React app runs in Electron's renderer window. Dev workflow uses Vite HMR inside the Electron window.
+- **Electron shell** — `electron/main.js` boots the embedded Express server, manages BrowserWindow lifecycle, and provides a minimal IPC bridge via `electron/preload.js` with context isolation.
+- **Server embeddable** — `server/standalone.js` preserves the terminal/server entry point. The Express server (`server/index.js`) exports `bootstrap()` and `gracefulShutdown()` for embedders without auto-running.
+- **Data migration** — First Electron launch migrates legacy `./data/` to the platform-native `app.getPath('userData')` directory via `electron/utils/migrateLegacyData.js`. The `HYDRA_DATA_DIR` env var is set before any server import.
+- **Prisma & native modules** — `electron-builder.yml` disables asar so Prisma's native query engine resolves normally. The `afterPack` hook (`electron/builders/afterPack.js`) copies the generated `.prisma/client` into the packaged app and prunes foreign engine binaries.
+- **Playwright Chromium** — `scripts/prepare-electron-resources.mjs` locates the Playwright Chromium revision and copies the platform payload into `build/electron/chromium/` for `electron-builder` `extraResources`.
+- **Empty DB** — `scripts/build-empty-db.mjs` generates an empty SQLite database (`data/empty-hydra.db`) from the Prisma schema, shipped with the app for first-launch instant setup.
+- **Packaging** — `npm run electron:build` runs `vite build` → `electron:prepare` → `electron-builder`. Output lands in `release/`.
+- **Smoke tests** — `npm run electron:smoke` validates the unpacked package contract (Prisma engine, migrations, empty DB, bundled Chromium, package size).
+- **Dev loop** — `npm run dev:electron` runs Vite HMR inside the Electron window for development.
 
----
+### Verification checklist (all passed)
 
-## 📚 Document Map (Read In This Order)
+| # | Item | Status |
+|---|------|--------|
+| 1 | `npm run preview:electron` opens the production UI with working API calls | ✅ |
+| 2 | `npm run electron:build` produces the expected platform artifact | ✅ |
+| 3 | `npm run electron:smoke` passes against the built artifact | ✅ |
+| 4 | Packaged app creates/reads accounts and survives restart with data intact | ✅ |
+| 5 | Packaged app runs Playwright provisioning path | ✅ |
+| 6 | Fresh Electron launch migrates legacy `./data` once, then uses Electron `userData` | ✅ |
+| 7 | macOS DMG, Windows NSIS, and Linux AppImage builds verified | ✅ |
+| 8 | CI coverage confirmed for build and smoke path | ✅ |
 
-| Doc | Purpose | Status |
-|-----|---------|--------|
-| **THIS FILE** | Status, pickup guide, quick reference | ✅ Current |
-| [ELECTRON_MASTER_PLAN.md](ELECTRON_MASTER_PLAN.md) | Full migration spec — architecture, 12 agents, build config, CI | ✅ Current |
-| [ELECTRON_PAIN_POINTS.md](ELECTRON_PAIN_POINTS.md) | 16 specific issues found in codebase — exact file:line, multiple approaches, recommended fix | ✅ Current |
-| ELECTRON_MIGRATION_PLAN.md | **SUPERSEDED** — old draft, do not use | ❌ Outdated |
-| ELECTRON_PLAN.md | **SUPERSEDED** — original draft, do not use | ❌ Outdated |
+## Documentation Map
 
----
-
-## 🎯 What's Done (Planning Phase)
-
-- [x] Full architecture designed (see MASTER_PLAN.md Section 2)
-- [x] 16 pain points identified and audited in codebase
-- [x] All pain points marked with `// ─── ELECTRON_MIGRATION ───` comments in source
-- [x] Multiple approaches evaluated for each issue, recommendations chosen
-- [x] Research completed on: Prisma+Electron packaging, Playwright+Electron packaging, ESM main process
-- [x] 12-agent decomposition plan written (MASTER_PLAN.md Section 10)
-- [x] Execution order and dependencies mapped (MASTER_PLAN.md Section 11)
-- [x] Verification checklist defined (MASTER_PLAN.md Section 12)
-
-## 🔴 What's NOT Done (Implementation Phase — Next)
-
-- [ ] **Phase 1:** Server refactor (Issues #1–7 in PAIN_POINTS.md)
-- [ ] **Phase 2:** Packaging config (Issues #8–10)
-- [ ] **Phase 3:** Polish (Issues #11–16)
-- [ ] **Phase 4:** Build, test, CI/CD
-
----
-
-## 🚀 How to Pick Up (Step by Step)
-
-### Step 0: Orient Yourself
-```bash
-cd ~/Desktop/hydra
-# Read the current status
-open docs/ELECTRON_MIGRATION_STATUS.md
-# Read the full plan
-open docs/ELECTRON_MASTER_PLAN.md
-# Read the pain points
-open docs/ELECTRON_PAIN_POINTS.md
-```
-
-### Step 1: Find All TODO Markers in Code
-```bash
-grep -rn "ELECTRON_MIGRATION" server/ scripts/ vite.config.js
-```
-This shows every file that needs attention. 13 files are marked.
-
-### Step 2: Start Phase 1 — Server Refactor
-
-**Goal:** Make `server/index.js` importable without auto-starting.
-
-**Files to change (in order):**
-
-1. **`server/index.js`** 
-   - Remove `bootstrap();` auto-call (line ~183)
-   - Remove `process.on('SIGINT')` and `process.on('SIGTERM')` (lines ~185-191)
-   - Refactor `gracefulShutdown(source)` → `gracefulShutdown(source, { exit = true, timeoutMs = 5000 })`
-   - Replace all `process.exit()` calls inside gracefulShutdown with conditional `if (exit)`
-   - Replace `process.exit(1)` in `bootstrap()` catch block with `throw err`
-   - Export `{ app, bootstrap, gracefulShutdown, server }`
-   - See PAIN_POINTS.md Issues #1, #2, #3
-
-2. **`server/config.js`**
-   - No changes needed if electron/main.js sets env vars before import
-   - Keep the `process.exit(1)` there — it's caught by electron/main.js try/catch
-   - See PAIN_POINTS.md Issue #4
-
-3. **5 service files — data path abstraction:**
-   - `server/services/local-secrets.js` (line ~7)
-   - `server/services/auth.js` (line ~12)
-   - `server/services/proxy-gate.js` (line ~12)
-   - `server/services/redemption-log.js` (line ~11)
-   - Pattern: `const DATA_DIR = process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data');`
-   - See PAIN_POINTS.md Issue #5
-
-4. **`scripts/launch.js`**
-   - Import `{ bootstrap, gracefulShutdown }` from `../server/index.js`
-   - Replace `spawn('node', ['server/index.js'])` with direct `await bootstrap({ port })`
-   - Remove child process stdout/stderr streaming
-   - Update signal handlers to call `gracefulShutdown('SIGINT', { exit: true })`
-   - See PAIN_POINTS.md Issues #2, #7
-
-5. **NEW `server/standalone.js`**
-   - Minimal wrapper: imports bootstrap, calls it, registers signal handlers
-   - Used by Docker and terminal paths
-   - See PAIN_POINTS.md Issue #2
-
-6. **`vite.config.js`**
-   - No code changes needed — just note the proxy target stays 3001
-   - `electron/main.js` will bind Express to port 3001 in dev mode
-   - See PAIN_POINTS.md Issue #6
-
-### Step 3: Create Electron Shell
-
-**NEW files to create:**
-
-7. **`electron/main.js`**
-   - Sets `process.env.HYDRA_DATA_DIR = app.getPath('userData')`
-   - Sets `process.env.DATABASE_URL = file:${userData}/hydra.db`
-   - Sets `process.env.PLAYWRIGHT_BROWSERS_PATH`
-   - Imports server AFTER env setup: `const { bootstrap } = await import('../server/index.js')`
-   - Wraps import in try/catch, shows `dialog.showErrorBox()` on failure
-   - Creates BrowserWindow, loads Vite URL in dev / Express URL in prod
-   - Handles `before-quit` → `gracefulShutdown('before-quit', { exit: false })` → `app.exit(0)`
-   - See MASTER_PLAN.md Section 5.1 for full code
-
-8. **`electron/preload.js`**
-   - Minimal contextBridge exposing: `appVersion`, `appPaths`, `openPath`
-   - `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`
-   - See MASTER_PLAN.md Section 5.2
-
-9. **`electron/utils/migrateLegacyData.js`**
-   - Copies `./data/` to `userData/` on first launch
-   - Idempotent — checks if userData already has files
-   - See MASTER_PLAN.md Section 5.3
-
-### Step 4: Update Package Scripts & Build Config
-
-10. **`package.json`**
-    - Add `electron`, `electron-builder`, `electron-updater`, `electron-log` to deps
-    - Update scripts: `"dev"`, `"dev:web"`, `"preview"`, `"electron:build"`, `"postinstall"`
-    - Set `"main": "electron/main.js"`
-    - See MASTER_PLAN.md Section 6.1
-
-11. **`electron-builder.yml`**
-    - `asarUnpack` for Prisma (`node_modules/.prisma/**`, `node_modules/@prisma/client/**`)
-    - `asarUnpack` for Playwright JS files
-    - `extraResources` for Chromium browsers (if bundling)
-    - `extraResources` for pre-built DB template
-    - Platform targets: dmg (mac), nsis (win), AppImage (linux)
-    - See MASTER_PLAN.md Section 6.2
-
-### Step 5: Test & Iterate
-
-12. Run `npm run dev` — should open Electron window with Vite HMR
-13. Run `npm run preview` — should open Electron with production build
-14. Run `npm run electron:build` — should produce `.dmg`
-15. Verify data persistence, graceful shutdown, Playwright provisioning
-
-See MASTER_PLAN.md Sections 7–12 for full testing strategy, CI config, and definition of done.
-
----
-
-## 📝 Quick Reference: 16 Issues
-
-| # | Issue | File(s) | Severity | Fix Complexity |
-|---|-------|---------|----------|---------------|
-| 1 | Server auto-starts on import | `server/index.js:183` | 🔴 Critical | Low |
-| 2 | Signal handlers conflict with Electron | `server/index.js:185-191` | 🔴 Critical | Low |
-| 3 | `process.exit()` in shutdown kills Electron | `server/index.js` gracefulShutdown | 🔴 Critical | Medium |
-| 4 | `process.exit(1)` in config kills Electron | `server/config.js:91` | 🔴 Critical | Low |
-| 5 | 5 files hardcode `process.cwd()/data` | 5 services | 🔴 Critical | Low |
-| 6 | Vite proxy hardcodes port 3001 | `vite.config.js:17` | 🔴 Critical | Low |
-| 7 | `launch.js` spawns dead server | `scripts/launch.js:205` | 🔴 Critical | Medium |
-| 8 | Prisma engine binary fails in asar | `server/services/db.js` | 🔴 Critical | Medium |
-| 9 | Playwright can't find Chromium in packaged app | `dashboard-api.js`, `account-generator.js` | 🔴 Critical | Medium |
-| 10 | Prisma migrations at runtime | `prisma/migrations/` | 🔴 Critical | Medium |
-| 11 | `dotenv/config` in packaged app | `server/config.js:2` | ⚪ No action | None |
-| 12 | macOS Gatekeeper blocks unsigned app | — | 🟡 Polish | Document only (v1) |
-| 13 | App will be 300MB+ | — | 🟡 Polish | Monitor |
-| 14 | Docker entrypoint breaks | (no Dockerfile found) | 🟡 Polish | Low |
-| 15 | No log files in production | `server/services/logger.js` | 🟡 Polish | Low |
-| 16 | `__dirname` in ESM | Various | ⚪ No action | None |
-
----
-
-## 🧠 Key Decisions Already Made
-
-1. **Electron as primary, browser as fallback** — `npm run dev:web` preserved for debugging
-2. **No IPC for API calls** — frontend still uses `fetch()` to localhost
-3. **Raw ESM main process** — no electron-vite bundler (simpler, Electron 35 supports ESM)
-4. **Express in main process** — not a hidden renderer
-5. **asarUnpack for Prisma + Playwright** — standard pattern, well-tested
-6. **Ship pre-built empty DB** — avoids runtime `prisma migrate deploy` complexity
-7. **Bundle Chromium for Playwright** — adds ~400MB but guarantees provisioning works
-8. **No code signing for v1** — document right-click → Open workaround
-9. **Server ignorance** — `server/` has zero Electron-specific code
-
-See MASTER_PLAN.md Appendix for full decision log.
-
----
-
-## 🔧 Files Modified During Planning (Committed)
-
-```
-docs/ELECTRON_MASTER_PLAN.md          # Added PICKUP NOTE, status
-docs/ELECTRON_PAIN_POINTS.md          # Added PICKUP NOTE, phase breakdown
-server/index.js                       # TODO comments: Issues #1, #2, #3
-server/config.js                      # TODO comment: Issue #4
-server/services/db.js                 # TODO comment: Issue #8
-server/services/local-secrets.js      # TODO comment: Issue #5
-server/services/auth.js               # TODO comment: Issue #5
-server/services/proxy-gate.js         # TODO comment: Issue #5
-server/services/redemption-log.js     # TODO comment: Issue #5
-server/services/dashboard-api.js      # TODO comments: Issue #9 (4 locations)
-server/services/account-generator.js  # TODO comment: Issue #9
-scripts/launch.js                     # TODO comments: Issues #2, #7
-vite.config.js                        # TODO comment: Issue #6
-```
-
-Commit: `031e300`
-
----
-
-## 🐛 Known Risks & Unknowns
-
-| Risk | Likelihood | Mitigation |
-|------|-----------|------------|
-| ESM entry point fails in electron-builder | Medium | Test early; fallback to CJS wrapper if needed |
-| Prisma can't find query engine in asar | High | asarUnpack pattern verified; test in packaged build |
-| Playwright can't find Chromium in asar | High | extraResources + PLAYWRIGHT_BROWSERS_PATH; test provisioning |
-| Data migration corrupts or misses files | Low | Atomic copy (not move); verify checksums |
-| macOS Gatekeeper blocks unsigned app | High (for users) | Document workaround; plan signing for v2 |
-| Windows Defender false positive | Medium | Code signing helps; avoid suspicious APIs |
-
----
-
-## 🎯 Definition of Done
-
-- [ ] `npm run dev:web` works exactly as before (browser path preserved)
-- [ ] `npm start` (`scripts/launch.js`) works exactly as before
-- [ ] `npm run dev` opens Electron window, loads UI, HMR works
-- [ ] `npm run preview` opens Electron with production build
-- [ ] `npm run electron:build` produces `.dmg` (mac) or `.exe` (win)
-- [ ] Built app opens on a clean machine WITHOUT Node.js installed
-- [ ] Built app persists data across restarts
-- [ ] First launch copies legacy `./data/` to `userData`
-- [ ] Second launch uses `userData` (no re-copy)
-- [ ] Graceful shutdown: no orphan Node processes after quit
-- [ ] Playwright provisioning works in built app
-- [ ] All existing tests pass (`npm run test:*`)
-- [ ] New Electron tests pass (`npm run test:electron:*`)
-- [ ] CI passes on macOS and Windows
-- [ ] `server/` has ZERO Electron-specific code
-- [ ] `src/` has ZERO Electron-specific code (only uses `window.hydraNative` if needed)
-- [ ] README has install instructions for end users
-
----
-
-## 👥 Who to Contact
-
-- **Zayd** — Product owner, decides on signing budget, scope cuts, v1 vs v2 features
-- **Future agent** — Read this file, then MASTER_PLAN.md, then PAIN_POINTS.md, then grep for ELECTRON_MIGRATION
-
----
-
-**This document is the single source of truth for picking up the Electron migration.**
-
-If you're reading this and anything is unclear, update this file — don't let the next person wonder. ✅
+| Doc | Purpose |
+|-----|---------|
+| `docs/ELECTRON_MIGRATION_STATUS.md` | This file — current status |
+| `docs/ELECTRON_MASTER_PLAN.md` | Historical architecture decisions and original plan |
+| `docs/ELECTRON_TROUBLESHOOTING.md` | Runtime/build troubleshooting guide |
+| `docs/PACKAGING.md` | Packaging pipeline and artifact details |
