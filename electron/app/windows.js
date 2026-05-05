@@ -101,6 +101,9 @@ export function createMainWindow({ preloadPath, windowURL, openExternalUrl, onCl
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
+      experimentalFeatures: false,
+      webviewTag: false,
+      devTools: isDev,
       spellcheck: false,
       backgroundThrottling: true,
     },
@@ -113,6 +116,13 @@ export function createMainWindow({ preloadPath, windowURL, openExternalUrl, onCl
 
   win.on('closed', () => {
     // Caller tracks the reference; this just lets GC collect the window.
+  });
+
+  win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+  win.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault();
   });
 
   const isAllowedLocalUrl = (rawUrl) => {
@@ -132,6 +142,11 @@ export function createMainWindow({ preloadPath, windowURL, openExternalUrl, onCl
     if (isAllowedLocalUrl(targetUrl)) return;
     event.preventDefault();
     console.warn(`[electron] blocked navigation outside Hydra UI: ${targetUrl}`);
+  });
+  win.webContents.on('will-frame-navigate', (event, targetUrl) => {
+    if (isAllowedLocalUrl(targetUrl)) return;
+    event.preventDefault();
+    console.warn(`[electron] blocked frame navigation outside Hydra UI: ${targetUrl}`);
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {

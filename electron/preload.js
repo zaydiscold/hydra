@@ -29,6 +29,12 @@ contextBridge.exposeInMainWorld('hydraNative', {
   appPaths: () => ipcRenderer.invoke('native:get-paths'),
 
   /**
+   * Native runtime status: server URL, embedded mode, packaging state.
+   * @returns {Promise<{ok:true,data:object}|{ok:false,error:string,code?:string}>}
+   */
+  status: () => ipcRenderer.invoke('native:get-status'),
+
+  /**
    * Open a path in the OS file manager. Path must be inside one of the
    * allowed roots (userData, logs, downloads, documents) — see main.js.
    * @param {string} targetPath

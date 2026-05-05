@@ -32,7 +32,7 @@ export const MIGRATIONS_DIR = path.join(isDev ? APP_ROOT : RESOURCES_PATH, 'pris
 export const PRISMA_BIN = path.join(APP_ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'prisma.cmd' : 'prisma');
 export const ICON_PATH = path.join(__dirname, '..', '..', 'desktop', 'icons', 'icon.png');
 export const LOCAL_UI_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
-export const EXTERNAL_URL_ALLOWLIST = new Set(['github.com']);
+export const EXTERNAL_URL_ALLOWLIST = new Set(['github.com', 'openrouter.ai']);
 
 // ─── 2. Platform setup ──────────────────────────────────────────────────────
 export function setupPlatform() {
