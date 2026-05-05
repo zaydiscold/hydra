@@ -201,26 +201,11 @@ async function bootstrap({ port, silent } = {}) {
     throw err;
   }
 
-  taskSupervisor.start();
-  startPinger();
-  startRequestLogRetention();
-  startSessionRefresher(); // P13 — auto-refresh sessions approaching expiry
-
-  // Eagerly load the rotation pool so it's ready before first proxy request
-  rotationManager.reload().catch(err => {
-    // HIGH #13: Structured error logging for rotationManager failures
-    logger.error({
-      source: 'rotationManager.reload',
-      event: 'eager_load_failed',
-      message: `[POOL] Eager load failed: ${err.message}`,
-      stack: err.stack,
-      code: err.code,
-    });
-  });
-
   const listenPort = port ?? config.PORT;
   const host = process.env.HYDRA_EMBEDDED ? '127.0.0.1' : '0.0.0.0';
 
+  // #10: Listen FIRST, then start services. If port conflict occurs,
+  // the promise rejects before any timers are created — no leak.
   server = await new Promise((resolve, reject) => {
     const s = app.listen(listenPort, host, () => {
       if (!silent) {
@@ -245,6 +230,24 @@ async function bootstrap({ port, silent } = {}) {
       resolve(s);
     });
     s.on('error', reject);
+  });
+
+  // Services started only after successful listen
+  taskSupervisor.start();
+  startPinger();
+  startRequestLogRetention();
+  startSessionRefresher(); // P13 — auto-refresh sessions approaching expiry
+
+  // Eagerly load the rotation pool so it's ready before first proxy request
+  rotationManager.reload().catch(err => {
+    // HIGH #13: Structured error logging for rotationManager failures
+    logger.error({
+      source: 'rotationManager.reload',
+      event: 'eager_load_failed',
+      message: `[POOL] Eager load failed: ${err.message}`,
+      stack: err.stack,
+      code: err.code,
+    });
   });
 
   return server;
