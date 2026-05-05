@@ -104,7 +104,15 @@ export async function runSelfHeal({ dbPath, migrationsDir, log = console.log }) 
   try {
     for (const { stmt, kind, table, name, migration } of stmts) {
       try {
-        await prisma.$executeRawUnsafe(stmt);
+        // Bug #36: race against a timeout — a DB-level lock can cause
+        // $executeRawUnsafe to hang indefinitely.
+        const STATEMENT_TIMEOUT_MS = 15_000;
+        await Promise.race([
+          prisma.$executeRawUnsafe(stmt),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('STATEMENT_TIMEOUT')), STATEMENT_TIMEOUT_MS),
+          ),
+        ]);
         applied++;
         const label = kind === 'alter' ? `ALTER ${table}` : `INDEX ${name} ON ${table}`;
         log(`[DB_HEAL] applied: ${label} (from ${migration})`);
