@@ -14,7 +14,7 @@ async function audit() {
     let config = {};
     try {
       config = decryptConfig(acc.config);
-    } catch (e) {
+    } catch {
       console.log(`[ERROR] Failed to decrypt config for ${acc.alias}`);
     }
     
