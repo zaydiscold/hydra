@@ -109,8 +109,8 @@ app.use(errorHandler);
 // { exit: boolean } option. When exit=false, resolve promise instead of exiting.
 // Terminal callers pass exit=true; Electron passes exit=false.
 // ─── END ELECTRON_MIGRATION ───
-async function gracefulShutdown(source = 'unknown') {
-  if (shutdownInFlight) return;
+async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5000 } = {}) {
+  if (shutdownInFlight) return true;
   shutdownInFlight = true;
 
   logger.info(`[SHUTDOWN] Starting graceful shutdown (${source})`);
@@ -124,43 +124,41 @@ async function gracefulShutdown(source = 'unknown') {
     logger.error(`[SHUTDOWN] Task supervisor shutdown failed: ${err.message}`);
   }
 
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #3 — Remove all process.exit() calls below. Use
-// { exit: true } option from callers instead. Electron callers need exit=false.
   if (!server) {
-    process.exit(0);
-    return;
+    logger.info('[SHUTDOWN] No server to close');
+    if (exit) process.exit(0);
+    return true;
   }
 
-  server.close(err => {
-    if (err) {
-      logger.error(`[SHUTDOWN] HTTP server close failed: ${err.message}`);
-      process.exit(1);
-      return;
-    }
-    logger.info('[SHUTDOWN] Hydra stopped cleanly');
-    process.exit(0);
-  });
+  return new Promise((resolve) => {
+    server.close((err) => {
+      if (err) {
+        logger.error(`[SHUTDOWN] HTTP server close failed: ${err.message}`);
+        if (exit) process.exit(1);
+        resolve(false);
+        return;
+      }
+      logger.info('[SHUTDOWN] Hydra stopped cleanly');
+      if (exit) process.exit(0);
+      resolve(true);
+    });
 
-  setTimeout(() => {
-    logger.warn('[SHUTDOWN] Forced exit after timeout');
-    process.exit(1);
-  }, 5000).unref();
-// ─── END ELECTRON_MIGRATION ───
+    setTimeout(() => {
+      logger.warn('[SHUTDOWN] Forced exit after timeout');
+      if (exit) process.exit(1);
+      resolve(false);
+    }, timeoutMs).unref();
+  });
 }
 
 async function bootstrap() {
   try {
     validateConfig();
     await enforceLegacyStorageReset();
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #3 — Remove process.exit(1). Throw error instead so
-// caller (electron/main.js or server/standalone.js) can handle it gracefully.
   } catch (err) {
     logger.error(err.message);
-    process.exit(1);
+    throw err;
   }
-// ─── END ELECTRON_MIGRATION ───
 
   taskSupervisor.start();
   startPinger();
@@ -181,33 +179,19 @@ async function bootstrap() {
       const genericKey  = getGenericProxyKey();
       const base        = `http://localhost:${config.PORT}/v1`;
       logger.info('');
-      logger.info('  ┌─ Proxy Keys ──────────────────────────────────────────────────────────────┐');
+      logger.info('  ┌─ Proxy Keys ───────────────────────────────────────────────────────────────────────────────────────┐');
       logger.info(`  │  Hydra branded   : ${hydraKey}`);
       logger.info(`  │  OpenAI-compat   : ${genericKey}`);
       logger.info(`  │  Base URL        : ${base}`);
-      logger.info('  │  Use either key as "Authorization: Bearer <key>" in Cursor / any client.  │');
-      logger.info('  └───────────────────────────────────────────────────────────────────────────┘');
+      logger.info('  │  Use either key as "Authorization: Bearer *** in Cursor / any client.  │');
+      logger.info('  └──────────────────────────────────────────────────────────────────────────────────────┘');
       logger.info('');
     } catch (keyErr) {
       logger.warn(`  [PROXY] Could not derive proxy keys (vault not yet initialised?): ${keyErr.message}`);
     }
   });
+
+  return server;
 }
 
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #1 — Remove auto-bootstrap call. Export bootstrap() for
-// callers (electron/main.js, server/standalone.js) to invoke explicitly.
-bootstrap();
-// ─── END ELECTRON_MIGRATION ───
-
-// ─── ELECTRON_MIGRATION ───
-// TODO: PAIN_POINTS.md #2 — Remove SIGINT/SIGTERM handlers. Electron main process
-// manages its own lifecycle. Move handlers to server/standalone.js for terminal path.
-// Also conflicts with gracefulShutdown calling process.exit() unconditionally.
-process.on('SIGINT', () => {
-  void gracefulShutdown('SIGINT');
-});
-
-process.on('SIGTERM', () => {
-  void gracefulShutdown('SIGTERM');
-});
+export { app, bootstrap, gracefulShutdown, server };
