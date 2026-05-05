@@ -32,8 +32,11 @@ app.setName('Hydra');
 setupLogging();
 setupPlatform();
 
+// #85: requestSingleInstanceLock prevents dual Electron processes.
+// If we don't get the lock, quit cleanly — don't race process.exit(0)
+// against app.quit() (Bug #16). app.quit() will exit the process naturally.
 const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) { app.quit(); process.exit(0); }
+if (!gotLock) { app.quit(); }
 
 setupEnvironment(app);
 

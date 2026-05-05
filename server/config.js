@@ -16,8 +16,19 @@ const configSchema = z.object({
   PORT: z.coerce.number().default(3001),
   HYDRA_SERVER_PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  JWT_SECRET: z.string().min(1, 'JWT_SECRET is required').default('hydra-dev-secret-unsafe'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required')
+    // #84: Validate DATABASE_URL starts with file: (SQLite) or postgres:// protocol.
+    // In Electron mode this is always file:. Reject clearly-wrong schemes early.
+    .refine((url) => url.startsWith('file:') || url.startsWith('postgres://') || url.startsWith('postgresql://'), {
+      message: 'DATABASE_URL must start with file:, postgres://, or postgresql://',
+    }),
+  JWT_SECRET: z.string().min(1, 'JWT_SECRET is required').default('hydra-dev-secret-unsafe')
+    // #83: Validate JWT_SECRET is at least 32 characters and trimmed.
+    // Trivially short or whitespace-only secrets produce forgeable tokens.
+    .transform((s) => s.trim())
+    .refine((s) => s.length >= 32, {
+      message: 'JWT_SECRET must be at least 32 characters after trimming',
+    }),
   /** Master lock-screen JWT lifetime (jsonwebtoken `expiresIn`, e.g. 8h, 7d, 30d). */
   HYDRA_MASTER_JWT_TTL: z.string().min(1).max(48).default('30d'),
   LOCAL_STORAGE_KEY: optionalHexSecret,
