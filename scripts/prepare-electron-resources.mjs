@@ -34,9 +34,14 @@ function browserCacheRoots() {
   if (process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.PLAYWRIGHT_BROWSERS_PATH !== '0') {
     roots.push(resolve(process.env.PLAYWRIGHT_BROWSERS_PATH));
   }
-  roots.push(resolve(homedir(), 'Library/Caches/ms-playwright'));
+  // Platform-specific cache roots — prefer the platform-native location first
+  if (process.platform === 'darwin') {
+    roots.push(resolve(homedir(), 'Library/Caches/ms-playwright'));
+  }
   roots.push(resolve(homedir(), '.cache/ms-playwright'));
-  if (process.env.LOCALAPPDATA) roots.push(resolve(process.env.LOCALAPPDATA, 'ms-playwright'));
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
+    roots.push(resolve(process.env.LOCALAPPDATA, 'ms-playwright'));
+  }
   return [...new Set(roots.filter(Boolean))];
 }
 
@@ -78,5 +83,28 @@ for (const child of ['chrome-mac', 'chrome-mac-arm64', 'chrome-linux', 'chrome-w
   if (existsSync(source)) {
     cpSync(source, resolve(CHROMIUM_OUT, child), { recursive: true, dereference: true });
   }
+}
+
+// Validate that the copied Chromium has at least one executable path
+// that playwright-browser.js resolveBundledChromium() will search.
+const execPaths = [
+  resolve(CHROMIUM_OUT, 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+  resolve(CHROMIUM_OUT, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+  resolve(CHROMIUM_OUT, 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+  resolve(CHROMIUM_OUT, 'chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+  resolve(CHROMIUM_OUT, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+  resolve(CHROMIUM_OUT, 'chrome'),
+  resolve(CHROMIUM_OUT, 'chromium'),
+  resolve(CHROMIUM_OUT, 'chromium-browser'),
+  resolve(CHROMIUM_OUT, 'chrome-linux', 'chrome'),
+  resolve(CHROMIUM_OUT, 'chrome-win', 'chrome.exe'),
+];
+const found = execPaths.find(p => existsSync(p));
+if (found) {
+  console.log(`[prepare-electron-resources] validated chromium executable: ${found}`);
+} else {
+  console.warn(`[prepare-electron-resources] WARNING: no known chromium executable found under ${CHROMIUM_OUT}`);
+  console.warn('  playwright-browser.js resolveBundledChromium() will not find a browser binary.');
+  console.warn('  Expected one of:\n    ' + execPaths.join('\n    '));
 }
 console.log(`[prepare-electron-resources] copied ${basename(chromiumSrc)} to ${CHROMIUM_OUT}`);

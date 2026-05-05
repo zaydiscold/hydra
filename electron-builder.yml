@@ -1,6 +1,8 @@
 appId: com.zayd.hydra
 productName: Hydra
 copyright: Copyright © 2026
+artifactName: ${productName}-${version}-${arch}.${ext}
+
 # asar disabled — see electron/builders/afterPack.js comment.
 # Prisma's @prisma/client/default.js does `require('.prisma/client')` which
 # walks up node_modules looking for the dotfile dir. electron-builder filters
@@ -77,18 +79,33 @@ win:
       arch:
         - x64
   icon: desktop/icons/icon.ico
-  publisherName: Hydra
-
-linux:
-  target:
-    - target: AppImage
-      arch:
-        - x64
-  icon: desktop/icons/icon.png
-  category: Utility
+  publisherName: Zayd
+  publisher: Hydra
+  legalTrademarks: Hydra is a trademark of Zayd
+  verifyUpdateCodeSignature: false
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
+  shortcutName: Hydra
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: desktop/icons/icon.png
+  category: Utility
+  synopsis: Multi-chain DeFi management dashboard
+  description: >-
+    Hydra is a desktop application for managing DeFi positions, vaults,
+    and accounts across multiple blockchain networks.
+  packageCategory: utils
+  maintainer: Zayd <zayd@hydra.app>
+  vendor: Zayd

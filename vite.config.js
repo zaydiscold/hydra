@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const vitePort = Number(process.env.HYDRA_VITE_PORT) || 5173
+const serverPort = Number(process.env.HYDRA_SERVER_PORT) || 3001
 
 export default defineConfig({
   plugins: [react()],
@@ -14,11 +15,11 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: `http://localhost:${serverPort}`,
         changeOrigin: true,
       },
       '/v1': {
-        target: 'http://localhost:3001',
+        target: `http://localhost:${serverPort}`,
         changeOrigin: true,
       },
     },

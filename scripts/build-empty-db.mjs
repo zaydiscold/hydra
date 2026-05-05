@@ -17,8 +17,8 @@
  *   - A valid DATABASE_URL is needed; we override it for this build step
  */
 
-import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, copyFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, copyFileSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -145,8 +145,9 @@ PRAGMA foreign_keys=ON;
 
 try {
   try {
-    execSync(
-      `npx prisma db push --schema="${SCHEMA_PATH}" --accept-data-loss --force-reset`,
+    execFileSync(
+      'npx',
+      ['prisma', 'db', 'push', `--schema=${SCHEMA_PATH}`, '--accept-data-loss', '--force-reset'],
       {
         cwd: PROJECT_ROOT,
         env: {
@@ -160,7 +161,8 @@ try {
   } catch (err) {
     console.warn(`[build-empty-db] Prisma db push failed; falling back to sqlite3 bootstrap (${err.stderr || err.message})`);
     writeFileSync(tempSql, bootstrapSql);
-    execSync(`sqlite3 "${tempDb}" < "${tempSql}"`, { cwd: PROJECT_ROOT, stdio: 'pipe', timeout: 30_000 });
+    const sqlInput = readFileSync(tempSql, 'utf-8');
+    execFileSync('sqlite3', [tempDb], { cwd: PROJECT_ROOT, input: sqlInput, stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000 });
   }
 
   // Copy the freshly-pushed database to the final empty-db path

@@ -3,7 +3,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { config } from '../config.js';
-const DATA_DIR = process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data');
+
+/**
+ * Resolve the Hydra data directory once, centrally.
+ * All services that need DATA_DIR should import this value.
+ */
+export const DATA_DIR = process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data');
 const SECRETS_PATH = path.join(DATA_DIR, 'local-secrets.json');
 const HEX_SECRET_LENGTH = 64;
 

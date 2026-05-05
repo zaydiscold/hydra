@@ -18,11 +18,16 @@
  *   H: desktop/icons/icon.png exists
  *   I: desktop/icons/icon.icns exists
  *   J: dist/index.html exists (Vite build output)
+ *
+ * Phase 4: Live integration
+ *   K: Dynamic import of server modules works
+ *   L: Ephemeral server boot + graceful shutdown
  */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'node:net';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -32,7 +37,14 @@ let failed = 0;
 
 function check(name, fn) {
   try {
-    fn();
+    const result = fn();
+    if (result && typeof result.then === 'function') {
+      // Async check — will be awaited in the main run loop
+      return result.then(
+        () => { passed++; console.log('  PASS  ' + name); },
+        (err) => { failed++; console.log('  FAIL  ' + name + ': ' + err.message); }
+      );
+    }
     passed++;
     console.log('  PASS  ' + name);
   } catch (err) {
@@ -47,6 +59,19 @@ function assertFile(path, desc) {
 
 function assertPattern(content, regex, desc) {
   if (!regex.test(content)) throw new Error(desc + ' not found');
+}
+
+/** Find a free port by binding to port 0. */
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.on('listening', () => {
+      const port = srv.address().port;
+      srv.close(() => resolve(port));
+    });
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1');
+  });
 }
 
 async function run() {
@@ -118,6 +143,54 @@ async function run() {
   check('J: dist/index.html exists (Vite built)', () => {
     assertFile('dist/index.html', 'dist/index.html');
     console.log('      (run `npm run build` to generate if missing)');
+  });
+
+  // ─── Phase 4: Live integration ───
+  await check('K: dynamic import of server modules works', async () => {
+    // Verify key server modules can be imported without error
+    const { bootstrap, gracefulShutdown, server } = await import('../server/index.js');
+    if (typeof bootstrap !== 'function') throw new Error('bootstrap is not a function');
+    if (typeof gracefulShutdown !== 'function') throw new Error('gracefulShutdown is not a function');
+    if (server !== null) throw new Error('server should be null before bootstrap');
+  });
+
+  await check('L: ephemeral server boot + graceful shutdown', async () => {
+    const { bootstrap, gracefulShutdown } = await import('../server/index.js');
+
+    // Find a free port to avoid conflicts
+    const port = await findFreePort();
+    const originalDbUrl = process.env.DATABASE_URL;
+
+    // Use the empty-hydra.db for a clean sandbox
+    const dbPath = resolve(ROOT, 'data', 'empty-hydra.db');
+    if (!existsSync(dbPath)) {
+      throw new Error('empty-hydra.db not found — run `node scripts/build-empty-db.mjs` first');
+    }
+    process.env.DATABASE_URL = `file:${dbPath}`;
+
+    try {
+      const srv = await bootstrap({ port, silent: true });
+      if (!srv || typeof srv.close !== 'function') {
+        throw new Error('bootstrap did not return an http.Server');
+      }
+
+      // Verify server responds to health checks
+      const res = await fetch(`http://127.0.0.1:${port}/api/system/health`);
+      if (res.status !== 200) {
+        throw new Error(`Health endpoint returned status ${res.status}`);
+      }
+
+      // Shut down gracefully
+      await gracefulShutdown('integration-gate', { exit: false });
+      console.log('      (ephemeral server started on port ' + port + ', health check passed, shut down)');
+    } finally {
+      // Restore original DATABASE_URL
+      if (originalDbUrl) {
+        process.env.DATABASE_URL = originalDbUrl;
+      } else {
+        delete process.env.DATABASE_URL;
+      }
+    }
   });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed\n`);

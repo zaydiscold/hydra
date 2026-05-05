@@ -16,6 +16,7 @@ import {
   ActivityIcon,
   BulkAuthIcon
 } from './components/Icons';
+import logger from './utils/clientLogger';
 
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
 const AccountDetail = lazy(() => import('./pages/AccountDetail.jsx'));
@@ -425,7 +426,7 @@ export default function App() {
         setAuthState('setup');
       }
     } catch (err) {
-      console.warn('Auth check failed:', err.message);
+      logger.warn('Auth check failed:', err.message);
       setAuthError(
         import.meta.env.DEV
           ? 'Hydra backend is offline. From the project folder run npm run dev (starts API + UI), then refresh this page.'

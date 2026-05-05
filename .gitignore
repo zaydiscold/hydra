@@ -53,6 +53,14 @@ prisma/dev.db
 
 /src/generated/prisma
 
+# Build output and generated artifacts
+build/
+
+# Capture dumps and analysis artifacts
+captures/
+*.dump
+*.capture.json
+
 # Heavy local media/build workspaces
 videos/remotion-project/node_modules/
 videos/remotion-project/out/

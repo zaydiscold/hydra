@@ -33,7 +33,7 @@ async function pingRandomKey() {
       headers: {
         'Authorization': `Bearer ${keyEntry.keyString}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost:3001',
+        'HTTP-Referer': `${OR_BASE}/`,
       },
       // 1-token cheap payload
       body: JSON.stringify({

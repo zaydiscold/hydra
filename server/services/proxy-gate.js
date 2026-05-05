@@ -8,6 +8,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { logger } from './logger.js';
 const DATA_DIR = process.env.HYDRA_DATA_DIR || join(process.cwd(), 'data');
 const STATE_FILE = join(DATA_DIR, 'proxy-gate.json');
 
@@ -26,7 +27,7 @@ function persistState(enabled) {
     writeFileSync(STATE_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
   } catch (err) {
     // Non-fatal — log but don't crash
-    console.warn(`[proxy-gate] Failed to persist state: ${err.message}`);
+    logger.warn(`[proxy-gate] Failed to persist state: ${err.message}`);
   }
 }
 

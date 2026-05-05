@@ -133,8 +133,19 @@ function checkEnv() {
 async function runMigrations() {
   step('Checking database...');
   try {
-    run('npx prisma db push --skip-generate', { silent: true });
-    success('Database ready');
+    const { runSelfHeal } = await import('../server/lib/db-self-heal.js');
+    // Extract dbPath from DATABASE_URL or use the default Prisma dev.db
+    const dbUrl = process.env.DATABASE_URL || `file:${join(PROJECT_ROOT, 'prisma', 'dev.db')}`;
+    const dbPath = dbUrl.startsWith('file:') ? dbUrl.slice(5) : dbUrl;
+    const migrationsDir = join(PROJECT_ROOT, 'prisma', 'migrations');
+
+    const summary = await runSelfHeal({ dbPath, migrationsDir, log: (m) => info(m) });
+    if (summary.errors > 0) {
+      error(`Self-heal: ${summary.applied} applied, ${summary.skipped} skipped, ${summary.errors} errors`);
+      error('Errors: ' + summary.errorDetails.join('; '));
+      process.exit(1);
+    }
+    success(`Database ready (${summary.applied} migrations applied, ${summary.skipped} already current)`);
   } catch (err) {
     error('Database migration failed. Resolve migration errors before launching.');
     info(err.message?.slice(0, 200));
