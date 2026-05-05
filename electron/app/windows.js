@@ -5,7 +5,7 @@
  */
 import { BrowserWindow, app } from 'electron';
 import path from 'node:path';
-import { ICON_PATH, LOCAL_UI_HOSTS, EXTERNAL_URL_ALLOWLIST } from './env.js';
+import { isDev, ICON_PATH, LOCAL_UI_HOSTS, EXTERNAL_URL_ALLOWLIST } from './env.js';
 
 // ─── Splash window — paints in <100 ms ────────────────────────────────────
 export function createSplashWindow() {
