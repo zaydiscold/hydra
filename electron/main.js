@@ -220,10 +220,22 @@ app.whenReady().then(async () => {
       clearTimeout(loadTimeout);
     }
 
-    // Fire-and-forget firstLaunchSetup in background
+    // Fire-and-forget firstLaunchSetup in background, but surface failures visibly
     if (needsSync) {
-      firstLaunchSetup(trackedChildren).catch(e =>
-        console.error('[electron] background firstLaunchSetup failed:', e));
+      firstLaunchSetup(trackedChildren).catch(e => {
+        console.error('[electron] background firstLaunchSetup failed:', e);
+        // Bug #35: show a dialog so the user knows something went wrong
+        // instead of seeing silent 500s with no explanation.
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          dialog.showErrorBox(
+            'Database Setup Error',
+            'Hydra was unable to sync the database schema.\n\n' +
+            'This may mean the app needs to be restarted. If the problem persists, ' +
+            'your database may be corrupt.\n\n' +
+            'Error: ' + (e.message || String(e)),
+          );
+        }
+      });
     }
   } catch (e) {
     console.error('[electron] Failed to start Hydra:', e);
