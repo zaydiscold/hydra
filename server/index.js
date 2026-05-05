@@ -51,7 +51,7 @@ app.use(express.json());
 // CSP middleware for Electron embedded mode — restrict to self
 if (process.env.HYDRA_EMBEDDED) {
   app.use((_req, res, next) => {
-    res.setHeader('Content-Security-Policy', "default-src 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:*");
     next();
   });
 }
@@ -70,7 +70,7 @@ app.use('/api/webhooks', webhookRoutes);
 // --- System Routes ---
 app.post('/api/shutdown', requireUnlocked, (req, res) => {
   res.json({ success: true, message: 'Server shutting down' });
-  void gracefulShutdown('api');
+  void gracefulShutdown('api', { exit: !process.env.HYDRA_EMBEDDED });
 });
 
 // --- Protected Routes ---
@@ -155,7 +155,7 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
       logger.warn('[SHUTDOWN] Forced exit after timeout');
       if (exit) process.exit(1);
       resolve(false);
-    }, timeoutMs).unref();
+    }, timeoutMs);
   });
 }
 

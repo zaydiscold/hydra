@@ -9,7 +9,7 @@
  *   5. Set up macOS app menu
  *   6. Handle app lifecycle with graceful shutdown
  */
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +25,7 @@ process.env.HYDRA_EMBEDDED = '1';
 // ─── 2. State ──────────────────────────────────────────────────────────────
 let mainWindow = null;
 let gracefulShutdown = null;
+let shuttingDown = false;
 
 // ─── 3. First-Launch: Migrate legacy data ──────────────────────────────────
 async function firstLaunchSetup() {
@@ -76,6 +77,14 @@ app.whenReady().then(async () => {
       ? 'http://localhost:5173'
       : `http://localhost:${port}`;
 
+    // ─── IPC Handlers (registered before window creation) ─────────────────
+    ipcMain.handle('native:get-version', () => app.getVersion());
+    ipcMain.handle('native:get-paths', () => ({
+      userData: app.getPath('userData'),
+      home: app.getPath('home'),
+    }));
+    ipcMain.handle('native:open-path', (_event, targetPath) => shell.openPath(targetPath));
+
     mainWindow = new BrowserWindow({
       width: 1440,
       height: 900,
@@ -119,6 +128,8 @@ app.on('activate', () => {
 
 // ─── 6. Before-Quit: graceful shutdown then force exit ────────────────────
 app.on('before-quit', (event) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   event.preventDefault();
   (async () => {
     try {

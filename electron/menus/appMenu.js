@@ -1,4 +1,4 @@
-import { app, Menu } from 'electron';
+import { app, Menu, shell } from 'electron';
 
 const isMac = process.platform === 'darwin';
 
@@ -61,7 +61,6 @@ const template = [
       {
         label: 'Hydra Documentation',
         click: async () => {
-          const { shell } = await import('electron');
           await shell.openExternal('https://github.com/zaydiscold/hydra');
         },
       },

@@ -13,5 +13,5 @@ contextBridge.exposeInMainWorld('hydraNative', {
   appVersion: () => ipcRenderer.invoke('native:get-version'),
   appPaths: () => ipcRenderer.invoke('native:get-paths'),
   openPath: (targetPath) => ipcRenderer.invoke('native:open-path', targetPath),
-  platform: process.platform,
+  platform: () => process.platform,
 });

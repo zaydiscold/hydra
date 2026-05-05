@@ -15,7 +15,6 @@
 import { bootstrap, gracefulShutdown } from './index.js';
 
 const port = process.env.PORT || 3001;
-process.env.PORT = String(port);
 
 async function main() {
   const shutdown = async (signal) => {
@@ -34,4 +33,7 @@ async function main() {
   }
 }
 
-main();
+main().catch(err => {
+  console.error(`[standalone] Unhandled error: ${err.message}`);
+  process.exit(1);
+});
