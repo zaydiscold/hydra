@@ -465,21 +465,14 @@ export default function App() {
       addToast('Close the window to keep Hydra running in the background.', 'info');
     }
   }, [addToast]);
-  const handleQuit = useCallback(async () => {
-    if (window.hydraNative?.quitApp) {
-      try { await window.hydraNative.quitApp(); } catch { /* fall through */ }
-      return;
-    }
+  const handleQuit = useCallback(() => {
     window.close();
   }, []);
   const handleShutdownConfirmed = useCallback(async () => {
     setShutdownConfirm(false);
-    if (window.hydraNative?.quitApp) {
-      try { await window.hydraNative.quitApp(); } catch { /* fall through */ }
-      return;
-    }
     try { await api.shutdownServer(); } catch { /* ok */ }
     setAuthState('shutdown');
+    window.close();
   }, []);
 
   const navigateToAccount = useCallback((accountId) => {
