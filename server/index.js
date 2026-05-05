@@ -40,7 +40,8 @@ let shutdownInFlight = false;
 
 // Trust the Docker internal bridge / reverse proxy to prevent rate-limit global lockouts
 // (Gotcha #1: Without this, all Docker requests appear from 172.x.x.x → rate limiter locks out ALL users)
-if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1') {
+// MEDIUM #20: Also trust proxy when embedded in Electron (HYDRA_EMBEDDED)
+if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1' || process.env.HYDRA_EMBEDDED === '1') {
   app.set('trust proxy', 1);
 }
 
@@ -102,7 +103,16 @@ app.use((req, res, next) => {
   
   res.sendFile(join(distPath, 'index.html'), (err) => {
     if (err) {
-      // In dev, 404 is fine. In prod, this is a configuration issue.
+      // MEDIUM #18: Log when dist/index.html is missing (SPA 404).
+      // In dev it's normal; in prod/packaged builds it's a configuration issue.
+      const indexPath = join(distPath, 'index.html');
+      logger.error({
+        source: 'spa_handler',
+        event: 'index_html_missing',
+        message: `[SPA] dist/index.html not found at ${indexPath}: ${err.message}`,
+        stack: err.stack,
+        code: err.code,
+      });
       next();
     }
   });
@@ -175,7 +185,14 @@ async function bootstrap({ port, silent } = {}) {
 
   // Eagerly load the rotation pool so it's ready before first proxy request
   rotationManager.reload().catch(err => {
-    logger.warn(`[POOL] Eager load failed (no accounts yet?): ${err.message}`);
+    // HIGH #13: Structured error logging for rotationManager failures
+    logger.error({
+      source: 'rotationManager.reload',
+      event: 'eager_load_failed',
+      message: `[POOL] Eager load failed: ${err.message}`,
+      stack: err.stack,
+      code: err.code,
+    });
   });
 
   const listenPort = port ?? config.PORT;
