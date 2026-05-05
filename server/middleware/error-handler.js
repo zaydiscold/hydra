@@ -5,6 +5,13 @@ import { logger } from '../services/logger.js';
  * Catch-all middleware for Express.
  */
 export const errorHandler = (err, req, res, _next) => {
+  // #11: Guard against double-send — if headers were already sent
+  // (e.g., a streaming response started writing), delegate to Express's
+  // default error handler rather than crashing the process.
+  if (res.headersSent) {
+    return _next(err);
+  }
+
   const status = err.status || 500;
   const message = err.message || 'Internal Server Error';
 
