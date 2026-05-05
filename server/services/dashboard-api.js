@@ -1321,6 +1321,7 @@ export const REDEEM_ERROR_CODES = Object.freeze({
   FORM_UNAVAILABLE: 'REDEEM_FORM_UNAVAILABLE',
   OUTCOME_UNKNOWN: 'REDEEM_OUTCOME_UNKNOWN',
   UPSTREAM: 'REDEEM_UPSTREAM',
+  MAX_USES: 'REDEEM_MAX_USES',       // "code has reached maximum redemptions"
 });
 
 function normalizeTrpcCode(c) {
@@ -1384,6 +1385,13 @@ export function classifyRedeemFailure(rawMessage, err = {}) {
   }
   if (/\btwo-factor\b/i.test(msg) || /\b2fa\b/i.test(msg)) {
     return { errorCode: REDEEM_ERROR_CODES.SESSION, message: msg };
+  }
+
+  // Max uses / max redemptions — distinct from promo invalid
+  // Example: "code has reached maximum redemptions" (ROUTE75-9BGQCV)
+  if (/\b(maximum|max)\s+(redemptions|uses|claims|times)\b/i.test(msg) ||
+      /\breached\s+(its\s+)?(max|limit)\b/i.test(msg)) {
+    return { errorCode: REDEEM_ERROR_CODES.MAX_USES, message: msg };
   }
 
   if (messageLooksLikeInvalidPromo(msg)) {
