@@ -171,7 +171,15 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
 
   return new Promise((resolve) => {
     const forceExitTimer = setTimeout(() => {
-      logger.warn('[SHUTDOWN] Forced exit after timeout');
+      // #23: Log hung subsystem details so operators can tell what's stuck.
+      const connections = server ? (typeof server._connections !== 'undefined' ? server._connections : 'unknown') : 'N/A';
+      const listening = server?.listening ?? false;
+      logger.warn(`[SHUTDOWN] Forced exit after timeout (${timeoutMs}ms) — ${connections} active connection(s), listening=${listening}`);
+
+      // #24: Reset shutdownInFlight so a subsequent shutdown attempt can retry
+      // instead of being stuck with a permanent true guard.
+      shutdownInFlight = false;
+
       if (exit) process.exit(1);
       resolve(false);
     }, timeoutMs);
@@ -181,6 +189,8 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
       clearTimeout(forceExitTimer);
       if (err) {
         logger.error(`[SHUTDOWN] HTTP server close failed: ${err.message}`);
+        // #24: Reset flag on failure too so retries aren't blocked.
+        shutdownInFlight = false;
         if (exit) process.exit(1);
         resolve(false);
         return;
