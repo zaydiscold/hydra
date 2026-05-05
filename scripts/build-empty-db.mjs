@@ -41,6 +41,17 @@ console.log(`[build-empty-db] Output: ${EMPTY_DB_PATH}`);
 const tempDb = resolve(DATA_DIR, '.hydra-empty-temp.db');
 const tempSql = resolve(DATA_DIR, '.hydra-empty-temp.sql');
 const bootstrapSql = `
+-- ⚠️  AUTO-GENERATED FALLBACK — DEPRECATED  ⚠️
+-- ───────────────────────────────────────────
+-- This SQL is a hand-maintained copy of the schema DDL from
+--   prisma/schema.prisma
+-- It is ONLY used when `prisma db push` fails (e.g., sqlite3 CLI
+-- fallback).  It is stale by definition — if you add/change a table,
+-- column, index, or constraint in schema.prisma you MUST update this
+-- block to match, otherwise the fallback path will create a DB that
+-- doesn't reflect the current schema.  Consider this a last resort.
+-- Run `node scripts/validate-fallback-sql.mjs` to check consistency.
+-- ───────────────────────────────────────────
 PRAGMA foreign_keys=OFF;
 DROP TABLE IF EXISTS "ManagementKey";
 DROP TABLE IF EXISTS "RequestLog";
@@ -160,6 +171,8 @@ try {
     );
   } catch (err) {
     console.warn(`[build-empty-db] Prisma db push failed; falling back to sqlite3 bootstrap (${err.stderr || err.message})`);
+    console.warn('[build-empty-db] ⚠️  USING DEPRECATED FALLBACK SQL — schema.prisma changes may not be reflected!');
+    console.warn('[build-empty-db] Make sure bootstrapSql in this file matches the current prisma/schema.prisma.');
     writeFileSync(tempSql, bootstrapSql);
     execFileSync('sqlite3', [tempDb], {
       input: readFileSync(tempSql, 'utf-8'),
