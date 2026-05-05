@@ -1,4 +1,4 @@
-import { app, Menu } from 'electron';
+import { app, Menu, dialog } from 'electron';
 
 const isMac = process.platform === 'darwin';
 
@@ -9,16 +9,44 @@ export function setupAppMenu({
   showAndFocusMainWindow = () => {},
   hideWindow = () => {},
   quitCompletely = () => app.quit(),
+  navigateToSettings = () => {},
 } = {}) {
+  const name = app.getName();
   const template = [
     ...(isMac ? [{
-      label: app.getName(),
+      label: name,
       submenu: [
-        { role: 'about' },
+        {
+          label: `About ${name}`,
+          click: (_item, focusedWindow) => {
+            // Custom About panel instead of Electron's generic dialog
+            const details = [
+              `${name} — local OpenRouter proxy & account manager`,
+              '',
+              `Version: ${app.getVersion()}`,
+              `Electron: ${process.versions.electron}`,
+              `Chrome: ${process.versions.chrome}`,
+              `Node.js: ${process.versions.node}`,
+              `Platform: ${process.platform} ${process.arch}`,
+              '',
+              'License: MIT',
+              'https://github.com/zaydiscold/hydra',
+            ].join('\n');
+            dialog.showMessageBox(focusedWindow || undefined, {
+              type: 'info',
+              title: `About ${name}`,
+              message: name,
+              detail: details,
+              buttons: ['OK'],
+            });
+          },
+        },
         { type: 'separator' },
-        { label: 'Show Hydra', click: showAndFocusMainWindow },
-        { label: 'Hide Window', click: hideWindow },
-        { label: 'Quit Hydra Completely', click: quitCompletely },
+        { label: 'Preferences…', accelerator: 'CmdOrCtrl+,', click: navigateToSettings },
+        { type: 'separator' },
+        { label: 'Show Hydra', accelerator: 'CmdOrCtrl+0', click: showAndFocusMainWindow },
+        { label: 'Hide Window', accelerator: 'CmdOrCtrl+H', click: hideWindow },
+        { label: 'Quit Hydra Completely', accelerator: 'CmdOrCtrl+Alt+Q', click: quitCompletely },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -61,10 +89,11 @@ export function setupAppMenu({
     {
       label: 'Hydra',
       submenu: [
-        { label: 'Show Hydra', click: showAndFocusMainWindow },
-        { label: 'Hide Window', click: hideWindow },
+        { label: 'Show Hydra', accelerator: 'CmdOrCtrl+0', click: showAndFocusMainWindow },
+        { label: 'Hide Window', accelerator: 'CmdOrCtrl+H', click: hideWindow },
         {
           label: 'Copy Proxy URL',
+          accelerator: 'CmdOrCtrl+Shift+C',
           click: async (_item, focusedWindow) => {
             const { clipboard } = await import('electron');
             clipboard.writeText(`${getServerUrl() || 'http://localhost:3001'}/v1`);
@@ -72,7 +101,9 @@ export function setupAppMenu({
           },
         },
         { type: 'separator' },
-        { label: 'Quit Hydra Completely', click: quitCompletely },
+        { label: 'Preferences…', accelerator: 'CmdOrCtrl+,', click: navigateToSettings },
+        { type: 'separator' },
+        { label: 'Quit Hydra Completely', accelerator: 'CmdOrCtrl+Alt+Q', click: quitCompletely },
       ],
     },
     {

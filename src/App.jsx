@@ -443,6 +443,13 @@ export default function App() {
     checkAuth();
   }, [checkAuth]);
 
+  // ── Listen for main-process navigation (e.g. Cmd+, → Preferences) ──
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.hydraNative?.onNavigate) {
+      window.hydraNative.onNavigate((path) => navigate(path));
+    }
+  }, [navigate]);
+
   const handleAuthSuccess = useCallback(() => setAuthState('app'), []);
 
   const handleRestartRequired = useCallback((message) => {

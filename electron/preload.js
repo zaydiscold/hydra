@@ -59,4 +59,12 @@ contextBridge.exposeInMainWorld('hydraNative', {
    * @returns {Promise<{ok:true,data:true}|{ok:false,error:string,code?:string}>}
    */
   quitApp: () => ipcRenderer.invoke('native:quit-app'),
+
+  /**
+   * Listen for main-process navigation requests (e.g., from app menu).
+   * @param {(path: string) => void} callback
+   */
+  onNavigate: (callback) => {
+    ipcRenderer.on('navigate', (_event, path) => callback(path));
+  },
 });

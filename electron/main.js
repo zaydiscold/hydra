@@ -42,12 +42,33 @@ function createTray() {
   const t = getTray();
   if (t && !t.isDestroyed()) return t;
   let img = nativeImage.createFromPath(ICON_PATH);
-  if (!img.isEmpty()) img = img.resize({ width: 18, height: 18 });
-  const tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
+  if (img.isEmpty()) {
+    // ── Programmatic fallback: 16×16 "H" icon so tray is never invisible ──
+    const size = 16;
+    const canvas = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        // Simple "H" glyph
+        const hBar = (x === 2 || x === size - 3) && y >= 3 && y <= size - 4;
+        const hMid = y >= 7 && y <= 9 && x >= 3 && x <= size - 4;
+        if (hBar || hMid) {
+          canvas[i] = 255;     // R
+          canvas[i + 1] = 0;   // G
+          canvas[i + 2] = 255; // B
+          canvas[i + 3] = 255; // A
+        } else {
+          canvas[i + 3] = 0;   // transparent
+        }
+      }
+    }
+    img = nativeImage.createFromBuffer(canvas, { width: size, height: size });
+  }
+  img = img.resize({ width: 18, height: 18 });
+  const tray = new Tray(img);
   tray.setToolTip('Hydra — local OpenRouter proxy');
   const rebuildMenu = () => {
     const url = getWindowURL();
-    const w = getMainWindow();
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Show Hydra', click: showAndFocusMainWindow },
       { type: 'separator' },
@@ -62,6 +83,8 @@ function createTray() {
     ]));
   };
   rebuildMenu();
+  // Expose rebuild so the tray can be updated when proxy status changes
+  tray._hydraRebuildMenu = rebuildMenu;
   tray.on('click', showAndFocusMainWindow);
   setTray(tray);
   return tray;
@@ -126,6 +149,11 @@ app.whenReady().then(async () => {
       showAndFocusMainWindow,
       hideWindow: () => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.hide(); },
       quitCompletely: () => { setForceQuit(true); app.quit(); },
+      navigateToSettings: () => {
+        showAndFocusMainWindow();
+        const mw = getMainWindow();
+        if (mw && !mw.isDestroyed()) mw.webContents.send('navigate', '/settings');
+      },
     });
 
     createTray();
