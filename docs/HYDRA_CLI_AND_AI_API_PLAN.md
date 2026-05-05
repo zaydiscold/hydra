@@ -1,8 +1,45 @@
 # Hydra CLI & AI API Plan
 
-> **Status:** Plan, not code. Date: 2026-05-05. Branch: `feat/electron-migration`.
+> **Status:** P0 shipped. Date: 2026-05-05. Branch: `master`.
 > **Goal:** Make Hydra usable from the terminal and from any AI agent without ever opening the React UI.
 > **Inspiration:** Peter Steipete's CLIs (`bird`, `Peekaboo`, `xcap`) — subcommand-first, defaults-heavy, JSON-pipeable, zero interactive prompts.
+
+---
+
+## SITREP — 2026-05-05 — P0 commands shipped
+
+Three read-only commands ship in `bin/commands/`:
+
+| Command | What it shows | Notes |
+|---|---|---|
+| `hydra status` | Fleet (accounts, healthy, balance, keys) **+** proxy (port probe, URL, gate state, masked Hydra/Generic keys) **+** storage (data dir) | Tight TCP probe (250 ms) tells you instantly if anything's listening on `:3001`. Shows `● running` / `○ not running` and the `/v1` URL when up. |
+| `hydra accounts` | One row per account: short id, email, health pip, balance, session status, key count, age | `--json` swaps to a flat object array suitable for `\| jq` |
+| `hydra balance [id]` | Total balance across the fleet, or balance for a single account by id-prefix match | `--json` emits `{ total, breakdown[] }` |
+
+All three call `server/services/store.js` directly via `bin/lib/services.js` — no Express boot, no port, no auth handshake. Cold-start cost ~150 ms, roughly the time it takes Prisma to open the SQLite DB.
+
+**Files added:**
+```
+bin/lib/output.js          ASCII table + status pips + color (NO_COLOR aware), zero deps
+bin/lib/services.js        Lazy-load server/services/* + DB user resolution
+bin/commands/status.js     Fleet + proxy + storage overview
+bin/commands/accounts.js   Tabular account list
+bin/commands/balance.js    Total or per-id balance
+```
+
+`bin/hydra.mjs` extends its existing dispatcher to lazy-load any `commands/<verb>.js` file — adding a new command is one new file + one entry in `managerCommands`.
+
+**Known limit (intentional):** `hydra accounts` shows `BALANCE = —` for cached accounts because `store.getAccounts()` returns DB-cached rows (fast, no upstream calls). To get live balances every time, switch to `store.getAllAccountsWithKeys()` (decrypts secrets) or add a `--live` flag in v0.2.
+
+**Proxy/router host story:** `hydra` (no args) keeps its existing behavior of starting `scripts/launch.js` — that boots the Express server which holds `:3001` open and serves `/v1`. So the CLI *already* hosts the proxy when invoked bare; the new manager commands talk to the same DB without needing Express.
+
+### What's next (when you greenlight)
+
+- **P1 (write-ish):** `hydra accounts add`, `hydra codes redeem <code>`, `hydra accounts sync` — the smallest "add an account from terminal" slice.
+- **P2 (ops):** `hydra keys provision <id>`, `hydra keys rotate`, `hydra scan` — full health pass.
+- **P3 (AI):** `hydra ai chat "<prompt>"`, `hydra ai models` — direct OpenAI-compat usage from the CLI itself.
+- **P4 (daemon):** `hydra serve --port N`, `hydra stop`, `hydra logs --tail`.
+- **P5 (MCP):** wrap the existing `/api/agent/*` endpoints (proposed below) as an `mcp-hydra` server so Claude Code/Cursor get fleet management as native tools.
 
 ---
 
