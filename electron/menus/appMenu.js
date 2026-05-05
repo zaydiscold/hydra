@@ -46,8 +46,10 @@ export function setupAppMenu({
       label: 'View',
       submenu: [
         { role: 'reload' },
-        { role: 'forceReload' },
-        ...(isDev ? [{ role: 'toggleDevTools' }] : []),
+        ...(isDev || process.env.HYDRA_DEBUG_MENU === '1' ? [
+          { role: 'forceReload' },
+          { role: 'toggleDevTools' },
+        ] : []),
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
