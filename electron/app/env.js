@@ -48,7 +48,11 @@ export function setupPlatform() {
 export function setupEnvironment(appParam) {
   const appRef = appParam || app;
   process.env.HYDRA_DATA_DIR = appRef.getPath('userData');
-  process.env.DATABASE_URL = 'file:' + path.join(appRef.getPath('userData'), 'hydra.db');
+  // Bug #9: URL-encode the path — macOS paths contain spaces ("Application Support")
+  // that break Prisma's file: URL parsing on some platforms.
+  const rawPath = path.join(appRef.getPath('userData'), 'hydra.db');
+  const normalized = rawPath.replace(/\\/g, '/'); // Windows backslashes → forward
+  process.env.DATABASE_URL = 'file:' + encodeURI(normalized);
   process.env.HYDRA_EMBEDDED = '1';
   if (!isDev && !process.env.NODE_ENV) {
     process.env.NODE_ENV = 'production';
@@ -95,6 +99,18 @@ export async function ensurePackagedRuntimeState() {
   if (!existsSync(dbPath) && existsSync(emptyDbPath)) {
     try {
       copyFileSync(emptyDbPath, dbPath);
+      // Bug #8: verify the SQLite magic header to catch corrupt copies early
+      // (a zeroed file, truncated download, or wrong binary would fail here
+      // instead of producing cryptic P1001 errors later).
+      const header = readFileSync(dbPath);
+      const magic = 'SQLite format 3\0';
+      if (!header || header.length < 16 || Buffer.compare(header.subarray(0, 16), Buffer.from(magic)) !== 0) {
+        summary.errors.push('db copy failed: invalid SQLite header after copy');
+        summary.db = 'skipped';
+        try { copyFileSync(dbPath, dbPath + '.corrupt'); } catch { /* best effort */ }
+        try { (await import('node:fs')).unlinkSync(dbPath); } catch { /* best effort */ }
+        return summary;
+      }
       summary.db = 'copied';
       console.log(`[electron] initialized database from bundled empty DB: ${dbPath}`);
     } catch (e) {
