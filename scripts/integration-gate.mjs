@@ -103,12 +103,21 @@ async function run() {
   // ─── Phase 2: Electron shell ───
   check('D: electron/main.js exists + patterns', () => {
     assertFile('electron/main.js', 'main.js');
-    const src = readFileSync(resolve(ROOT, 'electron/main.js'), 'utf-8');
-    assertPattern(src, /HYDRA_DATA_DIR/, 'must set HYDRA_DATA_DIR');
-    assertPattern(src, /HYDRA_EMBEDDED/, 'must set HYDRA_EMBEDDED');
-    assertPattern(src, /BrowserWindow/, 'must create BrowserWindow');
-    assertPattern(src, /gracefulShutdown/, 'must use gracefulShutdown');
-    assertPattern(src, /ICON_PATH|iconPath/, 'must set icon path');
+    assertFile('electron/app/env.js', 'Electron env module');
+    assertFile('electron/app/windows.js', 'Electron windows module');
+    assertFile('electron/app/schemaSync.js', 'Electron schema sync module');
+
+    const mainSrc = readFileSync(resolve(ROOT, 'electron/main.js'), 'utf-8');
+    const envSrc = readFileSync(resolve(ROOT, 'electron/app/env.js'), 'utf-8');
+    const windowsSrc = readFileSync(resolve(ROOT, 'electron/app/windows.js'), 'utf-8');
+    const schemaSrc = readFileSync(resolve(ROOT, 'electron/app/schemaSync.js'), 'utf-8');
+
+    assertPattern(envSrc, /HYDRA_DATA_DIR/, 'must set HYDRA_DATA_DIR');
+    assertPattern(envSrc, /HYDRA_EMBEDDED/, 'must set HYDRA_EMBEDDED');
+    assertPattern(windowsSrc, /BrowserWindow/, 'must create BrowserWindow');
+    assertPattern(mainSrc, /gracefulShutdown/, 'must use gracefulShutdown');
+    assertPattern(envSrc + windowsSrc, /ICON_PATH|iconPath/, 'must set icon path');
+    assertPattern(schemaSrc, /runSelfHeal|db-self-heal/, 'must include packaged schema self-heal');
   });
 
   check('E: electron/preload.js uses contextBridge', () => {
