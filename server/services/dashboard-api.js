@@ -1390,7 +1390,7 @@ export function classifyRedeemFailure(rawMessage, err = {}) {
   // Max uses / max redemptions — distinct from promo invalid
   // Example: "code has reached maximum redemptions" (ROUTE75-9BGQCV)
   if (/\b(maximum|max)\s+(redemptions|uses|claims|times)\b/i.test(msg) ||
-      /\breached\s+(its\s+)?(max|limit)\b/i.test(msg)) {
+      /\b(reached|hit|at)\s+(its\s+)?(max|limit|cap)\b/i.test(msg)) {
     return { errorCode: REDEEM_ERROR_CODES.MAX_USES, message: msg };
   }
 

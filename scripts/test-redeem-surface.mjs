@@ -113,6 +113,7 @@ const REDEEM_ERROR_CODES = {
   FORM_UNAVAILABLE: 'REDEEM_FORM_UNAVAILABLE',
   OUTCOME_UNKNOWN: 'REDEEM_OUTCOME_UNKNOWN',
   UPSTREAM: 'REDEEM_UPSTREAM',
+  MAX_USES: 'REDEEM_MAX_USES',
 };
 
 function messageLooksLikeInvalidPromo(msg) {
@@ -145,6 +146,12 @@ function classifyError(rawMessage, httpStatus) {
   }
   if (/two-factor|2fa|cloudflare|challenge/i.test(msg)) {
     return { errorCode: REDEEM_ERROR_CODES.SESSION, message: msg };
+  }
+
+  // Max uses / max redemptions — distinct from promo invalid
+  if (/\b(maximum|max)\s+(redemptions|uses|claims|times)\b/i.test(msg) ||
+      /\b(reached|hit|at)\s+(its\s+)?(max|limit|cap)\b/i.test(msg)) {
+    return { errorCode: REDEEM_ERROR_CODES.MAX_USES, message: msg };
   }
 
   if (messageLooksLikeInvalidPromo(msg)) {
