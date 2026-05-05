@@ -57,14 +57,14 @@
     "@eslint/js": "^9.39.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-log": "^5.4.3",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
-    "prisma": "^6.19.2",
-    "electron": "^28.0.0",
-    "electron-builder": "^24.13.3",
-    "electron-log": "^5.1.1"
+    "prisma": "^6.19.2"
   },
   "description": "Hydra is a professional, high-intensity local management dashboard for OpenRouter account fleets. It provides a single, locally-secured interface to manage balances, rotate API keys, and perform bulk operations across dozens of accounts simultaneously.",
   "main": "electron/main.js",
