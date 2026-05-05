@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node scripts/free-dev-ports.mjs && concurrently -n server,client -c blue,green \"node server/standalone.js\" \"vite --host\"",
+    "dev:web": "npm run dev",
     "start": "node scripts/launch.js",
     "setup": "npm install && npx prisma db push --accept-data-loss && npx prisma generate && npm run build",
     "server": "node server/index.js",
