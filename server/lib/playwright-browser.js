@@ -74,16 +74,22 @@ export function resolveChromiumLaunchOptions(overrides = {}) {
       }
       return finalizeOptions(opts, overrides);
     }
-    // Fallback: try system Chrome
-    console.warn(
-      '[playwright-browser] No bundled Chromium found in process.resourcesPath, ' +
-      'falling back to channel:chrome (requires Google Chrome to be installed)'
-    );
-    opts.channel = 'chrome';
-    if (overrides.args) {
-      opts.args = [...overrides.args];
+    if (process.env.HYDRA_PLAYWRIGHT_ALLOW_SYSTEM_CHROME_FALLBACK === '1') {
+      console.warn(
+        '[playwright-browser] No bundled Chromium found in process.resourcesPath, ' +
+        'using explicit system Chrome fallback because HYDRA_PLAYWRIGHT_ALLOW_SYSTEM_CHROME_FALLBACK=1'
+      );
+      opts.channel = 'chrome';
+      if (overrides.args) {
+        opts.args = [...overrides.args];
+      }
+      return finalizeOptions(opts, overrides);
     }
-    return finalizeOptions(opts, overrides);
+    throw new Error(
+      'Bundled Chromium was not found in the packaged Hydra resources. ' +
+      'Rebuild with `npm run electron:prepare && npm run electron:build`, set HYDRA_PLAYWRIGHT_EXECUTABLE_PATH, ' +
+      'or explicitly opt into system Chrome with HYDRA_PLAYWRIGHT_ALLOW_SYSTEM_CHROME_FALLBACK=1.'
+    );
   }
 
   // ── Priority 4: Default — Playwright's own browser cache ──

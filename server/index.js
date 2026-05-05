@@ -47,17 +47,14 @@ if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1
 
 // Standard middleware
 app.use(express.json());
-const embeddedAllowedOrigins = new Set([
-  'http://localhost:3001',
-  'http://127.0.0.1:3001',
-]);
 app.use(cors(process.env.HYDRA_EMBEDDED === '1'
   ? {
       origin(origin, callback) {
         if (!origin) return callback(null, true);
         try {
           const parsed = new URL(origin);
-          if ((parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') && embeddedAllowedOrigins.has(parsed.origin)) {
+          const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+          if (parsed.protocol === 'http:' && isLoopback) {
             return callback(null, true);
           }
         } catch {
