@@ -265,8 +265,16 @@ app.on('activate', () => {
       show: true,
     });
     mainWindow.on('closed', () => { mainWindow = null; });
-    mainWindow.loadURL(windowURL).catch(loadErr =>
-      console.error('[electron] Activate loadURL failed:', loadErr.message));
+    // #15: Show error dialog on load failure instead of leaving a blank window.
+    mainWindow.loadURL(windowURL).catch(loadErr => {
+      console.error('[electron] Activate loadURL failed:', loadErr.message);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        dialog.showErrorBox(
+          'Hydra Window Error',
+          `Failed to load the Hydra interface.\n\n${loadErr.message}\n\nPlease restart Hydra.`,
+        );
+      }
+    });
   }
 });
 
