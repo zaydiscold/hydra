@@ -26,6 +26,12 @@ const configSchema = z.object({
   HYDRA_RESET_LEGACY_STORAGE: z.boolean().default(false),
   RATE_LIMIT_WINDOW: z.coerce.number().default(15 * 60 * 1000),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
+  /**
+   * Swarm #27: rate limit on /v1/* (the OpenAI-compat proxy ingress).
+   * Defaults: 60 requests per 60s per IP. Disable via HYDRA_DISABLE_PROXY_RATELIMIT=1.
+   */
+  PROXY_RATE_LIMIT_WINDOW: z.coerce.number().default(60 * 1000),
+  PROXY_RATE_LIMIT_MAX: z.coerce.number().default(60),
   OR_BASE: z.string().url().default('https://openrouter.ai'),
   /** Browser-parity headers for Clerk FAPI (OpenRouter dashboard origin). */
   CLERK_ORIGIN: z.string().url().default('https://openrouter.ai'),
@@ -77,6 +83,8 @@ try {
     HYDRA_RESET_LEGACY_STORAGE: parseBoolean(process.env.HYDRA_RESET_LEGACY_STORAGE),
     RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW,
     RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX,
+    PROXY_RATE_LIMIT_WINDOW: process.env.PROXY_RATE_LIMIT_WINDOW,
+    PROXY_RATE_LIMIT_MAX: process.env.PROXY_RATE_LIMIT_MAX,
     OR_BASE: process.env.OR_BASE,
     CLERK_ORIGIN: process.env.CLERK_ORIGIN,
     CLERK_REFERER: process.env.CLERK_REFERER,

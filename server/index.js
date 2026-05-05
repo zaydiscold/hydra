@@ -50,6 +50,8 @@ app.use(express.json());
 app.use(cors(process.env.HYDRA_EMBEDDED === '1'
   ? {
       origin(origin, callback) {
+        // Swarm #89: every code path MUST call callback(...). Returning undefined
+        // here causes Express CORS to behave inconsistently across versions.
         if (!origin) return callback(null, true);
         try {
           const parsed = new URL(origin);
@@ -59,10 +61,12 @@ app.use(cors(process.env.HYDRA_EMBEDDED === '1'
           if (parsed.protocol === 'http:' && isLoopback) {
             return callback(null, true);
           }
-        } catch {
-          // Fall through to denial.
+          // Parsed but not loopback — explicit denial.
+          return callback(new Error(`CORS denied for origin: ${origin}`));
+        } catch (parseErr) {
+          // Origin header was unparseable — explicit denial.
+          return callback(new Error(`CORS denied for unparseable origin: ${origin} (${parseErr.message})`));
         }
-        return callback(new Error(`CORS denied for origin: ${origin}`));
       },
       credentials: true,
     }
@@ -96,6 +100,22 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts. Please try again in 15 minutes.' }
 });
 
+// Swarm #27: rate limit /v1/* proxy ingress so external AI clients can't hammer
+// the OpenAI-compat endpoint. Power users can opt out with HYDRA_DISABLE_PROXY_RATELIMIT=1.
+const proxyRateLimitDisabled = process.env.HYDRA_DISABLE_PROXY_RATELIMIT === '1';
+const proxyLimiter = proxyRateLimitDisabled
+  ? (_req, _res, next) => next()
+  : rateLimit({
+      windowMs: config.PROXY_RATE_LIMIT_WINDOW,
+      max: config.PROXY_RATE_LIMIT_MAX,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: { message: 'Rate limit exceeded for /v1 proxy. Slow down or set HYDRA_DISABLE_PROXY_RATELIMIT=1.', type: 'rate_limit_exceeded' } },
+    });
+if (proxyRateLimitDisabled) {
+  logger.warn('[startup] /v1 proxy rate limit DISABLED via HYDRA_DISABLE_PROXY_RATELIMIT=1');
+}
+
 // --- Public Routes & Misc ---
 app.use('/api/auth/', authLimiter, authRoutes);
 app.use('/api/webhooks', webhookRoutes);
@@ -125,7 +145,7 @@ app.use('/api/system', systemRoutes);
 app.use('/api/debug', debugRoutes);
 
 // --- OpenAI-compatible Proxy (must be before SPA catch-all) ---
-app.use('/v1', (req, res, next) => {
+app.use('/v1', proxyLimiter, (req, res, next) => {
   if (!proxyGate.enabled) {
     return res.status(503).json({ error: 'Proxy disabled', message: 'The Hydra proxy has been turned off by the operator.' });
   }

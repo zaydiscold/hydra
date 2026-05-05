@@ -25,12 +25,30 @@ function loadPersistedState() {
 }
 
 function persistState(enabled) {
+  // Swarm #25: write errors used to be silently swallowed at logger.warn level,
+  // which meant a disabled proxy could silently revert to enabled on restart
+  // (because loadPersistedState falls back to true on read failure).
+  // We retain in-memory state regardless, but escalate persistence failures so
+  // an operator notices that their "off" intent will not survive a restart.
   try {
     mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(STATE_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
+    return true;
   } catch (err) {
-    // Non-fatal — log but don't crash
-    logger.warn(`[proxy-gate] Failed to persist state: ${err.message}`);
+    // First attempt failed — try once more before escalating.
+    try {
+      mkdirSync(DATA_DIR, { recursive: true });
+      writeFileSync(STATE_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
+      logger.warn(`[proxy-gate] Persisted state on retry after initial failure: ${err.message}`);
+      return true;
+    } catch (retryErr) {
+      logger.error(
+        `[proxy-gate] CRITICAL: Failed to persist proxy gate state (enabled=${enabled}) after retry. ` +
+        `In-memory state is correct, but the operator's intent will NOT survive a restart. ` +
+        `STATE_FILE=${STATE_FILE} initialError=${err.message} retryError=${retryErr.message}`
+      );
+      return false;
+    }
   }
 }
 
