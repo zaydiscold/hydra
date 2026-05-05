@@ -60,18 +60,48 @@ function getPkgVersion() {
 if (sub === 'help' || sub === '-h' || sub === '--help') {
   console.log(`Hydra CLI
 
-  hydra              Start production-style server (launch.js) — API + static UI on PORT
-  hydra dev          Start Vite + Express for development
-  hydra doctor       Print system info (node version, OS, arch, disk space)
-  hydra logs         Print last 50 lines of the log file
-  hydra data-dir     Print the resolved data directory path
-  hydra version      Print version from package.json
-  hydra help         Show this help
+  Manager
+    hydra status              Fleet overview: account count, healthy, balance
+    hydra accounts            List every account with health, balance, age
+    hydra balance [id]        Total live balance, or balance for one account
+
+  Process
+    hydra                     Start production-style server (launch.js)
+    hydra dev                 Start Vite + Express for development
+    hydra logs                Print last 50 lines of the log file
+
+  System
+    hydra doctor              Print system info
+    hydra data-dir            Print the resolved data directory path
+    hydra version             Print version from package.json
+    hydra help                Show this help
+
+  Flags (most manager commands)
+    --json                    Machine-readable JSON output
 
 Install once from the repo root:
   npm link
 Then run \`hydra\` from any directory (links to this clone).`);
   process.exit(0);
+}
+
+// ─── Manager subcommands (lazy-loaded — only pay the import cost when used) ──
+const managerCommands = new Set(['status', 'accounts', 'balance']);
+if (managerCommands.has(sub)) {
+  const mod = await import(`./commands/${sub}.js`);
+  const argv = process.argv.slice(3);
+  try {
+    await mod.run(argv);
+    process.exit(process.exitCode ?? 0);
+  } catch (err) {
+    if (err.code === 'NO_USER') {
+      console.error(`✗ ${err.message}`);
+      process.exit(2);
+    }
+    console.error(`✗ ${sub}: ${err.message}`);
+    if (process.env.HYDRA_DEBUG) console.error(err.stack);
+    process.exit(1);
+  }
 }
 
 if (sub === 'dev') {
