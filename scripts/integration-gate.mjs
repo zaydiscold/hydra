@@ -7,6 +7,8 @@
  *   C: Import does NOT auto-start server
  *   A: bootstrap({port}) returns http.Server
  *   B: gracefulShutdown({exit:false}) works
+ *   K: server/config.js loads without throwing (dynamic import)
+ *   L: ephemeral server boots and closes cleanly
  *
  * Phase 2: Electron shell
  *   D: electron/main.js exists and has required patterns
@@ -33,6 +35,17 @@ let failed = 0;
 function check(name, fn) {
   try {
     fn();
+    passed++;
+    console.log('  PASS  ' + name);
+  } catch (err) {
+    failed++;
+    console.log('  FAIL  ' + name + ': ' + err.message);
+  }
+}
+
+async function checkAsync(name, fn) {
+  try {
+    await fn();
     passed++;
     console.log('  PASS  ' + name);
   } catch (err) {
@@ -70,6 +83,21 @@ async function run() {
     const src = readFileSync(resolve(ROOT, 'server/index.js'), 'utf-8');
     assertPattern(src, /exit\s*=\s*true/, 'must default exit=true');
     assertPattern(src, /if\s*\(\s*exit\s*\)/, 'must guard process.exit');
+  });
+
+  // ── Dynamic import + ephemeral server boot ──
+  await checkAsync('K: server/config.js loads without throwing', async () => {
+    const config = await import(resolve(ROOT, 'server/config.js'));
+    if (!config || typeof config !== 'object') throw new Error('config module did not export an object');
+  });
+
+  await checkAsync('L: ephemeral server boots and closes cleanly', async () => {
+    const { bootstrap, gracefulShutdown } = await import(resolve(ROOT, 'server/index.js'));
+    const server = await bootstrap({ port: 0, silent: true });
+    if (!server || typeof server.close !== 'function') {
+      throw new Error('bootstrap did not return a server instance');
+    }
+    await gracefulShutdown('SIGTERM', { exit: false });
   });
 
   // ─── Phase 2: Electron shell ───

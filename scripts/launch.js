@@ -132,9 +132,19 @@ function checkEnv() {
 
 async function runMigrations() {
   step('Checking database...');
+  // Try db push first (idempotent, like Electron's syncSchemaWithFallback)
   try {
     run('npx prisma db push --skip-generate', { silent: true });
-    success('Database ready');
+    success('Database ready (db push)');
+    return;
+  } catch (pushErr) {
+    warn(`db push failed: ${pushErr.message?.slice(0, 100)}`);
+    info('Falling back to prisma migrate deploy...');
+  }
+  // Fall back to migrate deploy
+  try {
+    run('npx prisma migrate deploy', { silent: true });
+    success('Database ready (migrate deploy)');
   } catch (err) {
     error('Database migration failed. Resolve migration errors before launching.');
     info(err.message?.slice(0, 200));

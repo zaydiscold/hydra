@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 /**
  * Hydra CLI — global `hydra` after `npm link` in this repo.
- *   hydra       → production-style launch (launch.js)
- *   hydra dev   → Vite + Express (npm run dev)
- *   hydra help  → usage
+ *   hydra              → production-style launch (launch.js)
+ *   hydra dev          → Vite + Express (npm run dev)
+ *   hydra doctor       → print system info
+ *   hydra logs         → print last 50 lines of log file
+ *   hydra data-dir     → print resolved data directory path
+ *   hydra version      → print version from package.json
+ *   hydra help         → usage
  */
-import { spawn } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { spawn, execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { homedir, platform, arch, hostname, totalmem, cpus } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -29,11 +35,37 @@ function runNpmDev() {
   child.on('exit', (code) => process.exit(code ?? 0));
 }
 
+function getDataDir() {
+  if (process.env.HYDRA_DATA_DIR) return resolve(process.env.HYDRA_DATA_DIR);
+  const p = platform();
+  if (p === 'darwin') return resolve(homedir(), 'Library', 'Application Support', 'Hydra');
+  if (p === 'win32') return resolve(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Hydra');
+  return resolve(homedir(), '.config', 'hydra');
+}
+
+function getLogPath() {
+  if (process.env.HYDRA_DATA_DIR) {
+    return join(resolve(process.env.HYDRA_DATA_DIR), 'hydra.log');
+  }
+  return join(getDataDir(), 'hydra.log');
+}
+
+function getPkgVersion() {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
+  return pkg.version || 'unknown';
+}
+
+// ─── Subcommands ──────────────────────────────────────────────────────────────
+
 if (sub === 'help' || sub === '-h' || sub === '--help') {
   console.log(`Hydra CLI
 
   hydra              Start production-style server (launch.js) — API + static UI on PORT
   hydra dev          Start Vite + Express for development
+  hydra doctor       Print system info (node version, OS, arch, disk space)
+  hydra logs         Print last 50 lines of the log file
+  hydra data-dir     Print the resolved data directory path
+  hydra version      Print version from package.json
   hydra help         Show this help
 
 Install once from the repo root:
@@ -44,6 +76,51 @@ Then run \`hydra\` from any directory (links to this clone).`);
 
 if (sub === 'dev') {
   runNpmDev();
+} else if (sub === 'doctor') {
+  const dataDir = getDataDir();
+  let diskInfo = 'N/A';
+  try {
+    if (existsSync(dataDir)) {
+      const st = statSync(dataDir);
+      diskInfo = `${(st.size / 1024 / 1024).toFixed(2)} MB (dir size)`;
+    } else {
+      diskInfo = 'data dir does not exist yet';
+    }
+  } catch (e) {
+    diskInfo = `error: ${e.message}`;
+  }
+  console.log(`Hydra System Info
+─────────────────
+Node.js:        ${process.version}
+OS:             ${platform()} ${arch()}
+Hostname:       ${hostname()}
+CPUs:           ${cpus().length} cores
+Total Memory:   ${(totalmem() / 1024 / 1024 / 1024).toFixed(1)} GB
+Data Directory: ${dataDir}
+Disk Info:      ${diskInfo}
+Root:           ${root}`);
+  process.exit(0);
+} else if (sub === 'logs') {
+  if (!process.env.HYDRA_DATA_DIR) {
+    console.warn('HYDRA_DATA_DIR is not set; using default data directory');
+  }
+  const logPath = getLogPath();
+  if (!existsSync(logPath)) {
+    console.log(`Log file not found at: ${logPath}`);
+    process.exit(0);
+  }
+  const content = readFileSync(logPath, 'utf-8');
+  const lines = content.split('\n');
+  const last50 = lines.slice(Math.max(0, lines.length - 50));
+  console.log(`Last ${last50.length} lines of ${logPath}:`);
+  console.log(last50.join('\n'));
+  process.exit(0);
+} else if (sub === 'data-dir') {
+  console.log(getDataDir());
+  process.exit(0);
+} else if (sub === 'version') {
+  console.log(getPkgVersion());
+  process.exit(0);
 } else if (sub) {
   console.error(`Unknown command: ${sub}\nRun hydra help for usage.`);
   process.exit(1);

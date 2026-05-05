@@ -6,7 +6,7 @@
  *   - build/electron/chromium/<platform-specific Playwright Chromium payload>
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -34,9 +34,14 @@ function browserCacheRoots() {
   if (process.env.PLAYWRIGHT_BROWSERS_PATH && process.env.PLAYWRIGHT_BROWSERS_PATH !== '0') {
     roots.push(resolve(process.env.PLAYWRIGHT_BROWSERS_PATH));
   }
-  roots.push(resolve(homedir(), 'Library/Caches/ms-playwright'));
-  roots.push(resolve(homedir(), '.cache/ms-playwright'));
-  if (process.env.LOCALAPPDATA) roots.push(resolve(process.env.LOCALAPPDATA, 'ms-playwright'));
+  const p = platform();
+  if (p === 'darwin') {
+    roots.push(resolve(homedir(), 'Library/Caches/ms-playwright'));
+  } else if (p === 'linux') {
+    roots.push(resolve(homedir(), '.cache/ms-playwright'));
+  } else if (p === 'win32') {
+    if (process.env.LOCALAPPDATA) roots.push(resolve(process.env.LOCALAPPDATA, 'ms-playwright'));
+  }
   return [...new Set(roots.filter(Boolean))];
 }
 
@@ -80,3 +85,22 @@ for (const child of ['chrome-mac', 'chrome-mac-arm64', 'chrome-linux', 'chrome-w
   }
 }
 console.log(`[prepare-electron-resources] copied ${basename(chromiumSrc)} to ${CHROMIUM_OUT}`);
+
+// ── Chromium validation: verify copied directory contains expected executables ──
+const chromiumBinCandidates = [
+  resolve(CHROMIUM_OUT, 'chrome'),
+  resolve(CHROMIUM_OUT, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+  resolve(CHROMIUM_OUT, 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+  resolve(CHROMIUM_OUT, 'chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+  resolve(CHROMIUM_OUT, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+  resolve(CHROMIUM_OUT, 'chrome-linux', 'chrome'),
+  resolve(CHROMIUM_OUT, 'chrome-win', 'chrome.exe'),
+  resolve(CHROMIUM_OUT, 'chrome-win', 'chrome'),
+];
+const foundBin = chromiumBinCandidates.find((p) => existsSync(p));
+if (foundBin) {
+  console.log(`[prepare-electron-resources] Chromium binary found: ${foundBin}`);
+} else {
+  console.warn(`[prepare-electron-resources] WARNING: No Chromium executable found in ${CHROMIUM_OUT}`);
+  console.warn(`[prepare-electron-resources] Checked: ${chromiumBinCandidates.join(', ')}`);
+}
