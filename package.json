@@ -25,7 +25,7 @@
     "pretest": "prisma db push --skip-generate && prisma generate",
     "test:electron": "npm run test:electron-server-extract && npm run test:electron-launch-compat && npm run test:electron-data-path",
     "test": "npm run test:session-expiry && npm run test:ensure-session-backfill && npm run test:electron",
-    "check:clerk": "node scripts/recon/check-clerk-connectivity.mjs"
+    "check:clerk": "node scripts/recon/check-clerk-connectivity.mjs",
     "preview": "npm run preview:electron",
     "preview:electron": "npm run build && electron .",
     "preview:web": "vite preview",
