@@ -11,7 +11,7 @@ The support bundle feature collects diagnostic information for troubleshooting H
 | **Data directory** | `userData` path (Electron-only) |
 | **Runtime mode** | Packaged (Electron), Dev (Electron), or Browser |
 | **Proxy status** | Enabled or Disabled |
-| **Server health** | Uptime, pool key counts (pooled, available, cooldowns) |
+| **Server health** | Uptime, pool key counts (pooled, available) |
 | **Timestamp** | ISO 8601 generation time |
 
 ## What's NOT Included
