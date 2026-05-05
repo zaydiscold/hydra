@@ -1,35 +1,73 @@
 import React from 'react';
 
+// Generate a short correlation ID for error tracking without exposing internals
+let _correlationCounter = 0;
+function nextCorrelationId() {
+  _correlationCounter++;
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 6);
+  return `${ts}-${rand}-${_correlationCounter}`;
+}
+
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, correlationId: null };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { hasError: true, error, correlationId: nextCorrelationId() };
   }
 
   componentDidCatch(error, errorInfo) {
+    // Always log the full stack internally for debugging
     console.error('[GLOBAL ERROR]', error, errorInfo);
+  }
+
+  /** Return a safe, production-appropriate error message with a correlation ID. */
+  getSafeErrorDisplay() {
+    const cid = this.state.correlationId;
+    const message = this.state.error?.message || 'Unknown error';
+
+    // Check if we're in development (Vite dev mode or Electron dev)
+    const isDev =
+      (typeof window !== 'undefined' && window.location?.hostname === 'localhost') ||
+      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development');
+
+    if (isDev) {
+      // Dev: show full stack trace for debugging
+      return {
+        title: 'SYSTEM COLLAPSE',
+        details: this.state.error?.stack || message,
+        showTrace: true,
+      };
+    }
+
+    // Production: sanitize — show correlation ID + human-readable message only
+    return {
+      title: 'Unexpected Error',
+      details: `Error ID: ${cid}\n${message}\n\nHydra encountered an unexpected error. Your locally stored data remains safe on disk.\nPlease try restarting the application. If the problem persists, include the Error ID above when reporting.`,
+      showTrace: false,
+    };
   }
 
   render() {
     if (this.state.hasError) {
+      const display = this.getSafeErrorDisplay();
       return (
         <div className="center-container" style={{ backdropFilter: 'blur(20px)', zIndex: 10000 }}>
           <div className="lock-card" style={{ border: '4px solid var(--status-error)', boxShadow: '12px 12px 0 var(--status-error)' }}>
             <div className="lock-card-icon" style={{ background: 'var(--status-error)', color: 'white' }}>CRITICAL ERR</div>
-            <h2 style={{ color: 'var(--status-error)', marginTop: 'var(--space-md)' }}>SYSTEM COLLAPSE</h2>
+            <h2 style={{ color: 'var(--status-error)', marginTop: 'var(--space-md)' }}>{display.title}</h2>
             
             <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)', fontSize: '0.9rem' }}>
               The application encountered a terminal exception. Your session state is unstable, but Hydra's locally stored encrypted data remains on disk.
             </p>
 
             <div className="error-banner" style={{ textAlign: 'left', marginBottom: 'var(--space-xl)', padding: '16px', maxHeight: '150px', overflowY: 'auto', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--status-error)' }}>
-              <strong style={{ display: 'block', color: 'var(--status-error)', marginBottom: '4px', fontSize: '0.75rem' }}>TRACE:</strong>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--status-error)' }}>
-                {this.state.error?.stack || this.state.error?.message || 'Unknown panic state'}
+              <strong style={{ display: 'block', color: 'var(--status-error)', marginBottom: '4px', fontSize: '0.75rem' }}>{display.showTrace ? 'TRACE:' : 'DETAILS:'}</strong>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--status-error)', whiteSpace: 'pre-wrap' }}>
+                {display.details}
               </div>
             </div>
 
