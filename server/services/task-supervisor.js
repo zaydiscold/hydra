@@ -395,9 +395,30 @@ class TaskSupervisor {
   }
 
   async runCleanup(task) {
+    // Clear timers first
     if (task.resources.timers.size > 0) {
       for (const timer of task.resources.timers) clearTimeout(timer);
       task.resources.timers.clear();
+    }
+
+    // #22: Close Playwright resources to prevent browser/context/page leaks.
+    // Order matters: page → context → browser (child before parent).
+    if (task.resources.page) {
+      try { await task.resources.page.close(); } catch { /* already closed */ }
+      task.resources.page = null;
+    }
+    if (task.resources.context) {
+      try { await task.resources.context.close(); } catch { /* already closed */ }
+      task.resources.context = null;
+    }
+    if (task.resources.browser) {
+      try { await task.resources.browser.close(); } catch { /* already closed */ }
+      task.resources.browser = null;
+    }
+
+    // Clear pending resources (abort signals, etc.)
+    if (task.resources.pending.size > 0) {
+      task.resources.pending.clear();
     }
 
     if (typeof task.cleanup === 'function') {
