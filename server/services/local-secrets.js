@@ -9,7 +9,7 @@ import { config } from '../config.js';
 //   process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data')
 // Same pattern needed in: auth.js, proxy-gate.js, redemption-log.js
 // ─── END ELECTRON_MIGRATION ───
-const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_DIR = process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data');
 const SECRETS_PATH = path.join(DATA_DIR, 'local-secrets.json');
 const HEX_SECRET_LENGTH = 64;
 

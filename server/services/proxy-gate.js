@@ -14,7 +14,7 @@ import { join } from 'node:path';
 //   process.env.HYDRA_DATA_DIR || join(process.cwd(), 'data')
 // Same pattern needed in: local-secrets.js, auth.js, redemption-log.js
 // ─── END ELECTRON_MIGRATION ───
-const DATA_DIR = join(process.cwd(), 'data');
+const DATA_DIR = process.env.HYDRA_DATA_DIR || join(process.cwd(), 'data');
 const STATE_FILE = join(DATA_DIR, 'proxy-gate.json');
 
 function loadPersistedState() {

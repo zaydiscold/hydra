@@ -13,7 +13,7 @@ import { join } from 'path';
 //   process.env.HYDRA_DATA_DIR || join(process.cwd(), 'data')
 // Same pattern needed in: local-secrets.js, auth.js, proxy-gate.js
 // ─── END ELECTRON_MIGRATION ───
-const DATA_DIR = join(process.cwd(), 'data');
+const DATA_DIR = process.env.HYDRA_DATA_DIR || join(process.cwd(), 'data');
 const LOG_PATH = join(DATA_DIR, 'redemption-log.json');
 const MAX_RECORDS = 100;
 

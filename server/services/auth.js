@@ -14,7 +14,7 @@ const ADMIN_USERNAME = 'admin';
 //   process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data')
 // Same pattern needed in: local-secrets.js, proxy-gate.js, redemption-log.js
 // ─── END ELECTRON_MIGRATION ───
-const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_DIR = process.env.HYDRA_DATA_DIR || path.join(process.cwd(), 'data');
 let restartRequired = false;
 
 // IMPORTANT: The admin password is stored as a bcrypt hash (SALT_ROUNDS=12) in
