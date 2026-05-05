@@ -64,8 +64,9 @@ export async function openExternalUrl(rawUrl) {
 /** Narrow check — only matches Prisma Studio processes from this project. */
 export function isHydraAuxiliaryProcess(command) {
   if (!command.includes('prisma studio')) return false;
+  const dataDir = process.env.HYDRA_DATA_DIR;
   return (
-    command.includes(process.env.HYDRA_DATA_DIR || '') ||
+    (dataDir ? command.includes(dataDir) : false) ||
     command.includes('/node_modules/.bin/prisma studio') ||
     command.includes('prisma studio --port 5555') ||
     command.includes('prisma studio --browser none')

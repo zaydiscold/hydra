@@ -6,9 +6,10 @@
  */
 import { app, Tray, Menu, nativeImage, shell } from 'electron';
 import { ICON_PATH } from './env.js';
-import { mainWindow, windowURL, tray, setTray, setForceQuit, showAndFocusMainWindow } from './state.js';
+import { getMainWindow, getTray, getWindowURL, setTray, setForceQuit, showAndFocusMainWindow } from './state.js';
 
 export function createTray() {
+  const tray = getTray();
   if (tray && !tray.isDestroyed()) return tray;
 
   let img = nativeImage.createFromPath(ICON_PATH);
@@ -17,6 +18,7 @@ export function createTray() {
   t.setToolTip('Hydra — local OpenRouter proxy');
 
   const rebuildMenu = () => {
+    const windowURL = getWindowURL();
     t.setContextMenu(Menu.buildFromTemplate([
       { label: 'Show Hydra', click: showAndFocusMainWindow },
       { type: 'separator' },
@@ -29,6 +31,7 @@ export function createTray() {
       {
         label: 'Hide Window',
         click: () => {
+          const mainWindow = getMainWindow();
           if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
         },
       },

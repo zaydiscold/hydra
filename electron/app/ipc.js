@@ -6,7 +6,7 @@
  */
 import { ipcMain, app, shell } from 'electron';
 import path from 'node:path';
-import { windowURL, setForceQuit } from './state.js';
+import { getMainWindow, getWindowURL, setForceQuit } from './state.js';
 
 function ok(data) { return { ok: true, data }; }
 function err(message, code) { return { ok: false, error: message, code }; }
@@ -31,13 +31,13 @@ export function registerIpcHandlers() {
         logs: app.getPath('logs'),
         downloads: app.getPath('downloads'),
         documents: app.getPath('documents'),
-        serverUrl: windowURL,
+        serverUrl: getWindowURL(),
       });
     } catch (e) { return err(e.message); }
   });
 
   ipcMain.handle('native:get-status', async () => ok({
-    serverUrl: windowURL,
+    serverUrl: getWindowURL(),
     embedded: process.env.HYDRA_EMBEDDED === '1',
     packaged: app.isPackaged,
   }));
@@ -55,7 +55,7 @@ export function registerIpcHandlers() {
   ipcMain.handle('native:platform', async () => ok(process.platform));
 
   ipcMain.handle('native:hide-window', async () => {
-    const { mainWindow } = await import('./state.js');
+    const mainWindow = getMainWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.hide();
       return ok(true);

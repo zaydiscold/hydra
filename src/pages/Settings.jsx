@@ -140,7 +140,7 @@ export default function Settings({ addToast, onLogout }) {
         </div>
         {/* Inline status strip */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
-          <span>v{nativeInfo?.version || import.meta.env.VITE_APP_VERSION ?? 'dev'}</span>
+          <span>v{nativeInfo?.version || (import.meta.env.VITE_APP_VERSION ?? 'dev')}</span>
           {nativeInfo?.platform && <span>{nativeInfo.platform}</span>}
           {window.hydraNative && <span style={{ color: 'var(--accent-primary)' }}>Electron</span>}
           {import.meta.env.PROD && <span>PACKAGED</span>}

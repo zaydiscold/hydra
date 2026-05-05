@@ -109,7 +109,7 @@ async function syncSchemaWithFallback() {
 async function runSelfHealSync() {
   console.warn('[electron] falling back to db-self-heal');
   try {
-    const { runSelfHeal } = await import('../server/lib/db-self-heal.js');
+    const { runSelfHeal } = await import('../../server/lib/db-self-heal.js');
     const dbPath = path.join(process.env.HYDRA_DATA_DIR || '', 'hydra.db');
     const summary = await runSelfHeal({ dbPath, migrationsDir: MIGRATIONS_DIR, log: (m) => console.log(m) });
     console.log(`[electron] db-self-heal: ${summary.applied} applied, ${summary.skipped} already present, ${summary.errors} errors`);
