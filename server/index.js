@@ -53,7 +53,9 @@ app.use(cors(process.env.HYDRA_EMBEDDED === '1'
         if (!origin) return callback(null, true);
         try {
           const parsed = new URL(origin);
-          const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+          // #21: Harmonize IPv6 loopback — ::1 must be allowed alongside
+          // localhost/127.0.0.1 to match the LOCAL_UI_HOSTS navigation guard.
+          const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
           if (parsed.protocol === 'http:' && isLoopback) {
             return callback(null, true);
           }
@@ -71,7 +73,18 @@ if (process.env.HYDRA_EMBEDDED) {
   app.use((_req, res, next) => {
     // Vite's production build still emits inline style/script bootstrap in a few places.
     // Keep unsafe-inline documented here until the renderer build is migrated to nonce/hash CSP.
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* ws://127.0.0.1:*");
+    // #6 / #20: Added missing directives: frame-ancestors, form-action, base-uri, object-src.
+    // These lock down embedding, form submission targets, <base> hijacking, and plugin content.
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "connect-src 'self' ws://localhost:* ws://127.0.0.1:* ws://[::1]:*",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+      "base-uri 'self'",
+      "object-src 'none'",
+    ].join('; '));
     next();
   });
 }

@@ -9,19 +9,31 @@
  */
 import { app, ipcMain, shell } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 
 function ok(data) { return { ok: true, data }; }
 function err(message, code) { return { ok: false, error: message, code }; }
 
 function isPathAllowed(target) {
   if (typeof target !== 'string' || target.length === 0) return false;
-  const normalized = path.resolve(target);
+  // #5: Use realpathSync to resolve symlinks. path.resolve() alone does not
+  // follow symlinks, so a symlink in Downloads pointing to /etc could bypass
+  // the allowlist check.
+  let normalized;
+  try {
+    normalized = fs.realpathSync(target);
+  } catch {
+    // realpathSync throws if the path doesn't exist — reject.
+    return false;
+  }
   const allowed = [
     app.getPath('userData'),
     app.getPath('logs'),
     app.getPath('downloads'),
     app.getPath('documents'),
-  ];
+  ].map(root => {
+    try { return fs.realpathSync(root); } catch { return root; }
+  });
   return allowed.some(root => normalized === root || normalized.startsWith(root + path.sep));
 }
 
@@ -51,11 +63,13 @@ export function registerIpcHandlers({ windowURL, onHideWindow, onQuitApp } = {})
     } catch (e) { return err(e.message); }
   });
 
-  ipcMain.handle('native:get-status', async () => ok({
-    serverUrl: windowURL,
-    embedded: process.env.HYDRA_EMBEDDED === '1',
-    packaged: app.isPackaged,
-  }));
+  ipcMain.handle('native:get-status', async () => {
+    try { return ok({
+      serverUrl: windowURL,
+      embedded: process.env.HYDRA_EMBEDDED === '1',
+      packaged: app.isPackaged,
+    }); } catch (e) { return err(e.message); }
+  });
 
   ipcMain.handle('native:open-path', async (_event, targetPath) => {
     if (typeof targetPath !== 'string') return err('targetPath must be a string', 'BAD_ARG');

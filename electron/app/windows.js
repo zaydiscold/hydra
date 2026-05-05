@@ -150,7 +150,11 @@ export function createMainWindow({ show = false } = {}) {
     } catch { return false; }
   };
 
-  win.webContents.on('will-navigate', (event, targetUrl) => { if (isAllowedLocalUrl(targetUrl)) return; event.preventDefault(); console.warn('[electron] blocked navigation: ${targetUrl}'); });
+  win.webContents.on('will-navigate', (event, targetUrl) => { if (isAllowedLocalUrl(targetUrl)) return; event.preventDefault(); console.warn(`[electron] blocked navigation: ${targetUrl}`); });
+  // #18: will-redirect fires on server 302 redirects. Without this handler,
+  // redirect responses (e.g., login redirects from the API) would bypass the
+  // will-navigate navigation guard, allowing unintended origins to load.
+  win.webContents.on('will-redirect', (event, targetUrl) => { if (isAllowedLocalUrl(targetUrl)) return; event.preventDefault(); console.warn(`[electron] blocked redirect: ${targetUrl}`); });
   win.webContents.setWindowOpenHandler(({ url }) => { if (isAllowedLocalUrl(url)) return { action: 'allow' }; void openExternalUrl(url); return { action: 'deny' }; });
 
   setMainWindow(win);
