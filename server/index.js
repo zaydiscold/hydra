@@ -48,6 +48,14 @@ if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1
 app.use(cors());
 app.use(express.json());
 
+// CSP middleware for Electron embedded mode — restrict to self
+if (process.env.HYDRA_EMBEDDED) {
+  app.use((_req, res, next) => {
+    res.setHeader('Content-Security-Policy', "default-src 'self'");
+    next();
+  });
+}
+
 // --- Rate Limiting ---
 const authLimiter = rateLimit({
   windowMs: config.RATE_LIMIT_WINDOW,
@@ -171,9 +179,10 @@ async function bootstrap({ port, silent } = {}) {
   });
 
   const listenPort = port ?? config.PORT;
+  const host = process.env.HYDRA_EMBEDDED ? '127.0.0.1' : '0.0.0.0';
 
   server = await new Promise((resolve, reject) => {
-    const s = app.listen(listenPort, '0.0.0.0', () => {
+    const s = app.listen(listenPort, host, () => {
       if (!silent) {
         logger.info(`  Hydra Server live on port ${listenPort}`);
         logger.info(`  Environment: ${config.NODE_ENV}`);
