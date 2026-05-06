@@ -17,6 +17,8 @@ import { decrypt, encryptConfig } from './storage-codec.js';
 const REFRESH_WINDOW_MS = 24 * 60 * 60 * 1000; // probe within 24h of expiry
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // run every 6h
 let _sweepRunning = false;
+/** @type {Promise<void>|null} — tracks the current sweep so stop() can await it. */
+let _sweepPromise = null;
 
 async function getConfigForAccount(account) {
   try {
@@ -31,9 +33,17 @@ async function getConfigForAccount(account) {
 export async function sweepAndRefresh() {
   if (_sweepRunning) {
     logger.warn('[AUTO-REFRESH] Previous sweep still running; skipping overlap');
-    return;
+    return _sweepPromise;
   }
   _sweepRunning = true;
+
+  // #44: Save the promise so stopSessionRefresher() can await the in-flight
+  // sweep instead of only clearing timers and returning immediately.
+  _sweepPromise = _sweepImpl().finally(() => { _sweepRunning = false; });
+  return _sweepPromise;
+}
+
+async function _sweepImpl() {
   let swept = 0;
   let refreshed = 0;
   let skipped = 0;
