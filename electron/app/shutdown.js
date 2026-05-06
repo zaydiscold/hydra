@@ -5,6 +5,7 @@
  * graceful server shutdown, and force exit.
  */
 import { killKnownHydraAuxiliaryProcesses } from '../utils/cleanupAuxProcesses.js';
+import { sweepStaleEphemeralProfiles } from '../../server/lib/playwright-browser.js';
 import { getTray, setTray, getShuttingDown, setShuttingDown } from './state.js';
 
 /**
@@ -44,6 +45,13 @@ export async function shutdownEverything({ reason, trackedChildren, gracefulShut
   console.log(`[electron] shutdown initiated: ${reason}`);
   killTrackedChildren(trackedChildren);
   await killKnownHydraAuxiliaryProcesses(reason);
+  // Pair the orphan-process sweep with an orphan-profile-dir sweep. After
+  // SIGTERM goes out above, the Chromium children get ~50ms to flush their
+  // sqlite + pref files, then their userDataDir is fair game for cleanup.
+  // Best-effort — failures are logged + tolerated.
+  try { sweepStaleEphemeralProfiles(); } catch (e) {
+    console.warn('[electron] profile-dir sweep failed:', e.message);
+  }
 
   // Explicitly destroy the tray so the menu-bar slot releases immediately.
   // Without this, macOS sometimes keeps a "ghost" tray icon for a few seconds

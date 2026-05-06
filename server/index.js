@@ -3,6 +3,8 @@ import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { createGzip } from 'node:zlib';
+import { Readable } from 'node:stream';
 
 import { logger } from './services/logger.js';
 import { config, validateConfig } from './config.js';
@@ -46,6 +48,73 @@ let shutdownInFlight = false;
 if (process.env.NODE_ENV === 'production' || process.env.HYDRA_DOCKERIZED === '1' || process.env.HYDRA_EMBEDDED === '1') {
   app.set('trust proxy', 1);
 }
+
+// ─── Inline gzip middleware ─────────────────────────────────────────────────
+//
+// Express has no built-in compression and we don't want to add the
+// `compression` package as a dep just for static asset gzipping. This is
+// a 30-line zlib wrapper that:
+//   - skips when client doesn't accept gzip (Accept-Encoding header)
+//   - skips when body is already encoded (Content-Encoding set upstream)
+//   - skips when body is small (<1 KB — overhead beats savings)
+//   - skips for hot-path API responses (we let JSON go through plain to keep
+//     /api/* low-latency; the win is on dist/* which is the bulk transfer)
+//   - sets Content-Encoding + Vary headers correctly so browser caches behave
+//
+// Real-world impact: a typical Vite-built JS bundle compresses 60-70% over
+// the wire. On a 1.5 MB bundle that's ~1 MB saved per first paint.
+const COMPRESSIBLE_RE = /^(text\/|application\/(json|javascript|xml|wasm|x-javascript|manifest|vnd\.api\+json))/i;
+const GZIP_MIN_BYTES = 1024;
+function gzipMiddleware(req, res, next) {
+  // Client must announce gzip support; bail otherwise.
+  const acceptEnc = req.headers['accept-encoding'] || '';
+  if (!/\bgzip\b/.test(acceptEnc)) return next();
+
+  // Skip API hot path — keep JSON responses on the fast path. The bulk
+  // savings come from /dist/* static assets.
+  if (req.path.startsWith('/api/') || req.path.startsWith('/v1/')) return next();
+
+  const origWrite = res.write.bind(res);
+  const origEnd = res.end.bind(res);
+  let chunks = [];
+
+  res.write = function (chunk, enc) {
+    if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, enc));
+    return true;
+  };
+
+  res.end = function (chunk, enc) {
+    if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, enc));
+
+    // Decision time. If already encoded upstream, bail without touching.
+    if (res.getHeader('Content-Encoding')) {
+      const buf = Buffer.concat(chunks);
+      if (buf.length) origWrite(buf);
+      return origEnd();
+    }
+    const ct = String(res.getHeader('Content-Type') || '');
+    const buf = Buffer.concat(chunks);
+    if (buf.length < GZIP_MIN_BYTES || !COMPRESSIBLE_RE.test(ct)) {
+      if (buf.length) origWrite(buf);
+      return origEnd();
+    }
+
+    // Stream into gzip. We could buffer-and-compress synchronously but that
+    // ties up the event loop on large bundles; streaming keeps the loop free.
+    res.removeHeader('Content-Length');
+    res.setHeader('Content-Encoding', 'gzip');
+    const prevVary = res.getHeader('Vary');
+    res.setHeader('Vary', prevVary ? `${prevVary}, Accept-Encoding` : 'Accept-Encoding');
+
+    const gz = createGzip({ level: 6 }); // 6 = good speed/size tradeoff (default)
+    gz.on('data', (d) => origWrite(d));
+    gz.on('end', () => origEnd());
+    Readable.from(buf).pipe(gz);
+  };
+
+  next();
+}
+app.use(gzipMiddleware);
 
 // Standard middleware
 app.use(express.json());

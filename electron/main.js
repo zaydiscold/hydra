@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 // ─── Modules ─────────────────────────────────────────────────────────────────
 import {
   isDev, setupLogging, setupPlatform, setupEnvironment,
-  ensurePackagedRuntimeState, ICON_PATH,
+  ensurePackagedRuntimeState, ICON_PATH, resolveDevServerUrl,
 } from './app/env.js';
 import {
   getMainWindow, getSplashWindow, getWindowURL, getForceQuit, getShuttingDown, getGracefulShutdown, getTray,
@@ -24,6 +24,7 @@ import { registerIpcHandlers } from './app/ipc.js';
 import { shouldSyncSchema, firstLaunchSetup } from './app/schemaSync.js';
 import { shutdownEverything } from './app/shutdown.js';
 import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js';
+import { sweepStaleEphemeralProfiles } from '../server/lib/playwright-browser.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
@@ -118,10 +119,23 @@ app.whenReady().then(async () => {
     const splashStartedAt = Date.now();
 
     await killKnownHydraAuxiliaryProcesses('startup sweep');
+    // Companion sweep: every Playwright launch creates a fresh `mkdtempSync`
+    // profile dir under the OS tmpdir. Past crashed/killed runs leave them
+    // behind. They're empty (just the dir entry) but accumulate over weeks
+    // of dev cycles and pollute /var/folders inspection. The sweep is safe
+    // by construction — only acts on `hydra-pw-profile-*` names under
+    // `tmpdir()`, and only on dirs ≥ 60s old (so we never race a sibling).
+    sweepStaleEphemeralProfiles();
     await ensurePackagedRuntimeState();
     performance.mark('hydra:startup:runtime-ready');
 
-    const needsSync = await shouldSyncSchema();
+    // shouldSyncSchema now returns { shouldSync, hash, mtimeFingerprint }.
+    // We only need the boolean here; firstLaunchSetup recomputes its own
+    // decision (the schema may have been touched between this check and
+    // the deferred sync). Threading the full decision through is a future
+    // optimization but adds complexity for marginal gain.
+    const schemaDecision = await shouldSyncSchema();
+    const needsSync = schemaDecision.shouldSync;
     performance.mark('hydra:startup:schema-check');
 
     const server = await import('../server/index.js');
@@ -159,9 +173,8 @@ app.whenReady().then(async () => {
 
     // DEV server URL: prefer VITE_DEV_SERVER_URL env, but fall back to
     // Express static serve when Vite isn't running (e.g. standalone `electron .`).
-    const viteUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
     const staticUrl = `http://localhost:${expressPort}`;
-    const url = (isDev && process.env.VITE_DEV_SERVER_URL) ? viteUrl : staticUrl;
+    const url = isDev ? resolveDevServerUrl(process.env.VITE_DEV_SERVER_URL, staticUrl) : staticUrl;
     setWindowURL(url);
     console.log(`[electron] Hydra UI listening at ${url}`);
 
@@ -198,10 +211,15 @@ app.whenReady().then(async () => {
     // parallelism that would have pre-warmed main during splash) but we
     // get the clean Pica-style "splash → animation → close → app" flow
     // the product wants.
-    // Bumped from 1500 → 2500 ms per user feedback ("let it last a little
-    // bit longer so people can see it"). 2500 ms is the sweet spot — under
-    // 1.5s feels like a flash, over 3.5s feels like the app is broken.
-    const SPLASH_MIN_VISIBLE_MS = 2500;
+    //
+    // Duration history:
+    //   1500 ms — initial; felt like a flash
+    //   2500 ms — "let it last a little bit longer"
+    //   6500 ms — "extends over 4 more seconds compared to old one with
+    //             falling letters" — Pica-style sprawl + falling letters
+    //             need this much screen time for the geometry sprawl to
+    //             read as intentional, not accidental.
+    const SPLASH_MIN_VISIBLE_MS = 6500;
     const splashElapsed = Date.now() - splashStartedAt;
     if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
       await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));

@@ -121,7 +121,12 @@ async function launchSignupFlowPlaywright(task) {
       if (process.env.HYDRA_PLAYWRIGHT_NO_SANDBOX === '1') {
         launchArgs.push('--no-sandbox', '--disable-setuid-sandbox');
       }
-      const { chromium } = await import('playwright');
+      // playwright-core: API-only package (no auto-downloaded browser bundle).
+      // Saves ~200 MB in the production deps tree. The Chromium binary itself
+      // is provided by `electron/builders/afterPack.js`, which copies a curated
+      // build into the packaged app's resourcesPath; `resolveChromiumLaunchOptions`
+      // points `executablePath` there.
+      const { chromium } = await import('playwright-core');
       const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true, args: launchArgs }));
       const context = await browser.newContext({ userAgent: USER_AGENT });
       const page = await context.newPage();

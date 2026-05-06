@@ -12,13 +12,11 @@
     "dev:electron": "concurrently -k \"vite\" \"electron .\"",
     "server": "node server/standalone.js",
     "client": "vite --host",
-
     "// ─── Build ─────────────────────────────────────────────────────────────": "",
     "build": "vite build",
     "electron:prepare": "node scripts/prepare-electron-resources.mjs",
     "electron:build": "npm run build && npm run electron:prepare && electron-builder",
     "electron:smoke": "node scripts/smoke-electron-package.mjs",
-
     "// ─── Testing ───────────────────────────────────────────────────────────": "",
     "pretest": "prisma db push --skip-generate && prisma generate",
     "test": "npm run test:session-expiry && npm run test:ensure-session-backfill && npm run test:electron",
@@ -30,11 +28,9 @@
     "test:electron-launch-compat": "node --experimental-test-module-mocks --test server/tests/electron-launch-compat.test.mjs",
     "test:electron-data-path": "node --experimental-test-module-mocks --test server/tests/electron-data-path.test.mjs",
     "test:management-key-backfill": "DATABASE_URL=file:./prisma/dev.db node --experimental-test-module-mocks --test server/tests/management-key-backfill.test.mjs",
-
     "// ─── Lint & Quality ────────────────────────────────────────────────────": "",
     "lint": "eslint .",
     "gate": "node scripts/integration-gate.mjs",
-
     "// ─── Preview & Start ───────────────────────────────────────────────────": "",
     "start": "node scripts/launch.js",
     "preview": "npm run preview:electron",
@@ -42,7 +38,6 @@
     "preview:web": "vite preview",
     "preview:static": "npm run build && node server/standalone.js",
     "start:electron": "npm run preview:electron",
-
     "// ─── Setup & Tools ─────────────────────────────────────────────────────": "",
     "setup": "npm install && prisma db push --skip-generate && prisma generate && npm run build",
     "link": "npm link",
@@ -52,14 +47,12 @@
   "dependencies": {
     "@prisma/client": "^6.19.2",
     "bcryptjs": "^3.0.3",
-    "cheerio": "^1.2.0",
     "cors": "^2.8.6",
-    "electron-log": "^5.4.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
     "jsonwebtoken": "^9.0.3",
     "p-limit": "^7.3.0",
-    "playwright": "^1.58.2",
+    "playwright-core": "^1.58.2",
     "winston": "^3.19.0",
     "zod": "^4.3.6"
   },
@@ -76,6 +69,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
     "node-fetch": "^2.7.0",
+    "playwright": "^1.58.2",
     "prisma": "^6.19.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

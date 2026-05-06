@@ -43,6 +43,12 @@ prisma/dev.db
 capture-*.json
 capture-*.png
 
+# Local audit/review notes — personal scratchpads from review passes,
+# not part of the repo. Re-runnable via the corresponding skill.
+.review-*.md
+.sweep-report.md
+mem-watch-*.log
+
 # Cursor hook runtime state (local; changes every session)
 .cursor/hooks/state/
 

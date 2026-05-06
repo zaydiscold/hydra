@@ -77,12 +77,14 @@ test('package.json: main field is electron/main.js', () => {
   assert.equal(pkg.main, 'electron/main.js', 'package.json main must be electron/main.js');
 });
 
-test('package.json: has all 3 Electron devDependencies', () => {
+test('package.json: has Electron devDependencies', () => {
   const pkg = JSON.parse(readSource('../../package.json'));
   const deps = pkg.devDependencies || {};
   assert.ok(deps.electron, 'must have electron devDep');
   assert.ok(deps['electron-builder'], 'must have electron-builder devDep');
-  assert.ok(deps['electron-log'], 'must have electron-log devDep');
+  // `electron-log` was removed in the perf-cleanup pass — replaced by a
+  // 30-line file-tee in electron/app/env.js. See that file for the parity
+  // notes vs the prior electron-log behavior.
 });
 
 test('package.json: has electron build scripts', () => {

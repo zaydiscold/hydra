@@ -15,6 +15,8 @@ export default defineConfig({
     // to clients.  Maps are written to dist/ for error-tracking tools but the
     // bundles themselves contain no reference to them.
     sourcemap: 'hidden',
+    // Electron 28 = Chromium 120 — target modern syntax to reduce bundle ~5-10%
+    target: 'chrome120',
     rollupOptions: {
       output: {
         // #96: Split vendor dependencies (React, ReactDOM, React Router) into a

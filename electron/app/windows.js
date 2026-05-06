@@ -4,10 +4,10 @@
  * Splash: clean brand grid with model names, subtle animation.
  * Main window: navigation guards + security options.
  */
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, screen } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isDev, ICON_PATH, LOCAL_UI_HOSTS } from './env.js';
+import { isDev, ICON_PATH, isAllowedLocalUiUrl } from './env.js';
 import {
   getMainWindow, getWindowURL, getForceQuit, getShuttingDown, getClosePromptPending,
   setSplashWindow, setMainWindow, setForceQuit, setClosePromptPending,
@@ -16,17 +16,29 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ─── Splash Window — Brand grid, clean modern design ─────────────────────────
+// ─── Splash Window — Pica-style fullscreen sprawl + small centered card ─────
 export function createSplashWindow() {
+  // Pica-style architecture: BrowserWindow stretches across the WHOLE primary
+  // display with a fully transparent background. The hex pattern + falling
+  // letters cover the entire viewport (sprawl outside any opaque region). A
+  // small centered card is the ONLY opaque region — translucent, frosted glass.
+  // Result: the user sees hex + letters across their whole screen, with a
+  // small island of card in the middle holding the hero text.
+  const display = screen.getPrimaryDisplay();
+  const { width: dispW, height: dispH } = display.workAreaSize;
+
   const win = new BrowserWindow({
-    // Larger card per user feedback: more room for the falling letters
-    // animation, the hex pattern in the band, and the longer subtitle text.
-    width: 720,
-    height: 520,
+    width: dispW,
+    height: dispH,
+    x: 0,
+    y: 0,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
     resizable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    focusable: false,  // can't steal focus from the user's other apps during splash
     icon: ICON_PATH,
     webPreferences: {
       contextIsolation: true,
@@ -34,8 +46,12 @@ export function createSplashWindow() {
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
+      backgroundThrottling: true,
     },
   });
+  // Make the window transparent to mouse clicks — the user can interact with
+  // whatever's behind the splash. The splash purely visual, not interactive.
+  win.setIgnoreMouseEvents(true);
 
   // Separate brand entries and model entries — not paired.
   // Brands show as bold identifiers, models as flowing text.
@@ -86,8 +102,12 @@ export function createSplashWindow() {
   // (ease-in: slow start, fast end — like an object accelerating downward).
   // Each token is plain text — NO chip pills, no borders, no backgrounds.
   // The brand color (when present) tints the word; otherwise muted white.
+  // Reduced from 24 → 14 falling letters to lighten the GPU/CPU load.
+  // Each animated <span> costs a compositor layer; on stressed systems the
+  // splash was saturating a CPU core during boot. 14 is enough to see the
+  // rain effect across a full-screen splash without breaking the budget.
   const shuffled = items.slice().sort(() => Math.random() - 0.5);
-  const drops = shuffled.slice(0, 24).map((item, i) => {
+  const drops = shuffled.slice(0, 14).map((item, i) => {
     // Spread across 96% of width, biased to avoid card edges
     const x = 4 + ((i * 31) % 88);
     // Stagger fall start times so words don't all rain at once
@@ -123,52 +143,50 @@ export function createSplashWindow() {
     + 'html,body{height:100%;background:transparent;'
     + 'font-family:\'Intel One Mono\',\'JetBrains Mono\',\'SF Mono\',\'Menlo\',ui-monospace,monospace;'
     + 'color:#fff;overflow:hidden;-webkit-font-smoothing:antialiased}'
-    // Mostly-clear card — desktop bleeds through. Visual weight comes from
-    // the geometric hex pattern + the solid accent band, not from a uniformly
-    // opaque frame.
-    + '.card{position:absolute;inset:10px;border-radius:16px;'
-    + 'background:rgba(8,4,18,.34);'
-    + 'backdrop-filter:blur(10px) saturate(125%);-webkit-backdrop-filter:blur(10px) saturate(125%);'
+    // ─── PICA-STYLE FULLSCREEN SPRAWL ARCHITECTURE ───────────────────────
+    //
+    // Body fills the whole display, fully transparent. Hex layers + falling
+    // letters are positioned `fixed` to cover the viewport (sprawl across
+    // the user's entire screen). The card is a SMALL CENTERED ISLAND of
+    // translucent glass — the only opaque region of the splash.
+    //
+    // Light-touch performance: ONE hex layer instead of three; static (no
+    // stroke-dashoffset animation) — saves ~60% of compositor work; no
+    // pulsing nodes (most expensive layer); shorter falling-letter loop.
+    //
+    // The card sits ~540×400 in the visual center via translate(-50%,-50%).
+    + '.card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);'
+    + 'width:540px;height:400px;border-radius:16px;'
+    + 'background:rgba(8,4,18,.62);'
+    + 'backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);'
     + 'border:1px solid rgba(255,255,255,.10);'
-    + 'box-shadow:0 30px 80px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.07);'
-    + 'overflow:hidden}'
-    // Sprawling hex grid — SVG <pattern> tiled across the whole card.
-    // Strokes only (no fill) so the pattern is geometric scaffolding, not
-    // visual weight. Three layers at different scales + opacities create
-    // the "sprawl" feel (foreground, midground, distance).
-    + '.hex-far,.hex-mid,.hex-near{position:absolute;inset:0;pointer-events:none}'
-    + '.hex-far{opacity:.18;animation:hex-draw 1.8s ease-out both}'
-    + '.hex-mid{opacity:.28;animation:hex-draw 1.4s .18s ease-out both}'
-    + '.hex-near{opacity:.42;animation:hex-draw 1.1s .35s ease-out both}'
-    // Stroke-dashoffset draw-in — Oak/Pica-style "the geometry assembles
-    // itself" rather than just popping into existence. stroke-dasharray on
-    // the SVG paths is set inline; we animate offset to 0.
-    + '@keyframes hex-draw{from{stroke-dashoffset:600}to{stroke-dashoffset:0}}'
-    + '.hex-far svg,.hex-mid svg,.hex-near svg{width:100%;height:100%;display:block}'
-    // Glowing nodes at random hex vertices — lit by the brand gradient.
-    + '.node{position:absolute;width:4px;height:4px;border-radius:50%;'
-    + 'background:radial-gradient(circle,rgba(255,90,200,.95),rgba(168,85,247,.4) 60%,transparent 80%);'
-    + 'box-shadow:0 0 8px rgba(255,90,200,.6);'
-    + 'animation:node-pulse 2.4s ease-in-out infinite}'
-    + '@keyframes node-pulse{0%,100%{opacity:.4;transform:scale(.85)}50%{opacity:1;transform:scale(1.1)}}'
-    // Solid accent band — the only fully-opaque region. Holds the hero text.
+    + 'box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);'
+    + 'overflow:hidden;z-index:5}'
+    // Hex grid sprawls ACROSS THE WHOLE VIEWPORT — outside the card too.
+    // Static (no draw-in animation) so it doesn't fight for compositor
+    // cycles every frame. Single layer instead of three.
+    + '.hex{position:fixed;inset:0;pointer-events:none;opacity:.22;z-index:1}'
+    + '.hex svg{width:100%;height:100%;display:block}'
+    // Solid accent band — only inside the card, holds the hero text.
     + '.band{position:absolute;left:0;right:0;top:38%;height:24%;'
     + 'background:linear-gradient(90deg,rgba(18,6,38,.86),rgba(36,10,58,.94) 50%,rgba(18,6,38,.86));'
     + 'border-top:1px solid rgba(255,90,200,.22);border-bottom:1px solid rgba(120,200,255,.18);'
     + 'box-shadow:0 0 36px rgba(168,85,247,.20) inset,0 0 0 .5px rgba(255,255,255,.04) inset;'
     + 'pointer-events:none;z-index:1}'
-    // Corner brackets — thin geometric accents, terminal/cyberpunk feel
-    + '.corner{position:absolute;width:18px;height:18px;border-color:rgba(255,90,200,.45);border-style:solid;border-width:0;pointer-events:none}'
-    + '.corner.tl{top:14px;left:14px;border-left-width:1px;border-top-width:1px}'
-    + '.corner.tr{top:14px;right:14px;border-right-width:1px;border-top-width:1px}'
-    + '.corner.bl{bottom:14px;left:14px;border-left-width:1px;border-bottom-width:1px}'
-    + '.corner.br{bottom:14px;right:14px;border-right-width:1px;border-bottom-width:1px}'
-    // Subtle radial highlights for depth
+    // Corner brackets — drawn as a single SVG inside the card so it's ONE
+    // compositor layer instead of four separately-positioned divs. Was the
+    // biggest contributor to the audit's "~18 compositor layers" count.
+    + '.corners{position:absolute;inset:0;pointer-events:none;color:rgba(255,90,200,.55)}'
+    + '.corners svg{position:absolute;inset:0;width:100%;height:100%;display:block}'
+    // Subtle radial highlights for depth, on the card
     + '.card:before{content:"";position:absolute;inset:0;pointer-events:none;'
     + 'background:radial-gradient(circle at 22% 18%,rgba(120,200,255,.10),transparent 38%),'
     + 'radial-gradient(circle at 80% 22%,rgba(255,90,200,.10),transparent 40%)}'
-    // Falling letters field — fills the entire card behind the hero text
-    + '.field{position:absolute;inset:-80px 0 0 0;mask-image:linear-gradient(180deg,transparent 0%,#000 14%,#000 78%,transparent 100%);overflow:hidden}'
+    // Falling letters field fills the WHOLE viewport (fixed, full-screen)
+    // so words rain across the entire screen, not just inside the card.
+    + '.field{position:fixed;inset:-100px 0 0 0;pointer-events:none;'
+    + 'mask-image:linear-gradient(180deg,transparent 0%,#000 8%,#000 86%,transparent 100%);'
+    + 'overflow:hidden;z-index:2}'
     // Each falling word — solid color, no background, ease-in (gravity-like)
     + '.d{position:absolute;left:var(--x);top:-40px;'
     + 'color:var(--c);font-size:var(--s);font-weight:var(--w);'
@@ -195,42 +213,33 @@ export function createSplashWindow() {
     + 'box-shadow:0 0 14px rgba(168,85,247,.6);'
     + 'animation:sweep 1.4s ease-in-out infinite}'
     + '@keyframes sweep{0%{transform:translateX(-100%)}55%{transform:translateX(155%)}100%{transform:translateX(300%)}}'
-    + '@media(prefers-reduced-motion:reduce){.d,.bar::after,.hex-far,.hex-mid,.hex-near,.node{animation:none;opacity:.3}}'
+    + '@media(prefers-reduced-motion:reduce){.d,.bar::after,.hex{animation:none;opacity:.18}}'
     + '</style></head><body>'
-    + '<div class="card">'
-    // Sprawling hex grid — three layers (far/mid/near) at different scales
-    // and opacities. Each <pattern> tiles a single hexagon polygon across
-    // the whole card. stroke-dasharray + animation:hex-draw fills them in.
-    // Pica-principle in action: native SVG instead of a third-party runtime.
-    + '<div class="hex-far"><svg viewBox="0 0 720 520" preserveAspectRatio="xMidYMid slice">'
-    + '<defs><pattern id="hexFar" x="0" y="0" width="68" height="58.88" patternUnits="userSpaceOnUse">'
-    + '<polygon points="34,1 67,17.7 67,42.2 34,58.9 1,42.2 1,17.7" fill="none" stroke="rgba(120,200,255,.55)" stroke-width=".7" stroke-dasharray="200" />'
+    // ─── FULLSCREEN SPRAWL LAYERS (outside card) ────────────────────────
+    // Single hex pattern, fixed across the entire transparent viewport.
+    // No animation (was 3 layers + stroke-dashoffset draw-in — removed
+    // because the user wants performance fixes prioritized over visual flex).
+    + '<div class="hex"><svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">'
+    + '<defs><pattern id="hexGrid" x="0" y="0" width="56" height="48.5" patternUnits="userSpaceOnUse">'
+    + '<polygon points="28,1 55,14.4 55,34.6 28,48 1,34.6 1,14.4" fill="none" stroke="rgba(168,120,255,.45)" stroke-width=".6" />'
     + '</pattern></defs>'
-    + '<rect width="100%" height="100%" fill="url(#hexFar)"/>'
+    + '<rect width="100%" height="100%" fill="url(#hexGrid)"/>'
     + '</svg></div>'
-    + '<div class="hex-mid"><svg viewBox="0 0 720 520" preserveAspectRatio="xMidYMid slice">'
-    + '<defs><pattern id="hexMid" x="20" y="10" width="44" height="38.1" patternUnits="userSpaceOnUse">'
-    + '<polygon points="22,1 43,11.5 43,27.5 22,38 1,27.5 1,11.5" fill="none" stroke="rgba(255,90,200,.45)" stroke-width=".6" stroke-dasharray="120" />'
-    + '</pattern></defs>'
-    + '<rect width="100%" height="100%" fill="url(#hexMid)"/>'
-    + '</svg></div>'
-    + '<div class="hex-near"><svg viewBox="0 0 720 520" preserveAspectRatio="xMidYMid slice">'
-    + '<defs><pattern id="hexNear" x="35" y="5" width="28" height="24.25" patternUnits="userSpaceOnUse">'
-    + '<polygon points="14,.6 27.4,7.6 27.4,17.6 14,24.6 .6,17.6 .6,7.6" fill="none" stroke="rgba(168,85,247,.55)" stroke-width=".6" stroke-dasharray="80" />'
-    + '</pattern></defs>'
-    + '<rect width="100%" height="100%" fill="url(#hexNear)"/>'
-    + '</svg></div>'
-    // Glowing nodes at scattered hex vertices — tasteful detail, not clutter
-    + '<div class="node" style="top:18%;left:14%"></div>'
-    + '<div class="node" style="top:22%;right:18%;animation-delay:.4s"></div>'
-    + '<div class="node" style="top:72%;left:22%;animation-delay:.8s"></div>'
-    + '<div class="node" style="top:78%;right:24%;animation-delay:1.1s"></div>'
-    + '<div class="node" style="top:32%;left:48%;animation-delay:1.4s"></div>'
-    + '<div class="node" style="top:68%;right:46%;animation-delay:.6s"></div>'
-    // Corner brackets — terminal/cyberpunk geometric accents
-    + '<div class="corner tl"></div><div class="corner tr"></div>'
-    + '<div class="corner bl"></div><div class="corner br"></div>'
+    // Falling letters fill the whole viewport so words rain past the card.
     + '<div class="field">' + drops + '</div>'
+    // ─── CENTERED CARD (the only opaque region) ─────────────────────────
+    + '<div class="card">'
+    // Corner brackets — single SVG, ONE compositor layer. The four pairs
+    // of L-shaped strokes draw the cyberpunk terminal accent at each corner.
+    // 14px from each edge × 18px arm length matches the prior 4-div version.
+    + '<div class="corners"><svg viewBox="0 0 540 400" preserveAspectRatio="none">'
+    +   '<g fill="none" stroke="currentColor" stroke-width="1">'
+    +     '<path d="M14,32 L14,14 L32,14"/>'             // top-left
+    +     '<path d="M508,14 L526,14 L526,32"/>'           // top-right
+    +     '<path d="M14,368 L14,386 L32,386"/>'           // bottom-left
+    +     '<path d="M508,386 L526,386 L526,368"/>'        // bottom-right
+    +   '</g>'
+    + '</svg></div>'
     + '<div class="band"></div>'
     + '<div class="hero">'
     + '<h1>Hydra</h1>'
@@ -310,16 +319,9 @@ export function createMainWindow({ show = false } = {}) {
   });
 
   const isAllowedLocalUrl = (url) => {
-    try {
-      const parsed = new URL(url);
-      return LOCAL_UI_HOSTS.some(
-        (host) =>
-          (parsed.hostname === host || parsed.hostname === `[${host}]`) &&
-          (parsed.protocol === 'http:' || parsed.protocol === 'https:')
-      );
-    } catch {
-      return false;
-    }
+    const appUrl = getWindowURL();
+    const appPort = appUrl ? new URL(appUrl).port : null;
+    return isAllowedLocalUiUrl(url, appPort);
   };
 
   win.webContents.setWindowOpenHandler(({ url }) => {

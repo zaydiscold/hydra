@@ -18,9 +18,17 @@
  */
 
 import { join } from 'node:path';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { config } from '../config.js';
+
+/**
+ * Common prefix for every ephemeral profile dir we create. Used by both the
+ * creation path (`mkdtempSync(prefix)`) and the cleanup sweep (so the sweep
+ * cannot delete anything we didn't create — defense against accidental
+ * recursive rm of an unrelated `/var/folders/.../T/...` entry).
+ */
+const PROFILE_DIR_PREFIX = 'hydra-pw-profile-';
 
 /**
  * Browser ISOLATION FLAGS — the standard "this browser is for automation,
@@ -58,7 +66,89 @@ const ISOLATION_ARGS = Object.freeze([
  * @returns {string} absolute path to a fresh empty directory
  */
 export function makeEphemeralProfileDir() {
-  return mkdtempSync(join(tmpdir(), 'hydra-pw-profile-'));
+  return mkdtempSync(join(tmpdir(), PROFILE_DIR_PREFIX));
+}
+
+/**
+ * Delete a single ephemeral profile dir. Safe-by-construction:
+ *   - Only acts on absolute paths whose basename starts with our prefix.
+ *   - Only acts on paths under the OS tmpdir.
+ *   - Uses `rmSync(force:true, recursive:true)`. Never throws — failure
+ *     just leaves the dir behind (sweep will catch it next boot).
+ *
+ * Callers should invoke this after `await browser.close()` succeeds, in a
+ * `finally` block. Pairing creation + deletion at the call site is much
+ * more robust than relying on a separate sweep.
+ *
+ * @param {string} dirPath - absolute path returned by makeEphemeralProfileDir()
+ */
+export function cleanupEphemeralProfileDir(dirPath) {
+  if (typeof dirPath !== 'string' || !dirPath) return;
+  const tmpRoot = tmpdir();
+  // Refuse anything not under the OS tmpdir or not prefixed.
+  if (!dirPath.startsWith(tmpRoot)) return;
+  const basename = dirPath.slice(dirPath.lastIndexOf('/') + 1);
+  if (!basename.startsWith(PROFILE_DIR_PREFIX)) return;
+  try {
+    rmSync(dirPath, { recursive: true, force: true, maxRetries: 2 });
+  } catch (e) {
+    // Best-effort. Common failure: EBUSY because Chromium is still flushing
+    // its sqlite databases. Sweep will retry on next boot.
+    console.warn(`[playwright-browser] failed to remove ephemeral profile ${dirPath}: ${e.message}`);
+  }
+}
+
+/**
+ * Boot-time sweep: remove every `hydra-pw-profile-*` dir in the OS tmpdir
+ * that is older than `minAgeMs` (default 60s). The age floor protects
+ * against racing a sibling Hydra process that just created a fresh dir.
+ *
+ * Why this matters: each crashed/killed Hydra run leaves behind one of
+ * these dirs. They're empty (size 64 bytes, just the dir entry) so the
+ * disk impact is trivial, but the inode pressure adds up over weeks of
+ * dev cycles, and they make `ls /var/folders/.../T/` unreadable.
+ *
+ * Called from electron/main.js at startup alongside the orphan-process
+ * sweep so all the leak hygiene happens together.
+ *
+ * @param {number} [minAgeMs=60000] - only remove dirs older than this
+ * @returns {{ removed: number, kept: number, failed: number }}
+ */
+export function sweepStaleEphemeralProfiles(minAgeMs = 60_000) {
+  const stats = { removed: 0, kept: 0, failed: 0 };
+  const tmpRoot = tmpdir();
+  let entries;
+  try {
+    entries = readdirSync(tmpRoot);
+  } catch (e) {
+    console.warn(`[playwright-browser] sweep: cannot read tmpdir ${tmpRoot}: ${e.message}`);
+    return stats;
+  }
+  const now = Date.now();
+  for (const name of entries) {
+    if (!name.startsWith(PROFILE_DIR_PREFIX)) continue;
+    const full = join(tmpRoot, name);
+    let age;
+    try {
+      age = now - statSync(full).mtimeMs;
+    } catch {
+      continue;
+    }
+    if (age < minAgeMs) {
+      stats.kept += 1;
+      continue;
+    }
+    try {
+      rmSync(full, { recursive: true, force: true, maxRetries: 1 });
+      stats.removed += 1;
+    } catch {
+      stats.failed += 1;
+    }
+  }
+  if (stats.removed || stats.failed) {
+    console.log(`[playwright-browser] swept stale ephemeral profiles — removed=${stats.removed} kept=${stats.kept} failed=${stats.failed}`);
+  }
+  return stats;
 }
 
 /**

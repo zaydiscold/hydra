@@ -2226,7 +2226,10 @@ function playwrightProvisionLaunchOptions() {
 }
 
 async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, trpcPhaseSummary = {}) {
-  const { chromium } = await import('playwright');
+  // playwright-core: API-only package, no auto-downloaded browser bundle.
+  // We supply the Chromium binary path via resolveChromiumLaunchOptions().
+  // The full `playwright` package is dev-only now (see package.json).
+  const { chromium } = await import('playwright-core');
   const cdpUrl = config.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim();
   let connectMode = 'launch';
   const browser = cdpUrl
@@ -3193,7 +3196,10 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
 }
 
 async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code) {
-  const { chromium } = await import('playwright');
+  // playwright-core: API-only package, no auto-downloaded browser bundle.
+  // We supply the Chromium binary path via resolveChromiumLaunchOptions().
+  // The full `playwright` package is dev-only now (see package.json).
+  const { chromium } = await import('playwright-core');
   const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED }));
   let result = {
     success: false,
@@ -3415,7 +3421,10 @@ export async function syncApiKeys(userId, accountId) {
 }
 
 async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
-  const { chromium } = await import('playwright');
+  // playwright-core: API-only package, no auto-downloaded browser bundle.
+  // We supply the Chromium binary path via resolveChromiumLaunchOptions().
+  // The full `playwright` package is dev-only now (see package.json).
+  const { chromium } = await import('playwright-core');
   const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED }));
   const results = [];
 
