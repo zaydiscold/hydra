@@ -97,17 +97,26 @@ app.on('second-instance', showAndFocusMainWindow);
 
 // ─── App Lifecycle ──────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
+  // #97: Startup performance instrumentation — performance.mark/measure
+  // at every major phase so we can track regressions and identify
+  // per-user bottlenecks.  Marks are preserved in the Performance
+  // timeline (available via DevTools or electron-log traces).
+  performance.mark('hydra:startup:begin');
   try {
     const splash = createSplashWindow();
     setSplashWindow(splash);
+    performance.mark('hydra:startup:splash-shown');
 
     await killKnownHydraAuxiliaryProcesses('startup sweep');
     await ensurePackagedRuntimeState();
+    performance.mark('hydra:startup:runtime-ready');
 
     const needsSync = await shouldSyncSchema();
+    performance.mark('hydra:startup:schema-check');
 
     const server = await import('../server/index.js');
     setGracefulShutdown(server.gracefulShutdown);
+    performance.mark('hydra:startup:server-imported');
 
     // Item #76: in dev we prefer port 3001 for stable URLs (Vite proxy targets,
     // bookmarks, terminal hot-pasted curl commands), but a stale Vite/Hydra
@@ -131,6 +140,7 @@ app.whenReady().then(async () => {
     }
     const expressPort = s.address()?.port ?? PORT;
     setExpressPort(expressPort);
+    performance.mark('hydra:startup:bootstrap-done');
     if (isDev && expressPort !== PREFERRED_DEV_PORT) {
       console.log(`[electron] Hydra dev server bound to port ${expressPort} (preferred ${PREFERRED_DEV_PORT} was busy).`);
     } else {
@@ -165,6 +175,7 @@ app.whenReady().then(async () => {
     setMainWindow(mainWindow);
 
     mainWindow.once('ready-to-show', () => {
+      performance.mark('hydra:startup:ready-to-show');
       // #38: drop splash alwaysOnTop before showing main window to avoid
       // the splash visually flashing over the main window during the transition.
       const sp = getSplashWindow();
@@ -177,7 +188,9 @@ app.whenReady().then(async () => {
       if (sp && !sp.isDestroyed()) sp.close();
       if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show();
     }, 15000);
+    performance.mark('hydra:startup:loadurl-begin');
     try { await mainWindow.loadURL(url); } finally { clearTimeout(loadTimeout); }
+    performance.mark('hydra:startup:loadurl-done');
 
     if (needsSync) {
       firstLaunchSetup(trackedChildren).catch(e => {
@@ -190,6 +203,27 @@ app.whenReady().then(async () => {
             'Error: ' + (e.message || String(e)));
         }
       });
+    }
+
+    // ── Log startup timing summary ─────────────────────────────────────────
+    performance.mark('hydra:startup:end');
+    const measures = [
+      ['splash-shown', 'runtime-ready', 'Hydra startup: runtime init'],
+      ['runtime-ready', 'schema-check', 'Hydra startup: schema check'],
+      ['schema-check', 'server-imported', 'Hydra startup: server import'],
+      ['server-imported', 'bootstrap-done', 'Hydra startup: bootstrap'],
+      ['loadurl-begin', 'loadurl-done', 'Hydra startup: loadURL'],
+      ['begin', 'ready-to-show', 'Hydra startup: total → ready-to-show'],
+      ['begin', 'end', 'Hydra startup: total'],
+    ];
+    for (const [from, to, label] of measures) {
+      try {
+        performance.measure(label, `hydra:startup:${from}`, `hydra:startup:${to}`);
+      } catch { /* mark may not exist yet (e.g. ready-to-show fires async) */ }
+    }
+    const totalEntry = performance.getEntriesByName('Hydra startup: total', 'measure')[0];
+    if (totalEntry) {
+      console.log(`[electron] Hydra startup completed in ${totalEntry.duration.toFixed(0)}ms`);
     }
   } catch (e) {
     console.error('[electron] Failed to start Hydra:', e);

@@ -201,7 +201,8 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
   logger.info(`[SHUTDOWN] Starting graceful shutdown (${source})`);
   stopPinger();
   stopRequestLogRetention();
-  stopSessionRefresher();
+  rotationManager.cancelReload();
+  await stopSessionRefresher();
 
   try {
     await taskSupervisor.shutdown();

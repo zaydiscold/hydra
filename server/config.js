@@ -139,6 +139,11 @@ export const OR_BASE = config.OR_BASE;
 export const CLERK_ORIGIN = config.CLERK_ORIGIN;
 export const CLERK_REFERER = config.CLERK_REFERER;
 
+/**
+ * DEPRECATED: Config validation now runs at module load via configSchema.parse().
+ * Kept as a no-op to avoid breaking the existing call site in server/index.js:264.
+ * TODO: Remove this function and its call site after the next integration test pass.
+ */
 export function validateConfig() {
   return true;
 }

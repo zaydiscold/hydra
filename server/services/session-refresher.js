@@ -147,7 +147,6 @@ async function _sweepImpl() {
   if (swept > 0) {
     logger.info(`[AUTO-REFRESH] Sweep done — ${swept} checked, ${refreshed} refreshed, ${skipped} skipped`);
   }
-  _sweepRunning = false;
 
   // ── Session lifetime probe pass ──────────────────────────────────────────
   // Runs after the refresh sweep. For every account that has logged in at
@@ -263,7 +262,7 @@ export function startSessionRefresher() {
   logger.info(`[AUTO-REFRESH] Session refresher scheduled (every ${INTERVAL_MS / 3600000}h)`);
 }
 
-export function stopSessionRefresher() {
+export async function stopSessionRefresher() {
   if (_startupTimeoutHandle) {
     clearTimeout(_startupTimeoutHandle);
     _startupTimeoutHandle = null;
@@ -271,6 +270,15 @@ export function stopSessionRefresher() {
   if (_intervalHandle) {
     clearInterval(_intervalHandle);
     _intervalHandle = null;
+  }
+  // #44: Await the in-flight sweep so DB writes complete before shutdown
+  // continues. Without this, stop() could return while a sweep is still
+  // writing session updates to the database.
+  if (_sweepPromise) {
+    logger.info('[AUTO-REFRESH] Waiting for in-flight sweep to complete before stop…');
+    await _sweepPromise;
+    logger.info('[AUTO-REFRESH] In-flight sweep completed — session refresher stopped');
+  } else {
     logger.info('[AUTO-REFRESH] Session refresher stopped');
   }
 }

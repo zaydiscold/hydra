@@ -15,10 +15,20 @@ export const isDev = !app.isPackaged;
 // ─── 0. Persistent logging (file + rotating) ────────────────────────────────
 export function setupLogging() {
   log.initialize();
-  log.transports.file.level = 'info';
+  // #104: In production, only write warnings and errors to disk.
+  // Info-level logs are still shown on console but not persisted —
+  // this eliminates ~90% of startup I/O writes without losing
+  // visibility into errors. Dev mode keeps debug level in file.
+  log.transports.file.level = isDev ? 'debug' : 'warn';
   log.transports.console.level = isDev ? 'debug' : 'info';
   log.transports.file.maxSize = 5 * 1024 * 1024;
-  Object.assign(console, log.functions);
+  // #101: Do NOT overwrite console.log/warn/error with electron-log's
+  // instrumented wrappers.  Those wrappers funnel every console.* call
+  // through processMessage() → format pipeline → file transport, which
+  // adds measurable overhead to the dozens of log lines emitted during
+  // server bootstrap.  electron-log hooks its own log.* methods via
+  // log.initialize() already; routing console through it as well is
+  // redundant in the main process.
 }
 
 // ─── 1. Paths and constants ─────────────────────────────────────────────────

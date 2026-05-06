@@ -187,6 +187,29 @@ async function runSelfHealSync() {
         }
       }
       console.log(`[electron] backed up database (with WAL/SHM) before self-heal: ${backupPath}`);
+
+      // #49: Prune old backups — keep only the 5 most recent to prevent
+      // unbounded disk accumulation across repeated self-heal runs.
+      try {
+        const { readdirSync, unlinkSync } = await import('node:fs');
+        const userDataDir = app.getPath('userData');
+        const backupPattern = /^hydra\.db\.backup-/;
+        const backups = readdirSync(userDataDir)
+          .filter(f => backupPattern.test(f))
+          .map(f => ({ name: f, path: path.join(userDataDir, f) }))
+          .sort((a, b) => a.name.localeCompare(b.name)); // ISO timestamps sort lexicographically
+        while (backups.length > 5) {
+          const old = backups.shift();
+          // Remove the main backup + any WAL/SHM sidecars
+          for (const suffix of ['', '-wal', '-shm']) {
+            const p = old.path + suffix;
+            try { unlinkSync(p); } catch { /* file may not exist */ }
+          }
+          console.log(`[electron] pruned old backup: ${old.name}`);
+        }
+      } catch (pruneErr) {
+        console.warn('[electron] failed to prune old backups:', pruneErr.message);
+      }
     }
     const summary = await runSelfHeal({ dbPath, migrationsDir: MIGRATIONS_DIR, log: (m) => console.log(m) });
     console.log(`[electron] db-self-heal: ${summary.applied} applied, ${summary.skipped} already present, ${summary.errors} errors`);

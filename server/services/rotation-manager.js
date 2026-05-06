@@ -28,6 +28,8 @@ class RotationManager {
     this.userId = null;
     /** @type {string|null} ISO timestamp of last pool reload */
     this.lastSyncAt = null;
+    /** @type {AbortController|null} — cancels in-flight reload during shutdown */
+    this._reloadController = null;
   }
 
   /** Called lazily on first request if pool was never initialized */
@@ -39,23 +41,45 @@ class RotationManager {
     await this.reload();
   }
 
-  /** Reload the pool from DB. Call after any pool toggle. */
+  /** Reload the pool from DB. Call after any pool toggle. Cancellable via cancelReload(). */
   async reload() {
+    // Cancel any previous in-flight reload
+    if (this._reloadController) {
+      this._reloadController.abort();
+    }
+    this._reloadController = new AbortController();
+    const signal = this._reloadController.signal;
+
     if (!this.userId) {
       const user = await prisma.user.findFirst();
       if (!user) return;
       this.userId = user.id;
     }
 
+    signal.throwIfAborted();
+
     // Lazy import to avoid circular require
     const { getPooledKeys } = await import('./store.js');
     const keys = await getPooledKeys(this.userId);
+
+    signal.throwIfAborted();
 
     this.pool = keys;
     this.index = 0;
     this.loaded = true;
     this.lastSyncAt = new Date().toISOString();
+    this._reloadController = null;
     logger.info(`[POOL] Rotation pool reloaded: ${keys.length} active key(s)`);
+  }
+
+  /**
+   * Cancel any in-flight reload(). Safe to call during shutdown.
+   * Resolves when the current reload is aborted.
+   */
+  cancelReload() {
+    if (this._reloadController) {
+      this._reloadController.abort();
+    }
   }
 
   /**

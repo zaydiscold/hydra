@@ -59,7 +59,9 @@ export default async function afterPack(context) {
     ? [...targetPlatforms.keys()][0].nodeName
     : (packager.platform?.nodeName || process.platform);
   // electron-builder Arch enum: ia32=0, x64=1, armv7l=2, arm64=3, universal=4
-  const arch = context.arch === 1 ? 'x64' : context.arch === 3 ? 'arm64' : (process.arch === 'arm64' ? 'arm64' : 'x64');
+  // #46: Universal builds (arch=4) need BOTH x64 and arm64 engines. Detect
+  // the build arch and include all needed engines for the target platform.
+  const arch = context.arch === 1 ? 'x64' : context.arch === 3 ? 'arm64' : context.arch === 4 ? 'universal' : (process.arch === 'arm64' ? 'arm64' : 'x64');
 
   const resourcesDir = typeof packager.getResourcesDir === 'function'
     ? packager.getResourcesDir(appOutDir)
