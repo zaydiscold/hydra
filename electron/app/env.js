@@ -187,7 +187,7 @@ export async function ensurePackagedRuntimeState() {
 
   if (isDev) return summary;
 
-  const { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, statfsSync } = await import('node:fs');
+  const { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, statfsSync } = await import('node:fs');
   const { randomBytes } = await import('node:crypto');
   const userData = app.getPath('userData');
 
