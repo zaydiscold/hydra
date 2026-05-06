@@ -215,3 +215,101 @@ caller of `chromium.launch()` that bypasses `resolveChromiumLaunchOptions`,
 that caller is responsible for its own isolation — and it should be
 caught by the contract test in `server/tests/playwright-isolation.test.mjs`
 (if/when that test exists).
+
+---
+
+## Sessions: what survives a Hydra restart, what doesn't
+
+**Browser isolation ≠ session loss.** This is the most important
+point in this doc. When we say the Playwright browser uses an
+ephemeral `userDataDir`, we mean the *browser fingerprint*
+(installed extensions, autofill, cached fonts, persisted device-id)
+is fresh per launch. The actual **OpenRouter login state** is stored
+elsewhere and re-injected when needed.
+
+Three session types live in three different places:
+
+### Type 1 — OpenRouter Clerk session (per account)
+
+**Where it lives:** Prisma `Account.sessionToken` + `Account.config`
+(both encrypted AES-256-GCM with `LOCAL_STORAGE_KEY` from
+`local-secrets.json`). One row per OpenRouter account Hydra manages.
+
+**Survives:** forever, until Clerk says the session expired (~7d typically).
+
+**Restored into Playwright like this:**
+
+```js
+// server/services/dashboard-api.js
+context = await browser.newContext({ userAgent: USER_AGENT });
+await context.addCookies(
+  await playwrightCookiesForOpenRouter(sessionCookie, clientCookie)
+);
+// ↑ stored cookies from Prisma are INJECTED into the isolated context.
+//   The Playwright browser now appears logged-in as that OpenRouter
+//   account, even though its userDataDir is brand new and empty.
+```
+
+**Refreshed back into Prisma like this:**
+
+```js
+// server/services/session-refresher.js
+await updateAccountSession(userId, id, sessionCookie, clientCookie,
+                           sessionExpiry, { ... });
+// ↑ after a successful action, the refreshed __client cookie is
+//   written back so the next launch picks up the new state.
+```
+
+Why this design wins: the browser identity is fresh (no cross-task
+fingerprint accumulation that Clerk could fraud-flag), but the
+account login is preserved. Best of both worlds.
+
+### Type 2 — Hydra master unlock JWT (per Hydra-user)
+
+**Where it lives:** the renderer's `localStorage.hydra_token`. Issued
+by the server when you POST `/api/auth/login` with your password,
+signed with the per-install `JWT_SECRET` from `userData/jwt-secret`.
+
+**TTL:** 30 days by default (`HYDRA_MASTER_JWT_TTL: '30d'` in
+`server/config.js`). Survives Hydra restarts as long as the JWT is
+within its `exp`.
+
+**Survives a quit?** Yes — `localStorage` is per-userData-dir, and
+Hydra's userData is `~/Library/Application Support/Hydra/` which
+persists. No retyping `1111` for 30 days.
+
+**Browser isolation does NOT touch this.** The unlock JWT lives in
+the *renderer's* localStorage, not the Playwright browser. The
+Playwright work happens server-side and never sees this token.
+
+### Type 3 — Playwright browser cookies (per signup task)
+
+**Where it lives:** the ephemeral `userDataDir` we just created
+(`/var/folders/.../hydra-pw-profile-XXXX/`). Browser-only state:
+DOM cookies, localStorage of openrouter.ai, IndexedDB.
+
+**Survives:** intentionally NO. The dir gets `rm -rf`'d when the
+task ends (or by the orphan sweep on the next Hydra launch). This
+is correct: each signup is a *fresh account*, so we want a fresh
+browser. Reusing fingerprints would trip Clerk's fraud heuristics.
+
+**Important nuance:** the *result* of the signup (the `__client`
+cookie + Clerk JWT) is extracted by code BEFORE the browser dies
+and persisted to Type 1 storage (Prisma). The browser is the
+acquisition channel, not the storage layer.
+
+---
+
+## Quick summary table
+
+| Session | Storage | Persists across launches? | Affected by Playwright isolation? |
+|---|---|---|---|
+| OpenRouter Clerk (per account) | Prisma encrypted blobs | ✅ yes (until Clerk expiry) | ❌ no — Prisma is the canonical store, browser is just the working surface |
+| Hydra unlock JWT (per Hydra-user) | Renderer localStorage | ✅ yes (30-day TTL) | ❌ no — renderer-side, never touches Playwright |
+| Playwright browser fingerprint | Ephemeral userDataDir | ❌ no (intentionally) | ✅ yes — this is exactly what isolation discards |
+
+If you ever change anything in `server/lib/playwright-browser.js`,
+re-read this section. The "ephemeral profile" decision is correct
+*because* of where sessions actually live — break that assumption
+and you'll either leak fingerprints between accounts (bad) or
+discard real session state (worse).
