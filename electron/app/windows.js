@@ -119,19 +119,31 @@ export function createSplashWindow() {
     + '<style>'
     + '*{margin:0;padding:0;box-sizing:border-box}'
     + 'html,body{height:100%;background:transparent;'
-    + 'font-family:\'SF Mono\',\'JetBrains Mono\',\'Fira Code\',ui-monospace,monospace;'
+    // Stronger terminal feel: Menlo/Andale Mono first (rounder, more terminal-y),
+    // SF Mono second, Courier as ultimate Mac fallback.
+    + 'font-family:\'Menlo\',\'Andale Mono\',\'SF Mono\',\'JetBrains Mono\',\'Courier New\',ui-monospace,monospace;'
     + 'color:#fff;overflow:hidden;-webkit-font-smoothing:antialiased}'
-    // Frosted-glass card — translucent so desktop bleeds through
-    + '.card{position:absolute;inset:10px;border-radius:20px;'
-    + 'background:linear-gradient(150deg,rgba(8,4,22,.78),rgba(20,6,34,.82));'
-    + 'backdrop-filter:blur(28px) saturate(140%);-webkit-backdrop-filter:blur(28px) saturate(140%);'
-    + 'border:1px solid rgba(255,255,255,.07);'
-    + 'box-shadow:0 28px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06);'
+    // Card is MOSTLY CLEAR — just a faint dark wash + subtle blur so the
+    // desktop bleeds through. The visual weight comes from a single solid
+    // accent BAND across the middle (where the hero text lives), not from
+    // a uniformly opaque frame.
+    + '.card{position:absolute;inset:10px;border-radius:14px;'
+    + 'background:rgba(8,4,18,.32);'  // mostly clear (32% opacity, was 78%)
+    + 'backdrop-filter:blur(8px) saturate(120%);-webkit-backdrop-filter:blur(8px) saturate(120%);'
+    + 'border:1px solid rgba(255,255,255,.10);'  // sharp 1px stroke, terminal feel
+    + 'box-shadow:0 24px 70px rgba(0,0,0,.40),inset 0 1px 0 rgba(255,255,255,.06);'
     + 'overflow:hidden}'
-    // Subtle radial highlights, no pills
+    // Solid accent band across the middle — the ONLY truly opaque part of
+    // the splash. Holds the hero text and contrasts against the clear card.
+    + '.band{position:absolute;left:0;right:0;top:38%;height:24%;'
+    + 'background:linear-gradient(90deg,rgba(20,8,40,.85),rgba(40,12,60,.92) 50%,rgba(20,8,40,.85));'
+    + 'border-top:1px solid rgba(255,90,200,.18);border-bottom:1px solid rgba(120,200,255,.14);'
+    + 'box-shadow:0 0 30px rgba(168,85,247,.18) inset;'
+    + 'pointer-events:none;z-index:1}'
+    // Subtle radial highlights for depth, doesn't add opacity
     + '.card:before{content:"";position:absolute;inset:0;pointer-events:none;'
-    + 'background:radial-gradient(circle at 25% 15%,rgba(120,200,255,.10),transparent 36%),'
-    + 'radial-gradient(circle at 80% 25%,rgba(255,90,200,.10),transparent 38%)}'
+    + 'background:radial-gradient(circle at 25% 15%,rgba(120,200,255,.08),transparent 36%),'
+    + 'radial-gradient(circle at 80% 25%,rgba(255,90,200,.08),transparent 38%)}'
     // Falling letters field — fills the entire card behind the hero text
     + '.field{position:absolute;inset:-80px 0 0 0;mask-image:linear-gradient(180deg,transparent 0%,#000 14%,#000 78%,transparent 100%);overflow:hidden}'
     // Each falling word — solid color, no background, ease-in (gravity-like)
@@ -164,6 +176,7 @@ export function createSplashWindow() {
     + '</style></head><body>'
     + '<div class="card">'
     + '<div class="field">' + drops + '</div>'
+    + '<div class="band"></div>'  // solid accent band (only opaque region)
     + '<div class="hero">'
     + '<h1>Hydra</h1>'
     + '<div class="sub">local proxy &middot; starting</div>'

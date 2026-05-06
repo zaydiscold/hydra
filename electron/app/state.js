@@ -16,6 +16,11 @@ let _expressPort = null;
 let _forceQuit = false;
 let _closePromptPending = false;
 let _shuttingDown = false;
+// True while the strict splash → main sequence is in progress. Gates the
+// `activate` / `second-instance` / tray-respawn handlers so they don't
+// race-spawn main while the splash is still up. Set to true at the start
+// of boot, cleared once main is shown.
+let _bootingSplash = true;
 export const trackedChildren = new Set();
 
 export function getMainWindow()          { return _mainWindow; }
@@ -27,6 +32,7 @@ export function getExpressPort()         { return _expressPort; }
 export function getForceQuit()           { return _forceQuit; }
 export function getClosePromptPending()  { return _closePromptPending; }
 export function getShuttingDown()        { return _shuttingDown; }
+export function getBootingSplash()       { return _bootingSplash; }
 
 export function setMainWindow(w)         { _mainWindow = w; }
 export function setSplashWindow(w)       { _splashWindow = w; }
@@ -37,6 +43,7 @@ export function setExpressPort(p)        { _expressPort = p; }
 export function setForceQuit(v)          { _forceQuit = v; }
 export function setClosePromptPending(v) { _closePromptPending = v; }
 export function setShuttingDown(v)       { _shuttingDown = v; }
+export function setBootingSplash(v)      { _bootingSplash = v; }
 
 // ─── External URL Helpers ────────────────────────────────────────────────────
 function isAllowedExternalUrl(rawUrl) {
@@ -63,6 +70,15 @@ export async function openExternalUrl(rawUrl) {
  * cached URL. Tray clicks and second-instance launches both call this.
  */
 export async function showAndFocusMainWindow() {
+  // GATE: during the splash → main boot sequence we MUST NOT spawn main
+  // here. macOS sends `activate` and `second-instance` events that route
+  // through this function; if we honored them during boot we'd race the
+  // strict-serialization in main.js (creating a second main window while
+  // splash is still up — the bug the user keeps screenshotting).
+  if (_bootingSplash) {
+    console.log('[electron] showAndFocusMainWindow ignored — boot in progress');
+    return;
+  }
   const { app } = await import('electron');
   if (process.platform === 'darwin') app.dock?.show();
   const w = getMainWindow();

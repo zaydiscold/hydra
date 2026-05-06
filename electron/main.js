@@ -17,6 +17,7 @@ import {
   getMainWindow, getSplashWindow, getWindowURL, getForceQuit, getShuttingDown, getGracefulShutdown, getTray,
   setMainWindow, setSplashWindow, setWindowURL, setExpressPort, setForceQuit, setGracefulShutdown, setShuttingDown, setTray,
   openExternalUrl, showAndFocusMainWindow, trackedChildren,
+  setBootingSplash, getBootingSplash,
 } from './app/state.js';
 import { createSplashWindow, createMainWindow } from './app/windows.js';
 import { registerIpcHandlers } from './app/ipc.js';
@@ -227,6 +228,9 @@ app.whenReady().then(async () => {
       performance.mark('hydra:startup:ready-to-show');
       mainWindow.show();
       mainWindow.focus();
+      // Boot complete — release the gate so activate / second-instance /
+      // tray-click handlers can spawn windows again from this point on.
+      setBootingSplash(false);
     };
     mainWindow.once('ready-to-show', showMainOnce);
     const safetyTimeout = setTimeout(() => {
@@ -285,6 +289,16 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {});
 
 app.on('activate', () => {
+  // GATE: during the splash → main boot sequence the strict-serialization
+  // in `whenReady` is responsible for constructing main exactly once. If we
+  // also spawn one here from `activate` (which macOS fires when the user
+  // double-clicks the .app or the dock icon during startup), we get TWO
+  // main windows simultaneously — and the bug where the user sees splash +
+  // unlock screen at the same time. Just no-op while booting.
+  if (getBootingSplash()) {
+    console.log('[electron] activate event ignored — boot in progress');
+    return;
+  }
   const w = getMainWindow();
   if (w && !w.isDestroyed()) { showAndFocusMainWindow(); return; }
   const url = getWindowURL();
