@@ -5,7 +5,7 @@
  * graceful server shutdown, and force exit.
  */
 import { killKnownHydraAuxiliaryProcesses } from '../utils/cleanupAuxProcesses.js';
-import { getTray, setTray } from './state.js';
+import { getTray, setTray, getShuttingDown, setShuttingDown } from './state.js';
 
 /**
  * Kill all tracked child processes (e.g. prisma db push spawns).
@@ -26,16 +26,21 @@ export function killTrackedChildren(trackedChildren) {
  * Orchestrate a complete shutdown: children → aux processes → server.
  * Safe to call multiple times — second call is a no-op once shuttingDown is set.
  *
+ * Reads/writes the shuttingDown flag through state.js so the caller in
+ * main.js doesn't have to construct a `{value}` ref. Earlier shape took a
+ * mutable `shuttingDownRef` argument; callers in main.js never passed it,
+ * which produced `Cannot read properties of undefined (reading 'value')`
+ * on every quit. Now self-sufficient — pass only what changes per call.
+ *
  * @param {object} opts
  * @param {string} opts.reason - label for logging
  * @param {Set} opts.trackedChildren - set of tracked child processes
  * @param {Function|null} opts.gracefulShutdown - server's gracefulShutdown function
- * @param {{value: boolean}} opts.shuttingDownRef - mutable flag to prevent double-shutdown
  * @returns {Promise<void>}
  */
-export async function shutdownEverything({ reason, trackedChildren, gracefulShutdown, shuttingDownRef }) {
-  if (shuttingDownRef.value) return;
-  shuttingDownRef.value = true;
+export async function shutdownEverything({ reason, trackedChildren, gracefulShutdown }) {
+  if (getShuttingDown()) return;
+  setShuttingDown(true);
   console.log(`[electron] shutdown initiated: ${reason}`);
   killTrackedChildren(trackedChildren);
   await killKnownHydraAuxiliaryProcesses(reason);
