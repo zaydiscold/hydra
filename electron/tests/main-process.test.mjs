@@ -107,4 +107,11 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     );
     assert.ok(surface.includes('app.exit'), 'must call app.exit after shutdown');
   });
+
+  it('persists renderer auth token through native IPC', () => {
+    const surface = readMainProcessSurface();
+    assert.ok(surface.includes('native:auth-token:get'), 'must expose native token read');
+    assert.ok(surface.includes('native:auth-token:set'), 'must expose native token write');
+    assert.ok(surface.includes('renderer-auth-token.json'), 'must persist token outside port-scoped localStorage');
+  });
 });

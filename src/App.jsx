@@ -412,7 +412,7 @@ export default function App() {
 
   const checkAuth = useCallback(async () => {
     try {
-      const storedToken = localStorage.getItem('hydra_token');
+      const storedToken = await api.hydrateToken();
       const res = await api.getAuthStatus();
       const payload = res?.data ?? res ?? {};
       // Server wraps response: { success, data: { setup, authenticated }, timestamp }

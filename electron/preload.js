@@ -49,6 +49,14 @@ contextBridge.exposeInMainWorld('hydraNative', {
   platform: () => ipcRenderer.invoke('native:platform'),
 
   /**
+   * Persist the lock-screen JWT outside renderer localStorage so packaged
+   * Electron survives random localhost port changes across launches.
+   */
+  getAuthToken: () => ipcRenderer.invoke('native:auth-token:get'),
+  setAuthToken: (token) => ipcRenderer.invoke('native:auth-token:set', token),
+  clearAuthToken: () => ipcRenderer.invoke('native:auth-token:clear'),
+
+  /**
    * Hide the app window while keeping the embedded server/proxy online.
    * @returns {Promise<{ok:true,data:true}|{ok:false,error:string,code?:string}>}
    */

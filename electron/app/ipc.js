@@ -8,12 +8,18 @@
  * (main.js) can manage its own state (mainWindow ref, forceQuit flag).
  */
 import { app, ipcMain, shell } from 'electron';
+import { chmod, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import { getWindowURL, getExpressPort } from './state.js';
 import { isPathInAllowlist } from './path-allowlist.js';
 
 function ok(data) { return { ok: true, data }; }
 function err(message, code) { return { ok: false, error: message, code }; }
+
+function authTokenPath() {
+  return path.join(app.getPath('userData'), 'renderer-auth-token.json');
+}
 
 function isPathAllowed(target) {
   return isPathInAllowlist(target, [
@@ -68,6 +74,41 @@ export function registerIpcHandlers({ windowURL, onHideWindow, onQuitApp } = {})
   });
 
   ipcMain.handle('native:platform', async () => ok(process.platform));
+
+  ipcMain.handle('native:auth-token:get', async () => {
+    try {
+      const raw = await readFile(authTokenPath(), 'utf-8').catch((e) => {
+        if (e.code === 'ENOENT') return null;
+        throw e;
+      });
+      if (!raw) return ok(null);
+      const parsed = JSON.parse(raw);
+      return ok(typeof parsed?.token === 'string' ? parsed.token : null);
+    } catch (e) {
+      return err(e.message, 'TOKEN_READ_FAILED');
+    }
+  });
+
+  ipcMain.handle('native:auth-token:set', async (_event, token) => {
+    if (typeof token !== 'string' || !token) return err('token must be a non-empty string', 'BAD_ARG');
+    try {
+      const file = authTokenPath();
+      await writeFile(file, JSON.stringify({ token, updatedAt: new Date().toISOString() }), { mode: 0o600 });
+      await chmod(file, 0o600).catch(() => {});
+      return ok(true);
+    } catch (e) {
+      return err(e.message, 'TOKEN_WRITE_FAILED');
+    }
+  });
+
+  ipcMain.handle('native:auth-token:clear', async () => {
+    try {
+      await rm(authTokenPath(), { force: true });
+      return ok(true);
+    } catch (e) {
+      return err(e.message, 'TOKEN_CLEAR_FAILED');
+    }
+  });
 
   ipcMain.handle('native:hide-window', async () => {
     if (onHideWindow) {

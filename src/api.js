@@ -64,6 +64,22 @@ function getToken() {
   return localStorage.getItem('hydra_token') || '';
 }
 
+async function nativeAuthToken(method, token) {
+  const native = globalThis.window?.hydraNative;
+  const fn = native?.[method];
+  if (typeof fn !== 'function') return null;
+  const result = await fn(token);
+  if (!result?.ok) return null;
+  return result.data ?? null;
+}
+
+export async function hydrateToken() {
+  if (getToken()) return getToken();
+  const token = await nativeAuthToken('getAuthToken');
+  if (token) localStorage.setItem('hydra_token', token);
+  return token || '';
+}
+
 function isRetryableRequest(method) {
   return method === 'GET';
 }
@@ -202,9 +218,11 @@ export const shutdownServer = () =>
 export function saveToken(token) {
   handledAuthFailure = false;
   localStorage.setItem('hydra_token', token);
+  void nativeAuthToken('setAuthToken', token);
 }
 export function clearToken() {
   localStorage.removeItem('hydra_token');
+  void nativeAuthToken('clearAuthToken');
 }
 export function hasToken() {
   return !!getToken();
