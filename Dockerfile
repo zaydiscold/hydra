@@ -60,7 +60,13 @@ ENV NODE_ENV=production \
 # This ensures native C++ addons (bcryptjs, sqlite3/Prisma) link against
 # the correct glibc — the #1 cause of crashes in V1 Dockerfile.
 COPY package*.json ./
-RUN npm ci --omit=dev
+# `--ignore-scripts` skips package.json `postinstall: electron-builder install-app-deps`.
+# Docker doesn't need electron-builder rebuilding native modules — Hydra in
+# the container only runs server-side code (Express + Prisma). The legitimate
+# native rebuilds (`npx prisma generate`) are invoked explicitly below.
+# Without --ignore-scripts the build fails with exit code 127 because
+# electron-builder lives in devDependencies which --omit=dev strips out.
+RUN npm ci --omit=dev --ignore-scripts
 
 # Install Chromium for Playwright fallback (dashboard-api provisioning path).
 # Must run AFTER npm ci so the playwright binary exists in node_modules/.bin.

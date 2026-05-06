@@ -35,30 +35,57 @@ export function createSplashWindow() {
     },
   });
 
-  // Brand + model grid — each card shows a brand identifier and cycles through models
-  const brands = [
-    { id: 'OA', label: 'OpenAI',   models: ['GPT-4o', 'GPT-4.1', 'o4-mini'],         color: '#10a37f' },
-    { id: 'AN', label: 'Anthropic', models: ['Claude 4.5', 'Opus 4.5', 'Sonnet 4'],  color: '#d97757' },
-    { id: 'GG', label: 'Google',   models: ['Gemini 2.5', 'Gemini Flash', 'Gemma 3'], color: '#4285f4' },
-    { id: 'DS', label: 'DeepSeek', models: ['DeepSeek R1', 'DeepSeek V3'],           color: '#4d6bfe' },
-    { id: 'MT', label: 'Meta',     models: ['Llama 4', 'Llama 3.3'],                 color: '#0668e1' },
-    { id: 'MS', label: 'Mistral',  models: ['Mistral Large', 'Mixtral', 'Codestral'], color: '#f90' },
-    { id: 'XA', label: 'xAI',      models: ['Grok 3', 'Grok 2'],                     color: '#e5e5e5' },
-    { id: 'CH', label: 'Cohere',   models: ['Command R+', 'Command R'],              color: '#39594d' },
-    { id: 'KM', label: 'Kimi',     models: ['Kimi K2', 'Moonshot'],                  color: '#6c5ce7' },
-    { id: 'MM', label: 'MiniMax',  models: ['MiniMax M1', 'abab 6.5s'],              color: '#ff6b6b' },
-    { id: 'PP', label: 'Perplexity', models: ['Sonar Pro', 'Sonar'],                  color: '#1fb8cd' },
-    { id: 'QW', label: 'Qwen',     models: ['Qwen 2.5', 'Qwen Coder'],               color: '#615ced' },
+  // Separate brand entries and model entries — not paired.
+  // Brands show as bold identifiers, models as flowing text.
+  const items = [
+    // Brand names
+    { text: 'OpenAI',     tag: 'brand', color: '#10a37f' },
+    { text: 'Anthropic',  tag: 'brand', color: '#d97757' },
+    { text: 'Google',     tag: 'brand', color: '#4285f4' },
+    { text: 'DeepSeek',   tag: 'brand', color: '#4d6bfe' },
+    { text: 'Meta',       tag: 'brand', color: '#0668e1' },
+    { text: 'Mistral',    tag: 'brand', color: '#f90' },
+    { text: 'xAI',        tag: 'brand', color: '#e5e5e5' },
+    { text: 'Cohere',     tag: 'brand', color: '#39594d' },
+    { text: 'Kimi',       tag: 'brand', color: '#6c5ce7' },
+    { text: 'MiniMax',    tag: 'brand', color: '#ff6b6b' },
+    { text: 'Perplexity', tag: 'brand', color: '#1fb8cd' },
+    { text: 'Qwen',       tag: 'brand', color: '#615ced' },
+    { text: 'HuggingFace',tag: 'brand', color: '#ffbd45' },
+    { text: 'Together',   tag: 'brand', color: '#6e56cf' },
+    { text: 'Groq',       tag: 'brand', color: '#f55036' },
+    { text: 'Fireworks',  tag: 'brand', color: '#fb923c' },
+    // Model names
+    { text: 'GPT-4o',       tag: 'model' },
+    { text: 'GPT-4.1',      tag: 'model' },
+    { text: 'Claude 4.5',   tag: 'model' },
+    { text: 'Opus 4.5',     tag: 'model' },
+    { text: 'Sonnet 4',     tag: 'model' },
+    { text: 'Gemini 2.5',   tag: 'model' },
+    { text: 'Gemma 3',      tag: 'model' },
+    { text: 'Llama 4',      tag: 'model' },
+    { text: 'DeepSeek R1',  tag: 'model' },
+    { text: 'DeepSeek V3',  tag: 'model' },
+    { text: 'Qwen 3',       tag: 'model' },
+    { text: 'Qwen Coder',   tag: 'model' },
+    { text: 'Mistral Large',tag: 'model' },
+    { text: 'Mixtral',      tag: 'model' },
+    { text: 'Grok 3',       tag: 'model' },
+    { text: 'Command R+',   tag: 'model' },
+    { text: 'Kimi K2',      tag: 'model' },
+    { text: 'MiniMax M1',   tag: 'model' },
+    { text: 'Sonar Pro',    tag: 'model' },
+    { text: 'Hermes 3',     tag: 'model' },
+    { text: 'Nous Research',tag: 'brand', color: '#a78bfa' },
   ];
 
-  const brandCards = brands.map((b, i) => {
-    const delay = (i * 0.08).toFixed(2);
-    return '<div class="bcard" style="animation-delay:' + delay + 's;border-color:' + b.color + '22">'
-      + '<div class="bid" style="color:' + b.color + '">' + b.id + '</div>'
-      + '<div class="bmodels">' + b.models.map((m, mi) =>
-          '<span style="animation-delay:' + (delay + mi * 0.6).toFixed(2) + 's">' + m + '</span>'
-        ).join('') + '</div>'
-      + '</div>';
+  // Shuffle for visual variety and slice to fit
+  const shuffled = items.sort(() => Math.random() - 0.5);
+  const chips = shuffled.slice(0, 28).map((item, i) => {
+    const delay = (i * 0.07).toFixed(2);
+    const cls = item.tag === 'brand' ? 'chip-brand' : 'chip-model';
+    const style = item.color ? ' style="--c:' + item.color + '"' : '';
+    return '<span class="' + cls + '"' + style + ' style="animation-delay:' + delay + 's">' + item.text + '</span>';
   }).join('');
 
   const splashHTML = '<!doctype html><html><head><meta charset="utf-8">'
@@ -79,37 +106,24 @@ export function createSplashWindow() {
     + '.header{text-align:center;margin-bottom:18px}'
     + 'h1{font-size:32px;font-weight:700;letter-spacing:-.02em;color:#fff;margin-bottom:4px}'
     + '.sub{font-size:11px;font-weight:500;color:rgba(255,255,255,.35);letter-spacing:.1em;text-transform:uppercase}'
-    // Brand grid
-    + '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%;flex:1;align-content:start}'
-    // Brand card
-    + '.bcard{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);'
-    + 'border-radius:10px;padding:10px 8px;text-align:center;'
-    + 'animation:card-in .5s ease-out both}'
-    + '@keyframes card-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}'
-    // Brand ID — two-letter abbreviation
-    + '.bid{font-size:18px;font-weight:800;letter-spacing:.04em;margin-bottom:6px}'
-    // Model names — cycle through
-    + '.bmodels{display:flex;flex-direction:column;gap:3px;position:relative;height:36px;overflow:hidden}'
-    + '.bmodels span{font-size:9px;font-weight:500;color:rgba(255,255,255,.5);'
-    + 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;'
-    + 'opacity:0;animation:model-cycle 6s ease-in-out infinite}'
-    + '.bmodels span:nth-child(1){animation-delay:0s}'
-    + '.bmodels span:nth-child(2){animation-delay:2s}'
-    + '.bmodels span:nth-child(3){animation-delay:4s}'
-    + '@keyframes model-cycle{0%,5%{opacity:0;transform:translateY(6px)}'
-    + '10%,28%{opacity:1;transform:translateY(0)}'
-    + '33%,100%{opacity:0;transform:translateY(-6px)}}'
+    // Chip cloud — brands + models intermixed
+    + '.cloud{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;width:100%;flex:1;align-content:center;padding:8px 0}'
+    + '.chip-brand,.chip-model{font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;'
+    + 'animation:chip-in .4s ease-out both}'
+    + '.chip-brand{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.85)}'
+    + '.chip-model{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);color:rgba(255,255,255,.45)}'
+    + '@keyframes chip-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}'
     // Progress bar
-    + '.bar{width:180px;height:2px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:16px}'
+    + '.bar{width:180px;height:2px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:12px}'
     + '.bar::after{content:"";display:block;width:35%;height:100%;border-radius:inherit;'
     + 'background:linear-gradient(90deg,rgba(99,102,241,.6),rgba(139,92,246,.6));'
     + 'animation:sweep 1.5s ease-in-out infinite}'
     + '@keyframes sweep{0%{transform:translateX(-100%)}55%{transform:translateX(150%)}100%{transform:translateX(300%)}}'
-    + '@media(prefers-reduced-motion:reduce){.bcard,.bmodels span,.bar::after{animation:none}}'
+    + '@media(prefers-reduced-motion:reduce){.chip-brand,.chip-model,.bar::after{animation:none}}'
     + '</style></head><body>'
     + '<div class="card">'
     + '<div class="header"><h1>Hydra</h1><div class="sub">local proxy &middot; starting</div></div>'
-    + '<div class="grid">' + brandCards + '</div>'
+    + '<div class="cloud">' + chips + '</div>'
     + '<div class="bar"></div>'
     + '</div></body></html>';
 

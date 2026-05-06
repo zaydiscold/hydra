@@ -1,12 +1,15 @@
 name: Build & Push Docker Image
 
+# 2026-05-05: Switched from "every push to master" → "manual + tagged release"
+# triggers. The Docker image isn't actively consumed (Hydra is Mac-only in
+# practice; Docker is the future safety valve), and every-commit pushes were
+# spamming failure notifications. Re-enable push-to-master here when Docker
+# becomes a real distribution path.
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - master
     tags:
       - 'v*.*.*'
-  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
