@@ -188,20 +188,18 @@ app.whenReady().then(async () => {
       performance.mark('hydra:startup:ready-to-show');
       const sp = getSplashWindow();
       if (sp && !sp.isDestroyed()) {
-        // #38: drop alwaysOnTop first so we don't flash topmost during teardown.
-        // Use destroy() (synchronous) instead of close() (async) so the splash
-        // is GONE by the time we proceed — close() may leave the window briefly
-        // visible while the OS processes the close request, which causes the
-        // splash to overlap the main window in screenshots.
         sp.setAlwaysOnTop(false);
         sp.destroy();
       }
-      // 200 ms gap: visually distinct splash → main transition (not back-to-back
-      // tick), gives macOS one Display refresh cycle to fully unmount the splash
-      // window before the main window paints in.
+      // 500 ms gap: give macOS time to fully unmount the splash window
+      // before the main window paints. 200ms was too fast — splash and
+      // main were visible simultaneously.
       setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
-      }, 200);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }, 500);
     };
 
     mainWindow.once('ready-to-show', () => {
