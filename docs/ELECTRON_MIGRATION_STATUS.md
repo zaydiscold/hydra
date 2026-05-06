@@ -19,6 +19,7 @@ Hydra is now a native desktop application running on Electron. The migration cod
 - **Smoke tests** — `npm run electron:smoke` validates the unpacked package contract (Prisma engine, migrations, empty DB, bundled Chromium, package size).
 - **Dev loop** — `npm run dev:electron` runs Vite HMR inside the Electron window for development.
 - **Runtime hardening and perf** — packaged JWT secrets are generated per install and rechecked on boot, CORS is loopback/allowlist based, gzip compresses static responses, `vite` targets Chromium 120, schema hash work uses async reads, and `cheerio` / `electron-log` are no longer runtime dependencies.
+- **Splash sequence** — boot keeps the serialized splash-to-main handoff, but the old indeterminate pulsing/sweep indicator is now a deterministic progress bar that fills across the full visible splash interval.
 
 ### Current Validation
 
