@@ -1969,14 +1969,12 @@ body {
   padding: 38px 34px 34px;
   text-align: center;
   background:
-    linear-gradient(145deg, rgba(20, 23, 28, 0.94), rgba(10, 10, 10, 0.98)),
-    radial-gradient(circle at 28% 0%, rgba(0, 255, 255, 0.10), transparent 38%);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
+    linear-gradient(145deg, rgba(20, 23, 28, 0.94), rgba(10, 10, 10, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
   box-shadow:
-    0 30px 90px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 0, 255, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 24px 70px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 
@@ -1994,18 +1992,14 @@ body {
 
 .hydra-load-mark {
   position: relative;
-  width: 118px;
-  height: 118px;
+  width: 100px;
+  height: 100px;
   margin: 0 auto 22px;
   display: grid;
   place-items: center;
-  border-radius: 28px;
-  background:
-    conic-gradient(from 140deg, var(--accent-primary), var(--accent-secondary), var(--status-success), var(--accent-primary));
-  box-shadow:
-    0 0 38px rgba(0,255,255,0.20),
-    0 0 60px rgba(255,0,255,0.16);
-  transform: rotate(-3deg);
+  border-radius: 24px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 2px solid rgba(99, 102, 241, 0.3);
 }
 
 .hydra-load-mark::before {
@@ -2019,33 +2013,31 @@ body {
 
 .hydra-load-mark-core {
   position: relative;
-  font-size: 66px;
+  font-size: 54px;
   line-height: 1;
-  font-weight: 950;
+  font-weight: 800;
   color: #fff;
-  text-shadow: 0 0 22px rgba(255,255,255,0.58);
-  transform: rotate(3deg);
 }
 
 .hydra-load-card h1 {
   position: relative;
-  font-size: clamp(2.4rem, 8vw, 4.3rem);
+  font-size: clamp(2.4rem, 8vw, 3.8rem);
   line-height: 0.9;
   margin: 0 0 14px;
-  font-weight: 950;
-  letter-spacing: 0;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: #fff;
   text-transform: uppercase;
 }
 
 .hydra-load-status {
   position: relative;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 0.82rem;
-  font-weight: 800;
-  color: var(--accent-secondary);
+  font-weight: 600;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.12em;
 }
 
 .hydra-load-detail {
@@ -2088,42 +2080,7 @@ body {
 }
 
 .hydra-letter-rain {
-  position: absolute;
-  inset: -30% -8% 0;
-  z-index: 1;
-  pointer-events: none;
-  overflow: hidden;
-  mask-image: linear-gradient(transparent, #000 18%, #000 78%, transparent);
-}
-
-.hydra-letter-rain span {
-  position: absolute;
-  left: calc(var(--x) * 1%);
-  top: -80px;
-  font-family: var(--font-sans);
-  font-weight: 950;
-  font-size: var(--size);
-  line-height: 1;
-  color: rgba(255, 255, 255, 0.22);
-  text-shadow: 0 0 18px rgba(0,255,255,0.45);
-  transform: rotate(var(--spin));
-  animation: hydra-letter-fall var(--fall) cubic-bezier(.25,.72,.22,1) infinite;
-  animation-delay: var(--delay);
-}
-
-.hydra-letter-rain span:nth-child(3n) {
-  color: rgba(0, 255, 255, 0.26);
-}
-
-.hydra-letter-rain span:nth-child(4n) {
-  color: rgba(255, 0, 255, 0.24);
-}
-
-@keyframes hydra-letter-fall {
-  0% { transform: translate3d(0, -80px, 0) rotate(var(--spin)); opacity: 0; }
-  9% { opacity: 1; }
-  72% { opacity: .78; }
-  100% { transform: translate3d(0, 620px, 0) rotate(calc(var(--spin) * -1)); opacity: 0; }
+  display: none;
 }
 
 @keyframes hydra-meter-sweep {
