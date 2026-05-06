@@ -8,35 +8,20 @@
  * (main.js) can manage its own state (mainWindow ref, forceQuit flag).
  */
 import { app, ipcMain, shell } from 'electron';
-import path from 'node:path';
-import fs from 'node:fs';
 
 import { getWindowURL, getExpressPort } from './state.js';
+import { isPathInAllowlist } from './path-allowlist.js';
 
 function ok(data) { return { ok: true, data }; }
 function err(message, code) { return { ok: false, error: message, code }; }
 
 function isPathAllowed(target) {
-  if (typeof target !== 'string' || target.length === 0) return false;
-  // #5: Use realpathSync to resolve symlinks. path.resolve() alone does not
-  // follow symlinks, so a symlink in Downloads pointing to /etc could bypass
-  // the allowlist check.
-  let normalized;
-  try {
-    normalized = fs.realpathSync(target);
-  } catch {
-    // realpathSync throws if the path doesn't exist — reject.
-    return false;
-  }
-  const allowed = [
+  return isPathInAllowlist(target, [
     app.getPath('userData'),
     app.getPath('logs'),
     app.getPath('downloads'),
     app.getPath('documents'),
-  ].map(root => {
-    try { return fs.realpathSync(root); } catch { return root; }
-  });
-  return allowed.some(root => normalized === root || normalized.startsWith(root + path.sep));
+  ]);
 }
 
 /**

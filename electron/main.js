@@ -165,9 +165,11 @@ app.whenReady().then(async () => {
     setMainWindow(mainWindow);
 
     mainWindow.once('ready-to-show', () => {
-      mainWindow.show();
+      // #38: drop splash alwaysOnTop before showing main window to avoid
+      // the splash visually flashing over the main window during the transition.
       const sp = getSplashWindow();
-      if (sp && !sp.isDestroyed()) sp.close();
+      if (sp && !sp.isDestroyed()) { sp.setAlwaysOnTop(false); sp.close(); }
+      mainWindow.show();
     });
 
     const loadTimeout = setTimeout(() => {

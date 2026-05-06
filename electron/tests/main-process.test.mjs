@@ -1,131 +1,108 @@
 /**
- * Tests for electron/main.js
+ * Tests for the Electron main-process surface.
  *
- * Validates that the Electron main process module:
- * - Exists on disk
- * - Can be parsed as ESM by Node.js
- * - Contains the expected imports/exports patterns
+ * The main-process logic was split during the 2026-05 modularization
+ * (env / windows / ipc / schemaSync / shutdown / state). These assertions
+ * now check the *union* of `electron/main.js` + `electron/app/*.js` so they
+ * still mean "the main process must wire X" — regardless of which module
+ * actually owns X.
+ *
+ * Validates:
+ * - main.js exists and parses as ESM
+ * - Electron import is present
+ * - HYDRA_DATA_DIR + DATABASE_URL come from app.getPath('userData')
+ * - The server is imported and bootstrapped after whenReady
+ * - A BrowserWindow is created with a loadURL call
+ * - Vite dev URL + localhost prod URL are wired
+ * - before-quit triggers gracefulShutdown({exit:false}) then app.exit
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MAIN_JS = resolve(__dirname, '..', 'main.js');
+const ELECTRON_DIR = resolve(__dirname, '..');
+const MAIN_JS = resolve(ELECTRON_DIR, 'main.js');
+const APP_DIR = resolve(ELECTRON_DIR, 'app');
 const ROOT = resolve(__dirname, '..', '..');
 
-describe('electron/main.js', () => {
-  it('exists on disk', () => {
+/** Concatenate main.js + every electron/app/*.js into one searchable blob. */
+function readMainProcessSurface() {
+  const files = [MAIN_JS];
+  if (existsSync(APP_DIR)) {
+    for (const name of readdirSync(APP_DIR)) {
+      if (name.endsWith('.js')) files.push(join(APP_DIR, name));
+    }
+  }
+  return files.map(f => readFileSync(f, 'utf-8')).join('\n');
+}
+
+describe('electron main-process surface (main.js + app/*.js)', () => {
+  it('main.js exists on disk', () => {
     assert.ok(existsSync(MAIN_JS), `File not found: ${MAIN_JS}`);
   });
 
-  it('can be parsed as valid ESM syntax', () => {
-    // node --check validates syntax without executing.
-    // Imports (e.g. from 'electron') are not resolved during --check.
-    execSync(`node --check "${MAIN_JS}"`, {
-      cwd: ROOT,
-      stdio: 'pipe',
-    });
+  it('main.js parses as valid ESM syntax', () => {
+    execSync(`node --check "${MAIN_JS}"`, { cwd: ROOT, stdio: 'pipe' });
   });
 
-  it('imports from the electron module', () => {
-    const content = readFileSync(MAIN_JS, 'utf-8');
-    assert.ok(
-      content.includes("from 'electron'"),
-      'main.js must import from the electron module',
-    );
+  it('main.js imports from the electron module', () => {
+    const main = readFileSync(MAIN_JS, 'utf-8');
+    assert.ok(main.includes("from 'electron'"), 'main.js must import from electron');
   });
 
-  it('sets HYDRA_DATA_DIR from app.getPath', () => {
-    const content = readFileSync(MAIN_JS, 'utf-8');
-    assert.ok(
-      content.includes('process.env.HYDRA_DATA_DIR'),
-      'must set HYDRA_DATA_DIR env var',
-    );
-    assert.ok(
-      content.includes("app.getPath('userData')"),
-      'must derive HYDRA_DATA_DIR from app.getPath(userData)',
-    );
+  it('sets HYDRA_DATA_DIR from app.getPath(userData)', () => {
+    const surface = readMainProcessSurface();
+    assert.ok(surface.includes('process.env.HYDRA_DATA_DIR'), 'must set HYDRA_DATA_DIR');
+    assert.ok(surface.includes("app.getPath('userData')"), 'must derive from app.getPath(userData)');
   });
 
-  it('sets DATABASE_URL to userData/hydra.db', () => {
-    const content = readFileSync(MAIN_JS, 'utf-8');
-    assert.ok(
-      content.includes('process.env.DATABASE_URL'),
-      'must set DATABASE_URL env var',
-    );
-    assert.ok(
-      content.includes('hydra.db'),
-      'DATABASE_URL must reference hydra.db',
-    );
+  it('sets DATABASE_URL referencing hydra.db', () => {
+    const surface = readMainProcessSurface();
+    assert.ok(surface.includes('process.env.DATABASE_URL'), 'must set DATABASE_URL');
+    assert.ok(surface.includes('hydra.db'), 'DATABASE_URL must reference hydra.db');
   });
 
-  it('references bootstrap and gracefulShutdown from server/index.js', () => {
-    const content = readFileSync(MAIN_JS, 'utf-8');
+  it('imports bootstrap + gracefulShutdown from server/index.js', () => {
+    const surface = readMainProcessSurface();
     assert.ok(
-      content.includes("'../server/index.js'") || content.includes('"../server/index.js"'),
+      surface.includes("'../server/index.js'") || surface.includes('"../server/index.js"'),
       'must import from ../server/index.js',
     );
-    assert.ok(content.includes('bootstrap'), 'must reference bootstrap');
-    assert.ok(content.includes('gracefulShutdown'), 'must reference gracefulShutdown');
+    assert.ok(surface.includes('bootstrap'), 'must reference bootstrap');
+    assert.ok(surface.includes('gracefulShutdown'), 'must reference gracefulShutdown');
   });
 
   it('calls bootstrap after app.whenReady', () => {
-    const content = readFileSync(MAIN_JS, 'utf-8');
-    assert.ok(
-      content.includes('app.whenReady'),
-      'must use app.whenReady to wait for Electron readiness',
-    );
-    assert.ok(
-      content.includes('bootstrap'),
-      'must call bootstrap after ready',
-    );
+    const main = readFileSync(MAIN_JS, 'utf-8');
+    assert.ok(main.includes('app.whenReady'), 'main.js must use app.whenReady');
+    const surface = readMainProcessSurface();
+    assert.ok(surface.includes('bootstrap'), 'must call bootstrap after ready');
   });
 
-  it('creates a BrowserWindow and loads a URL', () => {
-    const content = readFileSync(MAIN_JS, 'utf-8');
-    assert.ok(
-      content.includes('BrowserWindow'),
-      'must import and instantiate BrowserWindow',
-    );
-    assert.ok(
-      content.includes('loadURL'),
-      'must call loadURL on the window',
-    );
+  it('creates a BrowserWindow with a loadURL call', () => {
+    const surface = readMainProcessSurface();
+    assert.ok(surface.includes('BrowserWindow'), 'must instantiate BrowserWindow');
+    assert.ok(surface.includes('loadURL'), 'must call loadURL on the window');
   });
 
-  it('loads Vite URL in dev and Express URL in prod', () => {
-    const content = readFileSync(MAIN_JS, 'utf-8');
-    assert.ok(
-      content.includes('localhost:5173'),
-      'dev mode should load from Vite dev server at localhost:5173',
-    );
-    assert.ok(
-      content.includes('localhost:'),
-      'prod mode should load from Express URL',
-    );
+  it('loads Vite URL in dev and a localhost URL in prod', () => {
+    const surface = readMainProcessSurface();
+    assert.ok(surface.includes('localhost:5173'), 'dev should load Vite at localhost:5173');
+    assert.ok(surface.includes('localhost:'), 'prod should load a localhost URL');
   });
 
-  it('hooks before-quit to gracefulShutdown then app.exit(0)', () => {
-    const content = readFileSync(MAIN_JS, 'utf-8');
+  it('hooks before-quit to gracefulShutdown({exit:false}) then app.exit', () => {
+    const surface = readMainProcessSurface();
+    assert.ok(surface.includes('before-quit'), 'must listen for before-quit');
+    assert.ok(surface.includes('gracefulShutdown'), 'before-quit must call gracefulShutdown');
     assert.ok(
-      content.includes('before-quit'),
-      'must listen for the before-quit event',
-    );
-    assert.ok(
-      content.includes('gracefulShutdown'),
-      'before-quit handler must call gracefulShutdown',
-    );
-    assert.ok(
-      content.includes('exit: false') || content.includes('exit:false'),
+      surface.includes('exit: false') || surface.includes('exit:false'),
       'must pass { exit: false } to gracefulShutdown',
     );
-    assert.ok(
-      content.includes('app.exit'),
-      'must call app.exit(0) after shutdown completes',
-    );
+    assert.ok(surface.includes('app.exit'), 'must call app.exit after shutdown');
   });
 });

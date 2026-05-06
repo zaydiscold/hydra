@@ -7,7 +7,7 @@
 import { BrowserWindow, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isDev, ICON_PATH, LOCAL_UI_HOSTS, EXTERNAL_URL_ALLOWLIST } from './env.js';
+import { isDev, ICON_PATH, LOCAL_UI_HOSTS } from './env.js';
 import {
   getMainWindow, getWindowURL, getForceQuit, getShuttingDown, getClosePromptPending,
   setSplashWindow, setMainWindow, setForceQuit, setClosePromptPending,
@@ -35,56 +35,59 @@ export function createSplashWindow() {
     },
   });
 
-  // ── Symbol pool: thematic for an LLM proxy ───────────────────────────
-  // Model identifiers, route paths, status codes, and Hydra-mythos hints
-  // (multi-headed serpent → "head/N"). Mixed lengths keep the visual rhythm
-  // varied; mixed prefixes (`anthropic/`, `openai/`) read as "we route many
-  // providers" — exactly what Hydra is.
-  const models = [
-    'claude-sonnet-4.5', 'claude-opus-4.7', 'gpt-4o', 'gpt-4.1',
-    'gemini-2.0-flash', 'gemini-2.5-pro', 'llama-4', 'llama-3.3',
-    'mistral-large', 'deepseek-r1', 'qwen-3', 'grok-2',
-    'mixtral-8x22b', 'command-r-plus', 'phi-4',
+  // ── Symbol pool: cyber-Tokyo / LLM proxy thematic ────────────────────
+  // Short `Provider · model` strings (compact at small font sizes), a few
+  // bare provider names for variety, and a sprinkle of katakana for the
+  // cyber-Tokyo accent. Middle-dot separator gives reading rhythm.
+  // Avoid long `meta-llama/llama-4` style — clips visually below 12px.
+  const branded = [
+    'OpenAI · gpt-4o', 'OpenAI · gpt-4.1',
+    'Anthropic · claude-4.5', 'Anthropic · opus',
+    'Google · gemini-2.5', 'Google · gemini-flash',
+    'DeepSeek · r1', 'DeepSeek · v3',
+    'Meta · llama-4', 'Meta · llama-3.3',
+    'Mistral · large', 'Mistral · mixtral',
+    'xAI · grok-2', 'Cohere · command-r',
   ];
-  const providers = ['anthropic/', 'openai/', 'google/', 'meta-llama/', 'mistralai/'];
-  const routes = ['/v1/chat', '/v1/models', '/v1/keys', 'POST', 'GET', '200 ok', '429 try', 'sk-hydra…'];
-  const mythos = ['head/1', 'head/3', 'head/7', 'pool/12', 'Ω', 'π', 'Ψ', '∇', '⌬', '⏣'];
-  const allTokens = [...models, ...providers, ...routes, ...mythos];
+  const providers = ['OpenRouter', 'Anthropic', 'OpenAI', 'Google', 'DeepSeek', 'Meta', 'Mistral'];
+  const routes = ['/v1/chat', '/v1/models', '200 ok', '429 try', 'sk-hydra…', 'pool · 12'];
+  // Cyber-Tokyo accent — katakana for proxy/route/connect/Hydra
+  const katakana = ['ハイドラ', 'ルート', 'プロキシ', '接続', '通信', '応答'];
+  const allTokens = [...branded, ...providers, ...routes, ...katakana];
 
   // ── Generate particles — varied sizes, speeds, opacities, paths ───────
-  // Smaller font ceiling than before because tokens are wider than single chars
-  // (a 24px provider/model string would clip the card). Tighter opacity range
-  // so dense areas don't muddy the foreground content.
   const particleTypes = ['rain', 'drift', 'spiral', 'pulse'];
-  const particleCount = 42;
+  const particleCount = 38;
   const particles = Array.from({ length: particleCount }, (_, i) => {
     const type = particleTypes[i % particleTypes.length];
-    const token = allTokens[(i * 7) % allTokens.length];
-    // Compose provider+model occasionally for the "anthropic/claude-…" look
-    const text = (i % 5 === 0 && i % 2 === 0)
-      ? providers[(i * 3) % providers.length] + models[(i * 11) % models.length]
-      : token;
+    const text = allTokens[(i * 7) % allTokens.length];
     const x = 3 + ((i * 17) % 88);
     const y = -10 - ((i * 23) % 80);
-    // Tokens are wider than single chars — keep size modest
     const size = 9 + ((i % 5) * 2);
-    const opacity = 0.08 + ((i % 7) * 0.03);
+    // Higher opacity floor so tokens read as solid against the translucent
+    // glass backdrop — the card no longer hides them under .97 alpha.
+    const opacity = 0.32 + ((i % 6) * 0.08);
     const duration = 5 + ((i % 8) * 1.4) + Math.random() * 2;
     const delay = -(i * 0.31 % 8);
-    // Hue band biased toward the brand: pinks, purples, cyans
-    const hue = (260 + (i * 31) % 100);
+    // Hue band: cyber-Tokyo neon — magenta → cyan, with a hot-pink wedge.
+    // 285 (violet) → 200 (cyan), occasional 320 (hot pink).
+    const hue = (i % 9 === 0) ? 320 : (200 + (i * 19) % 90);
     const spinDir = (i % 2 === 0 ? 1 : -1);
-    // Less spin than letters had — token strings look weird at 90° rotation
     const spinDeg = 4 + ((i % 7) * 2);
     return `<span class="p ${type}" style="--x:${x};--y:${y};--s:${size}px;--o:${opacity};--t:${duration}s;--d:${delay}s;--h:${hue};--r:${spinDir * spinDeg}deg">${text}</span>`;
   }).join('');
 
   const splashHTML = '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\' \'unsafe-inline\'"><style>'
     + 'html,body{margin:0;height:100%;background:transparent;font-family:\'SF Mono\',\'JetBrains Mono\',\'Fira Code\',monospace;color:#f8fbff;overflow:hidden}'
-    + '.frame{position:absolute;inset:10px;border-radius:22px;background:linear-gradient(145deg,rgba(4,8,16,.97),rgba(8,2,18,.99) 50%,rgba(2,14,22,.97));border:1px solid rgba(255,255,255,.10);box-shadow:0 28px 90px rgba(0,0,0,.80),inset 0 1px 0 rgba(255,255,255,.10);overflow:hidden}'
-    + '.frame:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 22% 18%,rgba(72,180,255,.18),transparent 30%),radial-gradient(circle at 82% 22%,rgba(255,61,97,.14),transparent 32%),linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px);background-size:auto,auto,100% 8px;pointer-events:none}'
+    // Frosted-glass card: translucent bg + backdrop-blur lets the desktop
+    // bleed through, but the foreground tokens stay solid (high opacity).
+    // Cyber-Tokyo aesthetic: magenta + cyan rim glow on a deep-violet base.
+    + '.frame{position:absolute;inset:10px;border-radius:22px;background:linear-gradient(145deg,rgba(8,4,22,.55),rgba(18,4,32,.62) 50%,rgba(4,12,24,.55));backdrop-filter:blur(24px) saturate(140%);-webkit-backdrop-filter:blur(24px) saturate(140%);border:1px solid rgba(255,90,200,.18);box-shadow:0 28px 90px rgba(0,0,0,.55),0 0 60px rgba(255,61,180,.10),inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(120,200,255,.06);overflow:hidden}'
+    + '.frame:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 22% 18%,rgba(120,220,255,.14),transparent 32%),radial-gradient(circle at 82% 22%,rgba(255,80,200,.12),transparent 34%),linear-gradient(rgba(140,200,255,.04) 1px,transparent 1px);background-size:auto,auto,100% 10px;pointer-events:none}'
     + '.field{position:absolute;inset:-160px 0 0;mask-image:linear-gradient(transparent 0%,#000 12%,#000 84%,transparent 100%);overflow:hidden}'
-    + '.p{position:absolute;left:calc(var(--x)*1%);top:var(--y)%;color:hsl(var(--h),70%,var(--o,0.65)*100%+40%);font:500 var(--s)/1 \'SF Mono\',monospace;text-shadow:0 0 14px hsl(var(--h),90%,60%,.9);white-space:pre}'
+    // Solid neon tokens against the glass — fixed lightness (66%) so colors
+    // POP regardless of per-particle opacity. Tighter glow than before.
+    + '.p{position:absolute;left:calc(var(--x)*1%);top:var(--y)%;color:hsl(var(--h),85%,66%);font:500 var(--s)/1 \'SF Mono\',\'JetBrains Mono\',\'Hiragino Sans\',monospace;text-shadow:0 0 8px hsl(var(--h),90%,60%,.85),0 0 18px hsl(var(--h),90%,55%,.4);white-space:pre;letter-spacing:0.02em}'
     // ── rain: fast vertical fall with spin ──
     + '.p.rain{animation:rain var(--t) cubic-bezier(.22,.74,.24,1) infinite;animation-delay:var(--d)}'
     + '@keyframes rain{0%{transform:translateY(-120px) rotate(var(--r));opacity:0}8%{opacity:calc(var(--o)+.3)}65%{opacity:calc(var(--o)+.15)}100%{transform:translateY(620px) rotate(calc(var(--r)*1.4));opacity:0}}'

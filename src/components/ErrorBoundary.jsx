@@ -29,10 +29,14 @@ export default class ErrorBoundary extends React.Component {
     const cid = this.state.correlationId;
     const message = this.state.error?.message || 'Unknown error';
 
-    // Check if we're in development (Vite dev mode or Electron dev)
+    // Check if we're in development (Vite dev mode or Electron dev).
+    // Vite replaces import.meta.env.* at build time; in production
+    // builds DEV is `false` and stack traces are sanitized below.
+    // (Avoid bare `process.env` here — it's not a browser global and
+    // would trip ESLint + the bundled output references won't resolve.)
     const isDev =
       (typeof window !== 'undefined' && window.location?.hostname === 'localhost') ||
-      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development');
+      (typeof import.meta !== 'undefined' && import.meta.env?.DEV === true);
 
     if (isDev) {
       // Dev: show full stack trace for debugging
