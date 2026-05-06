@@ -19,8 +19,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ─── Splash Window — Brand grid, clean modern design ─────────────────────────
 export function createSplashWindow() {
   const win = new BrowserWindow({
-    width: 540,
-    height: 400,
+    // Larger card per user feedback: more room for the falling letters
+    // animation, the hex pattern in the band, and the longer subtitle text.
+    width: 720,
+    height: 520,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -119,31 +121,52 @@ export function createSplashWindow() {
     + '<style>'
     + '*{margin:0;padding:0;box-sizing:border-box}'
     + 'html,body{height:100%;background:transparent;'
-    // Stronger terminal feel: Menlo/Andale Mono first (rounder, more terminal-y),
-    // SF Mono second, Courier as ultimate Mac fallback.
     + 'font-family:\'Menlo\',\'Andale Mono\',\'SF Mono\',\'JetBrains Mono\',\'Courier New\',ui-monospace,monospace;'
     + 'color:#fff;overflow:hidden;-webkit-font-smoothing:antialiased}'
-    // Card is MOSTLY CLEAR — just a faint dark wash + subtle blur so the
-    // desktop bleeds through. The visual weight comes from a single solid
-    // accent BAND across the middle (where the hero text lives), not from
-    // a uniformly opaque frame.
-    + '.card{position:absolute;inset:10px;border-radius:14px;'
-    + 'background:rgba(8,4,18,.32);'  // mostly clear (32% opacity, was 78%)
-    + 'backdrop-filter:blur(8px) saturate(120%);-webkit-backdrop-filter:blur(8px) saturate(120%);'
-    + 'border:1px solid rgba(255,255,255,.10);'  // sharp 1px stroke, terminal feel
-    + 'box-shadow:0 24px 70px rgba(0,0,0,.40),inset 0 1px 0 rgba(255,255,255,.06);'
+    // Mostly-clear card — desktop bleeds through. Visual weight comes from
+    // the geometric hex pattern + the solid accent band, not from a uniformly
+    // opaque frame.
+    + '.card{position:absolute;inset:10px;border-radius:16px;'
+    + 'background:rgba(8,4,18,.34);'
+    + 'backdrop-filter:blur(10px) saturate(125%);-webkit-backdrop-filter:blur(10px) saturate(125%);'
+    + 'border:1px solid rgba(255,255,255,.10);'
+    + 'box-shadow:0 30px 80px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.07);'
     + 'overflow:hidden}'
-    // Solid accent band across the middle — the ONLY truly opaque part of
-    // the splash. Holds the hero text and contrasts against the clear card.
+    // Sprawling hex grid — SVG <pattern> tiled across the whole card.
+    // Strokes only (no fill) so the pattern is geometric scaffolding, not
+    // visual weight. Three layers at different scales + opacities create
+    // the "sprawl" feel (foreground, midground, distance).
+    + '.hex-far,.hex-mid,.hex-near{position:absolute;inset:0;pointer-events:none}'
+    + '.hex-far{opacity:.18;animation:hex-draw 1.8s ease-out both}'
+    + '.hex-mid{opacity:.28;animation:hex-draw 1.4s .18s ease-out both}'
+    + '.hex-near{opacity:.42;animation:hex-draw 1.1s .35s ease-out both}'
+    // Stroke-dashoffset draw-in — Oak/Pica-style "the geometry assembles
+    // itself" rather than just popping into existence. stroke-dasharray on
+    // the SVG paths is set inline; we animate offset to 0.
+    + '@keyframes hex-draw{from{stroke-dashoffset:600}to{stroke-dashoffset:0}}'
+    + '.hex-far svg,.hex-mid svg,.hex-near svg{width:100%;height:100%;display:block}'
+    // Glowing nodes at random hex vertices — lit by the brand gradient.
+    + '.node{position:absolute;width:4px;height:4px;border-radius:50%;'
+    + 'background:radial-gradient(circle,rgba(255,90,200,.95),rgba(168,85,247,.4) 60%,transparent 80%);'
+    + 'box-shadow:0 0 8px rgba(255,90,200,.6);'
+    + 'animation:node-pulse 2.4s ease-in-out infinite}'
+    + '@keyframes node-pulse{0%,100%{opacity:.4;transform:scale(.85)}50%{opacity:1;transform:scale(1.1)}}'
+    // Solid accent band — the only fully-opaque region. Holds the hero text.
     + '.band{position:absolute;left:0;right:0;top:38%;height:24%;'
-    + 'background:linear-gradient(90deg,rgba(20,8,40,.85),rgba(40,12,60,.92) 50%,rgba(20,8,40,.85));'
-    + 'border-top:1px solid rgba(255,90,200,.18);border-bottom:1px solid rgba(120,200,255,.14);'
-    + 'box-shadow:0 0 30px rgba(168,85,247,.18) inset;'
+    + 'background:linear-gradient(90deg,rgba(18,6,38,.86),rgba(36,10,58,.94) 50%,rgba(18,6,38,.86));'
+    + 'border-top:1px solid rgba(255,90,200,.22);border-bottom:1px solid rgba(120,200,255,.18);'
+    + 'box-shadow:0 0 36px rgba(168,85,247,.20) inset,0 0 0 .5px rgba(255,255,255,.04) inset;'
     + 'pointer-events:none;z-index:1}'
-    // Subtle radial highlights for depth, doesn't add opacity
+    // Corner brackets — thin geometric accents, terminal/cyberpunk feel
+    + '.corner{position:absolute;width:18px;height:18px;border-color:rgba(255,90,200,.45);border-style:solid;border-width:0;pointer-events:none}'
+    + '.corner.tl{top:14px;left:14px;border-left-width:1px;border-top-width:1px}'
+    + '.corner.tr{top:14px;right:14px;border-right-width:1px;border-top-width:1px}'
+    + '.corner.bl{bottom:14px;left:14px;border-left-width:1px;border-bottom-width:1px}'
+    + '.corner.br{bottom:14px;right:14px;border-right-width:1px;border-bottom-width:1px}'
+    // Subtle radial highlights for depth
     + '.card:before{content:"";position:absolute;inset:0;pointer-events:none;'
-    + 'background:radial-gradient(circle at 25% 15%,rgba(120,200,255,.08),transparent 36%),'
-    + 'radial-gradient(circle at 80% 25%,rgba(255,90,200,.08),transparent 38%)}'
+    + 'background:radial-gradient(circle at 22% 18%,rgba(120,200,255,.10),transparent 38%),'
+    + 'radial-gradient(circle at 80% 22%,rgba(255,90,200,.10),transparent 40%)}'
     // Falling letters field — fills the entire card behind the hero text
     + '.field{position:absolute;inset:-80px 0 0 0;mask-image:linear-gradient(180deg,transparent 0%,#000 14%,#000 78%,transparent 100%);overflow:hidden}'
     // Each falling word — solid color, no background, ease-in (gravity-like)
@@ -172,14 +195,46 @@ export function createSplashWindow() {
     + 'box-shadow:0 0 14px rgba(168,85,247,.6);'
     + 'animation:sweep 1.4s ease-in-out infinite}'
     + '@keyframes sweep{0%{transform:translateX(-100%)}55%{transform:translateX(155%)}100%{transform:translateX(300%)}}'
-    + '@media(prefers-reduced-motion:reduce){.d,.bar::after{animation:none;opacity:.4}}'
+    + '@media(prefers-reduced-motion:reduce){.d,.bar::after,.hex-far,.hex-mid,.hex-near,.node{animation:none;opacity:.3}}'
     + '</style></head><body>'
     + '<div class="card">'
+    // Sprawling hex grid — three layers (far/mid/near) at different scales
+    // and opacities. Each <pattern> tiles a single hexagon polygon across
+    // the whole card. stroke-dasharray + animation:hex-draw fills them in.
+    // Pica-principle in action: native SVG instead of a third-party runtime.
+    + '<div class="hex-far"><svg viewBox="0 0 720 520" preserveAspectRatio="xMidYMid slice">'
+    + '<defs><pattern id="hexFar" x="0" y="0" width="68" height="58.88" patternUnits="userSpaceOnUse">'
+    + '<polygon points="34,1 67,17.7 67,42.2 34,58.9 1,42.2 1,17.7" fill="none" stroke="rgba(120,200,255,.55)" stroke-width=".7" stroke-dasharray="200" />'
+    + '</pattern></defs>'
+    + '<rect width="100%" height="100%" fill="url(#hexFar)"/>'
+    + '</svg></div>'
+    + '<div class="hex-mid"><svg viewBox="0 0 720 520" preserveAspectRatio="xMidYMid slice">'
+    + '<defs><pattern id="hexMid" x="20" y="10" width="44" height="38.1" patternUnits="userSpaceOnUse">'
+    + '<polygon points="22,1 43,11.5 43,27.5 22,38 1,27.5 1,11.5" fill="none" stroke="rgba(255,90,200,.45)" stroke-width=".6" stroke-dasharray="120" />'
+    + '</pattern></defs>'
+    + '<rect width="100%" height="100%" fill="url(#hexMid)"/>'
+    + '</svg></div>'
+    + '<div class="hex-near"><svg viewBox="0 0 720 520" preserveAspectRatio="xMidYMid slice">'
+    + '<defs><pattern id="hexNear" x="35" y="5" width="28" height="24.25" patternUnits="userSpaceOnUse">'
+    + '<polygon points="14,.6 27.4,7.6 27.4,17.6 14,24.6 .6,17.6 .6,7.6" fill="none" stroke="rgba(168,85,247,.55)" stroke-width=".6" stroke-dasharray="80" />'
+    + '</pattern></defs>'
+    + '<rect width="100%" height="100%" fill="url(#hexNear)"/>'
+    + '</svg></div>'
+    // Glowing nodes at scattered hex vertices — tasteful detail, not clutter
+    + '<div class="node" style="top:18%;left:14%"></div>'
+    + '<div class="node" style="top:22%;right:18%;animation-delay:.4s"></div>'
+    + '<div class="node" style="top:72%;left:22%;animation-delay:.8s"></div>'
+    + '<div class="node" style="top:78%;right:24%;animation-delay:1.1s"></div>'
+    + '<div class="node" style="top:32%;left:48%;animation-delay:1.4s"></div>'
+    + '<div class="node" style="top:68%;right:46%;animation-delay:.6s"></div>'
+    // Corner brackets — terminal/cyberpunk geometric accents
+    + '<div class="corner tl"></div><div class="corner tr"></div>'
+    + '<div class="corner bl"></div><div class="corner br"></div>'
     + '<div class="field">' + drops + '</div>'
-    + '<div class="band"></div>'  // solid accent band (only opaque region)
+    + '<div class="band"></div>'
     + '<div class="hero">'
     + '<h1>Hydra</h1>'
-    + '<div class="sub">local proxy &middot; starting</div>'
+    + '<div class="sub">Initializing OpenRouter Manager</div>'
     + '<div class="bar"></div>'
     + '</div>'
     + '</div></body></html>';

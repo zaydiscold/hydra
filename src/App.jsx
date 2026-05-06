@@ -675,7 +675,23 @@ export default function App() {
 
           <main id="main-content" className={`main-content${sidebarCollapsed ? ' main-content--expanded' : ''}`}>
             <div key={location.pathname} className="animate-fade-in">
-              <Suspense fallback={<HydraLoadFrame compact status="LOADING VIEW" detail="Preparing workspace" />}>
+              {/*
+                * Inter-page lazy-route fallback: render NOTHING.
+                *
+                * Routes are code-split via `lazy()` and typically load in
+                * 50–200 ms — short enough that any branded loading card
+                * feels jarring rather than helpful (you see splash → click
+                * a nav item → big "H" loading card flashes → page renders).
+                *
+                * Silent fallback means the previous route's content stays
+                * for one extra frame, then the new route paints. Feels
+                * instant, matches how native macOS apps handle tab swaps.
+                *
+                * If a future route is slow enough to warrant a skeleton,
+                * add it INSIDE that route's component, not here as a
+                * global fallback.
+                */}
+              <Suspense fallback={null}>
                 <Routes>
                   <Route path="/" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
                   <Route path="/dashboard" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />

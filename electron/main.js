@@ -198,7 +198,10 @@ app.whenReady().then(async () => {
     // parallelism that would have pre-warmed main during splash) but we
     // get the clean Pica-style "splash → animation → close → app" flow
     // the product wants.
-    const SPLASH_MIN_VISIBLE_MS = 1500;
+    // Bumped from 1500 → 2500 ms per user feedback ("let it last a little
+    // bit longer so people can see it"). 2500 ms is the sweet spot — under
+    // 1.5s feels like a flash, over 3.5s feels like the app is broken.
+    const SPLASH_MIN_VISIBLE_MS = 2500;
     const splashElapsed = Date.now() - splashStartedAt;
     if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
       await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));
