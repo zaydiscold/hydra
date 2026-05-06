@@ -32,7 +32,7 @@ const BulkAuthWizard = lazy(() => import('./pages/BulkAuthWizard.jsx'));
 
 function ToastContainer({ toasts, onDismiss }) {
   return (
-    <div className="toast-container">
+    <div className="toast-container" aria-live="polite" role="status">
       {toasts.map((t) => {
         const durationMs = t.durationMs ?? (t.type === 'error' ? 10000 : 4000);
         const tag =
@@ -261,7 +261,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
                 type="button"
                 className="input-reveal-btn"
                 onClick={() => setShow(!show)}
-                tabIndex={-1}
+                tabIndex={0}
               >
                 {show ? 'HIDE' : 'SHOW'}
               </button>
@@ -324,6 +324,8 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
                onMouseLeave={handleNukeEnd}
                onTouchStart={handleNukeStart}
                onTouchEnd={handleNukeEnd}
+               onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleNukeStart(); } }}
+               onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') handleNukeEnd(); }}
              >
                <div className="nuke-progress-bar" style={{ width: `${nukeProgress}%` }} />
                <span style={{ position: 'relative', zIndex: 1, pointerEvents: 'none' }}>
@@ -555,8 +557,13 @@ export default function App() {
           <ToastContainer toasts={toasts} onDismiss={dismissToast} />
         </>
       ) : (
+        <>
+          {/* #64: Skip-to-content link for keyboard users */}
+          <a href="#main-content" className="skip-to-content">
+            Skip to main content
+          </a>
         <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
+          <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`} role="navigation" aria-label="Main navigation">
             <button
               className="sidebar-logo"
               onClick={() => navigate('/')}
@@ -594,6 +601,7 @@ export default function App() {
                   <button
                     key={item.id}
                     className={`nav-link ${isActive ? 'active' : ''}`}
+                    aria-current={isActive ? 'page' : undefined}
                     onClick={() => navigate(item.path)}
                     title={sidebarCollapsed ? item.label : undefined}
                   >
@@ -648,7 +656,7 @@ export default function App() {
             </div>
           </aside>
 
-          <main className={`main-content${sidebarCollapsed ? ' main-content--expanded' : ''}`}>
+          <main id="main-content" className={`main-content${sidebarCollapsed ? ' main-content--expanded' : ''}`}>
             <div key={location.pathname} className="animate-fade-in">
               <Suspense fallback={<HydraLoadFrame compact status="LOADING VIEW" detail="Preparing workspace" />}>
                 <Routes>
