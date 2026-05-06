@@ -147,8 +147,11 @@ app.whenReady().then(async () => {
       console.log(`[electron] Hydra dev server bound to port ${expressPort}.`);
     }
 
-    const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
-    const url = isDev ? VITE_DEV_SERVER_URL : `http://localhost:${expressPort}`;
+    // DEV server URL: prefer VITE_DEV_SERVER_URL env, but fall back to
+    // Express static serve when Vite isn't running (e.g. standalone `electron .`).
+    const viteUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+    const staticUrl = `http://localhost:${expressPort}`;
+    const url = (isDev && process.env.VITE_DEV_SERVER_URL) ? viteUrl : staticUrl;
     setWindowURL(url);
     console.log(`[electron] Hydra UI listening at ${url}`);
 
