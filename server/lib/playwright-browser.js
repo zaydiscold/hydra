@@ -18,8 +18,48 @@
  */
 
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { config } from '../config.js';
+
+/**
+ * Browser ISOLATION FLAGS — the standard "this browser is for automation,
+ * keep your hands off my real installation" set.
+ *
+ *   --no-default-browser-check   don't prompt to set as default
+ *   --no-first-run               skip the first-run welcome flow
+ *   --disable-default-apps       no Chrome Web Store / Play apps
+ *   --disable-background-networking  no background sync, update, telemetry
+ *   --disable-sync               no Google account sync
+ *   --disable-features=...       turn off translate UI + occlusion (also good for us)
+ *   --metrics-recording-only     no metrics uploaded
+ *   --use-mock-keychain          don't touch the user's macOS Keychain
+ *
+ * Combined with a fresh ephemeral userDataDir (below), this gives a browser
+ * instance that is completely walled off from the user's daily Chrome.
+ */
+const ISOLATION_ARGS = Object.freeze([
+  '--no-default-browser-check',
+  '--no-first-run',
+  '--disable-default-apps',
+  '--disable-background-networking',
+  '--disable-sync',
+  '--disable-features=Translate,CalculateNativeWinOcclusion,MediaRouter',
+  '--metrics-recording-only',
+  '--use-mock-keychain',
+]);
+
+/**
+ * Generate a fresh ephemeral profile dir for this launch.
+ * Lives under the OS temp dir, prefixed `hydra-pw-` so the orphan-sweep
+ * (electron/utils/cleanupAuxProcesses.js) and ad-hoc `find` greps can spot
+ * leftover dirs from crashed runs.
+ *
+ * @returns {string} absolute path to a fresh empty directory
+ */
+export function makeEphemeralProfileDir() {
+  return mkdtempSync(join(tmpdir(), 'hydra-pw-profile-'));
+}
 
 /**
  * Resolve Playwright Chromium launch options with proper browser binary resolution.
@@ -138,20 +178,42 @@ function resolveBundledChromium() {
 }
 
 /**
- * Merge callers' non-binary overrides (headless already handled).
- * Preserves caller-provided `headless`, merges `args`, forwards everything else.
+ * Merge callers' overrides + apply isolation defaults.
+ *
+ * The result ALWAYS has:
+ *   - ISOLATION_ARGS prepended to args (so launches can't accidentally
+ *     pollute or read the user's real Chrome profile)
+ *   - userDataDir set to a fresh ephemeral path (unless caller passed one)
+ *
+ * Callers can opt out of ephemeral profile dir by passing `userDataDir: null`
+ * — currently no caller does this, but it's there as an escape hatch.
  *
  * @param {import('playwright').LaunchOptions} opts
  * @param {import('playwright').LaunchOptions} overrides
  * @returns {import('playwright').LaunchOptions}
  */
 function finalizeOptions(opts, overrides) {
-  // Copy over any extra properties from overrides not already set
+  // Copy over any extra properties from overrides not already set.
   for (const [key, value] of Object.entries(overrides)) {
     if (key === 'headless' || key === 'args') continue;
     if (value !== undefined && opts[key] === undefined) {
       opts[key] = value;
     }
   }
+
+  // Always prepend isolation args. Caller's args win on collision (caller
+  // passed them for a reason), but the isolation defaults still apply.
+  const callerArgs = Array.isArray(opts.args) ? opts.args : [];
+  opts.args = [...ISOLATION_ARGS, ...callerArgs];
+
+  // Ephemeral profile dir. If caller explicitly passed `userDataDir: null`
+  // they've opted out (e.g. for a test that needs to inspect profile state).
+  // Otherwise: always fresh, no leak across runs, no contact with real Chrome.
+  if (!('userDataDir' in overrides)) {
+    opts.userDataDir = makeEphemeralProfileDir();
+  } else if (overrides.userDataDir !== null) {
+    opts.userDataDir = overrides.userDataDir;
+  }
+
   return opts;
 }
