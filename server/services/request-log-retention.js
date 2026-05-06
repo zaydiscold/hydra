@@ -44,7 +44,9 @@ async function pruneRequestLogs() {
 export function startRequestLogRetention() {
   if (timer) return;
   timer = setInterval(pruneRequestLogs, RETENTION_INTERVAL_MS);
-  pruneRequestLogs().catch(() => {});
+  pruneRequestLogs().catch((err) => {
+    logger.error(`[RETENTION] Initial prune failed: ${err.message}`);
+  });
   logger.info('[RETENTION] RequestLog retention worker initialized');
 }
 
