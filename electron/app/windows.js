@@ -187,6 +187,12 @@ export function createSplashWindow() {
   win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(splashHTML));
   win.once('closed', () => { setSplashWindow(null); });
   setSplashWindow(win);
+  // Return the window so callers can reference it without re-reading state.
+  // CRITICAL: without this return, callers writing `const sp = createSplashWindow()`
+  // get `undefined` and any subsequent `setSplashWindow(sp)` clobbers the state
+  // we just set above — breaking later destroy() calls because getSplashWindow()
+  // returns undefined.
+  return win;
 }
 
 // ─── Main Window ─────────────────────────────────────────────────────────────

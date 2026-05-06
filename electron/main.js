@@ -104,8 +104,12 @@ app.whenReady().then(async () => {
   // timeline (available via DevTools or electron-log traces).
   performance.mark('hydra:startup:begin');
   try {
-    const splash = createSplashWindow();
-    setSplashWindow(splash);
+    // createSplashWindow already calls setSplashWindow(win) internally, so we
+    // don't double-set it here. (Earlier code did `setSplashWindow(splash)`
+    // where splash was undefined — overwriting the state with undefined and
+    // making the destroy() call later silently no-op because getSplashWindow()
+    // returned undefined.)
+    createSplashWindow();
     performance.mark('hydra:startup:splash-shown');
     // Track when splash first appeared so we can guarantee a minimum visible
     // duration before destroying it. Defined HERE (right at splash creation)
