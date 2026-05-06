@@ -313,3 +313,90 @@ re-read this section. The "ephemeral profile" decision is correct
 *because* of where sessions actually live — break that assumption
 and you'll either leak fingerprints between accounts (bad) or
 discard real session state (worse).
+
+---
+
+## Splash → Main lifecycle (strict serialization)
+
+After multiple iterations the boot sequence is now strictly serial:
+
+```
+t=0       app.whenReady fires
+          createSplashWindow()   → splash visible
+          splashStartedAt = Date.now()
+          ─────────────────────────────────────────────────────
+          Heavy boot work runs WITH THE SPLASH VISIBLE:
+            killKnownHydraAuxiliaryProcesses (orphan-Chrome sweep)
+            ensurePackagedRuntimeState     (DB copy, JWT secret)
+            shouldSyncSchema               (sentinel hash)
+            await import('../server/index.js')   (Prisma, Express)
+            server.bootstrap({ port })            (listen)
+            registerIpcHandlers
+            setupAppMenu
+            createTray
+          ─────────────────────────────────────────────────────
+          await SPLASH_MIN_VISIBLE_MS gate
+            (1500 ms minimum, even if boot finished faster — gives
+             the falling-letter animation a beat to play)
+t≈1.5–3s  splash.setAlwaysOnTop(false)
+          splash.destroy()                         ← SYNCHRONOUS
+          await 250 ms                             ← compositor flush
+          ─────────────────────────────────────────────────────
+          createMainWindow({ show: false })
+          mainWindow.loadURL(url)
+          mainWindow.once('ready-to-show', show)
+            (5 s safety timeout in case ready-to-show never fires)
+t≈3–4s    main window appears, password screen visible
+```
+
+### Why "strict" not "parallel"
+
+Earlier the main window was constructed *during* splash time and shown
+on `ready-to-show`. That looked clean but produced a visible overlap on
+~30% of launches because:
+- Main's React paint started while splash was still composited on top
+- The 15-second loadTimeout fallback could fire before ready-to-show,
+  forcibly showing main alongside an undestroyed splash
+- macOS occasionally rendered the transparent splash and opaque main
+  on the same compositor layer for a frame
+
+Fix: don't even *construct* main until splash is destroyed. The two
+windows literally cannot coexist now.
+
+Trade-off: ~500–800 ms slower perceived total. Worth it for clean UX.
+
+### Beware: there's also a *React-side* splash
+
+`src/App.jsx` defines a `HydraLoadFrame` component used for several
+loading states. One of them — `authState === 'loading'` — used to fire
+the *moment* React mounted (before the first `/api/auth/status` response)
+and rendered the same falling-letters animation as the Electron splash.
+
+That meant: **even with strict Electron-side serialization, the user
+saw a splash on top of the password screen** because React was painting
+its own. Fixed by returning `null` from that branch — the Electron
+splash is the single source of truth for "Hydra is starting up."
+
+The other `HydraLoadFrame` uses (`shutdown`, `restart`, `offline`,
+Suspense fallback for lazy routes) are STATEFUL UI states — different
+purpose, kept as-is.
+
+### How to verify the new sequence visually
+
+```bash
+# Capture frames at boundary points
+open ~/Desktop/hydra/Hydra.app
+sleep 0.8;  /usr/sbin/screencapture -x /tmp/t-08.png  # splash alone, animating
+sleep 0.7;  /usr/sbin/screencapture -x /tmp/t-15.png  # splash near end
+sleep 0.5;  /usr/sbin/screencapture -x /tmp/t-20.png  # gap (no window)
+sleep 1.0;  /usr/sbin/screencapture -x /tmp/t-30.png  # main visible, no splash
+```
+
+`t-08`, `t-15`: should show splash *alone* — no UNLOCK HYDRA visible.
+`t-20`: brief gap — dark window background, no splash, no main painting yet.
+`t-30`: main window visible (UNLOCK HYDRA), splash GONE.
+
+If any frame between `t-08` and `t-15` shows the password screen, the
+React-side `authState === 'loading'` branch has regressed and is
+rendering its own splash again. Trace `src/App.jsx` for any new
+`<HydraLoadFrame>` rendered before AuthScreen.

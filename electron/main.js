@@ -106,6 +106,11 @@ app.whenReady().then(async () => {
     const splash = createSplashWindow();
     setSplashWindow(splash);
     performance.mark('hydra:startup:splash-shown');
+    // Track when splash first appeared so we can guarantee a minimum visible
+    // duration before destroying it. Defined HERE (right at splash creation)
+    // not later — otherwise heavy server-bootstrap work below counts against
+    // the elapsed time and we'd skip the visible delay entirely on slow boots.
+    const splashStartedAt = Date.now();
 
     await killKnownHydraAuxiliaryProcesses('startup sweep');
     await ensurePackagedRuntimeState();
@@ -174,50 +179,65 @@ app.whenReady().then(async () => {
 
     createTray();
 
+    // ─── STRICT SPLASH → MAIN SERIALIZATION ────────────────────────────────
+    //
+    // Earlier we created the main window in parallel with the splash, with
+    // `show: false`, and swapped on `ready-to-show`. That looks clean in
+    // theory but in practice the user reported splash + main visible at the
+    // same time — caused by either (a) the 15 s loadTimeout fallback firing
+    // when ready-to-show was delayed, or (b) main's paint leaking through
+    // splash's transparent compositor layer on some macOS versions.
+    //
+    // True serialization: don't even CONSTRUCT main until the splash is
+    // gone. Trade-off is ~500–800 ms slower perceived total (we lose the
+    // parallelism that would have pre-warmed main during splash) but we
+    // get the clean Pica-style "splash → animation → close → app" flow
+    // the product wants.
+    const SPLASH_MIN_VISIBLE_MS = 1500;
+    const splashElapsed = Date.now() - splashStartedAt;
+    if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
+      await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));
+    }
+
+    // Phase 1: destroy splash (synchronous). After this line the splash
+    // window literally does not exist — there is no race with main.
+    const sp = getSplashWindow();
+    if (sp && !sp.isDestroyed()) {
+      sp.setAlwaysOnTop(false);
+      sp.destroy();
+    }
+
+    // Phase 2: 250 ms gap so macOS has a Display refresh cycle to fully
+    // unmount the splash compositor layer before main starts painting.
+    await new Promise(resolve => setTimeout(resolve, 250));
+
+    // Phase 3: NOW construct main window + load URL. show:false until
+    // ready-to-show so we don't paint a half-loaded React app for a frame.
+    performance.mark('hydra:startup:main-construct');
     const mainWindow = createMainWindow({ show: false, preloadPath: PRELOAD_PATH });
     setMainWindow(mainWindow);
 
-    // Minimum splash display time so the falling animation actually plays
-    // before the main window swaps in. Without this, on a fast machine
-    // ready-to-show fires <500 ms after splash creation and the user only
-    // sees a flash. 1500 ms gives the rain a beat to play and feels intentional.
-    const SPLASH_MIN_VISIBLE_MS = 1500;
-    const splashStartedAt = Date.now();
-
-    const closeSplashAndShowMain = () => {
+    // Show on ready-to-show (paint complete). 5s safety timeout in case
+    // ready-to-show never fires (e.g. React threw on import) — we'd rather
+    // show a half-loaded window than leave the user staring at a dock icon.
+    let mainShown = false;
+    const showMainOnce = () => {
+      if (mainShown || !mainWindow || mainWindow.isDestroyed()) return;
+      mainShown = true;
       performance.mark('hydra:startup:ready-to-show');
-      const sp = getSplashWindow();
-      if (sp && !sp.isDestroyed()) {
-        sp.setAlwaysOnTop(false);
-        sp.destroy();
-      }
-      // 500 ms gap: give macOS time to fully unmount the splash window
-      // before the main window paints. 200ms was too fast — splash and
-      // main were visible simultaneously.
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
-      }, 500);
+      mainWindow.show();
+      mainWindow.focus();
     };
-
-    mainWindow.once('ready-to-show', () => {
-      const elapsed = Date.now() - splashStartedAt;
-      if (elapsed >= SPLASH_MIN_VISIBLE_MS) {
-        closeSplashAndShowMain();
-      } else {
-        setTimeout(closeSplashAndShowMain, SPLASH_MIN_VISIBLE_MS - elapsed);
+    mainWindow.once('ready-to-show', showMainOnce);
+    const safetyTimeout = setTimeout(() => {
+      if (!mainShown) {
+        console.warn('[electron] ready-to-show did not fire within 5s — showing main window anyway');
+        showMainOnce();
       }
-    });
+    }, 5000);
 
-    const loadTimeout = setTimeout(() => {
-      const sp = getSplashWindow();
-      if (sp && !sp.isDestroyed()) sp.close();
-      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show();
-    }, 15000);
     performance.mark('hydra:startup:loadurl-begin');
-    try { await mainWindow.loadURL(url); } finally { clearTimeout(loadTimeout); }
+    try { await mainWindow.loadURL(url); } finally { clearTimeout(safetyTimeout); }
     performance.mark('hydra:startup:loadurl-done');
 
     if (needsSync) {

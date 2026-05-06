@@ -498,13 +498,22 @@ export default function App() {
 
   const navigateBack = useCallback(() => navigate('/dashboard'), [navigate]);
 
-  // Loading
+  // Initial auth-status check (~50–200 ms after React mount).
+  //
+  // Render NULL here — not a HydraLoadFrame — because the Electron splash
+  // is the canonical "starting up" surface and it has just closed. Showing
+  // ANOTHER falling-letters splash here causes the visual bug where the
+  // user sees splash and password screen overlapping at the same time
+  // (the React splash paints on top of the AuthScreen as it transitions).
+  //
+  // The dark `backgroundColor: '#0a0014'` on the main BrowserWindow
+  // covers this brief invisible interval. By the time the eye registers
+  // anything, /api/auth/status has resolved and AuthScreen renders.
+  //
+  // The other HydraLoadFrame uses below (offline / restart / shutdown /
+  // Suspense) are STATEFUL screens, not initial loading — keep them.
   if (authState === 'loading') {
-    return (
-      <div className="center-container">
-        <HydraLoadFrame status="INITIALIZING" detail="Starting local dashboard and proxy" />
-      </div>
-    );
+    return null;
   }
 
   // Shutdown
