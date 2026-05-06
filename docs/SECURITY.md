@@ -32,7 +32,7 @@ The master key used for AES-256-GCM is managed by `server/services/local-secrets
 
 - **Password Hashing** — User passwords are hashed using **bcrypt** (with a high-cost factor of 12 by default).
 - **Session Tokens** — Upon login, the server issues a signed **JWT (JSON Web Token)**.
-- **CSRF Protection** — All state-changing requests require a valid JWT in the `Authorization` header.
+- **CSRF Protection** — Normal state-changing requests require a valid JWT in the `Authorization` header. The destructive recovery reset is the exception: `POST /api/auth/nuke` is public so a locked-out operator can recover, but it requires the current local password and `confirm: "NUKE_HYDRA"`.
 
 Hydra is designed as a single-user local tool. Password policy is intentionally
 minimal compared with a shared SaaS system, because the stronger boundary is

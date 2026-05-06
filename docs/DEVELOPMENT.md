@@ -48,6 +48,8 @@ Developing Hydra requires understanding the interplay between the React frontend
 - `http://localhost:5173` — Vite client development server.
 - `http://localhost:3001` — Express API server.
 
+The Express server binds to `127.0.0.1` by default. Use `HYDRA_LAN=1` to bind `0.0.0.0`, or `HYDRA_LISTEN_HOST=<host>` for an explicit host. Browser CORS accepts loopback origins and origins listed in `HYDRA_CORS_ORIGINS`; curl/same-origin requests without an `Origin` header are accepted.
+
 ### Why the UI cannot start the server from a button
 
 A normal browser tab **cannot** launch `node server/index.js` on your machine (sandbox security). There is no embedded JSON/JS workaround for that in a standard Vite + Express setup.

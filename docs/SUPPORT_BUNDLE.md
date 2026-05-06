@@ -9,6 +9,7 @@ The support bundle feature collects diagnostic information for troubleshooting H
 | **Version info** | Hydra app version (from `VITE_APP_VERSION` or Electron native) |
 | **OS info** | Platform string (from Electron native or `navigator.platform`) |
 | **Data directory** | `userData` path (Electron-only) |
+| **Logs directory** | Electron logs path (path only, not log contents) |
 | **Runtime mode** | Packaged (Electron), Dev (Electron), or Browser |
 | **Proxy status** | Enabled or Disabled |
 | **Server health** | Uptime, pool key counts (pooled, available) |
@@ -21,7 +22,7 @@ The support bundle feature collects diagnostic information for troubleshooting H
 - ❌ API keys, management keys, session tokens
 - ❌ Account data, balance information
 - ❌ JWT secrets, encryption keys
-- ❌ Application log files
+- ❌ Application log file contents
 - ❌ Environment variables
 - ❌ Electron/Node.js version details
 

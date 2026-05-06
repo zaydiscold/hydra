@@ -111,7 +111,7 @@ function HydraLoadFrame({ tone = 'normal', title = 'HYDRA', status = 'INITIALIZI
 }
 
 // ─── Auth Screen ─────────────────────────────────────────────────────────────
-function AuthScreen({ mode, onSuccess, onRestartRequired }) {
+function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
   const isSetup = mode === 'setup';
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -124,11 +124,12 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
   const [nukeProgress, setNukeProgress] = useState(0); // 0 to 100
   const [isNuking, setIsNuking] = useState(false);
   const timerRef = useRef(null);
+  const nukeSecondsLeft = isNuking ? Math.max(0, Math.ceil((100 - nukeProgress) / 10)) : 10;
 
   const handleFinalNuke = useCallback(async () => {
     setIsNuking(false);
     try {
-      const res = await api.nukeApp();
+      const res = await api.nukeApp(password);
       const payload = res?.data ?? res ?? {};
       api.clearToken();
       if (payload?.restartRequired) {
@@ -143,7 +144,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
     } catch (err) {
       setError('Nuclear wipe failed: ' + err.message);
     }
-  }, [onRestartRequired]);
+  }, [onRestartRequired, password]);
 
   useEffect(() => {
     if (isNuking) {
@@ -302,11 +303,19 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
           <div style={{ marginTop: 'var(--space-md)', textAlign: 'center' }}>
             <button 
               className="btn btn-ghost" 
+              type="button"
               style={{ fontSize: '0.75rem', opacity: 0.6 }}
-              onClick={() => setError('Fresh installs with no local accounts will switch to setup automatically. Nuclear Reset only wipes the local vault.')}
+              onClick={() => {
+                setError('');
+                onRefreshAuth?.();
+              }}
             >
-              First time install?
+              Re-check setup
             </button>
+            <p style={{ margin: '0.5rem 0 0', color: 'var(--text-tertiary)', fontSize: '0.72rem', lineHeight: 1.4 }}>
+              Fresh installs switch to setup automatically after the bootstrap check.
+              If you just wiped the vault or restarted Hydra, use this to re-run it.
+            </p>
           </div>
         )}
 
@@ -329,10 +338,12 @@ function AuthScreen({ mode, onSuccess, onRestartRequired }) {
              >
                <div className="nuke-progress-bar" style={{ width: `${nukeProgress}%` }} />
                <span style={{ position: 'relative', zIndex: 1, pointerEvents: 'none' }}>
-                 {isNuking ? `ARMING... ${Math.ceil((100 - nukeProgress) / 10)}s` : '☢ NUCLEAR RESET'}
+                 {isNuking ? `WIPE IN ${nukeSecondsLeft}s` : '☢ NUCLEAR RESET'}
                </span>
              </button>
-             <p className="nuke-warning-text">HOLD FOR 10 SECONDS TO WIPE SYSTEM</p>
+             <p className="nuke-warning-text">
+               {isNuking ? `RELEASE TO CANCEL - WIPE IN ${nukeSecondsLeft}s` : 'HOLD FOR 10 SECONDS TO WIPE SYSTEM'}
+             </p>
            </div>
          )}
       </div>
@@ -570,7 +581,12 @@ export default function App() {
 
       {authState === 'setup' || authState === 'login' ? (
         <>
-          <AuthScreen mode={authState} onSuccess={handleAuthSuccess} onRestartRequired={handleRestartRequired} />
+          <AuthScreen
+            mode={authState}
+            onSuccess={handleAuthSuccess}
+            onRestartRequired={handleRestartRequired}
+            onRefreshAuth={checkAuth}
+          />
           <ToastContainer toasts={toasts} onDismiss={dismissToast} />
         </>
       ) : (

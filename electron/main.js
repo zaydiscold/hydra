@@ -4,7 +4,7 @@
  * Delegates to split modules under app/ and utils/.
  * All shared runtime state lives in app/state.js.
  */
-import { app, dialog, Menu, Tray, nativeImage } from 'electron';
+import { app, dialog, Menu, Tray, nativeImage, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -80,8 +80,8 @@ function createTray() {
       { label: `Status: ${url ? 'proxy running' : 'starting'}`, enabled: false },
       { label: url ? `Proxy URL: ${url}/v1` : 'Proxy URL: starting', enabled: false },
       { type: 'separator' },
-      { label: 'Open Logs Folder', click: () => { const { shell } = require('electron'); shell.openPath(app.getPath('logs')); } },
-      { label: 'Open Data Folder', click: () => { const { shell } = require('electron'); shell.openPath(app.getPath('userData')); } },
+      { label: 'Open Logs Folder', click: () => { shell.openPath(app.getPath('logs')); } },
+      { label: 'Open Data Folder', click: () => { shell.openPath(app.getPath('userData')); } },
       { type: 'separator' },
       { label: 'Hide Window', click: () => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.hide(); } },
       { label: 'Quit Hydra Completely', click: () => { setForceQuit(true); app.quit(); } },
@@ -101,8 +101,8 @@ app.on('second-instance', showAndFocusMainWindow);
 app.whenReady().then(async () => {
   // #97: Startup performance instrumentation — performance.mark/measure
   // at every major phase so we can track regressions and identify
-  // per-user bottlenecks.  Marks are preserved in the Performance
-  // timeline (available via DevTools or electron-log traces).
+  // per-user bottlenecks. Marks are preserved in the Performance
+  // timeline (available via DevTools traces).
   performance.mark('hydra:startup:begin');
   try {
     // createSplashWindow already calls setSplashWindow(win) internally, so we

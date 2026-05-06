@@ -25,7 +25,14 @@ before(() => {
 
   mock.module(resolve('./config.js'), {
     namedExports: {
-      config: { PORT: 0, NODE_ENV: 'test', RATE_LIMIT_WINDOW: 999999, RATE_LIMIT_MAX: 999 },
+      config: {
+        PORT: 0,
+        NODE_ENV: 'test',
+        RATE_LIMIT_WINDOW: 999999,
+        RATE_LIMIT_MAX: 999,
+        PROXY_RATE_LIMIT_WINDOW: 999999,
+        PROXY_RATE_LIMIT_MAX: 999,
+      },
       validateConfig() {},
     },
   });
@@ -35,7 +42,7 @@ before(() => {
   mock.module(sm('session-refresher'), { namedExports: { startSessionRefresher() {}, stopSessionRefresher() {} } });
   mock.module(sm('legacy-storage'), { namedExports: { enforceLegacyStorageReset() { return Promise.resolve(); } } });
   mock.module(sm('task-supervisor'), { namedExports: { taskSupervisor: { start() {}, shutdown() { return Promise.resolve(); } } } });
-  mock.module(sm('rotation-manager'), { namedExports: { rotationManager: { reload() { return Promise.resolve(); } } } });
+  mock.module(sm('rotation-manager'), { namedExports: { rotationManager: { reload() { return Promise.resolve(); }, cancelReload() {} } } });
   mock.module(sm('store'), { namedExports: { getMasterProxyKey() { return '***'; }, getGenericProxyKey() { return 'sk-or-test'; } } });
   mock.module(sm('proxy-gate'), { namedExports: { proxyGate: { enabled: true } } });
   mock.module(mm('error-handler'), { namedExports: { errorHandler(e,r,re,n) { n(); } } });

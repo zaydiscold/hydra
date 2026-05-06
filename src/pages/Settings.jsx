@@ -27,9 +27,11 @@ export default function Settings({ addToast }) {
     let mounted = true;
     api.getNetworkInfo()
       .then(res => { if (mounted) setLanUrls(Array.isArray(res?.data?.lanUrls) ? res.data.lanUrls : []); })
-      .catch(() => {});
+      .catch((err) => {
+        if (mounted) addToast?.(err?.message || 'Failed to load network info', 'error');
+      });
     return () => { mounted = false; };
-  }, []);
+  }, [addToast]);
 
   useEffect(() => {
     if (!isElectron) {

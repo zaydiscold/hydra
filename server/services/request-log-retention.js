@@ -8,9 +8,12 @@ const NETWORK_ERROR_LOG_WINDOW_MS = 60 * 1000;
 
 let timer = null;
 let pruneInFlight = false;
+let prunePromise = null;
+let stopping = false;
 let lastErrorAt = 0;
 
 async function pruneRequestLogs() {
+  if (stopping) return;
   if (pruneInFlight) return;
   pruneInFlight = true;
 
@@ -32,7 +35,7 @@ async function pruneRequestLogs() {
     );
   } catch (err) {
     const now = Date.now();
-    if (now - lastErrorAt >= NETWORK_ERROR_LOG_WINDOW_MS) {
+    if (!stopping && now - lastErrorAt >= NETWORK_ERROR_LOG_WINDOW_MS) {
       logger.warn(`[RETENTION] RequestLog prune failed: ${err.message}`);
       lastErrorAt = now;
     }
@@ -43,14 +46,23 @@ async function pruneRequestLogs() {
 
 export function startRequestLogRetention() {
   if (timer) return;
-  timer = setInterval(pruneRequestLogs, RETENTION_INTERVAL_MS);
-  pruneRequestLogs().catch((err) => {
+  stopping = false;
+  timer = setInterval(() => {
+    prunePromise = pruneRequestLogs();
+  }, RETENTION_INTERVAL_MS);
+  prunePromise = pruneRequestLogs();
+  prunePromise.catch((err) => {
     logger.error(`[RETENTION] Initial prune failed: ${err.message}`);
   });
   logger.info('[RETENTION] RequestLog retention worker initialized');
 }
 
-export function stopRequestLogRetention() {
+export async function stopRequestLogRetention() {
+  stopping = true;
   if (timer) clearInterval(timer);
   timer = null;
+  if (prunePromise) {
+    await prunePromise.catch(() => {});
+    prunePromise = null;
+  }
 }

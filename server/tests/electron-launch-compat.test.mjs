@@ -53,6 +53,8 @@ const mockConfig = {
   HYDRA_RESET_LEGACY_STORAGE: false,
   RATE_LIMIT_WINDOW: 15 * 60 * 1000,
   RATE_LIMIT_MAX: 100,
+  PROXY_RATE_LIMIT_WINDOW: 60 * 1000,
+  PROXY_RATE_LIMIT_MAX: 60,
   OR_BASE: 'https://openrouter.ai',
   CLERK_ORIGIN: 'https://openrouter.ai',
   CLERK_REFERER: 'https://openrouter.ai/sign-in',
@@ -155,6 +157,7 @@ mock.module(new URL('../services/rotation-manager.js', import.meta.url).href, {
   namedExports: {
     rotationManager: {
       reload: async () => {},
+      cancelReload: () => {},
       ensureLoaded: async () => {},
       pool: [],
     },

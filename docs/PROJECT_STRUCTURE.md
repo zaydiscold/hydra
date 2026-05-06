@@ -9,7 +9,7 @@ Hydra is organized into a clear separation of concerns between its high-performa
 The frontend is a single-page application (SPA) built with React 19 and Vite. It uses a custom Vanilla CSS design system for its Neo-Brutalist aesthetic.
 
 - **`App.jsx`** — Main entry point, routing configuration, and global state providers. It also composes the global space-themed layers (`edm-bar`, `starfield`, `nebula-glow`, `meteor-container`, and `planet` shapes) so the background scene is always present behind the app. On **SERVER OFFLINE** (e.g. `getAuthStatus` / `GET /api/auth/status` fails because Express is down), the dev build shows [`DevBackendHint`](../src/components/DevBackendHint.jsx) with **`npm run dev`** copy affordance.
-- **`api.js`** — Centralized **`fetch`**-based API client for `/api/*`. In Vite dev, network failures (backend not running) throw with a dev-specific message and optional **`hydraCopyCommand`** for clipboard UX — see [`API_REFERENCE.md`](API_REFERENCE.md) (*Frontend API client*) and [`ARCHITECTURE_DEEP_DIVE.md`](ARCHITECTURE_DEEP_DIVE.md) (*Development: backend-down UX*). Exports **`HYDRA_DEV_START_COMMAND`** / **`HYDRA_DEV_API_ONLY_COMMAND`** for consistent copy text.
+- **`api.js`** — Centralized **`fetch`**-based API client for `/api/*`. In Vite dev, network failures (backend not running) throw with a dev-specific message and optional **`hydraCopyCommand`** for clipboard UX — see [`API_REFERENCE.md`](API_REFERENCE.md) (*Frontend API client*) and [`ARCHITECTURE_DEEP_DIVE.md`](ARCHITECTURE_DEEP_DIVE.md) (*Development: backend-down UX*). Idempotent GET requests retry transient network/5xx/429 failures once. Exports **`HYDRA_DEV_START_COMMAND`** / **`HYDRA_DEV_API_ONLY_COMMAND`** for consistent copy text.
 - **`index.css`** — The core Design System (48kB+ of custom tokens, layout utilities, and animations), including the layered space background and the meteor/EDM animation timings. **Page headers:** `.page-header` defaults to a horizontal flex row (title on the left, actions on the right). For pages that only need a title plus a long intro paragraph—no right-side actions—use **`page-header page-header--intro`** and wrap the heading and body copy in one container; use **`.page-header__lede`** / **`.page-header__lede--note`** for intro text (sans, readable line length). Putting `<h1>`/`<h2>` and `<p>` as *direct* siblings under the default `.page-header` squeezes them into two columns and breaks the title. **Pool help popover:** **`.pool-help-trigger`** / **`.pool-help-panel`** — cyan-themed header control on **Pool Manager** (`/pool`) for management-key vs standard-key guidance (replaces a full-width `.info-banner` that broke layout when mixed inline nodes were flex children).
 - **`pages/`** — High-level views (Dashboard, Key Manager, Pool Manager, etc.). **`BulkAuthWizard.jsx`** — Bulk OTP sign-in: paste emails → `POST /api/accounts/bulk-otp-stubs` → sequential Clerk email OTP per row (`otp/start`, `otp/verify`) and optional provision. **React Router path:** `/bulk-auth` (sidebar: **Bulk OTP**). Wired in `src/App.jsx`.
 - **`utils/keyManagerAccountState.js`** — Key Manager lane typing (`credentials` / `key_import` / `oauth_session`) and CTA flags via **`getKeyManagerAccountState`** (`canProvision`, **`canPasteManagementKey`**, **`canAuthenticate`**); consumed by **`KeyManager.jsx`** with **`GET /api/accounts`**. See **`DASHBOARD_ACCOUNT_STATES.md`** (*Key Manager*).
@@ -34,7 +34,7 @@ The backend is a Node.js Express server that manages the local SQLite database v
 - **`routes/`** — API endpoint definitions (RESTful structure).
 - **`controllers/`** — Business logic for each route category.
 - **`services/`** — Core utilities (AES encryption, OpenRouter API wrappers, proxy logic). Key additions: `proxy-gate.js` (in-memory proxy kill switch, shared by `index.js` middleware and `SystemController`), `rotation-manager.js` (tracks `lastSyncAt` per pool reload for sync-status endpoint).
-- **`middleware/`** — Authentication (JWT), logging (Winston), and rate limiting.
+- **`middleware/`** — Authentication (JWT), logging (Winston), and rate limiting. `rate-limiters.js` contains shared high-cost route limiters for bulk auth, provisioning, redeem, generator, and shutdown paths.
 - **`validators/`** — Zod schemas for request validation.
 
 ### 🖥️ Desktop Shell (`/electron`)
@@ -95,6 +95,7 @@ Platform-specific assets and build resources for the Electron desktop build.
 - **`electron/main.js`** — Electron entry point (`"main"` in package.json).
 - **`scripts/prepare-electron-resources.mjs`** — Generates packaged Electron resources (`empty-hydra.db` and bundled Playwright Chromium) before `electron-builder`.
 - **`scripts/smoke-electron-package.mjs`** — Validates the unpacked package contract: Prisma engine, migrations/schema, empty DB, Chromium, and app size.
+- **`scripts/diagnostics/mem-watcher.sh`** — macOS memory sampler for launch/performance checks. It is read-only and writes a local `mem-watch-*.log`.
 
 ## 🔁 Runtime Flow
 

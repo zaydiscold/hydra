@@ -88,7 +88,7 @@ The local Hydra UI is protected by a JWT-based auth flow:
 - `POST /api/auth/login` issues a JWT after password validation.
 - `POST /api/auth/logout` is stateless; the frontend drops the token.
 - `POST /api/auth/change-password` updates the password and increments the token version.
-- `POST /api/auth/nuke` wipes local data and marks the app as restart required.
+- `POST /api/auth/nuke` wipes local data and marks the app as restart required. It is a public recovery route for locked-out sessions, but requires the current local password plus `confirm: "NUKE_HYDRA"`.
 
 Implementation details:
 
@@ -217,7 +217,7 @@ Implementation:
 
 - `AccountController.provision()` and `provisionAll()` call `dashboardApi.createManagementKey()`.
 - `server/services/dashboard-api.js` first tries to reuse or refresh a valid session.
-- If it has one, it attempts Next.js Server Action replay, then cached tRPC discovery, then tRPC candidate routes, then a REST session-token fallback, then **browser UI automation** (Chromium via the **`playwright`** npm package).
+- If it has one, it attempts Next.js Server Action replay, then cached tRPC discovery, then tRPC candidate routes, then a REST session-token fallback, then **browser UI automation** (Chromium via **`playwright-core`** at runtime, using the bundled Chromium payload in packaged Electron).
 - When a management key is found, it is written back into the local encrypted account config with `store.updateAccountManagementKey()`.
 
 **No clipboard in the automation path:** Provisioning does **not** click OpenRouter’s “Copy to clipboard” control. The implementation reads the secret from **Server Action/RSC text**, **tRPC JSON**, the REST fallback, or network/DOM text inside server-side browser automation (`server/services/dashboard-api.js`). Assistant or operator browsers used only to **document** selectors (`docs/recon/TRPC_ROUTES.md`) do **not** persist keys into the vault.
@@ -228,7 +228,7 @@ Implementation:
 
 **Clerk session vs management key:** A valid dashboard **`__session`** (and device cookies) lets Hydra call dashboard-only paths (Server Actions, tRPC, or the Playwright fallback that drives `https://…/settings/management-keys`). That is **not** the same as storing a **management API key**. OpenRouter currently returns management key material with the same **`sk-or-v1-…`** prefix shape as standard API keys, so Hydra verifies usefulness with OpenRouter rather than relying on a distinct prefix. Until provisioning succeeds and `updateAccountManagementKey` runs, Key Manager and OpenRouter REST management calls have nothing to authenticate with.
 
-**Server-side Playwright vs Playwright MCP:** The fallback uses the **`playwright` npm package** inside the Hydra Node process (headless Chromium, cookie injection, `waitForResponse` on `/api/trpc/`). It is unrelated to **Playwright MCP** in the IDE, which is a separate tool for assistants to control a browser via MCP.
+**Server-side Playwright vs Playwright MCP:** The fallback uses Playwright APIs inside the Hydra Node process (headless Chromium, cookie injection, `waitForResponse` on `/api/trpc/`). Runtime code imports **`playwright-core`**; the full **`playwright`** package is dev-only for installing/finding the browser payload. This is unrelated to **Playwright MCP** in the IDE, which is a separate tool for assistants to control a browser via MCP.
 
 This is one of Hydra's key "aggregation" flows:
 

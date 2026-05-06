@@ -1,4 +1,6 @@
 const API = '/api';
+const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const RETRY_DELAY_MS = 150;
 
 /** Map API `source` to UI label (API may still return `playwright` for browser automation). */
 export function formatProvisionSourceForUi(source) {
@@ -62,6 +64,22 @@ function getToken() {
   return localStorage.getItem('hydra_token') || '';
 }
 
+function isRetryableRequest(method) {
+  return method === 'GET';
+}
+
+function isRetryableResponseStatus(status) {
+  return RETRYABLE_STATUSES.has(status);
+}
+
+function isAbortError(err) {
+  return err?.name === 'AbortError';
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 let activeRequests = 0;
 let handledAuthFailure = false;
 function updateLoadingState() {
@@ -70,72 +88,96 @@ function updateLoadingState() {
 
 async function request(path, options = {}) {
   const { method = 'GET', body, skipAuth = false, signal, keepalive = false } = options;
+  const normalizedMethod = String(method || 'GET').toUpperCase();
   const headers = { 'Content-Type': 'application/json' };
   if (!skipAuth) {
     const token = getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
-  const fetchOptions = { method, headers, signal, keepalive };
+  const fetchOptions = { method: normalizedMethod, headers, signal, keepalive };
   if (body) fetchOptions.body = JSON.stringify(body);
+  const attempts = isRetryableRequest(normalizedMethod) ? 2 : 1;
 
   activeRequests++;
   updateLoadingState();
 
   try {
-    let res;
-    try {
-      res = await fetch(`${API}${path}`, fetchOptions);
-    } catch {
-      const dev = import.meta.env.DEV;
-      const msg = dev
-        ? 'Hydra API unreachable — the Express backend is not running. From the project folder run npm run dev (starts API + UI together) or npm run server for the API only, then refresh.'
-        : 'Hydra API unavailable. Check that the local server is running.';
-      const err = new Error(msg);
-      if (dev) err.hydraCopyCommand = HYDRA_DEV_START_COMMAND;
-      throw err;
-    }
-    
-    if (res.status === 401) {
-      // Never reload on intentional auth endpoints - they handle errors in the UI
-      if (path.startsWith('/auth/')) {
-        let errMsg = 'Invalid credentials';
-        try { const d = await res.clone().json(); errMsg = d?.error || errMsg; } catch (err) { void err; }
-        throw new Error(errMsg);
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      let res;
+      try {
+        res = await fetch(`${API}${path}`, fetchOptions);
+      } catch (fetchErr) {
+        if (attempt < attempts && !isAbortError(fetchErr)) {
+          await wait(RETRY_DELAY_MS * attempt);
+          continue;
+        }
+        const dev = import.meta.env.DEV;
+        const msg = dev
+          ? 'Hydra API unreachable — the Express backend is not running. From the project folder run npm run dev (starts API + UI together) or npm run server for the API only, then refresh.'
+          : 'Hydra API unavailable. Check that the local server is running.';
+        const err = new Error(msg);
+        if (dev) err.hydraCopyCommand = HYDRA_DEV_START_COMMAND;
+        throw err;
       }
-      clearToken();
-      if (!handledAuthFailure) {
-        handledAuthFailure = true;
-        window.location.reload();
+
+      if (res.status === 401) {
+        // Never reload on intentional auth endpoints - they handle errors in the UI
+        if (path.startsWith('/auth/')) {
+          let errMsg = 'Invalid credentials';
+          try { const d = await res.clone().json(); errMsg = d?.error || errMsg; } catch (err) { void err; }
+          throw new Error(errMsg);
+        }
+        clearToken();
+        if (!handledAuthFailure) {
+          handledAuthFailure = true;
+          window.location.reload();
+        }
+        const err = new Error('Authentication expired. Sign in again.');
+        err.status = 401;
+        err.code = 'AUTH_EXPIRED';
+        throw err;
       }
-      return;
-    }
-    let data;
-    try {
-      data = await res.json();
-    } catch {
-      throw new Error('Hydra API returned an invalid response.');
-    }
-    if (!res.ok) {
-      const msg = data?.error || `Request failed (${res.status})`;
-      const err = new Error(msg);
-      err.status = res.status;
-      if (data?.code) err.code = data.code;
-      if (data?.hint) err.hint = data.hint;
-      if (data?.details != null) err.details = data.details;
-      if (data?.legacyCode) err.legacyCode = data.legacyCode;
-      if (data?.debugDir) err.debugDir = data.debugDir;
-      if (data?.clerkDebugOtp && data?.clerkDebugHint) {
-        err.clerkDebugHint = data.clerkDebugHint;
+
+      if (!res.ok && attempt < attempts && isRetryableResponseStatus(res.status)) {
+        await wait(RETRY_DELAY_MS * attempt);
+        continue;
       }
-      throw err;
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        if (attempt < attempts && isRetryableResponseStatus(res.status)) {
+          await wait(RETRY_DELAY_MS * attempt);
+          continue;
+        }
+        throw new Error('Hydra API returned an invalid response.');
+      }
+
+      if (!res.ok) {
+        const msg = data?.error || `Request failed (${res.status})`;
+        const err = new Error(msg);
+        err.status = res.status;
+        if (data?.code) err.code = data.code;
+        if (data?.hint) err.hint = data.hint;
+        if (data?.details != null) err.details = data.details;
+        if (data?.legacyCode) err.legacyCode = data.legacyCode;
+        if (data?.debugDir) err.debugDir = data.debugDir;
+        if (data?.clerkDebugOtp && data?.clerkDebugHint) {
+          err.clerkDebugHint = data.clerkDebugHint;
+        }
+        throw err;
+      }
+
+      if (res.status === 202 && data?.requiresTwoFactor) {
+        const e = new Error('NEEDS_2FA');
+        e.requiresTwoFactor = true;
+        if (data.signInId) e.signInId = data.signInId;
+        throw e;
+      }
+
+      return data;
     }
-    if (res.status === 202 && data?.requiresTwoFactor) {
-      const e = new Error('NEEDS_2FA');
-      e.requiresTwoFactor = true;
-      if (data.signInId) e.signInId = data.signInId;
-      throw e;
-    }
-    return data;
   } finally {
     activeRequests--;
     updateLoadingState();
@@ -152,8 +194,10 @@ export const login = (password) =>
 export const logout = () => request('/auth/logout', { method: 'POST' });
 export const changePassword = (currentPassword, newPassword) =>
   request('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
-export const nukeApp = () => request('/auth/nuke', { method: 'POST', skipAuth: true });
-export const shutdownServer = () => request('/shutdown', { method: 'POST' });
+export const nukeApp = (password) =>
+  request('/auth/nuke', { method: 'POST', body: { password, confirm: 'NUKE_HYDRA' }, skipAuth: true });
+export const shutdownServer = () =>
+  request('/shutdown', { method: 'POST', body: { confirm: 'SHUTDOWN_HYDRA' } });
 
 export function saveToken(token) {
   handledAuthFailure = false;

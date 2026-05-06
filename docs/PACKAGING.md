@@ -49,7 +49,7 @@ Runs from `electron-builder.yml`. Produces platform artifacts in `release/`:
 
 1. Reads the Playwright Chromium revision from `node_modules/playwright-core/browsers.json`.
 2. Searches standard Playwright browser cache locations for that revision.
-3. If not found, runs `npx playwright install chromium` to fetch it.
+3. If not found, runs `npx playwright install chromium` to fetch it. The full `playwright` package is a dev dependency for this install/prepare path; runtime automation imports `playwright-core`.
 4. Copies the platform-specific Chrome payloads (`chrome-mac`, `chrome-win`, `chrome-linux`, `chrome-mac-arm64`) into `build/electron/chromium/`.
 5. At runtime, the app looks under `process.resourcesPath/chromium/` for the bundled browser.
 
@@ -95,7 +95,7 @@ npm run electron:smoke
 2. Asserts: `prisma/schema.prisma`, `prisma/migrations/`, `data/empty-hydra.db` exist in resources.
 3. Asserts: Prisma query engine binary exists in `.prisma/client/`.
 4. Asserts: Bundled Chromium exists under `resources/chromium/`.
-5. Asserts: Package size is under `HYDRA_MAX_PACKAGED_APP_MB` (default 900 MB).
+5. Asserts: Package size is under `HYDRA_MAX_PACKAGED_APP_MB` (default 900 MB). The current macOS ARM smoke path is roughly 49 MB.
 6. Opens the empty DB with PrismaClient and runs `SELECT 1` to confirm it's valid.
 
 ## Artifact Output

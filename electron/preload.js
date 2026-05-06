@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('hydraNative', {
   appVersion: () => ipcRenderer.invoke('native:get-version'),
 
   /**
-   * Native paths object: { userData, home, logs, downloads, documents }
+   * Native paths object: { userData, logs }
    * @returns {Promise<{ok:true,data:object}|{ok:false,error:string,code?:string}>}
    */
   appPaths: () => ipcRenderer.invoke('native:get-paths'),

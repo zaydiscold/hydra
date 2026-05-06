@@ -118,30 +118,30 @@ app.use(gzipMiddleware);
 
 // Standard middleware
 app.use(express.json());
-app.use(cors(process.env.HYDRA_EMBEDDED === '1'
-  ? {
-      origin(origin, callback) {
-        // Swarm #89: every code path MUST call callback(...). Returning undefined
-        // here causes Express CORS to behave inconsistently across versions.
-        if (!origin) return callback(null, true);
-        try {
-          const parsed = new URL(origin);
-          // #21: Harmonize IPv6 loopback — ::1 must be allowed alongside
-          // localhost/127.0.0.1 to match the LOCAL_UI_HOSTS navigation guard.
-          const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
-          if (parsed.protocol === 'http:' && isLoopback) {
-            return callback(null, true);
-          }
-          // Parsed but not loopback — explicit denial.
-          return callback(new Error(`CORS denied for origin: ${origin}`));
-        } catch (parseErr) {
-          // Origin header was unparseable — explicit denial.
-          return callback(new Error(`CORS denied for unparseable origin: ${origin} (${parseErr.message})`));
-        }
-      },
-      credentials: true,
+const configuredCorsOrigins = (process.env.HYDRA_CORS_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    // Same-origin, curl, and Electron file-less requests have no Origin.
+    if (!origin) return callback(null, true);
+    if (configuredCorsOrigins.includes(origin)) return callback(null, true);
+    try {
+      const parsed = new URL(origin);
+      // #21: Harmonize IPv6 loopback — ::1 must be allowed alongside
+      // localhost/127.0.0.1 to match the LOCAL_UI_HOSTS navigation guard.
+      const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+      if (parsed.protocol === 'http:' && isLoopback) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS denied for origin: ${origin}`));
+    } catch (parseErr) {
+      return callback(new Error(`CORS denied for unparseable origin: ${origin} (${parseErr.message})`));
     }
-  : undefined));
+  },
+  credentials: true,
+}));
 
 // CSP middleware for Electron embedded mode — restrict to self
 if (process.env.HYDRA_EMBEDDED) {
@@ -269,7 +269,7 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
 
   logger.info(`[SHUTDOWN] Starting graceful shutdown (${source})`);
   stopPinger();
-  stopRequestLogRetention();
+  await stopRequestLogRetention();
   rotationManager.cancelReload();
   await stopSessionRefresher();
 
@@ -339,7 +339,7 @@ async function bootstrap({ port, silent } = {}) {
   }
 
   const listenPort = port ?? config.PORT;
-  const host = process.env.HYDRA_EMBEDDED ? '127.0.0.1' : '0.0.0.0';
+  const host = process.env.HYDRA_LISTEN_HOST || (process.env.HYDRA_LAN === '1' ? '0.0.0.0' : '127.0.0.1');
 
   // #10: Listen FIRST, then start services. If port conflict occurs,
   // the promise rejects before any timers are created — no leak.
@@ -377,6 +377,7 @@ async function bootstrap({ port, silent } = {}) {
 
   // Eagerly load the rotation pool so it's ready before first proxy request
   rotationManager.reload().catch(err => {
+    if (err?.name === 'AbortError') return;
     // HIGH #13: Structured error logging for rotationManager failures
     logger.error({
       source: 'rotationManager.reload',

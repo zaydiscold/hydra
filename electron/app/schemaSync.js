@@ -7,6 +7,7 @@
 import { app } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import { promises as fsp } from 'node:fs';
 import { SCHEMA_PATH, MIGRATIONS_DIR, PRISMA_BIN, APP_ROOT, isDev } from './env.js';
 
 /**
@@ -26,23 +27,23 @@ export async function computeSchemaContentHash() {
   const hash = createHash('sha256');
   const mtimeParts = [];
 
-  const schemaStat = fs.statSync(SCHEMA_PATH);
-  hash.update(fs.readFileSync(SCHEMA_PATH));
+  const schemaStat = await fsp.stat(SCHEMA_PATH);
+  hash.update(await fsp.readFile(SCHEMA_PATH));
   mtimeParts.push(`schema:${schemaStat.mtimeMs}:${schemaStat.size}`);
 
-  const entries = fs.readdirSync(MIGRATIONS_DIR).sort();
+  const entries = (await fsp.readdir(MIGRATIONS_DIR)).sort();
   for (const name of entries) {
     const full = path.join(MIGRATIONS_DIR, name);
     let stat;
-    try { stat = fs.statSync(full); } catch { continue; }
+    try { stat = await fsp.stat(full); } catch { continue; }
     if (!stat.isDirectory()) continue;
-    const files = fs.readdirSync(full).sort();
+    const files = (await fsp.readdir(full)).sort();
     for (const f of files) {
       const filePath = path.join(full, f);
       let fileStat;
-      try { fileStat = fs.statSync(filePath); } catch { continue; }
+      try { fileStat = await fsp.stat(filePath); } catch { continue; }
       hash.update(name + '/' + f);
-      hash.update(fs.readFileSync(filePath));
+      hash.update(await fsp.readFile(filePath));
       mtimeParts.push(`${name}/${f}:${fileStat.mtimeMs}:${fileStat.size}`);
     }
   }
@@ -56,19 +57,19 @@ export async function computeSchemaContentHash() {
  */
 async function computeMtimeFingerprint() {
   const parts = [];
-  const schemaStat = fs.statSync(SCHEMA_PATH);
+  const schemaStat = await fsp.stat(SCHEMA_PATH);
   parts.push(`schema:${schemaStat.mtimeMs}:${schemaStat.size}`);
-  const entries = fs.readdirSync(MIGRATIONS_DIR).sort();
+  const entries = (await fsp.readdir(MIGRATIONS_DIR)).sort();
   for (const name of entries) {
     const full = path.join(MIGRATIONS_DIR, name);
     let stat;
-    try { stat = fs.statSync(full); } catch { continue; }
+    try { stat = await fsp.stat(full); } catch { continue; }
     if (!stat.isDirectory()) continue;
-    const files = fs.readdirSync(full).sort();
+    const files = (await fsp.readdir(full)).sort();
     for (const f of files) {
       const filePath = path.join(full, f);
       try {
-        const fStat = fs.statSync(filePath);
+        const fStat = await fsp.stat(filePath);
         parts.push(`${name}/${f}:${fStat.mtimeMs}:${fStat.size}`);
       } catch { /* skip */ }
     }
@@ -92,7 +93,7 @@ export async function shouldSyncSchema() {
     // Fast path: if mtime fingerprint matches sentinel, skip both hash *and*
     // file read. Reading file mtimes only — no content I/O.
     let storedFingerprint = null;
-    try { storedFingerprint = fs.readFileSync(fingerprintPath, 'utf-8').trim(); } catch { /* missing → fall through */ }
+    try { storedFingerprint = (await fsp.readFile(fingerprintPath, 'utf-8')).trim(); } catch { /* missing → fall through */ }
     if (storedFingerprint) {
       const currentFingerprint = await computeMtimeFingerprint();
       if (currentFingerprint === storedFingerprint) {
@@ -106,7 +107,7 @@ export async function shouldSyncSchema() {
     // `touch` would invalidate fingerprint without changing the hash).
     const { hash, mtimeFingerprint } = await computeSchemaContentHash();
     let stored = '';
-    try { stored = fs.readFileSync(sentinelPath, 'utf-8').trim(); } catch { /* fall through */ }
+    try { stored = (await fsp.readFile(sentinelPath, 'utf-8')).trim(); } catch { /* fall through */ }
     return {
       shouldSync: stored !== hash,
       hash,
@@ -136,8 +137,8 @@ export async function markSchemaSynced(opts = {}) {
       mtimeFingerprint = mtimeFingerprint || fresh.mtimeFingerprint;
     }
     const userData = app.getPath('userData');
-    fs.writeFileSync(path.join(userData, '.schema-version'), hash);
-    fs.writeFileSync(path.join(userData, '.schema-mtimes'), mtimeFingerprint);
+    await fsp.writeFile(path.join(userData, '.schema-version'), hash);
+    await fsp.writeFile(path.join(userData, '.schema-mtimes'), mtimeFingerprint);
   } catch (e) {
     console.warn('[electron] failed to write schema-version sentinel:', e.message);
   }
@@ -158,7 +159,7 @@ const LOCK_TTL_MS = 60_000;
 
 async function readLockPayload(lockPath) {
   try {
-    const raw = fs.readFileSync(lockPath, 'utf-8');
+    const raw = await fsp.readFile(lockPath, 'utf-8');
     const [pidStr, tsStr] = raw.trim().split(':');
     const pid = Number(pidStr);
     const ts = Number(tsStr);

@@ -91,8 +91,10 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
 
   it('loads Vite URL in dev and a localhost URL in prod', () => {
     const surface = readMainProcessSurface();
-    assert.ok(surface.includes('localhost:5173'), 'dev should load Vite at localhost:5173');
-    assert.ok(surface.includes('localhost:'), 'prod should load a localhost URL');
+    assert.ok(surface.includes('resolveDevServerUrl'), 'dev should resolve the Vite URL dynamically');
+    assert.ok(surface.includes('VITE_DEV_SERVER_URL'), 'dev should honor VITE_DEV_SERVER_URL when set');
+    assert.ok(surface.includes('staticUrl'), 'prod should derive a localhost static URL');
+    assert.ok(surface.includes('http://localhost:'), 'prod should load a localhost URL');
   });
 
   it('hooks before-quit to gracefulShutdown({exit:false}) then app.exit', () => {

@@ -41,11 +41,7 @@ export function registerIpcHandlers({ windowURL, onHideWindow, onQuitApp } = {})
     try {
       return ok({
         userData: app.getPath('userData'),
-        home: app.getPath('home'),
         logs: app.getPath('logs'),
-        downloads: app.getPath('downloads'),
-        documents: app.getPath('documents'),
-        serverUrl: windowURL,
       });
     } catch (e) { return err(e.message); }
   });

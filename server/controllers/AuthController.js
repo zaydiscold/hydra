@@ -11,6 +11,11 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+const nukeSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+  confirm: z.literal('NUKE_HYDRA'),
+});
+
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: z.string().min(1, 'New password must be at least 1 character'),
@@ -37,6 +42,8 @@ class AuthController extends BaseController {
 
   async nuke(req, res) {
     try {
+      const { password } = this.validate(req.body, nukeSchema);
+      await auth.login(password);
       const result = await auth.nukeSystem();
       return this.success(res, {
         success: true,
@@ -44,7 +51,8 @@ class AuthController extends BaseController {
         ...result,
       });
     } catch (err) {
-      return this.error(res, err.message, 500);
+      const status = err.name === 'ZodError' ? 400 : 401;
+      return this.error(res, err.message, status);
     }
   }
 

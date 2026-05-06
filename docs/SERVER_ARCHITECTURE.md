@@ -4,10 +4,12 @@
 
 The Express middleware chain is configured in `/server/index.js` in this order:
 
-1. **CORS** - Enables cross-origin requests
-2. **JSON Parser** - Parses incoming `application/json` bodies
-3. **Rate Limiting** - Applied selectively per route (see below)
-4. **Authentication** - `requireUnlocked` middleware validates Bearer token JWT
+1. **Inline gzip** - Compresses eligible non-API static responses when the client advertises gzip support.
+2. **JSON Parser** - Parses incoming `application/json` bodies.
+3. **CORS** - Allows same-origin/no-origin requests, loopback HTTP origins, and explicit `HYDRA_CORS_ORIGINS`; rejects non-loopback browser origins by default.
+4. **CSP (Electron embedded mode)** - Adds a local-only renderer policy for the packaged app.
+5. **Rate Limiting** - Applied selectively per route (see below).
+6. **Authentication** - `requireUnlocked` middleware validates Bearer token JWT.
 
 The **error handler middleware** runs last as a catch-all (see Global Error Handler section).
 
@@ -21,7 +23,7 @@ All protected routes must use `requireUnlocked` middleware unless explicitly not
   - `GET /status` - Check setup/login state
   - `POST /setup` - Create password (first-time setup)
   - `POST /login` - Authenticate and receive JWT
-  - `POST /nuke` - Nuclear reset (wipe database)
+  - `POST /nuke` - Nuclear reset (wipe database); public recovery route but requires the current local password and `confirm: "NUKE_HYDRA"` in the body
   - **Protected:** `POST /logout`, `POST /change-password`
 
 - **Webhooks** - `/api/webhooks/*`
@@ -33,6 +35,7 @@ All protected routes must use `requireUnlocked` middleware unless explicitly not
 ### Protected Routes (Require JWT)
 
 - **Accounts** - `/api/accounts/*` (includes `POST /bulk-otp-stubs` for email-only OTP stub creation before sequential Clerk OTP; primary UI: SPA **`/bulk-auth`** — `BulkAuthWizard.jsx`)
+  - High-cost mutating operations (bulk import, OTP/login/detect-auth, provision, refresh-login, silent-refresh, and magic-link send) use `highCostRouteLimiter` from `server/middleware/rate-limiters.js`.
   - CRUD, login, OTP verification, refresh, provisioning (`POST …/provision` returns **422** with `PROVISION_FAILED` when the dashboard session is dead; when all automated paths fail to capture a full **`sk-or-v1-…`** key, **500** with **`code`:** **`PROVISION_KEY_NOT_CAPTURED`**, structured **`details`** (`stage` e.g. **`browser_ui`**, `phasesTried`, `trpcLastRoute`, …), **`legacyCode`:** **`PROVISION_PLAYWRIGHT_EXTRACT`** (historical alias), **`hint`**, **`debugDir`**). **`PATCH …/:id`** may set **`managementKey`** (Key Manager paste modal → **`openrouter.getCredits`** probe; no new route). Provisioning captures keys from Server Action/RSC text, **tRPC JSON**, REST fallback, or **server-side browser automation**, not from IDE clipboard — see **`MANAGEMENT_KEY_PROVISION_AUTOMATION.md`**, **`docs/recon/TRPC_ROUTES.md`**.
   - Uses arrow wrapper pattern: `(req,res) => controller.method(req,res)`
   - **Email OTP (vault unlocked, JWT):** `POST /api/accounts/:id/otp/start` → `AccountController.startOTP` → `startEmailOTP` (Clerk `prepare_first_factor`); **`store.updateAccountSession`** is called with **`{ preserveSessionToken: true }`** so the vault **`__session`** JWT is **not** cleared when sending a code (only **`clientCookie`** is updated until **`otp/verify`** succeeds). `POST /api/accounts/:id/otp/verify` → `AccountController.verifyOTP` → `completeEmailOTP` (Clerk `attempt_first_factor` over **`clerkHttpsJson`** in `clerk-auth.js`). **HTTP routes and handlers are unchanged**; session materialization after Clerk `status=complete` is implemented entirely in `clerk-auth.js` (`resolveSessionAfterCompletedAttempt`: Set-Cookie **`__session`**, embedded JWT from **`client` / `response` / `client.sign_in`**, optional **`POST …/client/sessions/{id}/touch`**, then retried **`GET /client`**). Password login and TOTP completion use the same resolver. Persisted fields include the serialized device cookie jar (`__client` + **`__client_uat`** / **`__client_uat_*`** as returned by Clerk), encrypted **`sessionToken`** (**`__session`** JWT), and realistic **`config.sessionExpiry`** from the login or refresh path—see **`docs/ARCHITECTURE_DEEP_DIVE.md`**. **Session persistence beyond login:** `dashboard-api.ensureSession` (provision/redeem/tRPC) reuses valid sessions, refreshes via **`__client`**, or re-authenticates password accounts when possible. With **`CLERK_DEBUG_OTP=1`**, failures on these and related account routes may include extra JSON fields (**`clerkDebugHint`**) for operator UI; see **`docs/API_REFERENCE.md`**. See **`docs/ARCHITECTURE_DEEP_DIVE.md`** and **`.env.example`** for debugging.
@@ -50,9 +53,11 @@ All protected routes must use `requireUnlocked` middleware unless explicitly not
   - Redeem single code, bulk redeem, bulk matrix operations (`dashboard-api.redeemCode`: cached tRPC → procedure candidates → Playwright with **tRPC `waitForResponse`**, failure-first UI scan, optional **credits total** poll via management key, then **`REDEEM_OUTCOME_UNKNOWN`** + **`uiFeedback`**)
   - `POST /preflight` — session readiness for selected accounts before bulk redeem
   - `GET /endpoints` — persisted OpenRouter **redeem** tRPC route discovery (not a new Hydra route; see **API_REFERENCE** Code Redemption)
+  - Redeem, bulk, matrix, and preflight routes use the high-cost limiter.
 
 - **Generator** - `/api/generator/*`
   - Signup task management (start, status, heartbeat, verify OTP, cleanup)
+  - Start and verify routes use the high-cost limiter.
 
 - **Pool** - `/api/pool/*` (most require auth)
   - Pool data (includes `modelCache` summary for CachedModel), master key derivation, network info
@@ -73,6 +78,19 @@ All protected routes must use `requireUnlocked` middleware unless explicitly not
   - Streams responses and logs all requests to database
 
 **Optional external gateways:** Hydra does not bundle [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) or LiteLLM. For architecture choices, sidecar ports, example OpenRouter config, and borrowable feature ideas, see [`docs/CLIPROXYAPI_GATEWAY_SYNTHESIS.md`](CLIPROXYAPI_GATEWAY_SYNTHESIS.md).
+
+## Runtime Binding and CORS
+
+`bootstrap()` binds to `127.0.0.1` by default. Set `HYDRA_LAN=1` to bind `0.0.0.0`, or set `HYDRA_LISTEN_HOST` to an explicit host. This keeps the standalone server local unless the operator intentionally exposes it.
+
+CORS is not wildcard-open. Browser origins are accepted only when they are loopback HTTP origins or explicitly listed in `HYDRA_CORS_ORIGINS`. Requests without an `Origin` header, such as same-origin app traffic and curl, are accepted.
+
+## Rate Limiters
+
+- `authLimiter` applies to `/api/auth/*`.
+- `shutdownLimiter` applies to `POST /api/shutdown`.
+- `proxyLimiter` applies to `/v1/*` unless `HYDRA_DISABLE_PROXY_RATELIMIT=1`.
+- `highCostRouteLimiter` applies to expensive UI operations that may hit Clerk, OpenRouter dashboard tRPC, Playwright, or large local batches.
 
 ### Static / SPA Fallback
 

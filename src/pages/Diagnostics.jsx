@@ -66,6 +66,9 @@ export default function Diagnostics({ addToast }) {
     if (nativeInfo?.paths?.userData) {
       lines.push(`Data Dir: ${nativeInfo.paths.userData}`);
     }
+    if (nativeInfo?.paths?.logs) {
+      lines.push(`Logs Dir: ${nativeInfo.paths.logs}`);
+    }
 
     // Mode
     const mode = isElectron ? (import.meta.env.PROD ? 'Packaged' : 'Dev (Electron)') : 'Browser';
@@ -206,12 +209,6 @@ export default function Diagnostics({ addToast }) {
                 <div>
                   <span style={{ color: 'var(--text-tertiary)' }}>Logs: </span>
                   <code style={{ fontSize: '0.72rem', color: 'var(--accent-primary)' }}>{nativeInfo.paths.logs}</code>
-                </div>
-              )}
-              {nativeInfo.paths.home && (
-                <div>
-                  <span style={{ color: 'var(--text-tertiary)' }}>Home: </span>
-                  <code style={{ fontSize: '0.72rem', color: 'var(--accent-primary)' }}>{nativeInfo.paths.home}</code>
                 </div>
               )}
             </div>

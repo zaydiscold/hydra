@@ -52,6 +52,10 @@ test('server/config.js: throws instead of process.exit', () => {
 });
 
 test('HYDRA_DATA_DIR: all 4 services respect env var', () => {
+  const helper = readSource('../../server/lib/data-dir.js');
+  assertPatternIn('data-dir.js', helper, /process\.env\.HYDRA_DATA_DIR/, 'must use HYDRA_DATA_DIR');
+  assertPatternIn('data-dir.js', helper, /\|\|.*process\.cwd\(\).*data/, 'must fallback to cwd/data');
+
   const files = [
     '../../server/services/local-secrets.js',
     '../../server/services/auth.js',
@@ -61,8 +65,7 @@ test('HYDRA_DATA_DIR: all 4 services respect env var', () => {
   for (const f of files) {
     const src = readSource(f);
     const basename = f.split('/').pop();
-    assertPatternIn(basename, src, /process\.env\.HYDRA_DATA_DIR/, 'must use HYDRA_DATA_DIR');
-    assertPatternIn(basename, src, /\|\|.*process\.cwd\(\).*data/, 'must fallback to cwd/data');
+    assertPatternIn(basename, src, /getData(Path|Dir)/, 'must use shared data-dir helper');
   }
 });
 
@@ -103,10 +106,13 @@ test('prisma/schema.prisma: has binaryTargets for cross-platform', () => {
 
 test('electron/main.js: sets HYDRA_DATA_DIR before server import', () => {
   const src = readSource('../../electron/main.js');
-  assertPatternIn('main.js', src, /HYDRA_DATA_DIR/, 'must set HYDRA_DATA_DIR');
-  assertPatternIn('main.js', src, /app\.getPath\('userData'\)/, 'must use userData path');
-  assertPatternIn('main.js', src, /HYDRA_EMBEDDED/, 'must set HYDRA_EMBEDDED for dotenv bypass');
-  assertPatternIn('main.js', src, /migrateIfNeeded/, 'must call legacy data migration');
+  const envSrc = readSource('../../electron/app/env.js');
+  const schemaSyncSrc = readSource('../../electron/app/schemaSync.js');
+  assertPatternIn('env.js', envSrc, /HYDRA_DATA_DIR/, 'must set HYDRA_DATA_DIR');
+  assertPatternIn('env.js', envSrc, /appRef\.getPath\('userData'\)/, 'must use userData path');
+  assertPatternIn('env.js', envSrc, /HYDRA_EMBEDDED/, 'must set HYDRA_EMBEDDED for dotenv bypass');
+  assertPatternIn('main.js', src, /setupEnvironment\(app\)/, 'must call setupEnvironment before server import');
+  assertPatternIn('schemaSync.js', schemaSyncSrc, /migrateIfNeeded/, 'must call legacy data migration');
   assertPatternIn('main.js', src, /setupAppMenu/, 'must set up app menu');
 });
 

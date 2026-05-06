@@ -17,7 +17,7 @@
  * @module playwright-browser
  */
 
-import { join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { config } from '../config.js';
@@ -86,9 +86,9 @@ export function cleanupEphemeralProfileDir(dirPath) {
   if (typeof dirPath !== 'string' || !dirPath) return;
   const tmpRoot = tmpdir();
   // Refuse anything not under the OS tmpdir or not prefixed.
-  if (!dirPath.startsWith(tmpRoot)) return;
-  const basename = dirPath.slice(dirPath.lastIndexOf('/') + 1);
-  if (!basename.startsWith(PROFILE_DIR_PREFIX)) return;
+  const rel = relative(tmpRoot, dirPath);
+  if (!rel || rel.startsWith('..') || rel.includes('..') || rel === dirPath) return;
+  if (!basename(dirPath).startsWith(PROFILE_DIR_PREFIX)) return;
   try {
     rmSync(dirPath, { recursive: true, force: true, maxRetries: 2 });
   } catch (e) {
