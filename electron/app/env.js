@@ -48,14 +48,25 @@ export function setupPlatform() {
 export function setupEnvironment(appParam) {
   const appRef = appParam || app;
   process.env.HYDRA_DATA_DIR = appRef.getPath('userData');
-  // Bug #9: URL-encode the path — macOS paths contain spaces ("Application Support")
-  // that break Prisma's file: URL parsing on some platforms.
+  // Build the SQLite `file:` URL.
+  //
+  // Earlier we wrapped the path in `encodeURI(...)`. That BREAKS the packaged
+  // Mac install: macOS userData is `~/Library/Application Support/Hydra/...`
+  // (literal space). `encodeURI` rewrites it to `Application%20Support`, and
+  // Prisma's SQLite driver does NOT URI-decode the path — it tries to open a
+  // file named literally `Application%20Support` and dies with SQLITE_CANTOPEN
+  // (error code 14, "Unable to open the database file"). Spaces in `file:`
+  // URLs are well-tolerated by SQLite — leave them alone.
+  //
+  // We DO still escape `#` and `?` — those would be parsed as URL fragment
+  // and query before the path reaches SQLite, which is the bug #84 was
+  // originally trying to prevent.
   const rawPath = path.join(appRef.getPath('userData'), 'hydra.db');
-  let normalized = rawPath.replace(/\\/g, '/');
-  // #84: encodeURI does not encode # and ? — escape them manually
-  // so Prisma's file: URL parser doesn't misinterpret them as fragment/query.
-  normalized = normalized.replace(/#/g, '%23').replace(/\?/g, '%3F');
-  process.env.DATABASE_URL = 'file:' + encodeURI(normalized);
+  const safePath = rawPath
+    .replace(/\\/g, '/')
+    .replace(/#/g, '%23')
+    .replace(/\?/g, '%3F');
+  process.env.DATABASE_URL = 'file:' + safePath;
   process.env.HYDRA_EMBEDDED = '1';
   if (!isDev && !process.env.NODE_ENV) {
     process.env.NODE_ENV = 'production';
