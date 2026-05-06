@@ -16,9 +16,9 @@ import {
 import {
   getMainWindow, getSplashWindow, getWindowURL, getForceQuit, getShuttingDown, getGracefulShutdown, getTray,
   setMainWindow, setSplashWindow, setWindowURL, setExpressPort, setForceQuit, setGracefulShutdown, setShuttingDown, setTray,
-  openExternalUrl, showAndFocusMainWindow, trackedChildren,
-  setBootingSplash, getBootingSplash,
+  trackedChildren, setBootingSplash, getBootingSplash,
 } from './app/state.js';
+import { openExternalUrl, showAndFocusMainWindow } from './app/windowActions.js';
 import { createSplashWindow, createMainWindow } from './app/windows.js';
 import { registerIpcHandlers } from './app/ipc.js';
 import { shouldSyncSchema, firstLaunchSetup } from './app/schemaSync.js';
@@ -118,15 +118,20 @@ app.whenReady().then(async () => {
     // the elapsed time and we'd skip the visible delay entirely on slow boots.
     const splashStartedAt = Date.now();
 
-    await killKnownHydraAuxiliaryProcesses('startup sweep');
+    const startupSweep = killKnownHydraAuxiliaryProcesses('startup sweep').catch((err) => {
+      console.warn(`[electron] startup auxiliary process sweep failed: ${err.message}`);
+    });
     // Companion sweep: every Playwright launch creates a fresh `mkdtempSync`
     // profile dir under the OS tmpdir. Past crashed/killed runs leave them
     // behind. They're empty (just the dir entry) but accumulate over weeks
     // of dev cycles and pollute /var/folders inspection. The sweep is safe
     // by construction — only acts on `hydra-pw-profile-*` names under
     // `tmpdir()`, and only on dirs ≥ 60s old (so we never race a sibling).
-    sweepStaleEphemeralProfiles();
+    const profileSweep = Promise.resolve().then(() => sweepStaleEphemeralProfiles()).catch((err) => {
+      console.warn(`[electron] stale profile sweep failed: ${err.message}`);
+    });
     await ensurePackagedRuntimeState();
+    await Promise.allSettled([startupSweep, profileSweep]);
     performance.mark('hydra:startup:runtime-ready');
 
     // shouldSyncSchema now returns { shouldSync, hash, mtimeFingerprint }.

@@ -11,8 +11,8 @@ import { isDev, ICON_PATH, isAllowedLocalUiUrl } from './env.js';
 import {
   getMainWindow, getWindowURL, getForceQuit, getShuttingDown, getClosePromptPending,
   setSplashWindow, setMainWindow, setForceQuit, setClosePromptPending,
-  openExternalUrl,
 } from './state.js';
+import { openExternalUrl } from './windowActions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -102,12 +102,12 @@ export function createSplashWindow() {
   // (ease-in: slow start, fast end — like an object accelerating downward).
   // Each token is plain text — NO chip pills, no borders, no backgrounds.
   // The brand color (when present) tints the word; otherwise muted white.
-  // Reduced from 24 → 14 falling letters to lighten the GPU/CPU load.
+  // Reduced from 24 → 8 falling letters to lighten the GPU/CPU load.
   // Each animated <span> costs a compositor layer; on stressed systems the
-  // splash was saturating a CPU core during boot. 14 is enough to see the
-  // rain effect across a full-screen splash without breaking the budget.
+  // splash was saturating a CPU core during boot. 8 keeps motion visible
+  // without making every token its own expensive layer.
   const shuffled = items.slice().sort(() => Math.random() - 0.5);
-  const drops = shuffled.slice(0, 14).map((item, i) => {
+  const drops = shuffled.slice(0, 8).map((item, i) => {
     // Spread across 96% of width, biased to avoid card edges
     const x = 4 + ((i * 31) % 88);
     // Stagger fall start times so words don't all rain at once

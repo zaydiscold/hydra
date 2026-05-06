@@ -49,7 +49,7 @@ Runs from `electron-builder.yml`. Produces platform artifacts in `release/`:
 
 1. Reads the Playwright Chromium revision from `node_modules/playwright-core/browsers.json`.
 2. Searches standard Playwright browser cache locations for that revision.
-3. If not found, runs `npx playwright install chromium` to fetch it. The full `playwright` package is a dev dependency for this install/prepare path; runtime automation imports `playwright-core`.
+3. If not found, runs `npx playwright install chromium` to fetch it. The full `playwright` package is an optional dependency for this install/prepare path; runtime automation imports `playwright-core`.
 4. Copies the platform-specific Chrome payloads (`chrome-mac`, `chrome-win`, `chrome-linux`, `chrome-mac-arm64`) into `build/electron/chromium/`.
 5. At runtime, the app looks under `process.resourcesPath/chromium/` for the bundled browser.
 

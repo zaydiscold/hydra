@@ -43,6 +43,8 @@ The Electron shell that wraps the web app as a native desktop application.
 
 - **`main.js`** — Electron main process: sets platform-native paths, starts embedded Express server, creates BrowserWindow, handles app lifecycle (window-all-closed, before-quit, activate).
 - **`preload.js`** — Secure renderer bridge via `contextBridge` exposing `appVersion`, `appPaths`, `platform`. `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
+- **`app/schemaSync.js`** — Boot-time schema sync orchestrator. Hashing, lock handling, and self-heal replay are split into `schemaHash.js`, `schemaLock.js`, and `schemaSelfHeal.js`.
+- **`app/windowActions.js`** — Shared external URL opening and show/focus/respawn behavior, separated from `state.js` so runtime state stays as a small mutable singleton.
 - **`utils/migrateLegacyData.js`** — One-time migration from `./data/` to platform `userData` on first Electron launch.
 - **`menus/appMenu.js`** — macOS app menu bar configuration.
 - **`builders/afterPack.js`** — Post-packaging hook for electron-builder.

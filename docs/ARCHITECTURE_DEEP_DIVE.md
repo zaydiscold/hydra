@@ -228,7 +228,7 @@ Implementation:
 
 **Clerk session vs management key:** A valid dashboard **`__session`** (and device cookies) lets Hydra call dashboard-only paths (Server Actions, tRPC, or the Playwright fallback that drives `https://…/settings/management-keys`). That is **not** the same as storing a **management API key**. OpenRouter currently returns management key material with the same **`sk-or-v1-…`** prefix shape as standard API keys, so Hydra verifies usefulness with OpenRouter rather than relying on a distinct prefix. Until provisioning succeeds and `updateAccountManagementKey` runs, Key Manager and OpenRouter REST management calls have nothing to authenticate with.
 
-**Server-side Playwright vs Playwright MCP:** The fallback uses Playwright APIs inside the Hydra Node process (headless Chromium, cookie injection, `waitForResponse` on `/api/trpc/`). Runtime code imports **`playwright-core`**; the full **`playwright`** package is dev-only for installing/finding the browser payload. This is unrelated to **Playwright MCP** in the IDE, which is a separate tool for assistants to control a browser via MCP.
+**Server-side Playwright vs Playwright MCP:** The fallback uses Playwright APIs inside the Hydra Node process (headless Chromium, cookie injection, `waitForResponse` on `/api/trpc/`). Runtime code imports **`playwright-core`**; the full **`playwright`** package is optional and only needed for installing/finding the browser payload. This is unrelated to **Playwright MCP** in the IDE, which is a separate tool for assistants to control a browser via MCP.
 
 This is one of Hydra's key "aggregation" flows:
 
