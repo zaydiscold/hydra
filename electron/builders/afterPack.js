@@ -83,7 +83,12 @@ export default async function afterPack(context) {
   mkdirSync(unpackedNodeModules, { recursive: true });
   // Only ship the engine binary for THIS build's platform+arch; the others
   // are ~20 MB each and uselessly inflate the package.
-  const wantedEngine = engineNameFor(platform, arch);
+  // #46: For universal builds, keep BOTH x64 and arm64 engines.
+  const isUniversal = arch === 'universal';
+  const wantedEngine = isUniversal ? null : engineNameFor(platform, arch);
+  const universalEngines = isUniversal
+    ? new Set([engineNameFor(platform, 'arm64'), engineNameFor(platform, 'x64')])
+    : null;
   // Generated bundler-specific JS shims that ship inside .prisma/client/.
   // We use only the native Node engine — these are dead weight and confuse
   // bundlers that follow conditional exports.
@@ -93,9 +98,10 @@ export default async function afterPack(context) {
     recursive: true,
     dereference: true,
     filter: (src) => {
-      // Drop foreign engine binaries
+      // Drop foreign engine binaries (keep only platform-appropriate ones)
       if (src.endsWith('.dylib.node') || src.endsWith('.so.node') || src.endsWith('.dll.node')) {
-        const keep = path.basename(src) === wantedEngine;
+        const base = path.basename(src);
+        const keep = isUniversal ? universalEngines.has(base) : base === wantedEngine;
         if (keep) keptCount += 1;
         return keep;
       }
@@ -110,7 +116,7 @@ export default async function afterPack(context) {
       return true;
     },
   });
-  console.log(`[afterPack] ✅ copied .prisma → ${targetPrismaDir} (${wantedEngine} only, ${keptCount} files kept)`);
+  console.log(`[afterPack] ✅ copied .prisma → ${targetPrismaDir} (${isUniversal ? `${[...universalEngines].join(' + ')} (universal)` : wantedEngine} only, ${keptCount} files kept)`);
 
   prunePrismaClientRuntime(unpackedNodeModules);
 

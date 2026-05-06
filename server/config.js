@@ -140,9 +140,10 @@ export const CLERK_ORIGIN = config.CLERK_ORIGIN;
 export const CLERK_REFERER = config.CLERK_REFERER;
 
 /**
- * DEPRECATED: Config validation now runs at module load via configSchema.parse().
- * Kept as a no-op to avoid breaking the existing call site in server/index.js:264.
- * TODO: Remove this function and its call site after the next integration test pass.
+ * DEPRECATED: Config validation runs at module load via configSchema.parse().
+ * Kept as a no-op for backward compatibility with callers that expect a
+ * pre-boot validation gate (e.g. server/index.js). Safe to remove once the
+ * call site is migrated.
  */
 export function validateConfig() {
   return true;

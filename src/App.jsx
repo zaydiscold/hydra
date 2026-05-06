@@ -367,6 +367,14 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // #70: Dynamic window title based on current route
+  useEffect(() => {
+    const path = location.pathname;
+    const page = path === '/' ? 'Dashboard' : path.split('/').filter(Boolean)[0];
+    const title = page ? `${page.charAt(0).toUpperCase() + page.slice(1)} — Hydra` : 'Hydra';
+    document.title = title;
+  }, [location.pathname]);
+
   const addToast = useCallback((message, type = 'info', options = {}) => {
     const durationMs = options.durationMs ?? (type === 'error' ? 10000 : 4000);
     const toastKey = `${type}:${message}`;
