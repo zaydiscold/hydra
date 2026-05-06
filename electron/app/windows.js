@@ -4,7 +4,7 @@
  * Splash: clean brand grid with model names, subtle animation.
  * Main window: navigation guards + security options.
  */
-import { BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDev, ICON_PATH, LOCAL_UI_HOSTS } from './env.js';
@@ -155,15 +155,26 @@ export function createMainWindow({ show = false } = {}) {
       cancelId: 0,
       title: 'Hydra',
       message: 'The proxy server keeps running when the window is closed.',
-      detail: 'Choose "Keep Running" to hide the window and stay in the tray.\nChoose "Quit" to shut down the proxy and exit completely.',
+      detail: 'Choose "Keep Running" to close the window (proxy stays online; click the tray icon to reopen).\nChoose "Quit" to shut down the proxy and exit completely.',
     });
 
     setClosePromptPending(false);
 
     if (response === 1) {
+      // User picked Quit — flag it so the second close pass bypasses the
+      // dialog, and ask the app to fully quit (triggers before-quit →
+      // shutdownEverything → server graceful → app.exit).
       setForceQuit(true);
-      win.close();
+      app.quit();
+      return;
     }
+
+    // User picked Keep Running — destroy the renderer entirely (frees
+    // ~250 MB of Chromium renderer memory) and hide the dock icon. The
+    // Express server stays alive (window-all-closed is a no-op on macOS).
+    // Tray icon stays in the menu bar; clicking it respawns a fresh window.
+    if (process.platform === 'darwin') app.dock?.hide();
+    win.destroy();  // unconditional close — bypasses the close handler we're inside
   });
 
   const isAllowedLocalUrl = (url) => {

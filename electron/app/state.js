@@ -56,13 +56,31 @@ export async function openExternalUrl(rawUrl) {
 }
 
 // ─── Window Helpers ──────────────────────────────────────────────────────────
-export function showAndFocusMainWindow() {
-  const { app } = require('electron');
+/**
+ * Show + focus the main window. If the window was destroyed (e.g. user picked
+ * "Keep Running in Background", which now destroys the renderer to free
+ * ~250 MB instead of just hiding it), respawn a fresh window and load the
+ * cached URL. Tray clicks and second-instance launches both call this.
+ */
+export async function showAndFocusMainWindow() {
+  const { app } = await import('electron');
   if (process.platform === 'darwin') app.dock?.show();
   const w = getMainWindow();
   if (w && !w.isDestroyed()) {
     if (!w.isVisible()) w.show();
     if (w.isMinimized()) w.restore();
     w.focus();
+    return;
   }
+  // No live window — spawn a fresh one. Lazy-import windows.js to avoid
+  // a circular state ↔ windows dependency at module load time.
+  const url = getWindowURL();
+  if (!url) {
+    console.warn('[electron] tray click: no windowURL cached, cannot respawn');
+    return;
+  }
+  const { createMainWindow } = await import('./windows.js');
+  const fresh = createMainWindow({ show: true });
+  setMainWindow(fresh);
+  fresh.loadURL(url).catch(err => console.error('[electron] respawn loadURL failed:', err.message));
 }

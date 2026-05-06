@@ -223,6 +223,12 @@ async function launchSignupFlowPlaywright(task) {
       taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });
     } catch (err) {
       logger.error(`[Account Generator] Launch failed for ${task.taskId}: ${err.message}`);
+      // Defensive: close any Playwright resources we managed to attach BEFORE
+      // marking the task failed. taskSupervisor.fail also runs the configured
+      // cleanup, but if `attachResources` itself threw or the supervisor's
+      // cleanup hook is missing, the browser would orphan and balloon to many
+      // GB of memory waiting for nothing. Belt + suspenders.
+      try { await closeGeneratorResources(task); } catch { /* already gone */ }
       await taskSupervisor.fail(task.taskId, err);
     }
   })();
