@@ -266,11 +266,12 @@ account login is preserved. Best of both worlds.
 
 ### Type 2 — Hydra master unlock JWT (per Hydra-user)
 
-**Where it lives:** the renderer keeps a copy in `localStorage.hydra_token`
-and Electron also persists the same value in
-`userData/renderer-auth-token.json`. The native copy matters because packaged
-Hydra serves the UI from a dynamic localhost port; browser `localStorage` is
-origin-scoped, so a new port would otherwise look logged out on every launch.
+**Where it lives:** the renderer keeps a copy in `localStorage.hydra_token`,
+sets a same-origin `hydra_token` cookie with a 24-hour max age, and Electron
+also persists the same value in `userData/renderer-auth-token.json`. The native
+copy matters because packaged Hydra serves the UI from a dynamic localhost
+port; browser `localStorage` is origin-scoped, so a new port would otherwise
+look logged out on every launch.
 The token is issued by the server when you POST `/api/auth/login` with your
 password, signed with the per-install `JWT_SECRET` from `userData/jwt-secret`.
 
@@ -279,9 +280,10 @@ password, signed with the per-install `JWT_SECRET` from `userData/jwt-secret`.
 within its `exp`.
 
 **Survives a quit?** Yes. On startup the SPA hydrates `localStorage` from the
-native token file before calling `/api/auth/status`, so random packaged ports
-do not force a fresh unlock. No retyping `1111` for 30 days unless the token
-expires, the password changes, or the token file is cleared.
+native token file before calling `/api/auth/status`; the server also accepts
+the host-scoped cookie as a fallback. Random packaged ports do not force a
+fresh unlock. No retyping `1111` for at least 24 hours unless the token
+expires, the password changes, or the stored token/cookie is cleared.
 
 **Browser isolation does NOT touch this.** The unlock JWT lives in
 the *renderer's* localStorage, not the Playwright browser. The

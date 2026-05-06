@@ -11,16 +11,15 @@ import {
   DatabaseIcon,
   AlertIcon,
 } from '../components/Icons';
+import { timeAgo } from '../utils/time';
 
 /* --- Helper: Format model cache subtitle --- */
 function formatModelCacheSubtitle(modelCache) {
   if (!modelCache) return 'No local model catalog found. Refresh to fetch from OpenRouter.';
-  const d = new Date(modelCache.timestamp);
-  const ageSec = Math.floor((Date.now() - d.getTime()) / 1000);
-  let ageStr = `${ageSec}s ago`;
-  if (ageSec > 3600) ageStr = `${Math.floor(ageSec / 3600)}h ago`;
-  else if (ageSec > 60) ageStr = `${Math.floor(ageSec / 60)}m ago`;
-  return `${modelCache.count} models available · Updated ${ageStr}`;
+  const updatedAt = modelCache.updatedAt ?? modelCache.timestamp;
+  const ageStr = timeAgo(updatedAt);
+  const updatedLabel = ageStr ? ` · Updated ${ageStr}` : ' · Refresh to update timestamps';
+  return `${modelCache.count} models available${updatedLabel}`;
 }
 
 /* --- Sub-component: CopyButton --- */

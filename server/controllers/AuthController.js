@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import BaseController from './BaseController.js';
 import * as auth from '../services/auth.js';
+import { clearAuthTokenCookie, extractAuthToken, setAuthTokenCookie } from '../middleware/auth.js';
 
 const setupSchema = z.object({
   password: z.string().min(1, 'Password must be at least 1 character'),
@@ -24,8 +25,7 @@ const changePasswordSchema = z.object({
 class AuthController extends BaseController {
   async getStatus(req, res) {
     const { setup, error, hasUser = false, hasAccounts = false, bootstrapRequired = false } = await auth.getSetupStatus();
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    const token = extractAuthToken(req);
     const authenticated = !!(token && await auth.validateToken(token));
     const needsRestart = auth.isRestartRequired();
 
@@ -45,6 +45,7 @@ class AuthController extends BaseController {
       const { password } = this.validate(req.body, nukeSchema);
       await auth.login(password);
       const result = await auth.nukeSystem();
+      clearAuthTokenCookie(res);
       return this.success(res, {
         success: true,
         message: 'System wiped successfully. Restart Hydra once to regenerate local secrets before creating new data.',
@@ -60,6 +61,7 @@ class AuthController extends BaseController {
     try {
       const { password } = this.validate(req.body, setupSchema);
       const token = await auth.signup(password);
+      setAuthTokenCookie(res, token);
       return this.success(res, { token });
     } catch (err) {
       return this.error(res, err.message, 400);
@@ -85,6 +87,7 @@ class AuthController extends BaseController {
     try {
       const { password } = this.validate(req.body, loginSchema);
       const token = await auth.login(password);
+      setAuthTokenCookie(res, token);
       
       // Success - reset login attempts
       rotationManager.resetLoginAttempts(`admin:${clientId}`);
@@ -96,6 +99,7 @@ class AuthController extends BaseController {
   }
 
   async logout(req, res) {
+    clearAuthTokenCookie(res);
     return this.success(res, { success: true });
   }
 
@@ -103,6 +107,7 @@ class AuthController extends BaseController {
     try {
       const { currentPassword, newPassword } = this.validate(req.body, changePasswordSchema);
       await auth.changePassword(req.user.id, currentPassword, newPassword);
+      clearAuthTokenCookie(res);
       return this.success(res, { success: true, message: 'Password changed. Please log in again.' });
     } catch (err) {
       return this.error(res, err.message, 400);

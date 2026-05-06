@@ -24,7 +24,6 @@ import { registerIpcHandlers } from './app/ipc.js';
 import { shouldSyncSchema, firstLaunchSetup } from './app/schemaSync.js';
 import { shutdownEverything } from './app/shutdown.js';
 import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js';
-import { sweepStaleEphemeralProfiles } from '../server/lib/playwright-browser.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
@@ -127,9 +126,11 @@ app.whenReady().then(async () => {
     // of dev cycles and pollute /var/folders inspection. The sweep is safe
     // by construction — only acts on `hydra-pw-profile-*` names under
     // `tmpdir()`, and only on dirs ≥ 60s old (so we never race a sibling).
-    const profileSweep = Promise.resolve().then(() => sweepStaleEphemeralProfiles()).catch((err) => {
-      console.warn(`[electron] stale profile sweep failed: ${err.message}`);
-    });
+    const profileSweep = import('../server/lib/playwright-browser.js')
+      .then(({ sweepStaleEphemeralProfiles }) => sweepStaleEphemeralProfiles())
+      .catch((err) => {
+        console.warn(`[electron] stale profile sweep failed: ${err.message}`);
+      });
     await ensurePackagedRuntimeState();
     await Promise.allSettled([startupSweep, profileSweep]);
     performance.mark('hydra:startup:runtime-ready');
@@ -170,10 +171,11 @@ app.whenReady().then(async () => {
     const expressPort = s.address()?.port ?? PORT;
     setExpressPort(expressPort);
     performance.mark('hydra:startup:bootstrap-done');
+    const serverModeLabel = isDev ? 'dev server' : 'embedded server';
     if (isDev && expressPort !== PREFERRED_DEV_PORT) {
-      console.log(`[electron] Hydra dev server bound to port ${expressPort} (preferred ${PREFERRED_DEV_PORT} was busy).`);
+      console.log(`[electron] Hydra ${serverModeLabel} bound to port ${expressPort} (preferred ${PREFERRED_DEV_PORT} was busy).`);
     } else {
-      console.log(`[electron] Hydra dev server bound to port ${expressPort}.`);
+      console.log(`[electron] Hydra ${serverModeLabel} bound to port ${expressPort}.`);
     }
 
     // DEV server URL: prefer VITE_DEV_SERVER_URL env, but fall back to
@@ -220,11 +222,11 @@ app.whenReady().then(async () => {
     // Duration history:
     //   1500 ms — initial; felt like a flash
     //   2500 ms — "let it last a little bit longer"
-    //   6500 ms — "extends over 4 more seconds compared to old one with
+    //   6800 ms — "extends over 4 more seconds compared to old one with
     //             falling letters" — Pica-style sprawl + falling letters
     //             need this much screen time for the geometry sprawl to
     //             read as intentional, not accidental.
-    const SPLASH_MIN_VISIBLE_MS = 6500;
+    const SPLASH_MIN_VISIBLE_MS = 6800;
     const splashElapsed = Date.now() - splashStartedAt;
     if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
       await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));

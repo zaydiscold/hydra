@@ -23,6 +23,12 @@ function setCachedLiveKeys(accountId, keys) {
   _liveKeysCache.set(accountId, { keys, expiresAt: Date.now() + LIVE_KEYS_TTL_MS });
 }
 
+function getRequestPort(req) {
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '');
+  const match = host.match(/:(\d+)$/);
+  return match?.[1] || process.env.PORT || 3001;
+}
+
 class PoolController extends BaseController {
   extractValidatedKeyHash(payload) {
     return payload?.data?.hash
@@ -139,7 +145,7 @@ class PoolController extends BaseController {
   async getMasterKey(req, res) {
     try {
       const masterKey = store.getMasterProxyKey();
-      const port = process.env.PORT || 3001;
+      const port = getRequestPort(req);
       return this.success(res, {
         masterKey,
         endpoint: `http://localhost:${port}/v1`,
@@ -154,7 +160,7 @@ class PoolController extends BaseController {
     try {
       const nets = networkInterfaces();
       const ips = new Set();
-      const port = process.env.PORT || 3001;
+      const port = getRequestPort(req);
 
       for (const iface of Object.values(nets)) {
         for (const net of iface || []) {
@@ -495,7 +501,7 @@ class PoolController extends BaseController {
     try {
       rotateProxySecret();
       const newMasterKey = store.getMasterProxyKey();
-      const port = process.env.PORT || 3001;
+      const port = getRequestPort(req);
       return this.success(res, {
         masterKey: newMasterKey,
         endpoint: `http://localhost:${port}/v1`,

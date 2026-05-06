@@ -18,12 +18,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Splash Window — Pica-style fullscreen sprawl + small centered card ─────
 export function createSplashWindow() {
-  // Pica-style architecture: BrowserWindow stretches across the WHOLE primary
-  // display with a fully transparent background. The hex pattern + falling
-  // letters cover the entire viewport (sprawl outside any opaque region). A
-  // small centered card is the ONLY opaque region — translucent, frosted glass.
-  // Result: the user sees hex + letters across their whole screen, with a
-  // small island of card in the middle holding the hero text.
+  // Pica-style architecture: BrowserWindow stretches across the whole primary
+  // display with a fully transparent background. Falling letters cover the
+  // viewport, while the hex pattern stays as a smaller centered accent around
+  // the card instead of taking over the whole transparent splash layer.
   const display = screen.getPrimaryDisplay();
   const { width: dispW, height: dispH } = display.workAreaSize;
 
@@ -102,18 +100,16 @@ export function createSplashWindow() {
   // (ease-in: slow start, fast end — like an object accelerating downward).
   // Each token is plain text — NO chip pills, no borders, no backgrounds.
   // The brand color (when present) tints the word; otherwise muted white.
-  // Reduced from 24 → 8 falling letters to lighten the GPU/CPU load.
-  // Each animated <span> costs a compositor layer; on stressed systems the
-  // splash was saturating a CPU core during boot. 8 keeps motion visible
-  // without making every token its own expensive layer.
+  // Keep enough falling words to span the viewport, without going back to the
+  // old heavy 24-layer splash. Each animated <span> costs a compositor layer.
   const shuffled = items.slice().sort(() => Math.random() - 0.5);
-  const drops = shuffled.slice(0, 8).map((item, i) => {
+  const drops = shuffled.slice(0, 14).map((item, i) => {
     // Spread across 96% of width, biased to avoid card edges
     const x = 4 + ((i * 31) % 88);
     // Stagger fall start times so words don't all rain at once
     const delay = -(i * 0.42 % 9).toFixed(2);
-    // Vary fall duration for natural drift (4–8s)
-    const fall = (4 + ((i * 0.71) % 4.4)).toFixed(2);
+    // Vary fall duration for natural drift across the full splash interval.
+    const fall = (5.8 + ((i * 0.53) % 1.7)).toFixed(2);
     // Font sizes vary — bigger for brands, smaller for models, mixed
     const size = item.tag === 'brand' ? (16 + (i % 4) * 2) : (12 + (i % 3) * 2);
     // Slight horizontal drift on the way down
@@ -145,10 +141,9 @@ export function createSplashWindow() {
     + 'color:#fff;overflow:hidden;-webkit-font-smoothing:antialiased}'
     // ─── PICA-STYLE FULLSCREEN SPRAWL ARCHITECTURE ───────────────────────
     //
-    // Body fills the whole display, fully transparent. Hex layers + falling
-    // letters are positioned `fixed` to cover the viewport (sprawl across
-    // the user's entire screen). The card is a SMALL CENTERED ISLAND of
-    // translucent glass — the only opaque region of the splash.
+    // Body fills the whole display, fully transparent. Falling letters cover
+    // the viewport. The hex pattern is intentionally smaller than the display
+    // so the transparent part of the splash does not become a full-screen grid.
     //
     // Light-touch performance: ONE hex layer instead of three; static (no
     // stroke-dashoffset animation) — saves ~60% of compositor work; no
@@ -162,10 +157,10 @@ export function createSplashWindow() {
     + 'border:1px solid rgba(255,255,255,.10);'
     + 'box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);'
     + 'overflow:hidden;z-index:5}'
-    // Hex grid sprawls ACROSS THE WHOLE VIEWPORT — outside the card too.
-    // Static (no draw-in animation) so it doesn't fight for compositor
-    // cycles every frame. Single layer instead of three.
-    + '.hex{position:fixed;inset:0;pointer-events:none;opacity:.22;z-index:1}'
+    // Hex grid is a centered accent around the card, not a full-screen layer.
+    // Static (no draw-in animation) so it does not fight for compositor cycles.
+    + '.hex{position:fixed;left:50%;top:50%;width:min(74vw,760px);height:min(74vh,620px);'
+    + 'transform:translate(-50%,-50%);pointer-events:none;opacity:.18;z-index:1}'
     + '.hex svg{width:100%;height:100%;display:block}'
     // Solid accent band — only inside the card, holds the hero text.
     + '.band{position:absolute;left:0;right:0;top:38%;height:24%;'
@@ -184,40 +179,40 @@ export function createSplashWindow() {
     + 'radial-gradient(circle at 80% 22%,rgba(255,90,200,.10),transparent 40%)}'
     // Falling letters field fills the WHOLE viewport (fixed, full-screen)
     // so words rain across the entire screen, not just inside the card.
-    + '.field{position:fixed;inset:-100px 0 0 0;pointer-events:none;'
-    + 'mask-image:linear-gradient(180deg,transparent 0%,#000 8%,#000 86%,transparent 100%);'
+    + '.field{position:fixed;inset:-120px 0 -180px 0;pointer-events:none;'
+    + 'mask-image:linear-gradient(180deg,transparent 0%,#000 7%,#000 92%,transparent 100%);'
     + 'overflow:hidden;z-index:2}'
     // Each falling word — solid color, no background, ease-in (gravity-like)
     + '.d{position:absolute;left:var(--x);top:-40px;'
     + 'color:var(--c);font-size:var(--s);font-weight:var(--w);'
-    + 'letter-spacing:.01em;white-space:nowrap;'
+    + 'font-family:inherit;letter-spacing:0;white-space:nowrap;'
     + 'animation:fall var(--t) cubic-bezier(.55,.055,.675,.19) infinite;'
     + 'animation-delay:var(--d)}'
-    // Gravity-like keyframes: slow start (ease-in), accelerate, swap-out at bottom.
-    // translateY from -60 → 480, with horizontal sway + slight rotation.
+    // Gravity-like keyframes: slow start, accelerate, and continue below the
+    // viewport instead of stopping at a fixed pixel distance on tall screens.
     + '@keyframes fall{'
     + '0%{transform:translate3d(0,-60px,0) rotate(0);opacity:0}'
     + '8%{opacity:.85}'
-    + '60%{opacity:.85}'
-    + '100%{transform:translate3d(var(--sx),520px,0) rotate(var(--sr));opacity:0}}'
+    + '78%{opacity:.85}'
+    + '100%{transform:translate3d(var(--sx),calc(100vh + 220px),0) rotate(var(--sr));opacity:0}}'
     // Hero content (above the rain)
     + '.hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 24px;z-index:2}'
-    + 'h1{font-size:42px;font-weight:800;letter-spacing:-.025em;'
+    + 'h1{font-family:inherit;font-size:42px;font-weight:800;letter-spacing:0;'
     + 'background:linear-gradient(180deg,#fff 0%,rgba(255,255,255,.78) 100%);'
     + '-webkit-background-clip:text;background-clip:text;color:transparent;'
     + 'text-shadow:0 2px 30px rgba(120,80,255,.35);margin-bottom:6px}'
-    + '.sub{font-size:11px;font-weight:600;color:rgba(220,200,255,.55);letter-spacing:.18em;text-transform:uppercase}'
+    + '.sub{font-family:inherit;font-size:11px;font-weight:600;color:rgba(220,200,255,.55);letter-spacing:.18em;text-transform:uppercase}'
     + '.bar{width:220px;height:3px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:18px;position:relative}'
     + '.bar::after{content:"";display:block;width:100%;height:100%;border-radius:inherit;'
     + 'background:linear-gradient(90deg,#a855f7,#ec4899,#60a5fa);'
     + 'box-shadow:0 0 14px rgba(168,85,247,.6);'
     + 'transform-origin:left center;transform:scaleX(0);'
-    + 'animation:fillbar 6.5s cubic-bezier(.22,.61,.36,1) forwards}'
+    + 'animation:fillbar 6.8s cubic-bezier(.22,.61,.36,1) forwards}'
     + '@keyframes fillbar{0%{transform:scaleX(0)}68%{transform:scaleX(.78)}100%{transform:scaleX(1)}}'
     + '@media(prefers-reduced-motion:reduce){.d,.hex{animation:none;opacity:.18}.bar::after{animation:none;transform:scaleX(1)}}'
     + '</style></head><body>'
     // ─── FULLSCREEN SPRAWL LAYERS (outside card) ────────────────────────
-    // Single hex pattern, fixed across the entire transparent viewport.
+    // Single hex pattern, centered around the card.
     // No animation (was 3 layers + stroke-dashoffset draw-in — removed
     // because the user wants performance fixes prioritized over visual flex).
     + '<div class="hex"><svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">'

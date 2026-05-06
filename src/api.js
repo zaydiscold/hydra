@@ -64,6 +64,14 @@ function getToken() {
   return localStorage.getItem('hydra_token') || '';
 }
 
+function setAuthCookie(token) {
+  document.cookie = `hydra_token=${encodeURIComponent(token)}; Max-Age=86400; Path=/; SameSite=Lax`;
+}
+
+function clearAuthCookie() {
+  document.cookie = 'hydra_token=; Max-Age=0; Path=/; SameSite=Lax';
+}
+
 async function nativeAuthToken(method, token) {
   const native = globalThis.window?.hydraNative;
   const fn = native?.[method];
@@ -218,10 +226,12 @@ export const shutdownServer = () =>
 export function saveToken(token) {
   handledAuthFailure = false;
   localStorage.setItem('hydra_token', token);
+  setAuthCookie(token);
   void nativeAuthToken('setAuthToken', token);
 }
 export function clearToken() {
   localStorage.removeItem('hydra_token');
+  clearAuthCookie();
   void nativeAuthToken('clearAuthToken');
 }
 export function hasToken() {
