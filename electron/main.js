@@ -177,13 +177,40 @@ app.whenReady().then(async () => {
     const mainWindow = createMainWindow({ show: false, preloadPath: PRELOAD_PATH });
     setMainWindow(mainWindow);
 
-    mainWindow.once('ready-to-show', () => {
+    // Minimum splash display time so the falling animation actually plays
+    // before the main window swaps in. Without this, on a fast machine
+    // ready-to-show fires <500 ms after splash creation and the user only
+    // sees a flash. 1500 ms gives the rain a beat to play and feels intentional.
+    const SPLASH_MIN_VISIBLE_MS = 1500;
+    const splashStartedAt = Date.now();
+
+    const closeSplashAndShowMain = () => {
       performance.mark('hydra:startup:ready-to-show');
-      // #38: drop splash alwaysOnTop before showing main window to avoid
-      // the splash visually flashing over the main window during the transition.
       const sp = getSplashWindow();
-      if (sp && !sp.isDestroyed()) { sp.setAlwaysOnTop(false); sp.close(); }
-      mainWindow.show();
+      if (sp && !sp.isDestroyed()) {
+        // #38: drop alwaysOnTop first so we don't flash topmost during teardown.
+        // Use destroy() (synchronous) instead of close() (async) so the splash
+        // is GONE by the time we proceed — close() may leave the window briefly
+        // visible while the OS processes the close request, which causes the
+        // splash to overlap the main window in screenshots.
+        sp.setAlwaysOnTop(false);
+        sp.destroy();
+      }
+      // 200 ms gap: visually distinct splash → main transition (not back-to-back
+      // tick), gives macOS one Display refresh cycle to fully unmount the splash
+      // window before the main window paints in.
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+      }, 200);
+    };
+
+    mainWindow.once('ready-to-show', () => {
+      const elapsed = Date.now() - splashStartedAt;
+      if (elapsed >= SPLASH_MIN_VISIBLE_MS) {
+        closeSplashAndShowMain();
+      } else {
+        setTimeout(closeSplashAndShowMain, SPLASH_MIN_VISIBLE_MS - elapsed);
+      }
     });
 
     const loadTimeout = setTimeout(() => {
