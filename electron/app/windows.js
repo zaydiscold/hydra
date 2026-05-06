@@ -121,7 +121,7 @@ export function createSplashWindow() {
     + '<style>'
     + '*{margin:0;padding:0;box-sizing:border-box}'
     + 'html,body{height:100%;background:transparent;'
-    + 'font-family:\'Menlo\',\'Andale Mono\',\'SF Mono\',\'JetBrains Mono\',\'Courier New\',ui-monospace,monospace;'
+    + 'font-family:\'Intel One Mono\',\'JetBrains Mono\',\'SF Mono\',\'Menlo\',ui-monospace,monospace;'
     + 'color:#fff;overflow:hidden;-webkit-font-smoothing:antialiased}'
     // Mostly-clear card — desktop bleeds through. Visual weight comes from
     // the geometric hex pattern + the solid accent band, not from a uniformly

@@ -54,8 +54,8 @@
   --status-ice: #b7fbff;
 
   /* Typography config */
-  --font-sans: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-sans: 'Intel One Mono', 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+  --font-mono: 'Intel One Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
   /* Spacing */
   --space-xs: 4px;
