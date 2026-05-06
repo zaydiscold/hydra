@@ -119,7 +119,7 @@ export function createSplashWindow() {
     + '<style>'
     + '*{margin:0;padding:0;box-sizing:border-box}'
     + 'html,body{height:100%;background:transparent;'
-    + 'font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",system-ui,sans-serif;'
+    + 'font-family:\'SF Mono\',\'JetBrains Mono\',\'Fira Code\',ui-monospace,monospace;'
     + 'color:#fff;overflow:hidden;-webkit-font-smoothing:antialiased}'
     // Frosted-glass card — translucent so desktop bleeds through
     + '.card{position:absolute;inset:10px;border-radius:20px;'
