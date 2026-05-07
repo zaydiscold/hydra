@@ -102,6 +102,7 @@ export const native = {
   platform: () => invokeNative('platform'),
   openPath: (target) => invokeNative('openPath', target),
   getAuthToken: () => invokeNative('getAuthToken'),
+  authTokenStatus: () => invokeNative('authTokenStatus'),
   setAuthToken: (token) => invokeNative('setAuthToken', token),
   clearAuthToken: () => invokeNative('clearAuthToken'),
   hideWindow: () => invokeNative('hideWindow'),

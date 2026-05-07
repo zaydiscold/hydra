@@ -22,17 +22,20 @@ export default function Settings({ addToast }) {
   // render fallback messages when the descriptors aren't loaded.
   const [prefs, setPrefs] = useState(null);
   const [biometricInfo, setBiometricInfo] = useState(null);
+  const [authTokenStatus, setAuthTokenStatus] = useState(null);
   useEffect(() => {
     if (!inElectron) return;
     let mounted = true;
     (async () => {
-      const [p, b] = await Promise.all([
+      const [p, b, tokenStatus] = await Promise.all([
         tryNative(native.prefsGetAll),
         tryNative(native.biometricDescribe),
+        tryNative(native.authTokenStatus),
       ]);
       if (!mounted) return;
       setPrefs(p);
       setBiometricInfo(b);
+      setAuthTokenStatus(tokenStatus);
     })();
     return () => { mounted = false; };
   }, [inElectron]);
@@ -244,6 +247,17 @@ export default function Settings({ addToast }) {
             )}
             {nativeInfo.paths?.logs && (
               <div><span style={{ color: 'var(--text-tertiary)' }}>Logs Dir: </span><code style={{ fontSize: '0.75rem', color: 'var(--accent-primary)' }}>{nativeInfo.paths.logs}</code></div>
+            )}
+            {authTokenStatus && (
+              <div>
+                <span style={{ color: 'var(--text-tertiary)' }}>Unlock Token: </span>
+                <span style={{ color: authTokenStatus.present ? 'var(--status-success)' : 'var(--status-warning)' }}>
+                  {authTokenStatus.present ? 'stored' : authTokenStatus.expired ? 'expired' : 'not stored'}
+                </span>
+                {authTokenStatus.expiresAt && (
+                  <span style={{ color: 'var(--text-tertiary)' }}> until {new Date(authTokenStatus.expiresAt).toLocaleString()}</span>
+                )}
+              </div>
             )}
           </div>
         </div>

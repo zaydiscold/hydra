@@ -7,6 +7,7 @@ export default function Diagnostics({ addToast }) {
   const [health, setHealth] = useState(null);
   const [proxyStatus, setProxyStatus] = useState(null);
   const [nativeInfo, setNativeInfo] = useState(null);
+  const [authTokenStatus, setAuthTokenStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -33,12 +34,14 @@ export default function Diagnostics({ addToast }) {
       // tryNative returns null on failure (already logs to console) — that's
       // exactly what we want for a diagnostics page: graceful degradation
       // with no UI explosion if a single bridge method is broken.
-      const [version, platform, paths] = await Promise.all([
+      const [version, platform, paths, tokenStatus] = await Promise.all([
         tryNative(native.appVersion),
         tryNative(native.platform),
         tryNative(native.appPaths),
+        tryNative(native.authTokenStatus),
       ]);
       setNativeInfo({ version, platform, paths });
+      setAuthTokenStatus(tokenStatus);
     }
     setLoading(false);
   }, [inElectron]);
@@ -64,6 +67,11 @@ export default function Diagnostics({ addToast }) {
     }
     if (nativeInfo?.paths?.logs) {
       lines.push(`Logs Dir: ${nativeInfo.paths.logs}`);
+    }
+    if (authTokenStatus) {
+      lines.push(`Unlock Token: ${authTokenStatus.present ? 'stored' : authTokenStatus.expired ? 'expired' : 'not stored'}`);
+      if (authTokenStatus.expiresAt) lines.push(`Unlock Token Expires: ${authTokenStatus.expiresAt}`);
+      lines.push(`Biometric Gate: ${authTokenStatus.biometricGate ? 'enabled' : 'disabled'}`);
     }
 
     // Mode
@@ -95,7 +103,7 @@ export default function Diagnostics({ addToast }) {
     } catch {
       addToast('Failed to copy to clipboard', 'error');
     }
-  }, [nativeInfo, proxyStatus, health, inElectron, addToast]);
+  }, [nativeInfo, authTokenStatus, proxyStatus, health, inElectron, addToast]);
 
   const modeLabel = inElectron
     ? (import.meta.env.PROD ? 'Packaged (Electron)' : 'Dev (Electron)')
@@ -207,6 +215,20 @@ export default function Diagnostics({ addToast }) {
                   <code style={{ fontSize: '0.72rem', color: 'var(--accent-primary)' }}>{nativeInfo.paths.logs}</code>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Electron: 24h unlock token */}
+        {authTokenStatus && (
+          <div className="card" style={{ padding: 'var(--space-md)' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
+              Unlock Token
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+              <div>Status: <span style={{ color: authTokenStatus.present ? 'var(--status-success)' : 'var(--status-warning)' }}>{authTokenStatus.present ? 'stored' : authTokenStatus.expired ? 'expired' : 'not stored'}</span></div>
+              {authTokenStatus.expiresAt && <div>Expires: {new Date(authTokenStatus.expiresAt).toLocaleString()}</div>}
+              <div>Biometric gate: {authTokenStatus.biometricGate ? 'enabled' : 'disabled'}</div>
             </div>
           </div>
         )}
