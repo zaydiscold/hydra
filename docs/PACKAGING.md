@@ -12,6 +12,39 @@ npm run electron:build
 npm run electron:smoke
 ```
 
+## Signing & Notarization (macOS)
+
+Hydra ships an `afterSign` hook (`electron/builders/notarize.cjs`) that submits the freshly-signed `.app` to Apple's notary service automatically. Notarization is what eliminates the "Hydra cannot be opened because the developer cannot be verified" Gatekeeper warning on first launch.
+
+**Required for signed/notarized builds:**
+
+```bash
+# 1. Apple Developer Program membership ($99/yr) and a Developer ID Application
+#    certificate installed in your Keychain.
+# 2. App-specific password from https://appleid.apple.com → Security.
+# 3. Uncomment the `mac.identity` line in electron-builder.yml (set to the
+#    Common Name of your cert, e.g. "Developer ID Application: Your Name (ABCDE12345)").
+# 4. Export these env vars before `npm run electron:build`:
+
+export APPLE_ID="you@example.com"
+export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+export APPLE_TEAM_ID="ABCDE12345"
+npm run electron:build
+```
+
+**Verify the result:**
+
+```bash
+codesign -dvv release/mac-arm64/Hydra.app                    # signature info
+spctl --assess --verbose=4 release/mac-arm64/Hydra.app       # gatekeeper accepts
+xcrun stapler validate release/mac-arm64/Hydra.app           # notarization stapled
+```
+
+**Skipping (local dev / unsigned builds):** if any of the three env vars are missing, the hook prints a warning and the build still completes — the resulting `.app` just isn't notarized. Set `HYDRA_SKIP_NOTARIZE=1` to silence the warning.
+
+**Windows code-signing:** see the commented `certificateFile` / `certificatePassword` block in `electron-builder.yml`. We don't yet ship a signed Windows installer; this is tracked in `docs/ROADMAP_NEXT.md`.
+
+
 ## Pipeline Steps
 
 ### 1. `npm run build` (Vite)

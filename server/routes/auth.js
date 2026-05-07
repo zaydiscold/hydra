@@ -4,6 +4,20 @@ import AuthController from '../controllers/AuthController.js';
 
 const router = Router();
 
+/**
+ * Escape HTML entities for safe interpolation into raw HTML responses.
+ * Used by the magic-link callback handler below — `pending.email` and
+ * `err.message` originate from Clerk's API and could carry markup.
+ * Even though the callback only ever renders to localhost, escaping is
+ * cheap and prevents reflected-XSS regressions if the server is ever
+ * exposed beyond loopback.
+ */
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
 // Status: tells frontend whether to show setup or login screen
 router.get('/status', AuthController.getStatus.bind(AuthController));
 
@@ -80,7 +94,7 @@ router.get('/magic-callback', async (req, res) => {
   <div style="text-align:center;max-width:420px">
     <div style="font-size:3rem;margin-bottom:16px">✓</div>
     <h2 style="color:#4ade80;margin:0 0 12px">Signed In Successfully</h2>
-    <p style="color:#d1d5db;margin:0 0 8px">Account <strong style="color:#fff">${pending.email}</strong> is now authenticated in Hydra.${provisionNote}</p>
+    <p style="color:#d1d5db;margin:0 0 8px">Account <strong style="color:#fff">${escapeHtml(pending.email)}</strong> is now authenticated in Hydra.${escapeHtml(provisionNote)}</p>
     <p style="color:#6b7280;font-size:0.85rem;margin:0 0 24px">This tab will close automatically in 3 seconds…</p>
     <div id="bar" style="height:3px;background:#1f2937;border-radius:2px;overflow:hidden;width:100%">
       <div id="fill" style="height:100%;background:#4ade80;width:100%;transition:width 3s linear"></div>
@@ -111,7 +125,7 @@ router.get('/magic-callback', async (req, res) => {
     return res.status(500).send(`
       <html><body style="font-family:monospace;background:#0a0a0a;color:#fff;padding:40px">
         <h2 style="color:#f87171">✗ Sign-In Failed</h2>
-        <p>${err.message}</p>
+        <p>${escapeHtml(err.message)}</p>
         <p style="color:#888">Go back to Hydra and try again.</p>
       </body></html>
     `);

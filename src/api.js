@@ -1,6 +1,7 @@
 const API = '/api';
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const RETRY_DELAY_MS = 150;
+const AUTH_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
 
 /** Map API `source` to UI label (API may still return `playwright` for browser automation). */
 export function formatProvisionSourceForUi(source) {
@@ -65,7 +66,7 @@ function getToken() {
 }
 
 function setAuthCookie(token) {
-  document.cookie = `hydra_token=${encodeURIComponent(token)}; Max-Age=86400; Path=/; SameSite=Lax`;
+  document.cookie = `hydra_token=${encodeURIComponent(token)}; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`;
 }
 
 function clearAuthCookie() {
@@ -82,10 +83,20 @@ async function nativeAuthToken(method, token) {
 }
 
 export async function hydrateToken() {
-  if (getToken()) return getToken();
-  const token = await nativeAuthToken('getAuthToken');
-  if (token) localStorage.setItem('hydra_token', token);
-  return token || '';
+  // Prefer the native (main-process) token over localStorage. Why:
+  // packaged Electron picks a RANDOM port per launch, so the renderer's
+  // origin is `http://127.0.0.1:<random>` — a new origin each boot →
+  // empty localStorage every launch. The native token lives in
+  // `userData/renderer-auth-token.json` (mode 0600), tied to the user
+  // not the origin, so it survives port changes for the intended 24-hour
+  // unlock window. localStorage is used as a faster in-session cache only.
+  const nativeToken = await nativeAuthToken('getAuthToken');
+  if (nativeToken) {
+    if (getToken() !== nativeToken) localStorage.setItem('hydra_token', nativeToken);
+    return nativeToken;
+  }
+  // Fall back to localStorage (browser-mode dev or non-Electron).
+  return getToken();
 }
 
 function isRetryableRequest(method) {
@@ -223,16 +234,19 @@ export const nukeApp = (password) =>
 export const shutdownServer = () =>
   request('/shutdown', { method: 'POST', body: { confirm: 'SHUTDOWN_HYDRA' } });
 
-export function saveToken(token) {
+export async function saveToken(token) {
   handledAuthFailure = false;
   localStorage.setItem('hydra_token', token);
   setAuthCookie(token);
-  void nativeAuthToken('setAuthToken', token);
+  // Await the native write so a quick window-close right after login
+  // doesn't lose the persisted token. The disk write is fast (~1 ms);
+  // not awaiting was a real session-loss bug in packaged builds.
+  await nativeAuthToken('setAuthToken', token);
 }
-export function clearToken() {
+export async function clearToken() {
   localStorage.removeItem('hydra_token');
   clearAuthCookie();
-  void nativeAuthToken('clearAuthToken');
+  await nativeAuthToken('clearAuthToken');
 }
 export function hasToken() {
   return !!getToken();

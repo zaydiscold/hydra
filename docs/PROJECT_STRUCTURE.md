@@ -1,10 +1,26 @@
 # 🏛️ Project Structure
 
-Hydra is organized into a clear separation of concerns between its high-performance React frontend and its controller-based Express backend.
+Hydra is a **single Electron desktop application**. The codebase is organized into three co-located layers that ship together as one signed bundle: the renderer UI (`src/`), the embedded Express server (`server/`), and the Electron shell that hosts both (`electron/`). There is no separately-deployed frontend or backend — the React UI talks to `127.0.0.1:<port>` inside the same process tree, and that port is never exposed beyond the local machine.
+
+```
+┌─────────────────────────── Hydra.app (Electron) ───────────────────────────┐
+│                                                                            │
+│   electron/main.js  ──┬── BrowserWindow (renders src/)                     │
+│                       │       │                                            │
+│                       │       └── window.hydraNative (preload bridge)      │
+│                       │                                                    │
+│                       └── child: Express (server/) on 127.0.0.1:<port>     │
+│                              │                                             │
+│                              └── Prisma → userData/hydra.db (SQLite)       │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+In dev (`npm run dev:electron`), the renderer source is served by Vite at `localhost:5173` and loaded into the Electron window via HMR. In production, the Vite-built `dist/` bundle is served by the embedded Express server on a random local port and loaded into the same Electron window.
 
 ## 📂 Directory Map
 
-### 🌐 Frontend (`/src`)
+### 🌐 Renderer / UI (`/src`)
 
 The frontend is a single-page application (SPA) built with React 19 and Vite. It uses a custom Vanilla CSS design system for its Neo-Brutalist aesthetic.
 
@@ -26,9 +42,9 @@ The frontend is a single-page application (SPA) built with React 19 and Vite. It
 **Scripts:** `scripts/otp-start-smoke.mjs` — `npm run test:otp-smoke` (optional `HYDRA_OTP_CODE` for verify). `scripts/check-clerk-connectivity.mjs` — `npm run check:clerk` (TLS + `Set-Cookie` visibility to `clerk.openrouter.ai`; honors `CLERK_ORIGIN` / `CLERK_REFERER` from `.env`).
 - **`components/`** — Reusable UI elements (Icons, Error Boundaries, Scramble Text effects). **`DevBackendHint.jsx`** — When the API is unreachable in dev, shows guidance plus optional **Copy command** (`data-testid="copy-dev-command"`); used from **`App.jsx`** (offline gate) and **`BulkAuthWizard.jsx`** (bulk OTP flow errors).
 
-### ⚙️ Backend (`/server`)
+### ⚙️ Embedded Server (`/server`)
 
-The backend is a Node.js Express server that manages the local SQLite database via Prisma and handles encrypted storage logic.
+The Express server is **not** a separately-deployed backend — it runs as a child of the Electron main process, bound to `127.0.0.1` on a port chosen at boot (preferred 3001 in dev; OS-assigned in packaged builds). It manages the local SQLite database via Prisma and handles all encrypted storage. The same code can be run standalone via `node server/standalone.js` for diagnostics, but the shipping app always boots it inside Electron.
 
 - **`index.js`** — Server initialization and middleware pipeline.
 - **`routes/`** — API endpoint definitions (RESTful structure).
@@ -41,15 +57,28 @@ The backend is a Node.js Express server that manages the local SQLite database v
 
 The Electron shell that wraps the web app as a native desktop application.
 
-- **`main.js`** — Electron main process: sets platform-native paths, starts embedded Express server, creates BrowserWindow, handles app lifecycle (window-all-closed, before-quit, activate).
-- **`preload.js`** — Secure renderer bridge via `contextBridge` exposing `appVersion`, `appPaths`, `platform`. `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
-- **`app/schemaSync.js`** — Boot-time schema sync orchestrator. Hashing, lock handling, and self-heal replay are split into `schemaHash.js`, `schemaLock.js`, and `schemaSelfHeal.js`.
-- **`app/windowActions.js`** — Shared external URL opening and show/focus/respawn behavior, separated from `state.js` so runtime state stays as a small mutable singleton.
+- **`main.js`** — Electron main process: sets platform-native paths, starts embedded Express server, creates BrowserWindow, handles app lifecycle (`window-all-closed`, `before-quit`, `activate`). Splash → main serialization with 7 s minimum visible time.
+- **`preload.js`** — Secure renderer bridge via `contextBridge`. `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Surfaces: `appVersion`, `appPaths`, `status`, `platform`, `openPath`, auth-token CRUD, `hideWindow`, `quitApp`, `prefsGetAll/Set`, `biometricDescribe/Prompt`, `onNavigate`. **Renderer must access via `src/lib/native.js`, never directly.**
+- **`app/state.js`** — Mutable runtime singleton (mainWindow, splashWindow, tray, expressPort, forceQuit flag, etc.).
+- **`app/ipc.js`** — All IPC handlers, returning `{ok, data}` / `{ok, error, code}` envelopes. Reads window/tray refs from `state.js` directly.
+- **`app/windows.js`** — Splash + main window factories. Splash CSS `fillbar` keyframe must stay in lockstep with `SPLASH_MIN_VISIBLE_MS` in `main.js` (currently 7 s).
+- **`app/windowActions.js`** — Shared external URL opening and show/focus/respawn behavior.
+- **`app/schemaSync.js`** — Boot-time schema sync orchestrator (hash, lock, self-heal).
+- **`app/shutdown.js`** — `shutdownEverything` orchestration: tracked-children kill → server graceful → tray destroy.
+- **`app/startupError.js`** — Rich startup-failure dialog with **Open Logs Folder / Copy Details / Quit** buttons.
+- **`app/userPrefs.js`** — JSON-backed key/value store at `userData/preferences.json` for device-local UX prefs (telemetry, biometric, theme). Atomic writes, mode 0600.
+- **`app/telemetry.js`** — Opt-in Sentry crash reporting. No-op without `HYDRA_SENTRY_DSN` env var + Settings toggle. PII scrubbing.
+- **`app/biometric.js`** — Touch ID prompt via `systemPreferences.promptTouchID()` (no native dep). Windows Hello stubbed for later.
 - **`utils/migrateLegacyData.js`** — One-time migration from `./data/` to platform `userData` on first Electron launch.
-- **`menus/appMenu.js`** — macOS app menu bar configuration.
-- **`builders/afterPack.js`** — Post-packaging hook for electron-builder.
-- **`builders/entitlements.mac.plist`** — macOS code signing entitlements.
+- **`menus/appMenu.js`** — macOS app menu (Hydra / Edit / View / Window / Help). Help menu surfaces Diagnostics (`⌘D`), logs/data folders, build info.
+- **`builders/afterPack.js`** — Post-packaging hook: copies `.prisma/client` into the packaged app, prunes foreign engines, verifies the engine binary.
+- **`builders/notarize.cjs`** — `afterSign` hook for macOS notarization. No-op without `APPLE_ID` env vars.
 - **`tests/main-process.test.mjs`** — Test suite for Electron main process.
+
+### 🪞 Renderer Native Bridge Layer (`/src/lib`)
+
+- **`native.js`** — Single source of truth for Electron bridge access. Exports `native.*` (throws on failure), `tryNative(fn)` (returns null on failure), `useNativeInfo()` (React hook), `isElectron()` (predicate), `NativeError` / `NotInElectronError` typed exceptions. Eliminates the silent-failure pattern where renderer code naively read `result?.data ?? null`.
+- **`client-logger.js`** — Renderer-side leveled logger that proxies to console.
 
 ### 🎨 Desktop Assets (`/desktop`)
 
@@ -91,7 +120,7 @@ Platform-specific assets and build resources for the Electron desktop build.
 
 - **`launch.js`** — A multi-platform bootloader that checks for dependencies and starts the production environment.
 - **`bin/hydra.mjs`** — Optional global CLI (`hydra`, `hydra dev`) after `npm link` in the repo root.
-- **`Start Hydra.command` / `.bat`** — User-facing shortcuts for starting the application.
+- **`Launch Hydra.command`** — macOS shortcut for running this repo clone in production-style mode.
 - **`vite.config.js`** — Build configuration for the frontend assets.
 - **`electron-builder.yml`** — Electron packaging configuration (dmg, nsis, AppImage).
 - **`electron/main.js`** — Electron entry point (`"main"` in package.json).
@@ -101,12 +130,16 @@ Platform-specific assets and build resources for the Electron desktop build.
 
 ## 🔁 Runtime Flow
 
-- `npm run dev` starts two processes with `concurrently`: the Vite client on `http://localhost:5173` and the Express API on `http://localhost:3001` (browser path).
-- `npm run dev:electron` starts concurrently with Vite + Electron (`electron .`), loading Vite HMR inside the Electron window.
-- `npx electron .` launches production-mode Electron (requires `npm run build` first).
-- Frontend edits under `src/` usually hot-reload through Vite.
-- Backend edits under `server/` require restarting the `npm run dev` process so Node loads the new code.
-- `npm start` uses `launch.js` to bootstrap the production-style server flow and serves the built client from `dist/`.
+**Production (the way users run Hydra):** double-click `Hydra.app` (or `Hydra Setup.exe` / `Hydra.AppImage`) → Electron main process boots, picks a free port, starts Express bound to `127.0.0.1`, opens BrowserWindow against the embedded server, and parks a tray icon. The window can be closed without exiting; the proxy stays alive in the menu bar / system tray until the user picks **Quit Hydra** or the tray's **Quit Hydra Completely** item.
+
+**Dev (the way contributors run Hydra):**
+
+- `npm run dev:electron` — recommended. Vite HMR inside the Electron window. This is the only loop that exercises the same shell users will ship.
+- `npm run dev` — legacy browser-mode dev loop. Vite client on `http://localhost:5173` + Express on `http://localhost:3001` in the user's default browser. Useful for rapid CSS iteration but does **not** reflect production behavior (no preload bridge, no native menu, no tray).
+- `npx electron .` — runs the packaged-style Electron flow against `dist/` (requires `npm run build` first).
+- Frontend edits under `src/` hot-reload through Vite in either mode.
+- Server edits under `server/` require restarting the dev process.
+- `npm start` (`scripts/launch.js`) — production-style terminal startup that serves the built client from `dist/` over Express. Retained for support / headless diagnostics but not the shipping path.
 - For a deeper explanation of how routes, services, proxying, and aggregation interact, read `ARCHITECTURE_DEEP_DIVE.md`.
 - For CLIProxyAPI / LiteLLM comparison, sidecar ports, and gateway synthesis, read `CLIPROXYAPI_GATEWAY_SYNTHESIS.md`.
 - For management-key provisioning (tRPC vs server Playwright, operator capture playbook, env debug flags, **live curl verification gate**), read `MANAGEMENT_KEY_PROVISION_AUTOMATION.md`.

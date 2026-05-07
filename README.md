@@ -1,17 +1,17 @@
 # 🐉 Hydra | OpenRouter Fleet Manager
 
-Hydra is a professional, high-intensity local management dashboard for OpenRouter account fleets. It provides a single, locally-secured interface to manage balances, rotate API keys, and perform bulk operations across dozens of accounts simultaneously.
+Hydra is a professional, high-intensity **local desktop application** for managing OpenRouter account fleets. The packaged Electron app ships an embedded Express server and a React UI in a single window — there is no separate frontend to host or backend to deploy. Everything runs on your machine, encrypted at rest.
 
 ## 🏮 The Vision
 
-Hydra is built for power users who manage multiple OpenRouter identities. Instead of juggling dozens of browser tabs and management keys, Hydra consolidates your "fleet" into a high-performance terminal dashboard.
+Hydra is built for power users who manage multiple OpenRouter identities. Instead of juggling dozens of browser tabs and management keys, Hydra consolidates your "fleet" into one native desktop window.
 
 ### Why Hydra?
 
 - **Efficiency** — One-click key rotation and bulk redemption across all accounts.
-- **Safety** — API keys and session data are **encrypted at rest** on your local machine.
+- **Safety** — API keys and session data are **encrypted at rest** in the OS-native `userData` directory.
 - **Speed** — Neo-Brutalist UI designed for rapid interaction and high-intensity monitoring.
-- **Portability** — A portable development environment that runs anywhere with Node.js.
+- **Portability** — Single signed Electron bundle per platform (macOS DMG, Windows NSIS, Linux AppImage). No Docker, no port-juggling, no browser tabs.
 
 ## ⚡ Key Features
 
@@ -20,44 +20,42 @@ Hydra is built for power users who manage multiple OpenRouter identities. Instea
 - **Bulk Code Redemption** — Distribute promo codes to your entire fleet in a single pass.
 - **Neo-Cyberpunk UI** — A premium, space-age design system optimized for modern cockpits.
 - **Local-First Encryption** — AES-256-GCM protection for all sensitive information.
+- **Embedded Proxy** — Hydra is also an OpenAI-compatible local proxy at `http://127.0.0.1:<port>/v1` (port chosen at boot, surfaced in the tray menu and Settings page) so any tool that speaks the OpenAI API can hit your fleet through it.
 
-## 🚀 Quick Start (Production)
+## 🚀 Quick Start (Desktop App)
 
-Hydra is designed for zero-friction deployment — no terminal mastery required.
+Hydra is a native desktop app — no terminal required for end users.
 
-### 1. Install Node.js
-
-Hydra requires **Node.js 18+**. Download it from: [nodejs.org](https://nodejs.org).
-
-### 2. Launching Hydra
-
-Use the launcher that matches the build you want:
+### Run the packaged app
 
 | Launcher | What it does |
 | --- | --- |
-| `Hydra.app` | Packaged Electron app. Starts the embedded local server and opens the native desktop UI. |
-| `Launch Hydra.command` | macOS launcher for this repo clone. Good for local production-style startup without opening a terminal first. |
-| `npm start` | Production-style terminal startup via `scripts/launch.js`. Builds if needed, syncs the local DB schema, starts Express, then opens the browser UI. |
-| `npm run preview` / `npm run preview:electron` | Builds the Vite frontend and launches Electron against the built app. |
-| `npm run preview:web` | Old Vite preview behavior for frontend-only preview. |
-| `npm run preview:static` | Builds the frontend and runs the standalone Express server. |
-| `npm run start:electron` | Production equivalent of the Electron preview flow. |
+| `Hydra.app` (macOS) / `Hydra Setup.exe` (Windows) / `Hydra.AppImage` (Linux) | The packaged Electron app. Boots the embedded server, opens the native window, and stays running in the system tray / menu bar. Closing the window keeps the proxy alive; "Quit Hydra" from the tray fully shuts down. |
+| `Launch Hydra.command` | macOS shortcut for running this repo clone in production-style mode without first opening a terminal. |
+| `npm run preview:electron` | From a clone: builds the Vite frontend and launches Electron against the built app — the standard local-test-the-real-app flow. |
+| `npm run electron:build` | Produces a distributable installer in `release/` (DMG / NSIS / AppImage). |
 
-Legacy launchers such as `Start Hydra.command` / `Start Hydra.bat` may exist in older checkouts, but the current macOS repo launcher is `Launch Hydra.command`.
+The first launch creates an empty SQLite database in your platform-native `userData` directory:
 
-### 3. Access Dashboard
+- macOS: `~/Library/Application Support/Hydra/`
+- Windows: `%APPDATA%\Hydra\`
+- Linux: `~/.config/Hydra/`
 
-The browser will automatically open to `http://localhost:3001` once the environment is initialized.
+There is no "browser opening to localhost" step in the desktop flow — the window is the app.
 
-### 4. Dev Server Notes
+### Developer mode
 
-If you are working on the UI, `npm run dev` starts the Vite client on `http://localhost:5173` and the Express backend on `http://localhost:3001` at the same time.
+If you are working on Hydra itself:
 
-- Frontend-only CSS and React changes usually hot-reload in the browser.
-- Backend changes in `server/` usually require restarting the backend process.
-- If the browser is pointed at `http://localhost:5173`, that is the Vite dev server; if the app says the server is offline, restart the backend, not the browser tab.
+```bash
+cp .env.example .env
+npm install
+npm run dev:electron   # Vite HMR + Electron window concurrently
+```
 
-**Important:** The web UI **cannot** start the Node server for you (browser security). You must run `npm run dev`, `npm start`, or the `hydra` CLI (below) from a terminal or launcher script.
+`npm run dev:electron` runs Vite in dev mode and Electron loads `http://localhost:5173` inside the BrowserWindow with hot module reload. Backend changes in `server/` still require restarting the dev process.
+
+`npm run dev` (without `:electron`) is the legacy browser-mode dev loop — Vite on 5173 + Express on 3001 in your default browser. It still works for UI-only iteration but is **not** the production runtime.
 
 ### 5. `hydra` CLI (optional global command)
 
@@ -77,7 +75,7 @@ Then from any directory:
 
 `npm link` ties the global `hydra` command to **this clone**; if you move the folder, run `npm link` again from the new path.
 
-For a full research-style comparison of packaging options, see [**docs/HYDRA_LAUNCH_RESEARCH.md**](docs/HYDRA_LAUNCH_RESEARCH.md).
+For current packaging/build details, see [**docs/PACKAGING.md**](docs/PACKAGING.md). Historical launch research lives in [**docs/_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md**](docs/_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md).
 
 ---
 
@@ -92,17 +90,23 @@ For developers wanting to build or extend the Hydra core:
    npm install
    ```
 
-2. **Launch Dev Mode**
+2. **Launch Dev Mode (recommended — Electron window)**
+
+   ```bash
+   npm run dev:electron
+   ```
+
+   Vite HMR is loaded inside the BrowserWindow — the same shell you ship.
+
+3. **Browser-mode dev (legacy)**
 
    ```bash
    npm run dev
    ```
 
-   Or, after `npm link`: `hydra dev`
+   Spins up Vite (`http://localhost:5173`) + Express (`http://localhost:3001`) for browser-only iteration. Useful for fast CSS work, but the production runtime is Electron — always retest in `npm run dev:electron` before shipping a UI change.
 
-*Dev instances run concurrently at `http://localhost:5173` (Client) and `http://localhost:3001` (Server).*
-
-*If you need to restart the local backend during development, stop the running `npm run dev` process and run it again. The client server and API server are launched together by the same command.*
+*If you need to restart the local backend during development, stop the running dev process and run it again. The client and API are launched together by the same command.*
 
 ## 📖 Project Documentation
 

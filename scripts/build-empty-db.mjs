@@ -27,6 +27,7 @@ const PROJECT_ROOT = resolve(__dirname, '..');
 const DATA_DIR = resolve(PROJECT_ROOT, 'data');
 const EMPTY_DB_PATH = resolve(DATA_DIR, 'empty-hydra.db');
 const SCHEMA_PATH = resolve(PROJECT_ROOT, 'prisma/schema.prisma');
+const PRISMA_CLI = resolve(PROJECT_ROOT, 'node_modules/prisma/build/index.js');
 
 // Ensure data directory exists
 if (!existsSync(DATA_DIR)) {
@@ -40,6 +41,8 @@ console.log(`[build-empty-db] Output: ${EMPTY_DB_PATH}`);
 // Push the schema to a temporary database file, creating all tables (empty)
 const tempDb = resolve(DATA_DIR, '.hydra-empty-temp.db');
 const tempSql = resolve(DATA_DIR, '.hydra-empty-temp.sql');
+const REQUIRED_TABLES = [...readFileSync(SCHEMA_PATH, 'utf-8').matchAll(/^model\s+(\w+)\s*\{/gm)]
+  .map((match) => match[1]);
 const bootstrapSql = `
 -- ⚠️  AUTO-GENERATED FALLBACK — DEPRECATED  ⚠️
 -- ───────────────────────────────────────────
@@ -155,10 +158,15 @@ PRAGMA foreign_keys=ON;
 `;
 
 try {
+  rmSync(tempDb, { force: true });
+  rmSync(`${tempDb}-journal`, { force: true });
+  rmSync(`${tempDb}-wal`, { force: true });
+  rmSync(`${tempDb}-shm`, { force: true });
+
   try {
     execFileSync(
-      'npx',
-      ['prisma', 'db', 'push', `--schema=${SCHEMA_PATH}`, '--accept-data-loss', '--force-reset'],
+      process.execPath,
+      [PRISMA_CLI, 'db', 'push', `--schema=${SCHEMA_PATH}`, '--skip-generate'],
       {
         cwd: PROJECT_ROOT,
         env: {
@@ -171,7 +179,7 @@ try {
     );
   } catch (err) {
     console.warn(`[build-empty-db] Prisma db push failed; falling back to sqlite3 bootstrap (${err.stderr || err.message})`);
-    console.warn('[build-empty-db] ⚠️  USING DEPRECATED FALLBACK SQL — schema.prisma changes may not be reflected!');
+    console.warn('[build-empty-db] WARNING: using fallback SQL; schema.prisma changes must be reflected here.');
     console.warn('[build-empty-db] Make sure bootstrapSql in this file matches the current prisma/schema.prisma.');
     writeFileSync(tempSql, bootstrapSql);
     execFileSync('sqlite3', [tempDb], {
@@ -180,6 +188,17 @@ try {
       stdio: 'pipe',
       timeout: 30_000,
     });
+  }
+
+  const tableRows = execFileSync(
+    'sqlite3',
+    [tempDb, "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"],
+    { encoding: 'utf-8', timeout: 30_000 },
+  );
+  const generatedTables = new Set(tableRows.split('\n').map((line) => line.trim()).filter(Boolean));
+  const missingTables = REQUIRED_TABLES.filter((table) => !generatedTables.has(table));
+  if (missingTables.length > 0) {
+    throw new Error(`empty DB is missing Prisma table(s): ${missingTables.join(', ')}`);
   }
 
   // Copy the freshly-pushed database to the final empty-db path

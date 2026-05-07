@@ -8,7 +8,7 @@ process.env.NODE_ENV       = 'test';
 
 const mockConfig = {
   PORT: 31789, NODE_ENV: 'test', DATABASE_URL: 'file:x', JWT_SECRET: 's',
-  HYDRA_MASTER_JWT_TTL: '30d', RATE_LIMIT_WINDOW: 900000, RATE_LIMIT_MAX: 100,
+  HYDRA_MASTER_JWT_TTL: '24h', RATE_LIMIT_WINDOW: 900000, RATE_LIMIT_MAX: 100,
   OR_BASE: 'https://openrouter.ai', CLERK_ORIGIN: 'https://openrouter.ai',
   CLERK_REFERER: 'https://openrouter.ai/sign-in',
 };

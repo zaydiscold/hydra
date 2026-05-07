@@ -33,8 +33,8 @@ const configSchema = z.object({
     .transform((s) => s.trim())
     .refine((s) => s.length >= 32, 'JWT_SECRET must be at least 32 characters after trimming')
     .default('hydra-dev-secret-unsafe'),
-  /** Master lock-screen JWT lifetime (jsonwebtoken `expiresIn`, e.g. 8h, 7d, 30d). */
-  HYDRA_MASTER_JWT_TTL: z.string().min(1).max(48).default('30d'),
+  /** Master lock-screen JWT lifetime (jsonwebtoken `expiresIn`, e.g. 8h, 24h, 7d). */
+  HYDRA_MASTER_JWT_TTL: z.string().min(1).max(48).default('24h'),
   LOCAL_STORAGE_KEY: optionalHexSecret,
   VAULT_KEY: optionalHexSecret,
   HYDRA_PROXY_SECRET: optionalHexSecret,

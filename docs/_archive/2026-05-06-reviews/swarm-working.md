@@ -1,6 +1,15 @@
 # Hydra Swarm — Collaborative Working Doc
 # ALL agents: READ this first, UPDATE with your findings/fixes
-# Last update: 2026-05-05 | Master branch | ~/Desktop/hydra
+# Last update: 2026-05-06 | Master branch | ~/Desktop/hydra
+
+> **Status (2026-05-06):** Reviewed end-to-end against the current tree.
+> All CRITICALs (#1, #2) and the originally-listed HIGHs (#3–#14) are
+> closed — see the FIXES APPLIED table below. Edge-case findings (#75–#95)
+> are post-fix probes; the ones with material exploit paths are addressed
+> (single-instance lock, schema-sync error dialog, env URL encoding, etc.).
+> Remaining LOW notes (cosmetic dev-mode quirks, Windows-specific signals,
+> CLI ergonomics) are tracked here for future work but are not shipping
+> blockers for the macOS Electron release.
 
 ## HOW TO USE THIS DOC
 - Read the "FOUND BUGS" section to know what's already discovered

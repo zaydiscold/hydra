@@ -113,5 +113,7 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(surface.includes('native:auth-token:get'), 'must expose native token read');
     assert.ok(surface.includes('native:auth-token:set'), 'must expose native token write');
     assert.ok(surface.includes('renderer-auth-token.json'), 'must persist token outside port-scoped localStorage');
+    assert.ok(surface.includes('expiresAt'), 'native persisted token must store an explicit expiry');
+    assert.ok(surface.includes('24 * 60 * 60 * 1000'), 'native persisted token must be capped to a 24-hour unlock window');
   });
 });

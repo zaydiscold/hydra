@@ -275,14 +275,15 @@ look logged out on every launch.
 The token is issued by the server when you POST `/api/auth/login` with your
 password, signed with the per-install `JWT_SECRET` from `userData/jwt-secret`.
 
-**TTL:** 30 days by default (`HYDRA_MASTER_JWT_TTL: '30d'` in
-`server/config.js`). Survives Hydra restarts as long as the JWT is
-within its `exp`.
+**TTL:** 24 hours by default (`HYDRA_MASTER_JWT_TTL: '24h'` in
+`server/config.js`). Electron also writes an explicit `expiresAt` into
+`userData/renderer-auth-token.json`; startup refuses to hydrate expired
+native tokens even if a stale file remains on disk.
 
 **Survives a quit?** Yes. On startup the SPA hydrates `localStorage` from the
 native token file before calling `/api/auth/status`; the server also accepts
 the host-scoped cookie as a fallback. Random packaged ports do not force a
-fresh unlock. No retyping `1111` for at least 24 hours unless the token
+fresh unlock. No retyping `1111` for up to 24 hours unless the token
 expires, the password changes, or the stored token/cookie is cleared.
 
 **Browser isolation does NOT touch this.** The unlock JWT lives in

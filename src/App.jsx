@@ -3,6 +3,7 @@ import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-d
 import './index.css';
 import * as api from './api';
 import { logger } from './lib/client-logger.js';
+import { isElectron, native as nativeBridge } from './lib/native';
 import DevBackendHint from './components/DevBackendHint';
 import ErrorBoundary from './components/ErrorBoundary';
 import { 
@@ -131,7 +132,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
     try {
       const res = await api.nukeApp(password);
       const payload = res?.data ?? res ?? {};
-      api.clearToken();
+      await api.clearToken();
       if (payload?.restartRequired) {
         if (onRestartRequired) {
           onRestartRequired(payload?.message);
@@ -203,7 +204,9 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
       // API wraps response: { success, data: { token }, timestamp }
       const token = res?.data?.token || res?.token;
       if (!token) throw new Error('No token received from server');
-      api.saveToken(token);
+      // Await — saveToken now persists to native main-process file too
+      // (essential for packaged-build session persistence across launches).
+      await api.saveToken(token);
       onSuccess();
     } catch (err) {
       setError(err.message);
@@ -419,7 +422,7 @@ export default function App() {
       const { setup, authenticated, error, needsRestart, bootstrapRequired } = payload || {};
 
       if (storedToken && !authenticated) {
-        api.clearToken();
+        await api.clearToken();
       }
 
       if (needsRestart) {
@@ -465,10 +468,12 @@ export default function App() {
   }, [checkAuth]);
 
   // ── Listen for main-process navigation (e.g. Cmd+, → Preferences) ──
+  // onNavigate returns an unsubscribe — without calling it on cleanup, every
+  // remount stacks another listener (Diagnostics → Settings → back fires the
+  // navigate handler N+1 times the (N+1)-th visit).
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.hydraNative?.onNavigate) {
-      window.hydraNative.onNavigate((path) => navigate(path));
-    }
+    const off = nativeBridge.onNavigate((path) => navigate(path));
+    return off;
   }, [navigate]);
 
   const handleAuthSuccess = useCallback(() => setAuthState('app'), []);
@@ -480,7 +485,7 @@ export default function App() {
 
   const handleLogout = useCallback(async () => {
     try { await api.logout(); } catch { /* fine */ }
-    api.clearToken();
+    await api.clearToken();
     setAuthState('login');
     navigate('/dashboard');
   }, [navigate]);
@@ -488,18 +493,43 @@ export default function App() {
   const handleShutdown = useCallback(() => setShutdownConfirm(true), []);
   const handleHideToBackground = useCallback(async () => {
     setShutdownConfirm(false);
-    const result = await window.hydraNative?.hideWindow?.();
-    if (!result?.ok) {
+    try {
+      await nativeBridge.hideWindow();
+    } catch {
+      // Either we're not in Electron or the bridge rejected — fall back to
+      // a hint so the user still understands the close-vs-quit distinction.
       addToast('Close the window to keep Hydra running in the background.', 'info');
     }
   }, [addToast]);
-  const handleQuit = useCallback(() => {
-    window.close();
+  const handleQuit = useCallback(async () => {
+    // Per swarm-doc finding #2: window.close() bypasses the full shutdown
+    // chain (Playwright cleanup, server graceful shutdown, child kill).
+    // Route through the native bridge so before-quit → shutdownEverything
+    // runs correctly. Falls back to window.close() outside Electron.
+    try {
+      await nativeBridge.quitApp();
+    } catch {
+      window.close();
+    }
   }, []);
   const handleShutdownConfirmed = useCallback(async () => {
     setShutdownConfirm(false);
-    try { await api.shutdownServer(); } catch { /* ok */ }
     setAuthState('shutdown');
+    // Bug fix: prior code called api.shutdownServer() THEN window.close().
+    // In Electron that triggered the windows.js close-handler — which then
+    // re-prompted the user with "Keep Running / Quit" *after* the API
+    // shutdown was already in flight. Routing through quitApp() runs the
+    // full main-process shutdown chain (before-quit → shutdownEverything →
+    // gracefulShutdown server-side → app.exit) without the second prompt.
+    if (isElectron()) {
+      try {
+        await nativeBridge.quitApp();
+        return;
+      } catch {
+        // fall through to legacy path if bridge rejected
+      }
+    }
+    try { await api.shutdownServer(); } catch { /* ok */ }
     window.close();
   }, []);
 
@@ -662,10 +692,10 @@ export default function App() {
                 </span>
                 {!sidebarCollapsed && <span>Collapse</span>}
               </button>
-              {typeof window !== 'undefined' && window.hydraNative && (
+              {isElectron() ? (
                 <>
                   <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
-                    <span className="nav-icon">🔒</span>
+                    <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock Vault</span>}
                   </button>
                   <button className="nav-link" style={{ color: 'var(--status-error)' }} onClick={handleQuit} title="Quit">
@@ -673,8 +703,7 @@ export default function App() {
                     {!sidebarCollapsed && <span>Quit</span>}
                   </button>
                 </>
-              )}
-              {!(typeof window !== 'undefined' && window.hydraNative) && (
+              ) : (
                 <>
                   <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
                     <span className="nav-icon"><LockIcon size={18} /></span>
@@ -738,7 +767,7 @@ export default function App() {
                 <p className="modal-body">Quit stops the local proxy. Hide keeps Hydra running in the background so clients can keep using it.</p>
                 <div className="modal-actions">
                   <button className="btn btn-ghost" onClick={() => setShutdownConfirm(false)}>Cancel</button>
-                  {window.hydraNative?.hideWindow && (
+                  {isElectron() && (
                     <button className="btn btn-secondary" onClick={handleHideToBackground}>Hide Window</button>
                   )}
                   <button className="btn btn-danger" onClick={handleShutdownConfirmed}>Shut down</button>

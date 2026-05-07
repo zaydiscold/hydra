@@ -47,7 +47,10 @@ capture-*.png
 # not part of the repo. Re-runnable via the corresponding skill.
 .review-*.md
 .sweep-report.md
+.swarm-*.md
 mem-watch-*.log
+scratch/
+.scratch/
 
 # Cursor hook runtime state (local; changes every session)
 .cursor/hooks/state/

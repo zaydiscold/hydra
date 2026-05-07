@@ -46,7 +46,7 @@ const mockConfig = {
   NODE_ENV: 'test',
   DATABASE_URL: 'file:./test-compat-launch.db',
   JWT_SECRET: 'test-compat-secret-hydra',
-  HYDRA_MASTER_JWT_TTL: '30d',
+  HYDRA_MASTER_JWT_TTL: '24h',
   LOCAL_STORAGE_KEY: undefined,
   VAULT_KEY: undefined,
   HYDRA_PROXY_SECRET: undefined,

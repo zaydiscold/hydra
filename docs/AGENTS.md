@@ -44,7 +44,7 @@ Start the dual-server environment:
 npm run dev
 ```
 
-After `npm link`, you can also run **`hydra dev`** (see [`bin/hydra.mjs`](../bin/hydra.mjs)). The browser **cannot** start the Node server by itself — see [**HYDRA_LAUNCH_RESEARCH.md**](HYDRA_LAUNCH_RESEARCH.md) for constraints and alternatives.
+After `npm link`, you can also run **`hydra dev`** (see [`bin/hydra.mjs`](../bin/hydra.mjs)). The browser **cannot** start the Node server by itself; current desktop packaging details live in [**PACKAGING.md**](PACKAGING.md), with older launch research archived at [**_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md**](_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md).
 
 **Docs map (launch + client errors):** [**DEVELOPMENT.md**](DEVELOPMENT.md) (operator setup), [**ARCHITECTURE_DEEP_DIVE.md**](ARCHITECTURE_DEEP_DIVE.md) (*Startup model*, *backend-down UX*), [**API_REFERENCE.md**](API_REFERENCE.md) (*Frontend API client* — `hydraCopyCommand`, `HYDRA_DEV_*` exports), [**SERVER_ARCHITECTURE.md**](SERVER_ARCHITECTURE.md) (Vite proxy / no new routes for offline UX).
 

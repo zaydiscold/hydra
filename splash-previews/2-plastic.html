@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hydra splash — variant: plastic</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#0a0a14;
+    font-family:'Intel One Mono','JetBrains Mono','SF Mono','Menlo',ui-monospace,monospace;
+    color:#fff;overflow:hidden;-webkit-font-smoothing:antialiased}
+  /* Static "fake desktop" so the glass has something to refract — gives it
+     a real-world feel even outside Electron. */
+  body::before{content:"";position:fixed;inset:0;
+    background:
+      radial-gradient(circle at 20% 30%,rgba(120,80,255,.18) 0%,transparent 60%),
+      radial-gradient(circle at 80% 70%,rgba(80,200,255,.14) 0%,transparent 60%),
+      radial-gradient(circle at 60% 20%,rgba(255,90,200,.12) 0%,transparent 50%),
+      linear-gradient(135deg,#0a0a14 0%,#1a1428 50%,#0a0a1a 100%);
+    z-index:0}
+
+  /* Variant label, top-left so user knows which one they are viewing */
+  .label{position:fixed;top:16px;left:20px;z-index:50;
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+  .label strong{color:#fff;font-weight:700;letter-spacing:.18em}
+  .blurb{position:fixed;top:36px;left:20px;z-index:50;font-size:12px;color:rgba(255,255,255,.55);max-width:540px}
+  .nav{position:fixed;top:16px;right:20px;z-index:50;font-size:11px;display:flex;gap:8px;
+    color:rgba(255,255,255,.6);letter-spacing:.12em}
+  .nav a{color:rgba(255,255,255,.55);text-decoration:none;padding:4px 10px;border-radius:8px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);transition:all .15s}
+  .nav a:hover{background:rgba(255,255,255,.12);color:#fff}
+  .nav a.active{background:rgba(168,85,247,.35);color:#fff;border-color:rgba(168,85,247,.5)}
+
+  /* OUTER GLASS JAR — the "filled container" effect */
+  .outer{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:min(78vw,1700px);height:min(78vh,1100px);border-radius:32px;
+    background:rgba(255,255,255,.08);
+    backdrop-filter:blur(60px) saturate(180%) brightness(1.04);
+    -webkit-backdrop-filter:blur(60px) saturate(180%) brightness(1.04);
+    box-shadow:
+      0 70px 160px rgba(0,0,0,.55),
+      0 30px 60px rgba(0,0,0,.30),
+      0 0 0 .5px rgba(255,255,255,.05),
+      inset 0 0 0 1px rgba(255,255,255,.06),
+      inset 0 1.5px 0 rgba(255,255,255,.22),
+      inset 0 14px 28px -12px rgba(255,255,255,.12),
+      inset 0 -2px 0 rgba(0,0,0,.40),
+      inset 0 -24px 50px -16px rgba(0,0,0,.32),
+      inset 6px 0 22px -12px rgba(255,255,255,.08),
+      inset -6px 0 22px -12px rgba(255,255,255,.08),
+      inset 0 0 100px rgba(255,255,255,.025);
+    overflow:hidden;z-index:3}
+  .outer::before{content:"";position:absolute;inset:0;border-radius:inherit;
+    background:radial-gradient(ellipse 130% 80% at 50% -10%,
+      rgba(255,255,255,.18) 0%,rgba(255,255,255,.06) 30%,transparent 60%);
+    pointer-events:none;z-index:1}
+  .outer::after{content:"";position:absolute;inset:0;border-radius:inherit;
+    background:radial-gradient(ellipse 120% 60% at 50% 110%,
+      rgba(0,0,0,.20) 0%,rgba(0,0,0,.08) 35%,transparent 60%);
+    pointer-events:none;z-index:1}
+
+  canvas#field{position:absolute;inset:0;width:100%;height:100%;
+    pointer-events:none;z-index:1;display:block}
+
+  /* INNER CARD */
+  .card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:540px;height:400px;border-radius:16px;
+    background:rgba(8,4,18,.62);
+    backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);
+    border:1px solid rgba(255,255,255,.10);
+    box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);
+    overflow:hidden;z-index:2}
+  .band{position:absolute;left:0;right:0;top:38%;height:24%;
+    background:linear-gradient(90deg,rgba(18,6,38,.86),rgba(36,10,58,.94) 50%,rgba(18,6,38,.86));
+    border-top:1px solid rgba(255,90,200,.22);border-bottom:1px solid rgba(120,200,255,.18);
+    box-shadow:0 0 36px rgba(168,85,247,.20) inset,0 0 0 .5px rgba(255,255,255,.04) inset;
+    pointer-events:none;z-index:1}
+  .corners{position:absolute;inset:0;pointer-events:none;color:rgba(255,90,200,.55)}
+  .corners svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .hero{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;padding:0 24px;z-index:2}
+  h1{font-family:inherit;font-size:42px;font-weight:800;letter-spacing:0;
+    background:linear-gradient(180deg,#fff 0%,rgba(255,255,255,.78) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 2px 30px rgba(120,80,255,.35);margin-bottom:6px}
+  .sub{font-family:inherit;font-size:11px;font-weight:600;color:rgba(220,200,255,.55);
+    letter-spacing:.18em;text-transform:uppercase}
+  .bar{width:220px;height:3px;border-radius:999px;background:rgba(255,255,255,.08);
+    overflow:hidden;margin-top:18px;position:relative}
+  .bar::after{content:"";display:block;width:100%;height:100%;border-radius:inherit;
+    background:linear-gradient(90deg,#a855f7,#ec4899,#60a5fa);
+    box-shadow:0 0 14px rgba(168,85,247,.6);
+    transform-origin:left center;transform:scaleX(0);
+    animation:fillbar 10s cubic-bezier(.22,.61,.36,1) forwards}
+  @keyframes fillbar{0%{transform:scaleX(0)}68%{transform:scaleX(.78)}100%{transform:scaleX(1)}}
+</style>
+</head>
+<body>
+  <div class="label">VARIANT <strong>plastic</strong></div>
+  <div class="blurb">Click-clack ABS plastic — quick to settle, distinct collision sounds visualized. Closest to Pica.</div>
+  <nav class="nav">
+    <a href="1-rubber.html">1 rubber</a>
+    <a href="2-plastic.html" class="active">2 plastic</a>
+    <a href="3-heavy.html">3 heavy</a>
+    <a href="4-beads.html">4 beads</a>
+    <a href="5-honey.html">5 honey</a>
+  </nav>
+
+  <div class="outer">
+    <canvas id="field"></canvas>
+    <div class="card">
+      <div class="corners">
+        <svg viewBox="0 0 540 400" preserveAspectRatio="none">
+          <g fill="none" stroke="currentColor" stroke-width="1">
+            <path d="M14,32 L14,14 L32,14"/>
+            <path d="M508,14 L526,14 L526,32"/>
+            <path d="M14,368 L14,386 L32,386"/>
+            <path d="M508,386 L526,386 L526,368"/>
+          </g>
+        </svg>
+      </div>
+      <div class="band"></div>
+      <div class="hero">
+        <h1>Hydra</h1>
+        <div class="sub">Initializing OpenRouter Manager</div>
+        <div class="bar"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const items = [{"text":"OpenAI","tag":"brand","color":"#10a37f"},{"text":"Anthropic","tag":"brand","color":"#d97757"},{"text":"Google","tag":"brand","color":"#4285f4"},{"text":"DeepSeek","tag":"brand","color":"#4d6bfe"},{"text":"Meta","tag":"brand","color":"#0668e1"},{"text":"Mistral","tag":"brand","color":"#f90"},{"text":"xAI","tag":"brand","color":"#e5e5e5"},{"text":"Cohere","tag":"brand","color":"#39594d"},{"text":"Kimi","tag":"brand","color":"#6c5ce7"},{"text":"MiniMax","tag":"brand","color":"#ff6b6b"},{"text":"Perplexity","tag":"brand","color":"#1fb8cd"},{"text":"Qwen","tag":"brand","color":"#615ced"},{"text":"HuggingFace","tag":"brand","color":"#ffbd45"},{"text":"Together","tag":"brand","color":"#6e56cf"},{"text":"Groq","tag":"brand","color":"#f55036"},{"text":"Fireworks","tag":"brand","color":"#fb923c"},{"text":"GPT-4o","tag":"model"},{"text":"GPT-4.1","tag":"model"},{"text":"Claude 4.5","tag":"model"},{"text":"Opus 4.5","tag":"model"},{"text":"Sonnet 4","tag":"model"},{"text":"Gemini 2.5","tag":"model"},{"text":"Gemma 3","tag":"model"},{"text":"Llama 4","tag":"model"},{"text":"DeepSeek R1","tag":"model"},{"text":"DeepSeek V3","tag":"model"},{"text":"Qwen 3","tag":"model"},{"text":"Qwen Coder","tag":"model"},{"text":"Mistral Large","tag":"model"},{"text":"Mixtral","tag":"model"},{"text":"Grok 3","tag":"model"},{"text":"Command R+","tag":"model"},{"text":"Kimi K2","tag":"model"},{"text":"MiniMax M1","tag":"model"},{"text":"Sonar Pro","tag":"model"},{"text":"Hermes 3","tag":"model"},{"text":"Nous Research","tag":"brand","color":"#a78bfa"}];
+  const G = 2600, RES = 0.28, FRIC = 0.78;
+  const AIR_DAMP = 0.992, ANG_AIR = 0.985, ANG_REST = 0.82;
+  const REST_THR = 30, FLOOR_PAD = 18, WALL_PAD = 14;
+
+  const cvs = document.getElementById('field');
+  const ctx = cvs.getContext('2d');
+  function size() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = cvs.clientWidth || 1, h = cvs.clientHeight || 1;
+    cvs.width = w * dpr; cvs.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  size();
+  new ResizeObserver(size).observe(cvs);
+  const W = () => cvs.clientWidth || 1, H = () => cvs.clientHeight || 1;
+
+  const TARGET = Math.min(80, Math.max(28, Math.floor(W() * H() / 26000)));
+  const repeatToFill = (arr, n) => {
+    const out = [];
+    while (out.length < n) for (const it of arr.slice().sort(() => Math.random() - 0.5)) out.push(it);
+    return out.slice(0, n);
+  };
+  const queue = repeatToFill(items, TARGET);
+
+  function makeBody(it, i) {
+    const isB = it.tag === 'brand';
+    const fontSize = isB ? (44 + Math.floor(Math.random() * 26)) : (30 + Math.floor(Math.random() * 18));
+    const weight = isB ? 800 : 600;
+    ctx.font = weight + ' ' + fontSize + 'px "Intel One Mono",monospace';
+    const w = ctx.measureText(it.text).width + 6, h = fontSize * 1.05;
+    const x = w / 2 + 24 + Math.random() * Math.max(40, W() - w - 48);
+    const spawnAt = Math.floor((i / TARGET) * 4500 + Math.random() * 250);
+    return {
+      text: it.text,
+      color: it.color || (isB ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.65)'),
+      weight, fontSize, w, h, x,
+      mass: Math.max(0.3, (w * h) / 2200 + 0.4),
+      I: (w * w + h * h) / 12,
+      y: -h - Math.random() * H() * 0.45,
+      vx: (Math.random() - 0.5) * 140, vy: 0,
+      rot: (Math.random() - 0.5) * 0.45, vRot: (Math.random() - 0.5) * 2.2,
+      spawnAt, alive: false, resting: false, onFloor: false,
+    };
+  }
+
+  const bodies = queue.map(makeBody);
+  let last = performance.now(); const t0 = last;
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 1 / 30); last = now;
+    const t = now - t0;
+    const cw = W(), ch = H(); ctx.clearRect(0, 0, cw, ch);
+    for (const b of bodies) if (!b.alive && t >= b.spawnAt) b.alive = true;
+    const floorY = ch - FLOOR_PAD;
+    for (const b of bodies) {
+      if (!b.alive) continue;
+      b.vy += G * dt;
+      b.vx *= AIR_DAMP; b.vy *= AIR_DAMP;
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      b.rot += b.vRot * dt;
+      b.vRot *= (b.onFloor || b.resting ? ANG_REST : ANG_AIR);
+      b.onFloor = false;
+      if (b.y + b.h / 2 >= floorY) {
+        b.y = floorY - b.h / 2; b.onFloor = true;
+        if (b.vy > 0) { b.vy = -b.vy * RES; if (Math.abs(b.vy) < REST_THR) { b.vy = 0; b.resting = true; } }
+        b.vx *= FRIC;
+        if (Math.abs(b.vx) < REST_THR / 4) b.vx = 0;
+      }
+      if (b.x - b.w / 2 < WALL_PAD) { b.x = WALL_PAD + b.w / 2; if (b.vx < 0) b.vx = -b.vx * RES; b.vRot += b.vy * 0.001; }
+      else if (b.x + b.w / 2 > cw - WALL_PAD) { b.x = cw - WALL_PAD - b.w / 2; if (b.vx > 0) b.vx = -b.vx * RES; b.vRot -= b.vy * 0.001; }
+    }
+    for (let i = 0; i < bodies.length; i++) {
+      const a = bodies[i]; if (!a.alive) continue;
+      for (let j = i + 1; j < bodies.length; j++) {
+        const c = bodies[j]; if (!c.alive) continue;
+        const dx = c.x - a.x, dy = c.y - a.y;
+        const halfW = (a.w + c.w) / 2, halfH = (a.h + c.h) / 2;
+        if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
+          const ox = halfW - Math.abs(dx), oy = halfH - Math.abs(dy);
+          let nx, ny, overlap;
+          if (ox < oy) { nx = dx < 0 ? -1 : 1; ny = 0; overlap = ox; }
+          else { nx = 0; ny = dy < 0 ? -1 : 1; overlap = oy; }
+          const mt = a.mass + c.mass, sa = c.mass / mt, sc = a.mass / mt;
+          a.x -= nx * overlap * sa; a.y -= ny * overlap * sa;
+          c.x += nx * overlap * sc; c.y += ny * overlap * sc;
+          const rvx = c.vx - a.vx, rvy = c.vy - a.vy, vn = rvx * nx + rvy * ny;
+          if (vn < 0) {
+            const J = -(1 + RES) * vn / (1 / a.mass + 1 / c.mass);
+            const Jx = J * nx, Jy = J * ny;
+            a.vx -= Jx / a.mass; a.vy -= Jy / a.mass;
+            c.vx += Jx / c.mass; c.vy += Jy / c.mass;
+            const tA = (nx === 0 ? dx : dy) * 0.0008;
+            a.vRot -= tA * J / a.I; c.vRot += tA * J / c.I;
+            if (ny > 0) { a.resting = true; a.onFloor = true; }
+            if (ny < 0) { c.resting = true; c.onFloor = true; }
+          }
+        }
+      }
+    }
+    for (const b of bodies) {
+      if (!b.alive) continue;
+      ctx.save();
+      ctx.translate(b.x, b.y); ctx.rotate(b.rot);
+      ctx.fillStyle = b.color;
+      ctx.font = b.weight + ' ' + b.fontSize + 'px "Intel One Mono",monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(b.text, 0, 0); ctx.restore();
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

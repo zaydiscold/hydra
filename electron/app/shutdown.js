@@ -5,8 +5,16 @@
  * graceful server shutdown, and force exit.
  */
 import { killKnownHydraAuxiliaryProcesses } from '../utils/cleanupAuxProcesses.js';
-import { sweepStaleEphemeralProfiles } from '../../server/lib/playwright-browser.js';
 import { getTray, setTray, getShuttingDown, setShuttingDown } from './state.js';
+// IMPORTANT: server/lib/playwright-browser.js statically imports
+// `server/config.js`, which Zod-validates `process.env.DATABASE_URL` at
+// module-evaluation time. If we static-imported it here, the chain
+//   main.js → shutdown.js → playwright-browser.js → server/config.js
+// would evaluate Zod BEFORE `setupEnvironment(app)` ran in main.js,
+// crashing the packaged app on launch with "DATABASE_URL undefined".
+// We DYNAMICALLY import inside the function instead — by the time
+// shutdownEverything actually fires, setupEnvironment has long since set
+// every env var the server config schema needs.
 
 /**
  * Kill all tracked child processes (e.g. prisma db push spawns).
@@ -49,7 +57,12 @@ export async function shutdownEverything({ reason, trackedChildren, gracefulShut
   // SIGTERM goes out above, the Chromium children get ~50ms to flush their
   // sqlite + pref files, then their userDataDir is fair game for cleanup.
   // Best-effort — failures are logged + tolerated.
-  try { sweepStaleEphemeralProfiles(); } catch (e) {
+  // Lazy-imported (see top-of-file comment) so the static import chain
+  // doesn't pull server/config.js before env vars are set.
+  try {
+    const { sweepStaleEphemeralProfiles } = await import('../../server/lib/playwright-browser.js');
+    sweepStaleEphemeralProfiles();
+  } catch (e) {
     console.warn('[electron] profile-dir sweep failed:', e.message);
   }
 

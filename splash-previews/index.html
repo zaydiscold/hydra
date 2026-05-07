@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Hydra splash · all variants</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#000;font-family:'Intel One Mono',monospace;color:#fff}
+  .grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr 1fr 1fr;height:100%;gap:2px;background:#222}
+  .cell{position:relative;background:#0a0a14;overflow:hidden;cursor:pointer}
+  .cell iframe{position:absolute;inset:0;width:117.6%;height:117.6%;border:0;transform:scale(.85);transform-origin:top left}
+  .cell .tag{position:absolute;top:8px;left:12px;z-index:10;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#fff;text-shadow:0 2px 6px #000;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:6px}
+  .header{grid-column:1/-1;background:#0a0a14;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #222}
+  .header h1{font-size:14px;letter-spacing:.3em;text-transform:uppercase}
+  .header span{font-size:11px;color:#888;max-width:60ch;text-align:right}
+</style>
+</head><body>
+<div class="grid">
+  <div class="header"><h1>Hydra Splash · 5 Behavioral Variants</h1><span>click any tile to open fullscreen · close tab to dismiss · variants differ in WORD-SPLITTING strategy + spawn cadence + physics</span></div>
+  
+  <div class="cell" onclick="window.open('1-letters.html','_blank')">
+    <span class="tag">1 · letters — letters</span>
+    <iframe src="1-letters.html" loading="lazy"></iframe>
+  </div>
+  <div class="cell" onclick="window.open('2-split.html','_blank')">
+    <span class="tag">2 · split — split</span>
+    <iframe src="2-split.html" loading="lazy"></iframe>
+  </div>
+  <div class="cell" onclick="window.open('3-words.html','_blank')">
+    <span class="tag">3 · words — words</span>
+    <iframe src="3-words.html" loading="lazy"></iframe>
+  </div>
+  <div class="cell" onclick="window.open('4-stream.html','_blank')">
+    <span class="tag">4 · stream — stream</span>
+    <iframe src="4-stream.html" loading="lazy"></iframe>
+  </div>
+  <div class="cell" onclick="window.open('5-settle.html','_blank')">
+    <span class="tag">5 · settle — settle</span>
+    <iframe src="5-settle.html" loading="lazy"></iframe>
+  </div>
+</div>
+</body></html>

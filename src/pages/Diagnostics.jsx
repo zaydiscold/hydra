@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import * as api from '../api';
 import { InfoIcon, NetworkIcon, RefreshIcon, CopyIcon } from '../components/Icons';
+import { isElectron, native, tryNative } from '../lib/native';
 
 export default function Diagnostics({ addToast }) {
   const [health, setHealth] = useState(null);
@@ -9,7 +10,7 @@ export default function Diagnostics({ addToast }) {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const isElectron = typeof window !== 'undefined' && window.hydraNative;
+  const inElectron = isElectron();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -28,24 +29,19 @@ export default function Diagnostics({ addToast }) {
       // fine — show placeholders
     }
 
-    if (isElectron) {
-      try {
-        const [versionRes, platformRes, pathsRes] = await Promise.allSettled([
-          window.hydraNative.appVersion(),
-          window.hydraNative.platform(),
-          window.hydraNative.appPaths(),
-        ]);
-        setNativeInfo({
-          version: versionRes.status === 'fulfilled' ? versionRes.value?.data : null,
-          platform: platformRes.status === 'fulfilled' ? platformRes.value?.data : null,
-          paths: pathsRes.status === 'fulfilled' ? pathsRes.value?.data : null,
-        });
-      } catch {
-        // fine
-      }
+    if (inElectron) {
+      // tryNative returns null on failure (already logs to console) — that's
+      // exactly what we want for a diagnostics page: graceful degradation
+      // with no UI explosion if a single bridge method is broken.
+      const [version, platform, paths] = await Promise.all([
+        tryNative(native.appVersion),
+        tryNative(native.platform),
+        tryNative(native.appPaths),
+      ]);
+      setNativeInfo({ version, platform, paths });
     }
     setLoading(false);
-  }, [isElectron]);
+  }, [inElectron]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -71,7 +67,7 @@ export default function Diagnostics({ addToast }) {
     }
 
     // Mode
-    const mode = isElectron ? (import.meta.env.PROD ? 'Packaged' : 'Dev (Electron)') : 'Browser';
+    const mode = inElectron ? (import.meta.env.PROD ? 'Packaged' : 'Dev (Electron)') : 'Browser';
     lines.push(`Mode: ${mode}`);
 
     // Proxy status
@@ -99,9 +95,9 @@ export default function Diagnostics({ addToast }) {
     } catch {
       addToast('Failed to copy to clipboard', 'error');
     }
-  }, [nativeInfo, proxyStatus, health, isElectron, addToast]);
+  }, [nativeInfo, proxyStatus, health, inElectron, addToast]);
 
-  const modeLabel = isElectron
+  const modeLabel = inElectron
     ? (import.meta.env.PROD ? 'Packaged (Electron)' : 'Dev (Electron)')
     : (import.meta.env.PROD ? 'Production' : 'Development');
 
@@ -231,7 +227,7 @@ export default function Diagnostics({ addToast }) {
             Chromium / Playwright
           </div>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-            {isElectron ? 'Available (bundled)' : 'Browser mode — N/A'}
+            {inElectron ? 'Available (bundled)' : 'Browser mode — N/A'}
           </span>
         </div>
 

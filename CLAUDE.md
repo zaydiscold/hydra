@@ -1,27 +1,78 @@
 # Hydra — Claude Code Instructions
 
-## 🏗️ Recent Work & Where to Pick Up
+## 🏗️ Current State (2026-05-06)
 
-**Last session:** 2026-04-21 | **Branch:** `feat/http-signup-migration`
+**Hydra is shipping as a native Electron desktop app.** The Docker path still
+exists in-repo but is no longer the primary distribution channel.
 
-### What just happened
-- `server/services/account-generator.js` — rewritten: HTTP-primary signup via Clerk FAPI (`detectAuthMethod → startEmailOTP → completeEmailOTP`), Playwright kept as named fallback only. File is heavily commented with migration notes.
-- `server/services/otp-generator.js` — fixed 5 dead/broken API calls (`createTask → startInteractive`, `createAccount → addAccountWithCredentials`, `cleanup → cancel`, missing `serializeTask` wrap, raw-string cookie type mismatch). Still dead code (nothing imports it) but now actually functional if wired up.
-- `Dockerfile` — base image changed `playwright:v1.58.2-jammy` → `node:20-bookworm`. tini removed (apt-get fails behind Docker Desktop proxy). `--with-deps` removed (bookworm already has Chromium libs). On-demand `npx playwright install chromium` after `npm ci`.
+**Branch:** `master` | **DMG output:** ~272 MB / app size ~683 MB (Chromium for Playwright is the bulk; lazy-download is a planned win — see ROADMAP_NEXT)
 
-### Current state
-- Code: complete and commented
-- Git: `Dockerfile`, `otp-generator.js` modified (unstaged). `account-generator.js` was already committed in a prior session. `docs/HTTP_SIGNUP_MIGRATION.md` is untracked.
-- Docker build: works (no more apt-get 403)
-- Dev smoke test: **NOT RUN YET** — this is the blocker
+### Major architectural pieces
 
-### What to do next
-1. `npm run dev` → open Generator page → start a job → confirm logs show `detecting_account → sending_otp → awaiting_otp` (NOT `launching_browser`)
-2. Submit a real OTP → confirm `verifying_otp → saving_profile → provisioning_key → completed`
-3. `git add` + commit the unstaged changes + untracked doc
-4. See `docs/HTTP_SIGNUP_MIGRATION.md` for full architecture, API signatures, error matrix
-5. See `~/.claude/plans/hydra_http_migration.md` for the living plan with exact terminal commands
-6. See `~/.claude/plans/hydra_http_migration_session_log.md` for blow-by-blow session log
+- **Process model:** `electron/main.js` boots an embedded Express server on a
+  random `127.0.0.1:<port>` (preferred 3001 in dev), then opens a BrowserWindow
+  pointed at it. Closing the window keeps the proxy alive in the tray; "Quit
+  Hydra" actually shuts it down via `before-quit` → `shutdownEverything`.
+- **Renderer ↔ main bridge:** `electron/preload.js` exposes `window.hydraNative`,
+  but renderer code MUST use **`src/lib/native.js`** (`native.X()` / `tryNative()` /
+  `useNativeInfo()` / `isElectron()`). The wrapper unwraps the `{ok, data, error}`
+  Result envelope and throws a typed `NativeError` on failure — never call the
+  bridge directly.
+- **State:** Mutable singletons in `electron/app/state.js`. IPC handlers in
+  `electron/app/ipc.js` read state directly (no callback args). Adding a new IPC?
+  Register it there + `preload.js` + `src/lib/native.js`'s `native` facade.
+
+### What just shipped (latest session, 2026-05-06)
+
+- ✅ **Splash min-visible time** bumped to 7 s (`SPLASH_MIN_VISIBLE_MS` in
+  `electron/main.js` paired with the `fillbar` keyframe in
+  `electron/app/windows.js` — keep both in lockstep).
+- ✅ **Renderer Result-type wrapper** (`src/lib/native.js`) — all renderer
+  bridge calls go through it. Old direct `window.hydraNative.*` is forbidden.
+- ✅ **Startup error dialog** with Open Logs / Copy Details / Quit buttons
+  (`electron/app/startupError.js`). Replaces every `dialog.showErrorBox` call
+  in `main.js`.
+- ✅ **Help menu polish** — Documentation, Report Issue, Diagnostics (`⌘D`),
+  Show Logs Folder, Show Data Folder, Build Info (with copy).
+- ✅ **macOS code-sign + notarize plumbing** (`electron/builders/notarize.cjs`,
+  wired into `electron-builder.yml` `afterSign`). No-op without `APPLE_ID` /
+  `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` env vars.
+- ✅ **Opt-in Sentry crash telemetry** (`electron/app/telemetry.js`).
+  Off by default; gated on `HYDRA_SENTRY_DSN` env var + Settings toggle.
+  PII scrubbing for `sk-or-…`, `sk-hydra-…`, `__session=`, `__client=`,
+  `Bearer …`, and home-directory paths.
+- ✅ **Touch ID biometric unlock** (`electron/app/biometric.js`). Uses
+  Electron's built-in `systemPreferences.promptTouchID()` — no external dep.
+  Settings toggle gates the persisted auth token via Touch ID prompt on read.
+  Windows Hello stubbed for later, Linux not supported.
+- ✅ **User preferences store** (`electron/app/userPrefs.js`). JSON-backed
+  key/value at `userData/preferences.json` (mode 0600, atomic rename).
+  Used for `telemetryEnabled`, `biometricEnabled`, future theme/UI toggles.
+- ✅ **Bug fixes:**
+  - `native:hide-window` / `native:quit-app` IPC handlers were silently
+    no-op (callbacks never wired). Now read state directly.
+  - `handleShutdownConfirmed` no longer triggers the Keep-Running prompt
+    after killing the server — routes through `quitApp()` instead.
+  - Hardcoded `:3001/v1` fallback in Settings + appMenu now reads the live
+    port via `native.status()`.
+  - Magic-link callback HTML escapes `pending.email` and `err.message`
+    (was a reflected-XSS vector).
+  - `/api/shutdown` response now uses `{ok, data}` envelope (was
+    `{success, message}` — last outlier in the API).
+  - `userPrefs.js` rename failures now invalidate the cache (was leaving
+    stale in-memory state if disk write failed).
+
+### Where to pick up
+
+- `docs/ROADMAP_NEXT.md` — only one item left planned: the **first-launch
+  onboarding wizard (#7)**. Everything else has shipped.
+- `docs/_archive/2026-05-06-reviews/` — full punch lists from the security,
+  perf, sweep, and swarm reviews. All flagged criticals + highs are addressed
+  in current code; remaining items are low-priority polish tracked in the
+  swarm doc.
+- `docs/_archive/historical/` — completed plans (Implementation, Electron
+  Master Plan, Project Status April 2026, SitRep, Docker Plan). Reference
+  only — code state is current truth.
 
 ---
 
@@ -71,6 +122,21 @@ Do not add format-based pre-validation for OpenRouter management keys or standar
 ### Encrypted Account Data
 `store.getAllAccountsWithKeys()` and related functions use `readConfig()` / `readSessionToken()` which decrypt AES-256-GCM blobs. These can fail if secrets have been rotated. Handle failures per-account (skip corrupt record, don't throw for the whole list).
 
+### Renderer ↔ Native Bridge
+- Never call `window.hydraNative.X()` directly from `src/`. Always use `src/lib/native.js`:
+  - `native.X()` — throws `NativeError` on `{ok:false}`, returns unwrapped data on success
+  - `tryNative(call)` — returns `null` on failure (use for "best effort" reads)
+  - `useNativeInfo()` — React hook for the common version+platform+paths triple
+  - `isElectron()` — boolean check for "are we in the packaged shell"
+- Adding a new IPC handler? Touch all four files in lockstep:
+  1. `electron/app/ipc.js` — register `ipcMain.handle('native:foo', ...)` returning `ok(...)` / `err(...)` from the helpers in that file
+  2. `electron/preload.js` — expose `foo: () => ipcRenderer.invoke('native:foo', ...)` on the `hydraNative` contextBridge
+  3. `src/lib/native.js` — add `foo: (...args) => invokeNative('foo', ...args)` to the `native` facade
+  4. Bump CLAUDE.md if the surface is user-visible
+
+### User Preferences
+Device-local UX prefs (telemetry consent, biometric, theme) live in `userData/preferences.json` via `electron/app/userPrefs.js`. NOT in the encrypted vault — these are device choices, not account data. Add new keys to the `DEFAULTS` map in that file; unknown keys are rejected at write time.
+
 ## When to Update Docs
 
 After making changes to:
@@ -96,18 +162,31 @@ Each finding needs: what, how, why it matters, raw evidence (redact secrets), re
 
 ## Docs Map
 
+**Live (current truth):**
+
 - [**Architecture Deep Dive**](docs/ARCHITECTURE_DEEP_DIVE.md) — best starting point: routes, services, proxying, aggregation, automation.
+- [**Project Structure**](docs/PROJECT_STRUCTURE.md) — Electron-first directory map and runtime flow.
 - [**Server Architecture**](docs/SERVER_ARCHITECTURE.md) — middleware stack, route bindings, controller patterns, response shapes.
-- [**API Reference**](docs/API_REFERENCE.md) — internal server routes and data models.
+- [**API Reference**](docs/API_REFERENCE.md) — internal server routes and data models. Response envelope: `{ok, data, error?, code?}`.
+- [**Electron Migration Status**](docs/ELECTRON_MIGRATION_STATUS.md) — current packaging status + what's validated.
+- [**Packaging**](docs/PACKAGING.md) — `electron:build` pipeline, signing, notarization, smoke checks.
+- [**IDEAS / running plan**](docs/IDEAS.md) — single source of truth for "what's not done yet" (replaces the older ROADMAP_NEXT). Items move out as they ship.
+- [**Security**](docs/SECURITY.md) — AES-256-GCM encryption, local auth, telemetry policy.
 - [**CLIProxyAPI & gateway synthesis**](docs/CLIPROXYAPI_GATEWAY_SYNTHESIS.md) — Hydra vs sidecar vs LiteLLM decision; optional CLIProxyAPI ports/config.
-- [**Security**](docs/SECURITY.md) — AES-256-GCM encryption, local auth.
 - [**Dashboard Account States**](docs/DASHBOARD_ACCOUNT_STATES.md) — card badge logic, session labels.
 - [**Management Key Provision**](docs/MANAGEMENT_KEY_PROVISION_AUTOMATION.md) — operator playbook for key provisioning.
 - [**Server Action Capture/Replay**](docs/SERVER_ACTION_CAPTURE_REPLAY.md) — Next.js SA hash capture.
 - [**Cookie & Session Tricks**](docs/COOKIE_SESSION_TRICKS.md) — living hive mind of auth/cookie exploits and techniques.
 - [**Session Lifecycle**](docs/SESSION_LIFECYCLE.md) — session creation, storage, validation, refresh flows.
-- [**Docker Plan**](docs/DOCKER_PLAN.md) — Dockerfile, compose, static serving, ghcr.io distribution.
-- [**Electron Plan**](docs/ELECTRON_PLAN.md) — native desktop app packaging, BrowserWindow + Express architecture.
+- [**Browser Isolation**](docs/BROWSER_ISOLATION.md) — Playwright profile isolation guarantees.
+- [**Development**](docs/DEVELOPMENT.md) — Prisma, environment, build scripts.
+
+**Archived (`docs/_archive/`):**
+
+- `_archive/historical/` — completed plans (Implementation, Electron Master Plan, Project Status April 2026, SitRep, Docker Plan). Reference only — every actionable item has been verified shipped or extracted into `docs/IDEAS.md`.
+- `_archive/2026-04-27/` — Electron-migration sprint archive (PAIN_POINTS, SKEPTIC_AUDIT, LINT_AUDIT, session notes). All TODOs / phases shipped; remaining ideas extracted into `docs/IDEAS.md`.
+- `_archive/2026-05-06-reviews/` — security/perf/sweep/swarm review punch lists from the 2026-05-06 audit. All criticals + highs are addressed; remaining LOW polish tracked in IDEAS.
+- `_archive/recon-html/` — captured HTML from OpenRouter recon (large; rarely needed).
 
 ## Parallel Work (Multi-Lane Plans)
 
@@ -115,16 +194,18 @@ When a plan splits into mostly independent streams (e.g. a small util module, a 
 
 ## Stack
 
-- **Backend**: Node.js + Express 5, Prisma/SQLite, Zod validation
-- **Frontend**: React 19 + Vite, no UI framework
-- **Auth**: JWT (stateless), AES-256-GCM encrypted local storage
-- **Port**: 3001 (server), 5173 (Vite dev; if that port is in use Vite picks the next free port — use the URL printed in the terminal)
+- **Shell**: Electron 28 (Chromium 120), bound to single-instance lock
+- **Backend**: Node.js + Express 5 embedded in main process, Prisma/SQLite, Zod validation
+- **Frontend**: React 19 + Vite, no UI framework, neo-brutalist Vanilla CSS
+- **Auth**: JWT (stateless), AES-256-GCM encrypted local storage; optional Touch ID gate
+- **Port**: random `127.0.0.1:<port>` in packaged builds (preferred 3001 in dev). Read live port via `native.status()` from the renderer.
 
 ## Start Dev
 
 ```bash
-npm run dev        # both server + client
-node server/index.js  # server only
+npm run dev:electron   # recommended — Vite HMR inside the Electron window
+npm run dev            # legacy browser-mode dev (Vite 5173 + Express 3001)
+node server/standalone.js  # server only, no Electron
 ```
 
 ## Password Recovery (when login breaks)

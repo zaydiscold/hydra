@@ -147,6 +147,22 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   background-attachment: fixed;
+  /* Tip from @sorenblank — tabular-nums by default so any updating
+     number (balances, counters, latency, token counts, timers) keeps
+     a fixed digit grid and stops jittering horizontally on update.
+     See ~/Desktop/design.md §1. Safe globally — only affects digits. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tip from @nilseller — drop flat 1 px gray borders. Stack an inset
+   white highlight + outer black hairline to read as a raised edge.
+   See ~/Desktop/design.md §2. Apply via class on cards / buttons /
+   inputs / modals where a "physical surface" feel is wanted. */
+.edge-crisp {
+  border: none !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.10),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
 #root {
@@ -682,10 +698,18 @@ body {
   background: var(--bg-card);
   -webkit-backdrop-filter: blur(32px) saturate(200%);
   backdrop-filter: blur(32px) saturate(200%);
-  border: 1px solid var(--border-subtle);
+  /* Edge built from layered shadows (per ~/Desktop/design.md §2) — no
+     flat 1px border. Inset white highlight reads as light catching the
+     top edge; outer black hairline simulates the shadow on the surface
+     below. The combination feels more "raised" than a CSS border. */
+  border: none;
   border-radius: var(--radius-md);
   padding: var(--space-xl);
-  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 0.5px rgba(255,255,255,0.04);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    var(--shadow-sm);
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;

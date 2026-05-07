@@ -70,9 +70,27 @@ contextBridge.exposeInMainWorld('hydraNative', {
 
   /**
    * Listen for main-process navigation requests (e.g., from app menu).
+   * Returns the wrapped listener so the caller can pass it to offNavigate
+   * to remove the subscription. Without this the renderer accumulates a
+   * fresh listener on every component remount → memory leak + double-fire.
    * @param {(path: string) => void} callback
+   * @returns {(event: any, path: string) => void} the wrapped listener
    */
   onNavigate: (callback) => {
-    ipcRenderer.on('navigate', (_event, path) => callback(path));
+    const wrapped = (_event, path) => callback(path);
+    ipcRenderer.on('navigate', wrapped);
+    return wrapped;
   },
+  /** Remove a listener previously registered via onNavigate. */
+  offNavigate: (wrapped) => {
+    if (typeof wrapped === 'function') ipcRenderer.removeListener('navigate', wrapped);
+  },
+
+  // ── User preferences (theme, telemetry, biometric, …) ──────────────────
+  prefsGetAll: () => ipcRenderer.invoke('native:prefs:get-all'),
+  prefsSet: (key, value) => ipcRenderer.invoke('native:prefs:set', key, value),
+
+  // ── Biometric unlock (#11) ─────────────────────────────────────────────
+  biometricDescribe: () => ipcRenderer.invoke('native:biometric:describe'),
+  biometricPrompt: (reason) => ipcRenderer.invoke('native:biometric:prompt', reason),
 });

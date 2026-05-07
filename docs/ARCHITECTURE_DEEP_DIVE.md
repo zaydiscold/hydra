@@ -44,7 +44,7 @@ Optional **global CLI** (same flows, discoverable one-word commands):
 - [`bin/hydra.mjs`](../bin/hydra.mjs) — `hydra` → `node launch.js` (same as `npm start`), `hydra dev` → `npm run dev`, `hydra help`.
 - Enable with `npm link` from the repo root (ties the global `hydra` to that clone). Documented in [`README.md`](../README.md) and [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
-**Research / constraints:** Browsers cannot spawn local Node from a web button; alternatives (Electron, Docker, etc.) are compared in [`HYDRA_LAUNCH_RESEARCH.md`](HYDRA_LAUNCH_RESEARCH.md).
+**Research / constraints:** Browsers cannot spawn local Node from a web button. Current desktop packaging details live in [`PACKAGING.md`](PACKAGING.md); historical launch research is archived at [`_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md`](_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md).
 
 For day-to-day UI work:
 

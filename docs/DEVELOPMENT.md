@@ -58,7 +58,7 @@ A normal browser tab **cannot** launch `node server/index.js` on your machine (s
 - **Production-style:** **`npm start`** runs [`launch.js`](../launch.js) and serves the built app and API on one port (default `3001`).
 - **CLI shortcut:** From the repo root, **`npm link`** once, then run **`hydra`** (production-style) or **`hydra dev`** from anywhere — see [`bin/hydra.mjs`](../bin/hydra.mjs).
 
-Deeper comparison of options (Electron, Docker, etc.) lives in [**HYDRA_LAUNCH_RESEARCH.md**](HYDRA_LAUNCH_RESEARCH.md).
+Current desktop packaging details live in [**PACKAGING.md**](PACKAGING.md). The older comparison of launch options is archived at [**_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md**](_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md).
 
 ### Electron Desktop Mode
 

@@ -206,13 +206,16 @@ const shutdownLimiter = rateLimit({
 app.post('/api/shutdown', shutdownLimiter, requireUnlocked, (req, res) => {
   if (process.env.HYDRA_EMBEDDED === '1' && req.body?.confirm !== 'SHUTDOWN_HYDRA') {
     return res.status(400).json({
-      success: false,
+      ok: false,
       error: 'Shutdown confirmation token required',
       code: 'SHUTDOWN_CONFIRM_REQUIRED',
     });
   }
   logger.warn('[SHUTDOWN] API shutdown requested');
-  res.json({ success: true, message: 'Server shutting down' });
+  // Audit fix: align with the codebase Result envelope ({ok, data, error?})
+  // used everywhere else. Prior `{success: true, message: '...'}` was the
+  // last surviving outlier in the API surface.
+  res.json({ ok: true, data: { message: 'Server shutting down' } });
   void gracefulShutdown('api', { exit: !process.env.HYDRA_EMBEDDED });
 });
 

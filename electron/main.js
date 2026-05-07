@@ -23,6 +23,10 @@ import { createSplashWindow, createMainWindow } from './app/windows.js';
 import { registerIpcHandlers } from './app/ipc.js';
 import { shouldSyncSchema, firstLaunchSetup } from './app/schemaSync.js';
 import { shutdownEverything } from './app/shutdown.js';
+import { showStartupErrorDialog } from './app/startupError.js';
+import { initTelemetry, captureError } from './app/telemetry.js';
+import { canPromptBiometric, describeBiometricSupport } from './app/biometric.js';
+import { isPrefExplicitlySet, setPref } from './app/userPrefs.js';
 import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,41 +38,31 @@ setupLogging();
 setupPlatform();
 
 // #85: requestSingleInstanceLock prevents dual Electron processes.
-// If we don't get the lock, quit cleanly — don't race process.exit(0)
-// against app.quit() (Bug #16). app.quit() will exit the process naturally.
+// If we don't get the lock we are the second instance — let app.quit()
+// drain naturally (no process.exit race per Bug #16) and SKIP the rest
+// of init. The first instance is fully responsible for state; we have
+// no business setting env vars, building a tray, or registering events.
+// Without the early-exit, setupEnvironment + every module side-effect
+// runs in a doomed process — wasteful and historically the source of
+// "second instance briefly flashes a window before dying" bugs.
 const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) { app.quit(); }
+if (!gotLock) {
+  app.quit();
+} else {
+  setupEnvironment(app);
+  registerLifecycle();
+}
 
-setupEnvironment(app);
+// All lifecycle wiring lives in one fn so the single-instance gate above
+// can skip it cleanly. Splitting the file into "what runs always" vs
+// "what runs only for the lock-holder" is what makes the gate reliable.
+function registerLifecycle() {
 
 // ─── Tray ───────────────────────────────────────────────────────────────────
 function createTray() {
   const t = getTray();
   if (t && !t.isDestroyed()) return t;
-  let img = nativeImage.createFromPath(ICON_PATH);
-  if (img.isEmpty()) {
-    // ── Programmatic fallback: 16×16 "H" icon so tray is never invisible ──
-    const size = 16;
-    const canvas = Buffer.alloc(size * size * 4);
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const i = (y * size + x) * 4;
-        // Simple "H" glyph
-        const hBar = (x === 2 || x === size - 3) && y >= 3 && y <= size - 4;
-        const hMid = y >= 7 && y <= 9 && x >= 3 && x <= size - 4;
-        if (hBar || hMid) {
-          canvas[i] = 255;     // R
-          canvas[i + 1] = 0;   // G
-          canvas[i + 2] = 255; // B
-          canvas[i + 3] = 255; // A
-        } else {
-          canvas[i + 3] = 0;   // transparent
-        }
-      }
-    }
-    img = nativeImage.createFromBuffer(canvas, { width: size, height: size });
-  }
-  img = img.resize({ width: 18, height: 18 });
+  let img = createTrayImage();
   const tray = new Tray(img);
   tray.setToolTip('Hydra — local OpenRouter proxy');
   const rebuildMenu = () => {
@@ -94,7 +88,54 @@ function createTray() {
   return tray;
 }
 
-app.on('second-instance', showAndFocusMainWindow);
+function createTrayImage() {
+  if (process.platform === 'darwin') {
+    // Menu-bar icons on macOS should be template masks, not full-color app
+    // icons. This keeps the approved app icon for Dock/Finder while the top
+    // bar gets a crisp monochrome mark that follows light/dark mode.
+    const size = 18;
+    const data = Buffer.alloc(size * size * 4);
+    const paint = (x, y, alpha = 255) => {
+      if (x < 0 || y < 0 || x >= size || y >= size) return;
+      const i = (y * size + x) * 4;
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = alpha;
+    };
+    for (let y = 3; y <= 14; y++) {
+      paint(4, y);
+      paint(5, y, 220);
+      paint(12, y);
+      paint(13, y, 220);
+    }
+    for (let x = 5; x <= 12; x++) {
+      paint(x, 8);
+      paint(x, 9, 220);
+    }
+    // Small split-terminal cues so it reads as Hydra rather than a generic H.
+    paint(3, 4, 180);
+    paint(14, 13, 180);
+    const template = nativeImage.createFromBuffer(data, { width: size, height: size });
+    template.setTemplateImage(true);
+    return template;
+  }
+
+  const img = nativeImage.createFromPath(ICON_PATH);
+  return (img.isEmpty() ? nativeImage.createEmpty() : img).resize({ width: 18, height: 18 });
+}
+
+app.on('second-instance', () => {
+  // Boot-gate parity with the `activate` handler — without this, a user
+  // double-clicking the dock icon during the splash → main hand-off can
+  // race-spawn a second main window before the strict serialization in
+  // whenReady completes, producing the "splash + main visible at once" bug.
+  if (getBootingSplash()) {
+    console.log('[electron] second-instance ignored — boot in progress');
+    return;
+  }
+  showAndFocusMainWindow();
+});
 
 // ─── App Lifecycle ──────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
@@ -103,6 +144,29 @@ app.whenReady().then(async () => {
   // per-user bottlenecks. Marks are preserved in the Performance
   // timeline (available via DevTools traces).
   performance.mark('hydra:startup:begin');
+
+  // #9 — opt-in crash telemetry. Init must happen BEFORE we touch any
+  // module that might throw, so we get the earliest-possible coverage.
+  // Returns false (no-op) when DSN is unset OR user hasn't opted in.
+  // Failure modes worth logging: Sentry SDK install corrupted, prefs
+  // file unreadable. Never blocks startup either way.
+  await initTelemetry().catch((e) => {
+    console.warn('[electron] telemetry init failed:', e?.message || e);
+  });
+
+  // Biometric auto-enable was REMOVED 2026-05-06 PM. Reason: with auto-on,
+  // every launch fires a Touch ID prompt before the auth-token releases →
+  // if the user dismisses (or doesn't see the system dialog), the renderer
+  // gets `null` and force-routes to the login screen. Result: "session not
+  // persisting" reports even though the JWT TTL is 30 days. Biometric is
+  // now a deliberate opt-in via Settings → Touch ID Unlock.
+  // (Code preserved for one-shot probe in describeBiometricSupport so the
+  // Settings UI can still detect availability.)
+  void describeBiometricSupport;
+  void isPrefExplicitlySet;
+  void setPref;
+  void canPromptBiometric;
+
   try {
     // createSplashWindow already calls setSplashWindow(win) internally, so we
     // don't double-set it here. (Earlier code did `setSplashWindow(splash)`
@@ -200,6 +264,11 @@ app.whenReady().then(async () => {
         const mw = getMainWindow();
         if (mw && !mw.isDestroyed()) mw.webContents.send('navigate', '/settings');
       },
+      navigateToDiagnostics: () => {
+        showAndFocusMainWindow();
+        const mw = getMainWindow();
+        if (mw && !mw.isDestroyed()) mw.webContents.send('navigate', '/diagnostics');
+      },
     });
 
     createTray();
@@ -226,7 +295,18 @@ app.whenReady().then(async () => {
     //             falling letters" — Pica-style sprawl + falling letters
     //             need this much screen time for the geometry sprawl to
     //             read as intentional, not accidental.
-    const SPLASH_MIN_VISIBLE_MS = 6800;
+    //   7000 ms — bumped to a clean 7s (2026-05-06).
+    //  10000 ms — Pica-style canvas physics splash (2026-05-06 PM). Letters
+    //             actually fall + collide + pile up at the bottom now (was
+    //             CSS keyframes that just looped). 10s gives the physics
+    //             enough time for the pile to settle into a recognizable
+    //             pile rather than dismissing mid-bounce.
+    //
+    // PROGRESS-BAR LOCKSTEP: the splash canvas physics is self-contained,
+    // but the `fillbar` keyframe in windows.js still measures perceived
+    // progress for the user. Keep that keyframe duration in lockstep with
+    // this constant so the bar reaches 100% as the splash dismisses.
+    const SPLASH_MIN_VISIBLE_MS = 10000;
     const splashElapsed = Date.now() - splashStartedAt;
     if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
       await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));
@@ -313,7 +393,13 @@ app.whenReady().then(async () => {
     console.error('[electron] Failed to start Hydra:', e);
     const sp = getSplashWindow();
     if (sp && !sp.isDestroyed()) sp.close();
-    dialog.showErrorBox('Hydra Startup Error', e.message || String(e));
+    // Replaces the legacy dialog.showErrorBox — the user now gets
+    // "Open Logs Folder" + "Copy Details" buttons before Quit.
+    await showStartupErrorDialog({
+      message: e?.message || String(e),
+      stack: e?.stack || null,
+      phase: 'whenReady-bootstrap',
+    });
     app.quit();
   }
 });
@@ -337,11 +423,17 @@ app.on('activate', () => {
   if (url) {
     const newWin = createMainWindow({ show: true, preloadPath: PRELOAD_PATH });
     setMainWindow(newWin);
-    newWin.loadURL(url).catch(loadErr => {
+    newWin.loadURL(url).catch(async loadErr => {
       console.error('[electron] Activate loadURL failed:', loadErr.message);
       const mw = getMainWindow();
       if (mw && !mw.isDestroyed()) {
-        dialog.showErrorBox('Hydra Window Error', `Failed to load the Hydra interface.\n\n${loadErr.message}\n\nPlease restart Hydra.`);
+        // Same actionable buttons as the startup-failure case so the
+        // user can grab logs/copy details before having to restart.
+        await showStartupErrorDialog({
+          message: `Failed to load the Hydra interface.\n${loadErr.message}\n\nPlease restart Hydra.`,
+          stack: loadErr?.stack || null,
+          phase: 'activate-loadURL',
+        });
       }
     });
   }
@@ -361,6 +453,8 @@ app.on('before-quit', (event) => {
 
 process.on('uncaughtException', async (err) => {
   console.error('[electron] uncaughtException:', err);
+  // Best-effort telemetry — no-op if user hasn't opted in.
+  try { captureError(err, { phase: 'uncaughtException' }); } catch { /* ignore */ }
   setShuttingDown(true);
   await shutdownEverything({
     reason: 'uncaughtException',
@@ -373,3 +467,5 @@ process.on('uncaughtException', async (err) => {
 process.on('unhandledRejection', async (reason) => {
   console.error('[electron] unhandledRejection:', reason);
 });
+
+} // end registerLifecycle — see top-of-file single-instance gate

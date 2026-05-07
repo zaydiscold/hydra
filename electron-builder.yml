@@ -10,6 +10,7 @@ artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 # normally; the cold-start penalty on macOS APFS is ~30–50 ms (noise).
 asar: false
 afterPack: ./electron/builders/afterPack.js
+afterSign: ./electron/builders/notarize.cjs   # #2 — no-op without APPLE_ID env vars
 
 # Patterns that ship to the packaged app.
 #
@@ -77,6 +78,12 @@ mac:
   entitlements: desktop/entitlements.mac.plist
   entitlementsInherit: desktop/entitlements.mac.plist
   darkModeSupport: true
+  # #2 — Code-signing identity. Leave commented for unsigned dev builds.
+  # When set, electron-builder finds the certificate by Common Name in
+  # the local Keychain. afterSign hook (notarize.cjs) handles notarization
+  # automatically when APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
+  # are exported. Without those env vars, notarize is a no-op (warning only).
+  # identity: "Developer ID Application: Your Name (TEAMID)"
 
 win:
   target:
