@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('hydraNative', {
    * Electron survives random localhost port changes across launches.
    */
   getAuthToken: () => ipcRenderer.invoke('native:auth-token:get'),
+  authTokenStatus: () => ipcRenderer.invoke('native:auth-token:status'),
   setAuthToken: (token) => ipcRenderer.invoke('native:auth-token:set', token),
   clearAuthToken: () => ipcRenderer.invoke('native:auth-token:clear'),
 
