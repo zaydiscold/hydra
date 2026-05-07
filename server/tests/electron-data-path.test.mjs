@@ -50,15 +50,20 @@ test('Electron exposes 24-hour renderer auth-token persistence', () => {
   const ipcSrc = readFileSync(resolve(ROOT, 'electron/app/ipc.js'), 'utf-8');
   const preloadSrc = readFileSync(resolve(ROOT, 'electron/preload.js'), 'utf-8');
   const apiSrc = readFileSync(resolve(ROOT, 'src/api.js'), 'utf-8');
+  const nativeSrc = readFileSync(resolve(ROOT, 'src/lib/native.js'), 'utf-8');
   const authMiddlewareSrc = readFileSync(resolve(ROOT, 'server/middleware/auth.js'), 'utf-8');
   const configSrc = readFileSync(resolve(ROOT, 'server/config.js'), 'utf-8');
 
   assert.match(ipcSrc, /AUTH_TOKEN_TTL_MS\s*=\s*24\s*\*\s*60\s*\*\s*60\s*\*\s*1000/);
   assert.match(ipcSrc, /renderer-auth-token\.json/);
   assert.match(ipcSrc, /native:auth-token:get/);
+  assert.match(ipcSrc, /native:auth-token:status/);
   assert.match(ipcSrc, /native:auth-token:set/);
   assert.match(ipcSrc, /native:auth-token:clear/);
   assert.match(preloadSrc, /getAuthToken:\s*\(\)\s*=>\s*ipcRenderer\.invoke\(['"]native:auth-token:get['"]\)/);
+  assert.match(preloadSrc, /authTokenStatus:\s*\(\)\s*=>\s*ipcRenderer\.invoke\(['"]native:auth-token:status['"]\)/);
+  assert.match(nativeSrc, /authTokenStatus:\s*\(\)\s*=>\s*invokeNative\(['"]authTokenStatus['"]\)/);
+  assert.match(apiSrc, /hydrateToken\(\)/);
   assert.match(apiSrc, /await\s+nativeAuthToken\(['"]setAuthToken['"],\s*token\)/);
   assert.match(apiSrc, /const nativeToken\s*=\s*await\s+nativeAuthToken\(['"]getAuthToken['"]\)/);
   assert.match(authMiddlewareSrc, /AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS\s*=\s*24\s*\*\s*60\s*\*\s*60/);

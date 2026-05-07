@@ -111,6 +111,7 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
   it('persists renderer auth token through native IPC', () => {
     const surface = readMainProcessSurface();
     assert.ok(surface.includes('native:auth-token:get'), 'must expose native token read');
+    assert.ok(surface.includes('native:auth-token:status'), 'must expose native token status for diagnostics');
     assert.ok(surface.includes('native:auth-token:set'), 'must expose native token write');
     assert.ok(surface.includes('renderer-auth-token.json'), 'must persist token outside port-scoped localStorage');
     assert.ok(surface.includes('expiresAt'), 'native persisted token must store an explicit expiry');
