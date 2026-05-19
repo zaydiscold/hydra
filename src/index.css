@@ -1006,8 +1006,15 @@ select:-webkit-autofill {
 /* ========= STAT CARDS ========= */
 .dashboard-command-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+}
+
+.dashboard-command-header-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
 }
 
 .fleet-status-pill {
@@ -1284,22 +1291,66 @@ select:-webkit-autofill {
   font-style: normal;
 }
 
-.dashboard-stats-strip {
-  grid-template-columns: repeat(5, minmax(118px, 1fr));
-  margin-bottom: var(--space-md);
-}
-
 .dashboard-accounts-header {
   align-items: flex-start;
   justify-content: space-between;
+  margin-bottom: 10px;
 }
 
 .dashboard-accounts-header h3 {
   margin: 0;
 }
 
+.dashboard-accounts-title {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+}
+
+.dashboard-account-count {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.dashboard-command-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.dashboard-last-sync {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+
+.dashboard-view-toggle {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.dashboard-view-toggle span {
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.dashboard-view-toggle span.active {
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+
 .dashboard-mini-grid {
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .dashboard-mobile-only {
@@ -1358,12 +1409,17 @@ select:-webkit-autofill {
     height: 96px;
   }
 
-  .dashboard-stats-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .dashboard-mini-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-command-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-last-sync {
+    margin-right: 0;
   }
 }
 

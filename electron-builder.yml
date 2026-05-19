@@ -2,6 +2,10 @@ appId: com.zayd.hydra
 productName: Hydra
 copyright: Copyright © 2026
 artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+publish:
+  provider: github
+  owner: zaydiscold
+  repo: hydra
 # asar disabled — see electron/builders/afterPack.js comment.
 # Prisma's @prisma/client/default.js does `require('.prisma/client')` which
 # walks up node_modules looking for the dotfile dir. electron-builder filters

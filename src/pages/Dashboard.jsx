@@ -2,19 +2,12 @@ import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMetrics } from '../hooks/useMetrics';
 import AccountCard from '../components/AccountCard';
-import SummaryCard from '../components/SummaryCard';
 import AddAccountModal from '../components/AddAccountModal';
 import AnimeText from '../components/AnimeText';
 import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
 import { formatCurrency } from '../utils/format';
 import { getCardHealth } from '../utils/cardHealth';
-import { 
-  WalletIcon, 
-  CreditsIcon, 
-  DatabaseIcon, 
-  PlusIcon, 
-  HydraIcon 
-} from '../components/Icons';
+import { PlusIcon } from '../components/Icons';
 
 export default function Dashboard({ onSelectAccount, addToast }) {
   const navigate = useNavigate();
@@ -68,6 +61,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
   const fleetHealth = getFleetHealth(accounts, liveStatuses);
   const burnRate = ((totals.totalUsed || 0) / 30);
   const lastSyncLabel = getLastSyncLabel(accounts);
+  const lastSyncText = formatHeaderSyncLabel(lastSyncLabel);
   const activity = getDashboardActivity(accounts, liveStatuses, cooldownMap);
   const statusLabel = attentionCount > 0 ? 'FLEET ATTENTION' : accounts.length > 0 ? 'FLEET NOMINAL' : 'FLEET EMPTY';
   const statusClass = attentionCount > 0 ? 'warning' : accounts.length > 0 ? 'success' : 'neutral';
@@ -76,29 +70,27 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     <>
       <div className="page-header dashboard-command-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-          <div style={{ color: 'var(--accent-primary)', opacity: 0.9 }}>
-            <HydraIcon size={40} />
-          </div>
           <div>
-            <AnimeText as="h2" mode="words" variant="signal" delay={28} style={{ margin: 0 }}>Dashboard</AnimeText>
-            <p style={{ margin: 0, marginTop: 2, color: 'var(--text-secondary)' }}>Local Management Vault for OpenRouter</p>
+            <AnimeText as="h1" mode="words" variant="signal" delay={28} style={{ margin: 0 }}>Command</AnimeText>
+            <p style={{ margin: 0, marginTop: 2, color: 'var(--text-secondary)' }}>Fleet health, activity, and account control at a glance</p>
+          </div>
+          <div className={`fleet-status-pill fleet-status-pill--${statusClass}`}>
+            <span />
+            {statusLabel}
           </div>
         </div>
-        <div className={`fleet-status-pill fleet-status-pill--${statusClass}`}>
-          <span />
-          {statusLabel}
-        </div>
-        <div className="page-actions" style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+        <div className="page-actions dashboard-command-header-actions">
           {refreshing && (
             <div className="refresh-status animate-fade-in" style={{ marginBottom: 4 }}>
               <div className="spinner-sm" />
               <span>Updating Vault...</span>
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => fetchDashboard(true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 120 }}>
+          <div className="dashboard-command-actions">
+            <span className="dashboard-last-sync">last sync {lastSyncText}</span>
+            <button className="btn btn-secondary btn-sm" onClick={() => fetchDashboard(true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 92 }}>
               <span className={refreshing ? 'spin-inline' : ''}>↻</span>
-              {refreshing ? 'Refreshing...' : 'Refresh'}
+              {refreshing ? 'Syncing...' : 'Sync'}
             </button>
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 160 }}>
               <PlusIcon size={16} />
@@ -120,54 +112,25 @@ export default function Dashboard({ onSelectAccount, addToast }) {
         </aside>
 
         <section className="dashboard-command-main">
-          <div className="stats-grid dashboard-stats-strip">
-            <SummaryCard
-              label="Total Balance"
-              value={formatCurrency(totals.totalRemaining)}
-              subtitle={`across ${accounts.length} accounts`}
-              icon={WalletIcon}
-              variant="highlight"
-              delay={0}
-            />
-            <SummaryCard
-              label="Total Credits"
-              value={formatCurrency(totals.totalCredits)}
-              icon={CreditsIcon}
-              variant="accent"
-              delay={50}
-            />
-            <SummaryCard
-              label="Used"
-              value={formatCurrency(totals.totalUsed)}
-              icon={DatabaseIcon}
-              variant="warning"
-              delay={100}
-            />
-            <SummaryCard
-              label="Accounts"
-              value={accounts.length.toString()}
-              subtitle={`${syncedCount} synced${attentionCount > 0 ? ` · ${attentionCount} alerts` : ''}`}
-              variant="info"
-              delay={150}
-            />
-            <SummaryCard
-              label="Active Keys"
-              value={(totals.totalActiveKeys || 0).toString()}
-              variant="accent"
-              delay={200}
-            />
-          </div>
-
           <div className="section-header dashboard-accounts-header">
             <div>
-              <h3>Accounts</h3>
+              <div className="dashboard-accounts-title">
+                <h3>Accounts</h3>
+                {accounts.length > 0 && (
+                  <span className="dashboard-account-count">{accounts.length}</span>
+                )}
+              </div>
               {accounts.length > 0 && (
                 <p className="dashboard-key-legend">
                   <strong>CONTROL</strong> is the management plane. <strong>API</strong> is usable model access.
                 </p>
               )}
             </div>
-            <div className="section-count">{accounts.length}</div>
+            <div className="dashboard-view-toggle" aria-label="Dashboard view mode">
+              <span className="active">GRID</span>
+              <span>LIST</span>
+              <span>MAP</span>
+            </div>
           </div>
 
           {accounts.length === 0 ? (
@@ -363,7 +326,8 @@ function getDashboardActivity(accounts, liveStatuses = {}, cooldownMap = {}) {
     const remaining = account.credits?.remaining ?? 0;
     const total = account.credits?.total ?? 0;
     const pct = total > 0 ? (remaining / total) * 100 : 0;
-    const syncLabel = formatRelativeSyncLabel(getSyncTimestamp(account) ?? now);
+    const syncTimestamp = getSyncTimestamp(account);
+    const syncLabel = syncTimestamp == null ? 'no sync' : formatRelativeSyncLabel(syncTimestamp);
 
     if (account.status === 'error' || account.sessionDecryptFailed) {
       events.push({ tone: 'error', title: 'account needs repair', detail: alias, time: syncLabel });
@@ -381,4 +345,10 @@ function getDashboardActivity(accounts, liveStatuses = {}, cooldownMap = {}) {
   }
 
   return events.slice(0, 5);
+}
+
+function formatHeaderSyncLabel(label) {
+  if (label === 'no sync') return 'never';
+  if (label === 'now') return 'now';
+  return `${label} ago`;
 }

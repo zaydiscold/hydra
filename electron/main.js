@@ -25,6 +25,7 @@ import { shouldSyncSchema, firstLaunchSetup } from './app/schemaSync.js';
 import { shutdownEverything } from './app/shutdown.js';
 import { showStartupErrorDialog } from './app/startupError.js';
 import { initTelemetry, captureError } from './app/telemetry.js';
+import { setupAutoUpdates } from './app/autoUpdate.js';
 import { canPromptBiometric, describeBiometricSupport } from './app/biometric.js';
 import { isPrefExplicitlySet, setPref } from './app/userPrefs.js';
 import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js';
@@ -303,6 +304,7 @@ app.whenReady().then(async () => {
 
     createTray();
     await bindTrayProxyState();
+    setupAutoUpdates({ isDev, getMainWindow });
 
     // ─── STRICT SPLASH → MAIN SERIALIZATION ────────────────────────────────
     //

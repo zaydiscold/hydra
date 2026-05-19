@@ -1,7 +1,7 @@
 {
   "name": "hydra",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "engines": {
     "node": ">=22.12"
@@ -99,6 +99,7 @@
     "animejs": "^4.4.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
+    "electron-updater": "^6.8.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
     "jsonwebtoken": "^9.0.3",
@@ -132,6 +133,10 @@
     "playwright": "^1.58.2"
   },
   "description": "Hydra is a professional, high-intensity local management dashboard for OpenRouter account fleets. It provides a single, locally-secured interface to manage balances, rotate API keys, and perform bulk operations across dozens of accounts simultaneously.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zaydiscold/hydra.git"
+  },
   "main": "electron/main.js",
   "keywords": [],
   "author": "",

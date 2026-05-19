@@ -1,12 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = new URL('../..', import.meta.url).pathname;
 
 function readRepoFile(path) {
   return readFileSync(join(ROOT, path), 'utf-8');
+}
+
+function listFiles(dir, predicate) {
+  const root = join(ROOT, dir);
+  const files = [];
+  const walk = (absolute, relative) => {
+    for (const entry of readdirSync(absolute)) {
+      const entryAbsolute = join(absolute, entry);
+      const entryRelative = `${relative}/${entry}`;
+      const stat = statSync(entryAbsolute);
+      if (stat.isDirectory()) {
+        walk(entryAbsolute, entryRelative);
+      } else if (predicate(entryRelative)) {
+        files.push(entryRelative);
+      }
+    }
+  };
+  walk(root, dir);
+  return files.sort();
 }
 
 test('Electron app chrome defers to standard native macOS titlebar controls', () => {
@@ -70,7 +89,7 @@ test('AnimeText uses current splitText addEffect cleanup pattern', () => {
 
 test('primary page headers use the shared AnimeText treatment', () => {
   const pages = [
-    ['src/pages/Dashboard.jsx', /<AnimeText as="h2" mode="words" variant="signal"[\s\S]*Dashboard<\/AnimeText>/],
+    ['src/pages/Dashboard.jsx', /<AnimeText as="h1" mode="words" variant="signal"[\s\S]*Command<\/AnimeText>/],
     ['src/pages/Vault.jsx', /<AnimeText as="h2" mode="words" variant="scanline"[\s\S]*Vault<\/AnimeText>/],
     ['src/pages/Settings.jsx', /<AnimeText as="h2" mode="words" variant="scanline"[\s\S]*Settings<\/AnimeText>/],
     ['src/pages/Diagnostics.jsx', /<AnimeText as="h2" mode="words" variant="scanline"[\s\S]*Diagnostics<\/AnimeText>/],
@@ -103,6 +122,11 @@ test('dashboard command center uses live fleet health data and compact account c
   const accountCard = readRepoFile('src/components/AccountCard.jsx');
   const css = readRepoFile('src/index.css');
 
+  assert.match(dashboard, /<AnimeText as="h1"[\s\S]*>Command<\/AnimeText>/);
+  assert.match(dashboard, /className=\{`fleet-status-pill fleet-status-pill--\$\{statusClass\}`\}/);
+  assert.match(dashboard, /className="dashboard-last-sync"/);
+  assert.match(dashboard, /\{refreshing \? 'Syncing\.\.\.' : 'Sync'\}/);
+  assert.match(dashboard, />Add Account<\/span>/);
   assert.match(dashboard, /const fleetHealth = getFleetHealth\(accounts, liveStatuses\)/);
   assert.match(dashboard, /const activity = getDashboardActivity\(accounts, liveStatuses, cooldownMap\)/);
   assert.match(dashboard, /className="dashboard-command-layout"/);
@@ -112,9 +136,16 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(dashboard, /<ActivityPanel events=\{activity\} \/>/);
   assert.match(dashboard, /className="accounts-grid dashboard-mini-grid"/);
   assert.match(dashboard, /<AccountCard[\s\S]*compact\s*\/>/);
+  assert.match(dashboard, /className="dashboard-view-toggle"/);
+  assert.match(dashboard, /<span className="active">GRID<\/span>/);
+  assert.match(dashboard, /<span>LIST<\/span>/);
+  assert.match(dashboard, /<span>MAP<\/span>/);
+  assert.doesNotMatch(dashboard, /dashboard-stats-strip/);
+  assert.doesNotMatch(dashboard, /<SummaryCard/);
   assert.match(dashboard, /function getFleetHealth\(accounts, liveStatuses = \{\}\)/);
   assert.match(dashboard, /function getDashboardActivity\(accounts, liveStatuses = \{\}, cooldownMap = \{\}\)/);
   assert.match(dashboard, /function getLastSyncLabel\(accounts\)/);
+  assert.match(dashboard, /function formatHeaderSyncLabel\(label\)/);
 
   assert.match(accountCard, /compact = false/);
   assert.match(accountCard, /account-card--compact/);
@@ -122,13 +153,43 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(accountCard, /<div className="account-card-auth-wrap">/);
 
   assert.match(css, /\.dashboard-command-layout\s*\{/);
+  assert.match(css, /\.dashboard-command-actions\s*\{/);
+  assert.match(css, /\.dashboard-last-sync\s*\{/);
+  assert.match(css, /\.dashboard-view-toggle\s*\{/);
   assert.match(css, /\.fleet-donut-ready\s*\{[\s\S]*?var\(--status-success\)/);
   assert.match(css, /\.fleet-donut-attention\s*\{[\s\S]*?var\(--status-warning\)/);
   assert.match(css, /\.fleet-donut-error\s*\{[\s\S]*?var\(--status-error\)/);
   assert.match(css, /\.activity-row--warning\s*\{[\s\S]*?var\(--status-warning\)/);
   assert.match(css, /\.account-card--compact\s*\{/);
+  assert.match(css, /\.dashboard-mini-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
+  assert.doesNotMatch(css, /\.dashboard-stats-strip\s*\{/);
   assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.dashboard-command-layout\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.dashboard-mini-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
+});
+
+test('every source JSX button has an executable action or form submit contract', () => {
+  const files = listFiles('src', (file) => /\.(jsx|js)$/.test(file));
+  const issues = [];
+
+  for (const file of files) {
+    const source = readRepoFile(file);
+    for (const match of source.matchAll(/<button\b[\s\S]*?>/g)) {
+      const tag = match[0];
+      const hasAction =
+        /\bonClick\s*=/.test(tag) ||
+        /\bonMouseDown\s*=/.test(tag) ||
+        /\bonPointerDown\s*=/.test(tag) ||
+        /\btype\s*=\s*["']submit["']/.test(tag) ||
+        /\btype\s*=\s*["']reset["']/.test(tag) ||
+        /\bformAction\s*=/.test(tag);
+      if (!hasAction) {
+        const line = source.slice(0, match.index).split('\n').length;
+        issues.push(`${file}:${line}: ${tag.replace(/\s+/g, ' ').slice(0, 140)}`);
+      }
+    }
+  }
+
+  assert.deepEqual(issues, []);
 });
 
 test('generator keeps instructions compact instead of a second desktop-sized panel', () => {

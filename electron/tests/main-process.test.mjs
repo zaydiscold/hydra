@@ -32,6 +32,7 @@ const CLEANUP_JS = resolve(ELECTRON_DIR, 'utils', 'cleanupAuxProcesses.js');
 const MIGRATE_LEGACY_JS = resolve(ELECTRON_DIR, 'utils', 'migrateLegacyData.js');
 const STARTUP_ERROR_JS = resolve(APP_DIR, 'startupError.js');
 const WINDOW_ACTIONS_JS = resolve(APP_DIR, 'windowActions.js');
+const AUTO_UPDATE_JS = resolve(APP_DIR, 'autoUpdate.js');
 const AFTER_PACK_JS = resolve(ELECTRON_DIR, 'builders', 'afterPack.js');
 const ROOT = resolve(__dirname, '..', '..');
 
@@ -114,6 +115,21 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(surface.includes('VITE_DEV_SERVER_URL'), 'dev should honor VITE_DEV_SERVER_URL when set');
     assert.ok(surface.includes('staticUrl'), 'prod should derive a localhost static URL');
     assert.ok(surface.includes('http://localhost:'), 'prod should load a localhost URL');
+  });
+
+  it('checks GitHub releases for packaged app updates without touching dev runs', () => {
+    const main = readFileSync(MAIN_JS, 'utf-8');
+    const updater = readFileSync(AUTO_UPDATE_JS, 'utf-8');
+    const builder = readFileSync(resolve(ROOT, 'electron-builder.yml'), 'utf-8');
+    const pkg = readFileSync(resolve(ROOT, 'package.json'), 'utf-8');
+
+    assert.match(main, /setupAutoUpdates\(\{ isDev, getMainWindow \}\)/);
+    assert.match(updater, /from 'electron-updater'/);
+    assert.match(updater, /if \(isDev \|\| !app\.isPackaged\) return false;/);
+    assert.match(updater, /autoUpdater\.checkForUpdates\(\)/);
+    assert.match(updater, /autoUpdater\.quitAndInstall\(false, true\)/);
+    assert.match(builder, /publish:\s*\n\s*provider: github\s*\n\s*owner: zaydiscold\s*\n\s*repo: hydra/);
+    assert.match(pkg, /"electron-updater":/);
   });
 
   it('hooks before-quit to gracefulShutdown({exit:false}) then app.exit', () => {
