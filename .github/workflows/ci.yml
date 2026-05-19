@@ -12,9 +12,9 @@ jobs:
     name: lint, test, gate
     runs-on: ubuntu-22.04
     env:
-      DATABASE_URL: file:./prisma/ci.db
-      HYDRA_DATA_DIR: ${{ runner.temp }}/hydra-ci-data
-      JWT_SECRET: ci-test-secret-32-characters-long
+      DATABASE_URL: "file:./prisma/ci.db"
+      HYDRA_DATA_DIR: ".hydra-ci-data"
+      JWT_SECRET: "ci-test-secret-32-characters-long"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
