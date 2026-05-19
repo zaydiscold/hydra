@@ -282,15 +282,16 @@ closed-app CLI commands, tests, and repo-local documentation.
 - Release workflow builds with `electron-builder --publish never`, runs package smoke, then uploads verified artifacts with `gh release upload`
 - CI job on every PR: lint + test + gate + electron:smoke
 - `server/tests/workflow-contract.test.mjs` is wired into `npm test` and locks
-  the CI/release/package-smoke workflow contracts for Node 22, Windows x64
-  NSIS, macOS zips, Linux AppImage, artifact upload, and packaged smoke
+  the CI/release/package-smoke workflow contracts for Node 24, GitHub Actions
+  Node 24 runtime opt-in, Windows x64 NSIS, macOS zips, Linux AppImage,
+  artifact upload, and packaged smoke
 
 ---
 
 ## Tests — Fill the Gaps
 
 - `npm test` now runs every normal `server/tests/*.test.mjs` file through package scripts; dormant auth-cookie, gzip middleware, ErrorBoundary sanitization, Prisma error classification, phase-1 compatibility, management-key backfill, and Electron Prisma-asar tests are wired into the main chain
-- Workflow contract coverage is implemented in `server/tests/workflow-contract.test.mjs` so the PR package-smoke matrix and release artifact matrix cannot silently drop Windows packaging, Node 22, packaged resource smoke, or artifact upload
+- Workflow contract coverage is implemented in `server/tests/workflow-contract.test.mjs` so the PR package-smoke matrix and release artifact matrix cannot silently drop Windows packaging, Node 24 runtime coverage, packaged resource smoke, or artifact upload
 - Preload/IPC bridge contract tests are implemented: `server/tests/electron-ipc-contract.test.mjs` verifies every `native:*` handler returns a Result envelope and renderer calls use the wrapper
 - Session-refresh and dashboard-data regression coverage is implemented through `server/tests/session-refresh-contract.test.mjs`, `server/tests/session-expiry-effective.test.mjs`, `server/tests/ensure-session-backfill.test.mjs`, and `server/tests/electron-api-integration.test.mjs`; live OTP dogfood remains tracked in `docs/RELEASE_AUDIT.md`
 - UI static contracts include first-run setup wizard, persisted Settings preference-toggle coverage, dense app-shell polish, and the Anime.js `signal` text treatment using `splitText().addEffect()` plus `splitter.revert()` cleanup; `npm run test:ui-static` passed with 18 tests on 2026-05-18 after the shell polish and Dashboard text-effect update
