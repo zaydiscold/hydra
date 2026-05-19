@@ -60,7 +60,7 @@ Files checked:
 
 | Finding | Status |
 |---|---|
-| `AGENTS.md` (root) vs `docs/AGENTS.md` | Intentional. Root is thin redirect to `CLAUDE.md`; `docs/` has full briefing. |
+| `AGENTS.md` / `CLAUDE.md` (root) vs `docs/AGENTS.md` | Intentional. Root files are thin entrypoints; `docs/AGENTS.md` has the full briefing. |
 | No `.tmp`, `.bak`, `.old`, or `TODO` files found | ✅ Clean |
 | No duplicate `.js`/`.mjs` source files | ✅ Clean |
 

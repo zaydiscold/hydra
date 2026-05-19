@@ -55,7 +55,7 @@ node complete-otp.js <alias> <code>
 
 ## When to Update Docs
 
-Per `CLAUDE.md`: Update relevant docs when changing:
+Per `docs/AGENTS.md`: update relevant docs when changing:
 - Server routes → `SERVER_ARCHITECTURE.md`
 - API contracts → `API_REFERENCE.md`
 - Architecture → `ARCHITECTURE_DEEP_DIVE.md`

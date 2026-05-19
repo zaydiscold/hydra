@@ -1,19 +1,30 @@
-# 🐉 Project Context & Agent Briefing
+# Hydra — Project Context & Agent Briefing
 
 Read this document first if you are an AI assistant working on Hydra.
 
-## 🔎 What is this?
+## Current State
 
-Hydra is an automated multi-account "Fleet Manager" for OpenRouter AI. It lets you manage 20+ accounts from a single dashboard specializing in balances, API keys, and code redemption.
+Hydra is shipping as a native Electron desktop app. The packaged window is the product surface; browser/Vite views are only development aids and are not acceptance evidence for desktop UI behavior.
+
+The root Markdown files are entrypoints only:
+
+- `README.md` — public product overview.
+- `AGENTS.md` and `CLAUDE.md` — thin pointers here.
+- `docs/IDEAS.md` — the single current backlog / plan file.
+
+## What is this?
+
+Hydra is an automated multi-account "Fleet Manager" for OpenRouter AI. It lets you manage account fleets from a single local desktop dashboard specializing in balances, API keys, code redemption, and OpenAI-compatible proxy routing.
 
 ### 🏮 The Vision
 
 Hydra is built for high-performance AI operations. It consolidates multiple OpenRouter identities into a single, locally-secured core.
 
-## 🏗️ Project Structure
+## Project Structure
 
-Hydra runs locally as an Node.js (Express) + React (Vite) application using Prisma for SQLite data persistence.
+Hydra runs locally as Electron + embedded Node.js/Express + React/Vite using Prisma for SQLite data persistence.
 
+- **`electron/`** — main process, native window/tray/menu/IPC, packaged app lifecycle, auto-update, biometric preferences.
 - **`server/`** — Express 5 backend with controller-based logic and Zod validation.
 - **`src/`** — React 19 frontend with a high-intensity "Neo-Brutalist" design system.
 - **`prisma/`** — Database schema and local migration history.
@@ -21,13 +32,13 @@ Hydra runs locally as an Node.js (Express) + React (Vite) application using Pris
 
 For a detailed map, see [**PROJECT_STRUCTURE.md**](PROJECT_STRUCTURE.md).
 
-## ⚡ Technical Architecture
+## Technical Architecture
 
 1. **Local-First Security** — All sensitive credentials are encrypted at rest using AES-256-GCM. See [**SECURITY.md**](SECURITY.md).
 2. **Proxy Core** — An OpenAI-compatible endpoint that routes traffic across the pool.
 3. **Automated Ops** — Specialized services for key rotation, balance tracking, and bulk redemption.
 
-## 📖 Essential Documentation
+## Essential Documentation
 
 - [**Hydra Architecture Deep Dive**](ARCHITECTURE_DEEP_DIVE.md) — The best starting point for understanding how routes, services, proxying, aggregation, and automation work together.
 - [**Server Architecture**](SERVER_ARCHITECTURE.md) — Detailed middleware stack, route bindings, controller patterns, and response shapes.
@@ -39,15 +50,15 @@ For a detailed map, see [**PROJECT_STRUCTURE.md**](PROJECT_STRUCTURE.md).
 - [**Development Workflow**](DEVELOPMENT.md) — Setup, Prisma, and build scripts.
 - [**Branding & Design**](BRANDING.md) — The Neo-Brutalist / Space-Age design system.
 
-## 🚀 Development Mode
+## Development Mode
 
-Start the dual-server environment:
+For desktop work, use Electron development mode:
 
 ```bash
-npm run dev
+npm run dev:electron
 ```
 
-After `npm link`, you can also run **`hydra dev`** (see [`bin/hydra.mjs`](../bin/hydra.mjs)). The browser **cannot** start the Node server by itself; current desktop packaging details live in [**PACKAGING.md**](PACKAGING.md).
+`npm run dev` still exists for the legacy Vite + Express browser-mode loop, but it is not the product surface. The browser cannot start the Node server by itself; current desktop packaging details live in [**PACKAGING.md**](PACKAGING.md).
 
 **Docs map (launch + client errors):** [**DEVELOPMENT.md**](DEVELOPMENT.md) (operator setup), [**ARCHITECTURE_DEEP_DIVE.md**](ARCHITECTURE_DEEP_DIVE.md) (*Startup model*, *backend-down UX*), [**API_REFERENCE.md**](API_REFERENCE.md) (*Frontend API client* — `hydraCopyCommand`, `HYDRA_DEV_*` exports), [**SERVER_ARCHITECTURE.md**](SERVER_ARCHITECTURE.md) (Vite proxy / no new routes for offline UX).
 
@@ -71,6 +82,7 @@ When a plan splits into **mostly independent streams** (e.g. a small util module
 
 - Update **relevant `docs/*.md`** when changes affect server routes, **`/v1` proxy** behavior, or **material operator-facing** UI—do not treat documentation as optional for those cases.
 - Hydra is a **private local app**. Do not run Printing Press upload, registration, public-library sync, or endpoint-tool publishing flows for it. Use the Printing Press methodology only for private source-derived API mapping and Hydra-native CLI planning.
+- Test desktop UI behavior in the Electron app, not a browser tab. Source-level tests and package smoke checks are valid code evidence; visual dogfood should be packaged Electron only.
 
 ## Learned Workspace Facts
 

@@ -6,7 +6,7 @@
 > ship. Items move IN when they're tracked but not yet built. Pure historical
 > plans were removed once their actionable work shipped.
 >
-> **Last update:** 2026-05-18 — post docs/plan consolidation and code-health pass.
+> **Last update:** 2026-05-19 — root Markdown consolidation, auto-update release, and release-matrix follow-up.
 
 ---
 
@@ -31,17 +31,7 @@ ETA: ½ day. Risk: medium — auth currently lives in renderer; splash is a sepa
 
 ---
 
-#### 1. Auto-update via `electron-updater`
-
-Without this every fix dies on the user's hard drive.
-
-- Add `electron-updater` to deps; init in `electron/main.js` after window shown
-- GitHub Releases as feed (free, signed)
-- "Restart to update" toast when an update is staged
-- Gate behind `app.isPackaged` so dev builds don't hit Releases
-- ETA: 1 afternoon
-
-#### 2. Drop bundled Chromium → lazy-download on first bulk-auth use
+#### 1. Drop bundled Chromium → lazy-download on first bulk-auth use
 
 Chromium is **~330 MB / 54 % of the DMG**. Bulk-auth wizard is the only path that needs it. Move from `extraResources` to a one-time `playwright install chromium` triggered when the user clicks "Bulk OTP" for the first time. DMG drops from 272 MB to ~280 MB → ~70 MB after the rest of the app shrinks proportionally.
 
@@ -50,17 +40,18 @@ Chromium is **~330 MB / 54 % of the DMG**. Bulk-auth wizard is the only path tha
 
 ### P1 — Fast follow-ons
 
-#### 3. CI release pipeline
+#### 2. Cross-platform release matrix hardening
 
-Single tag → three signed binaries.
+Single tag should produce verified macOS Apple Silicon, macOS Intel, Windows, and Linux artifacts. The current GitHub release workflow is wired and `v1.0.3` has verified macOS ARM updater assets, but the remote matrix still needs hardening for non-primary platforms.
 
-- `.github/workflows/release.yml` triggered on `v*` tag push
-- Matrix: macos-latest, windows-2022, ubuntu-22.04
-- Secrets: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, future `CSC_LINK` (Windows)
-- Build with `electron-builder --publish never`, run package smoke, then upload verified artifacts to the release
-- ETA: 1 day end-to-end
+- Keep `.github/workflows/release.yml` triggered on `v*` tag push
+- Preserve build-before-test order because `server/tests/gzip-middleware.test.mjs` needs `dist/assets`
+- macOS ARM path: verified locally and uploaded for `v1.0.3`
+- Follow up on Windows test failure in the `v1.0.3` release run after logs are available
+- Follow up on Linux `electron:prepare` failure after logs are available
+- Secrets still needed for notarized/signed public distribution: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, future `CSC_LINK` for Windows
 
-#### 4. Windows Hello biometric
+#### 3. Windows Hello biometric
 
 `electron/app/biometric.js` is currently macOS-only. The `windows-hello` npm package wraps `UserConsentVerifier`. Linux: still skip.
 
@@ -95,7 +86,7 @@ Single tag → three signed binaries.
 
 ## 📚 Reference (do not re-derive when picking up)
 
-- **Bridge contract:** see `CLAUDE.md` § "Renderer ↔ Native Bridge" — adding an IPC requires touching `ipc.js`, `preload.js`, `src/lib/native.js`, plus a CLAUDE.md note if user-visible
+- **Bridge contract:** see `docs/AGENTS.md` § "Reading Order for Agents" and the native-bridge rules there — adding an IPC requires touching `ipc.js`, `preload.js`, `src/lib/native.js`, plus relevant docs when user-visible
 - **Result envelope:** `{ok: true, data}` / `{ok: false, error, code?}` everywhere in API + IPC — last outlier (`/api/shutdown`) was fixed 2026-05-06
 - **Splash duration constants** must stay in lockstep — `SPLASH_MIN_VISIBLE_MS` in `electron/main.js` paired with `fillbar` keyframe in `electron/app/windows.js`
 - **Process model:** Electron main owns Express child via in-process import; loopback-only port; never expose beyond 127.0.0.1
