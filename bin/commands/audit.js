@@ -134,6 +134,8 @@ function buildAudit() {
   const dbCommand = safeRead('bin/commands/db.js');
   const cliTest = safeRead('server/tests/cli.test.mjs');
   const cliMain = safeRead('bin/hydra.mjs');
+  const mcpCommand = safeRead('bin/commands/mcp.js');
+  const mcpTest = safeRead('server/tests/mcp-cli.test.mjs');
   const electronSmoke = safeRead('scripts/smoke-electron-package.mjs');
   const electronPrepare = safeRead('scripts/prepare-electron-resources.mjs');
   const packagedOpenScript = safeRead('scripts/open-packaged-app.mjs');
@@ -309,8 +311,27 @@ function buildAudit() {
       'Full test chain',
       String(pkg.scripts?.test || '').includes('test:test-chain-completeness')
         && String(pkg.scripts?.test || '').includes('test:ui-static')
+        && String(pkg.scripts?.test || '').includes('test:mcp')
         && String(pkg.scripts?.test || '').includes('test:workflow-contract'),
-      'npm test includes chain completeness, UI static, and workflow contract tests',
+      'npm test includes chain completeness, MCP, UI static, and workflow contract tests',
+    ),
+    check(
+      'mcp-fleet-tools',
+      'Private MCP fleet tools',
+      cliMain.includes('hydra mcp')
+        && cliMain.includes("'mcp'")
+        && mcpCommand.includes("name: 'hydra_status'")
+        && mcpCommand.includes("name: 'hydra_proxy_status'")
+        && mcpCommand.includes("name: 'hydra_api_map'")
+        && mcpCommand.includes("name: 'hydra_audit'")
+        && mcpCommand.includes("name: 'hydra_doctor'")
+        && mcpCommand.includes("method === 'tools/list'")
+        && mcpCommand.includes("method === 'tools/call'")
+        && mcpCommand.includes('Content-Length')
+        && mcpCommand.includes('existing guarded/read-only CLI commands')
+        && mcpTest.includes('hydra mcp lists private local fleet tools')
+        && mcpTest.includes('hydra mcp speaks framed stdio JSON-RPC and returns tool results'),
+      'hydra mcp exposes private local stdio tools for status, proxy, API map, audit, and doctor through existing guarded/read-only CLI commands',
     ),
     check(
       'cli-runtime-diagnostics',

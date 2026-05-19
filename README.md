@@ -107,9 +107,12 @@ Common commands are grouped by operator workflow:
 | Keys and codes | `hydra keys --account <id-prefix>`, `hydra codes preflight <code> --all` |
 | Router lifecycle | `hydra proxy status`, `hydra serve --port 3001`, `HYDRA_TOKEN=<token> hydra stop --port 3001` |
 | OpenRouter helpers | `hydra openrouter models --json`, `hydra ai chat "hello" --route proxy` |
+| Agent tools | `hydra mcp`, `hydra mcp --list-tools`, `hydra api-map --json` |
 | Vault automation | `hydra unlock --stdin --token-only` |
 
 The CLI defaults to redacted human output and supports `--json` on the commands meant for automation. Secret-bearing flows require explicit flags such as `--yes`, `--stdin`, or an environment token so shell scripts do not accidentally burn codes, rotate proxy keys, or expose credentials.
+
+`hydra mcp` starts a private local stdio MCP server for Claude Code, Cursor, and other agent clients. It exposes curated fleet tools over the existing CLI contracts: status, proxy status, API map, release audit, and doctor diagnostics. It does not publish Hydra, register public endpoint tools, or bypass confirmation-gated live writes.
 
 ## Local API Router
 

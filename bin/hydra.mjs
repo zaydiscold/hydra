@@ -239,6 +239,7 @@ if (sub === 'help' || sub === '-h' || sub === '--help') {
     hydra ai models           List locally cached OpenRouter models
     hydra openrouter          Direct OpenRouter API probes and chat
     hydra api-map             List Hydra's local API surface from openapi/hydra-api.openapi.json
+    hydra mcp                 Start private local stdio MCP tools for agents
     hydra audit               Read-only release checklist snapshot
 
   Process
@@ -268,7 +269,7 @@ Run it again to update if you switch branches or pull updates.`);
 }
 
 // ─── Manager subcommands (lazy-loaded — only pay the import cost when used) ──
-const managerCommands = new Set(['status', 'accounts', 'account', 'balance', 'keys', 'session', 'proxy', 'scan', 'export', 'import', 'db', 'codes', 'serve', 'stop', 'unlock', 'ai', 'openrouter', 'audit']);
+const managerCommands = new Set(['status', 'accounts', 'account', 'balance', 'keys', 'session', 'proxy', 'scan', 'export', 'import', 'db', 'codes', 'serve', 'stop', 'unlock', 'ai', 'openrouter', 'mcp', 'audit']);
 if (managerCommands.has(sub)) {
   const mod = await import(`./commands/${sub}.js`);
   const argv = process.argv.slice(3);
