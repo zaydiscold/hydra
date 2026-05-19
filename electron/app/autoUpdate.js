@@ -1,5 +1,7 @@
 import { app, dialog } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import electronUpdater from 'electron-updater';
+
+const { autoUpdater } = electronUpdater;
 
 let updateCheckStarted = false;
 
