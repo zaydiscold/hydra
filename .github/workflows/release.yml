@@ -16,8 +16,25 @@ env:
   JWT_SECRET: "ci-test-secret-32-characters-long"
 
 jobs:
+  verify:
+    name: lint, test, gate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm run gate
+      - run: npm run build
+
   build:
     name: ${{ matrix.name }}
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -57,10 +74,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run build
-      - run: npm test
-      - run: npm run gate
       - run: npm run build
       - run: npm run electron:prepare
         env:
