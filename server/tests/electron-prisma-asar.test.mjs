@@ -11,6 +11,7 @@
  * Required targets (matching electron-builder mac/win/linux targets):
  *   - darwin        (macOS x64)
  *   - darwin-arm64  (macOS Apple Silicon)
+ *   - debian-openssl-1.1.x  (Ubuntu 22.04 GitHub runner runtime)
  *   - debian-openssl-3.0.x  (Linux x64 — Debian/Ubuntu-based distros)
  *   - linux-arm64-openssl-3.0.x  (Linux ARM64 — e.g. Raspberry Pi / Docker)
  *   - windows       (Windows x64)
@@ -114,6 +115,11 @@ test('binaryTargets includes darwin-arm64 (macOS Apple Silicon)', () => {
 test('binaryTargets includes debian-openssl-3.0.x (Linux x64)', () => {
   const targets = parseBinaryTargets(SCHEMA_PATH);
   assert.ok(targets.includes('debian-openssl-3.0.x'), 'binaryTargets must include "debian-openssl-3.0.x" for Linux x64');
+});
+
+test('binaryTargets includes debian-openssl-1.1.x (GitHub Ubuntu runner)', () => {
+  const targets = parseBinaryTargets(SCHEMA_PATH);
+  assert.ok(targets.includes('debian-openssl-1.1.x'), 'binaryTargets must include "debian-openssl-1.1.x" for GitHub Ubuntu 22.04 test runners');
 });
 
 test('binaryTargets includes linux-arm64-openssl-3.0.x', () => {
