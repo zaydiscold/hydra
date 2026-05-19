@@ -130,14 +130,17 @@ function assertPackagedMacChromeContract(resourcesDir) {
   assertExists(windowsSourcePath, 'packaged Electron window source');
   const windowsSource = readFileSync(windowsSourcePath, 'utf8');
 
-  if (!windowsSource.includes("const useNativeMacChrome = process.platform === 'darwin'")) {
-    throw new Error('[electron-smoke] packaged macOS window source must detect native Mac chrome');
+  if (!windowsSource.includes("const isMac = process.platform === 'darwin'")) {
+    throw new Error('[electron-smoke] packaged macOS window source must detect macOS');
   }
-  if (!windowsSource.includes('frame: useNativeMacChrome')) {
-    throw new Error('[electron-smoke] packaged macOS main window must use the native AppKit frame');
+  if (!windowsSource.includes("titleBarStyle: 'hiddenInset'")) {
+    throw new Error('[electron-smoke] packaged macOS main window must use hiddenInset titlebar');
   }
-  if (/titleBarStyle\s*:/.test(windowsSource) || /trafficLightPosition\s*:/.test(windowsSource)) {
-    throw new Error('[electron-smoke] packaged macOS main window must not override native titlebar/traffic lights');
+  if (!windowsSource.includes('trafficLightPosition: { x: 14, y: 12 }')) {
+    throw new Error('[electron-smoke] packaged macOS main window must keep traffic lights clear of renderer chrome');
+  }
+  if (!windowsSource.includes('frame: true')) {
+    throw new Error('[electron-smoke] packaged non-macOS main window must keep a framed window');
   }
 }
 
