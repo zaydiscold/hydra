@@ -51,6 +51,9 @@ test('release workflow uploads desktop artifacts for every release target', () =
 
   assert.match(workflow, /tags:\s*\n\s*-\s*'v\*\.\*\.\*'/, 'release workflow must run on version tags');
   assert.match(workflow, /permissions:\s*\n\s*contents:\s*write/, 'release workflow must be allowed to publish releases');
+  assert.match(workflow, /DATABASE_URL:\s*"file:\.\/prisma\/ci\.db"/, 'release workflow tests must have a deterministic SQLite URL');
+  assert.match(workflow, /HYDRA_DATA_DIR:\s*"\.hydra-ci-data"/, 'release workflow tests must isolate app data');
+  assert.match(workflow, /JWT_SECRET:\s*"ci-test-secret-32-characters-long"/, 'release workflow tests must have a deterministic JWT secret');
   assert.match(workflow, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:\s*"true"/, 'release workflow must opt into the supported Actions Node 24 runtime');
   assert.match(workflow, /node-version:\s*24/, 'release workflow must use supported Node 24');
   assert.match(workflow, /npx electron-builder \$\{\{ matrix\.target \}\} --publish never/, 'release workflow must build before publishing verified artifacts');

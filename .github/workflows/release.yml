@@ -10,7 +10,10 @@ permissions:
   contents: write
 
 env:
+  DATABASE_URL: "file:./prisma/ci.db"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  HYDRA_DATA_DIR: ".hydra-ci-data"
+  JWT_SECRET: "ci-test-secret-32-characters-long"
 
 jobs:
   build:
