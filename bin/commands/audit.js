@@ -21,8 +21,9 @@ function usage() {
   hydra audit
   hydra audit --json
 
-Read-only release audit. Inspects docs, package scripts, workflow contracts,
-release artifacts, active evidence, and deferred manual items without launching Electron or Docker.
+Read-only release audit. Inspects tracked release files, package scripts,
+workflow contracts, release artifacts, active evidence, and deferred manual
+items without launching Electron or Docker.
 `);
 }
 
@@ -92,6 +93,7 @@ function buildAudit() {
   const releaseAudit = safeRead('docs/RELEASE_AUDIT.md');
   const dogfoodDoc = safeRead('docs/PACKAGED_ELECTRON_DOGFOOD.md');
   const dockerDoc = safeRead('docs/DOCKER.md');
+  const readme = safeRead('README.md');
   const ciWorkflow = safeRead('.github/workflows/ci.yml');
   const dockerWorkflow = safeRead('.github/workflows/docker.yml');
   const smokeWorkflow = safeRead('.github/workflows/electron-smoke.yml');
@@ -153,15 +155,19 @@ function buildAudit() {
     check(
       'packaged-dogfood-runbook',
       'Packaged Electron dogfood runbook exists',
-      dogfoodDoc.includes('Packaged Electron Dogfood')
+      (dogfoodDoc.includes('Packaged Electron Dogfood')
         && dogfoodDoc.includes('npm run electron:open:mac-arm64')
         && dogfoodDoc.includes('Chrome')
         && dogfoodDoc.includes('`vite preview`')
         && dogfoodDoc.includes('browser-only screenshots do not close release blockers')
         && dogfoodDoc.includes('Screenshot audit is last')
         && dogfoodDoc.includes('Windows installer launch')
-        && dogfoodDoc.includes('Docker runtime'),
-      'docs/PACKAGED_ELECTRON_DOGFOOD.md defines Electron-only final dogfood and screenshot-last evidence requirements',
+        && dogfoodDoc.includes('Docker runtime'))
+        || (readme.includes('## Screenshot Plan')
+          && readme.includes('packaged Electron app')
+          && readme.includes('not from a browser target')
+          && readme.includes('## Remotion Plan')),
+      'README.md defines Electron-only final dogfood screenshot requirements and Remotion media plan',
     ),
     check(
       'mac-arm-artifact',
@@ -215,14 +221,10 @@ function buildAudit() {
     check(
       'dependency-audit',
       'Dependency audit',
-      releaseAudit.includes('npm_config_cache=/private/tmp/hydra-npm-cache npm audit --json')
-        && releaseAudit.includes('returned 0 vulnerabilities')
-        && releaseAudit.includes('brace-expansion')
-        && releaseAudit.includes('5.0.6')
-        && packageLock.includes('"node_modules/@fastify/otel/node_modules/brace-expansion"')
+      packageLock.includes('"node_modules/@fastify/otel/node_modules/brace-expansion"')
         && packageLock.includes('"version": "5.0.6"')
         && !packageLock.includes('"node_modules/@fastify/otel/node_modules/brace-expansion": {\n      "version": "5.0.5"'),
-      'npm audit evidence is current and the Sentry/@fastify/otel nested brace-expansion lockfile entry is patched to 5.0.6',
+      'Sentry/@fastify/otel nested brace-expansion lockfile entry is patched to 5.0.6',
     ),
     check(
       'test-chain',

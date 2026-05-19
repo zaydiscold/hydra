@@ -238,7 +238,7 @@ if (sub === 'help' || sub === '-h' || sub === '--help') {
     hydra unlock              Issue a bearer token from the local password
     hydra ai models           List locally cached OpenRouter models
     hydra openrouter          Direct OpenRouter API probes and chat
-    hydra api-map             List Hydra's local API surface from docs/hydra-api.openapi.json
+    hydra api-map             List Hydra's local API surface from openapi/hydra-api.openapi.json
     hydra audit               Read-only release checklist snapshot
 
   Process
@@ -287,7 +287,7 @@ if (managerCommands.has(sub)) {
 }
 
 if (sub === 'api-map') {
-  const specPath = join(root, 'docs', 'hydra-api.openapi.json');
+  const specPath = join(root, 'openapi', 'hydra-api.openapi.json');
   const tagIndex = cliArgs.indexOf('--tag');
   const tagFilter = tagIndex >= 0 ? cliArgs[tagIndex + 1] : null;
   if (!existsSync(specPath)) {
