@@ -56,6 +56,7 @@ test('release workflow uploads desktop artifacts for every release target', () =
   assert.match(workflow, /JWT_SECRET:\s*"ci-test-secret-32-characters-long"/, 'release workflow tests must have a deterministic JWT secret');
   assert.match(workflow, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:\s*"true"/, 'release workflow must opt into the supported Actions Node 24 runtime');
   assert.match(workflow, /node-version:\s*24/, 'release workflow must use supported Node 24');
+  assert.match(workflow, /npm run lint[\s\S]*npm run build[\s\S]*npm test[\s\S]*npm run gate[\s\S]*npm run build[\s\S]*npm run electron:prepare/, 'release workflow must build dist before tests that inspect dist assets');
   assert.match(workflow, /npx electron-builder \$\{\{ matrix\.target \}\} --publish never/, 'release workflow must build before publishing verified artifacts');
   assert.match(workflow, /npm run electron:smoke/, 'release workflow must smoke-check packaged resources before upload');
   assert.match(workflow, /npm run electron:smoke[\s\S]*HYDRA_BUILD_TARGET:\s*\$\{\{ matrix\.build_target \}\}/, 'release smoke must verify the target-specific Chromium payload');

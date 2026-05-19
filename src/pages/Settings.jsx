@@ -198,7 +198,7 @@ export default function Settings({ addToast }) {
             <code style={{ flex: 1, fontSize: '0.8rem', color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all', background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 4 }}>
               {primaryUrl}
             </code>
-            <button className="btn btn-secondary btn-sm" onClick={copyUrl} style={{ flexShrink: 0 }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={copyUrl} style={{ flexShrink: 0 }}>
               {copied ? '✓' : 'Copy'}
             </button>
           </div>
@@ -273,14 +273,14 @@ export default function Settings({ addToast }) {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--text-tertiary)' }}>Data Dir: </span>
                 <span>redacted</span>
-                <button className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('userData', 'Data Dir')}>Open</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('userData', 'Data Dir')}>Open</button>
               </div>
             )}
             {nativeInfo.paths?.logs && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--text-tertiary)' }}>Logs Dir: </span>
                 <span>redacted</span>
-                <button className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('logs', 'Logs Dir')}>Open</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('logs', 'Logs Dir')}>Open</button>
               </div>
             )}
             {authTokenStatus && (
@@ -329,7 +329,7 @@ export default function Settings({ addToast }) {
               Require {biometricInfo.label} when unlocking the vault
             </label>
             {biometricInfo.available && (
-              <button className="btn btn-secondary btn-sm" onClick={tryBiometricPrompt}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={tryBiometricPrompt}>
                 Test Prompt
               </button>
             )}

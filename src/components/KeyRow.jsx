@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import ScrambleText from './ScrambleText';
-import { 
-  KeyIcon, 
-  AlertIcon, 
-  EyeIcon, 
-  CopyIcon 
+import {
+  KeyIcon,
+  AlertIcon,
+  EyeIcon,
+  CopyIcon
 } from './Icons';
 
 function StatusDot({ pooled, hasKey }) {
@@ -25,12 +25,12 @@ function StatusDot({ pooled, hasKey }) {
   );
 }
 
-export default function KeyRow({ 
-  keyData, 
-  onToggle, 
-  onRegister, 
-  onDisable, 
-  onDelete 
+export default function KeyRow({
+  keyData,
+  onToggle,
+  onRegister,
+  onDisable,
+  onDelete
 }) {
   const {
     hash, name, enabled, isPooled, hasKeyString, plaintextKey, isProvisioningKey,
@@ -40,7 +40,7 @@ export default function KeyRow({
   const [showPlaintext, setShowPlaintext] = useState(false);
 
   const canPool = hasKeyString;
-  
+
   return (
     <div
       style={{
@@ -79,12 +79,12 @@ export default function KeyRow({
             </span>
           )}
         </div>
-        <code 
-          style={{ 
-            fontSize: '0.72rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', 
-            wordBreak: 'break-all', display: 'block', maxWidth: '100%', 
-            cursor: plaintextKey ? 'pointer' : 'default' 
-          }} 
+        <code
+          style={{
+            fontSize: '0.72rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)',
+            wordBreak: 'break-all', display: 'block', maxWidth: '100%',
+            cursor: plaintextKey ? 'pointer' : 'default'
+          }}
           onClick={() => plaintextKey && setShowPlaintext(!showPlaintext)}
         >
           {showPlaintext && plaintextKey ? (
@@ -133,8 +133,9 @@ export default function KeyRow({
       <div style={{ minWidth: 100, textAlign: 'right' }}>
         {!hasKeyString ? (
           <button
+            type="button"
             className="btn btn-sm"
-            onClick={() => onRegister && onRegister(hash, name)}
+            onClick={() => onRegister(hash, name)}
             style={{
               color: '#000',
               border: '1px solid var(--status-warning)',
@@ -152,9 +153,8 @@ export default function KeyRow({
               ✓ Stored
             </span>
             {plaintextKey && (
-              <button 
-                className={`btn btn-ghost btn-sm ${showPlaintext ? 'active' : ''}`} 
-                style={{ padding: '2px 4px', height: 20 }} 
+              <button type="button" className={`btn btn-ghost btn-sm ${showPlaintext ? 'active' : ''}`}
+                style={{ padding: '2px 4px', height: 20 }}
                 onClick={() => setShowPlaintext(!showPlaintext)}
                 title={showPlaintext ? 'Hide Key' : 'Show Key'}
               >
@@ -164,7 +164,7 @@ export default function KeyRow({
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => onRegister && onRegister(hash, name)}
+              onClick={() => onRegister(hash, name)}
               title="Replace key string"
               style={{ fontSize: '0.72rem', padding: '2px 8px', height: 24 }}
             >
@@ -184,13 +184,14 @@ export default function KeyRow({
             cursor: 'pointer',
           }}
           title={enabled ? 'Click to disable' : 'Click to enable'}
-          onClick={() => onDisable && onDisable(hash, enabled)}
+          onClick={() => onDisable(hash, enabled)}
         >
           {enabled ? '● ON' : '○ OFF'}
         </span>
         <button
+          type="button"
           className="btn btn-ghost btn-sm"
-          onClick={() => onDelete && onDelete(hash)}
+          onClick={() => onDelete(hash)}
           title="Delete key"
           style={{ fontSize: '0.65rem', padding: '1px 5px', color: 'var(--status-error)', opacity: 0.6 }}
         >

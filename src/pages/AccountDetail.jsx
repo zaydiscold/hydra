@@ -37,7 +37,7 @@ function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
     if (!name.trim()) {
       newErrors.name = 'Key Name is required';
     }
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -74,7 +74,7 @@ function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
         <div className="modal animate-spring" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3>[SUCCESS] Key Created!</h3>
-            <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+            <button type="button" className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
           </div>
           <p style={{ color: 'var(--status-warning)', fontSize: '0.85rem', marginBottom: 'var(--space-md)' }}>
             [WARNING] Copy your key now. It won't be shown again.
@@ -83,12 +83,12 @@ function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
             <code style={{ flex: 1 }}>
               <ScrambleText text={createdKey} duration={1000} />
             </code>
-            <button className="btn btn-secondary btn-sm" onClick={handleCopy}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={handleCopy}>
               {copied ? '✓ Copied' : 'Copy'}
             </button>
           </div>
           <div className="modal-footer">
-            <button className="btn btn-primary" onClick={onClose}>Done</button>
+            <button type="button" className="btn btn-primary" onClick={onClose}>Done</button>
           </div>
         </div>
       </div>
@@ -100,7 +100,7 @@ function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
       <div className="modal animate-spring" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Create New API Key</h3>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+          <button type="button" className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
@@ -478,8 +478,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         <div className="page-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <ShieldIcon size={28} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
-            <button
-              className="btn btn-ghost"
+            <button type="button" className="btn btn-ghost"
               style={{ padding: '3px 7px', minHeight: 'unset', fontSize: '0.7rem', opacity: 0.5, marginRight: 4 }}
               onClick={onBack}
             >
@@ -579,7 +578,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <h3>Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}</h3>
               <p>Full account-control credentials. Snapshot is degraded, but stored management keys remain visible here.</p>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
               {loadingMgmtKeys ? '…' : '↻'}
             </button>
           </div>
@@ -587,7 +586,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="account-detail-inline-status account-detail-inline-status--error">
               <span>Management key list failed to load.</span>
               <span style={{ color: 'var(--text-secondary)' }}>{managementKeysLoadError}</span>
-              <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
                 {loadingMgmtKeys ? '…' : 'Retry'}
               </button>
             </div>
@@ -596,7 +595,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="account-detail-empty-inline">
               <div>No management keys in Hydra.</div>
               <div style={{ color: 'var(--text-tertiary)' }}>Provision a new one or import an existing key from OpenRouter.</div>
-              <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
                 Reload keys
               </button>
             </div>
@@ -608,8 +607,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <code className="access-key-secret">{key.preview}</code>
               <span className="access-key-date">{formatDate(key.createdAt)}</span>
               {key.status === 'active' && (
-                <button
-                  className="btn btn-ghost btn-sm"
+                <button type="button" className="btn btn-ghost btn-sm"
                   style={{ marginLeft: 'auto', color: 'var(--status-error)', fontSize: '0.7rem' }}
                   onClick={() => handleRevokeKey(key.id)}
                 >
@@ -619,8 +617,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             </div>
           ))}
           <div className="access-key-import">
-            <button
-              className="btn btn-ghost btn-sm"
+            <button type="button" className="btn btn-ghost btn-sm"
               onClick={() => setShowImport(v => !v)}
               style={{ marginTop: 8 }}
             >
@@ -696,8 +693,8 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <div className="modal-title">Remove account from Hydra?</div>
               <p className="modal-body">This only removes the account from Hydra — your OpenRouter account, keys, and credits are not affected.</p>
               <div className="modal-actions">
-                <button className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
+                <button type="button" className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
               </div>
             </div>
           </div>
@@ -822,8 +819,8 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <div className="modal-title">Remove account from Hydra?</div>
               <p className="modal-body">This only removes the account from Hydra — your OpenRouter account, keys, and credits are not affected.</p>
               <div className="modal-actions">
-                <button className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
+                <button type="button" className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
               </div>
             </div>
           </div>
@@ -843,8 +840,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <ShieldIcon size={28} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
-          <button
-            className="btn btn-ghost"
+          <button type="button" className="btn btn-ghost"
             style={{ padding: '3px 7px', minHeight: 'unset', fontSize: '0.7rem', opacity: 0.5, marginRight: 4 }}
             onClick={onBack}
           >
@@ -861,16 +857,15 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                 autoFocus
                 spellCheck={false}
               />
-              <button className="btn btn-primary btn-sm" onClick={handleSaveAlias} disabled={aliasSaving}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveAlias} disabled={aliasSaving}>
                 {aliasSaving ? '…' : 'Save'}
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setEditingAlias(false)}>Cancel</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingAlias(false)}>Cancel</button>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <AnimeText as="h2" mode="words" variant="scanline" delay={26} style={{ margin: 0 }}>{snapshot.alias}</AnimeText>
-              <button
-                className="btn btn-ghost"
+              <button type="button" className="btn btn-ghost"
                 style={{ padding: '4px 6px', minHeight: 'unset', opacity: 0.6 }}
                 title="Edit account name"
                 onClick={() => { setAliasInput(snapshot.alias); setEditingAlias(true); }}
@@ -1004,7 +999,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <h3>Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}</h3>
               <p>Full account-control credentials: balances, API-key creation, disable/delete, and account maintenance.</p>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
               {loadingMgmtKeys ? '…' : '↻'}
             </button>
           </div>
@@ -1015,10 +1010,10 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <span className="mono access-key-secret">
                 {revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview}
               </span>
-              <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }} onClick={handleRevealMgmtKey} title={revealedMgmt ? 'Hide' : 'Reveal'} disabled={loadingMgmtReveal}>
+              <button type="button" className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }} onClick={handleRevealMgmtKey} title={revealedMgmt ? 'Hide' : 'Reveal'} disabled={loadingMgmtReveal}>
                 {loadingMgmtReveal ? <span style={{ fontSize: '0.65rem' }}>…</span> : revealedMgmt ? <EyeOffIcon size={11} /> : <EyeIcon size={11} />}
               </button>
-              <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }} onClick={() => void copyKey('mgmt', revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview)}>
+              <button type="button" className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }} onClick={() => void copyKey('mgmt', revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview)}>
                 {copiedKey === 'mgmt' ? <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={11} />}
               </button>
             </div>
@@ -1031,8 +1026,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <code className="access-key-secret">{key.preview}</code>
               <span className="access-key-date">{formatDate(key.createdAt)}</span>
               {key.status === 'active' && (
-                <button
-                  className="btn btn-ghost btn-sm"
+                <button type="button" className="btn btn-ghost btn-sm"
                   style={{ marginLeft: 'auto', color: 'var(--status-error)', fontSize: '0.7rem' }}
                   onClick={() => handleRevokeKey(key.id)}
                 >
@@ -1045,7 +1039,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="account-detail-inline-status account-detail-inline-status--error">
               <span>Management key list failed to load.</span>
               <span style={{ color: 'var(--text-secondary)' }}>{managementKeysLoadError}</span>
-              <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
                 {loadingMgmtKeys ? '…' : 'Retry'}
               </button>
             </div>
@@ -1054,14 +1048,13 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="account-detail-empty-inline">
               <div>No management keys in Hydra.</div>
               <div style={{ color: 'var(--text-tertiary)' }}>Provision a new one or import an existing key from OpenRouter.</div>
-              <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
                 Reload keys
               </button>
             </div>
           )}
           <div className="access-key-import">
-            <button
-              className="btn btn-ghost btn-sm"
+            <button type="button" className="btn btn-ghost btn-sm"
               onClick={() => setShowImport(v => !v)}
               style={{ marginTop: 8 }}
             >
@@ -1158,10 +1151,10 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           <span className="section-count">{keys.length}</span>
         </div>
         <div className="action-bar-group" style={{ marginLeft: 'auto' }}>
-          <button className="btn btn-secondary btn-sm" onClick={fetchSnapshot} disabled={loading}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={fetchSnapshot} disabled={loading}>
             <span className={loading ? 'spin-inline' : ''}>↻</span> Refresh
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowCreateModal(true)}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowCreateModal(true)}>
             <PlusIcon size={14} /> Create Key
           </button>
         </div>
@@ -1177,7 +1170,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           </div>
           <h3>No API keys</h3>
           <p>Create your first API key for this account.</p>
-          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+          <button type="button" className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
             <PlusIcon size={18} style={{ marginRight: 8 }} />
             Create Key
           </button>
@@ -1213,8 +1206,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                             : (key.label ? key.label.slice(0, 8) + '••••••' : '—')}
                         </span>
                         {key.hasKeyString && (
-                          <button
-                            className="btn btn-ghost"
+                          <button type="button" className="btn btn-ghost"
                             style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }}
                             title={revealedKeys.has(key.hash) ? 'Hide' : 'Show full key'}
                             onClick={() => toggleReveal(key.hash)}
@@ -1223,8 +1215,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                           </button>
                         )}
                         {key.hasKeyString && (
-                          <button
-                            className="btn btn-ghost"
+                          <button type="button" className="btn btn-ghost"
                             style={{ padding: '2px 4px', minHeight: 'unset' }}
                             title="Copy key"
                             onClick={() => void copyKey(key.hash, key.plaintextKey || key.label)}
@@ -1258,8 +1249,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                         {key.hasKeyString && (() => {
                           const ts = testKeyStatus[key.hash];
                           return (
-                            <button
-                              className="btn btn-secondary btn-sm"
+                            <button type="button" className="btn btn-secondary btn-sm"
                               onClick={() => handleTestKey(key.hash)}
                               disabled={ts?.loading}
                               title="Test key against OpenRouter"
@@ -1272,8 +1262,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                             </button>
                           );
                         })()}
-                        <button
-                          className="btn btn-secondary btn-sm"
+                        <button type="button" className="btn btn-secondary btn-sm"
                           onClick={() => handleToggleKey(key.hash, isKeyDisabled)}
                           disabled={actionLoading[key.hash]}
                           title={isKeyDisabled ? 'Enable' : 'Disable'}
@@ -1281,8 +1270,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                           {isKeyDisabled ? <PlusIcon size={12} /> : <PowerIcon size={12} />}
                           {isKeyDisabled ? 'Enable' : 'Disable'}
                         </button>
-                        <button
-                          className="btn btn-danger btn-sm"
+                        <button type="button" className="btn btn-danger btn-sm"
                           onClick={() => handleDeleteKey(key.hash, key.name)}
                           disabled={actionLoading[key.hash]}
                           title="Delete key"
@@ -1336,7 +1324,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           <PowerIcon size={14} style={{ color: 'var(--status-error)', flexShrink: 0 }} />
           <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Remove this account from Hydra — OpenRouter data stays untouched.</span>
         </div>
-        <button className="btn btn-danger btn-sm" onClick={handleDeleteAccount}>
+        <button type="button" className="btn btn-danger btn-sm" onClick={handleDeleteAccount}>
           <TrashIcon size={12} /> Remove Account
         </button>
       </div>
@@ -1371,8 +1359,8 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="modal-title">Delete key?</div>
             <p className="modal-body">Delete <strong>{deleteKeyConfirm.name}</strong>? This removes it from OpenRouter and the local vault permanently.</p>
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setDeleteKeyConfirm(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDeleteKeyConfirmed}>Delete key</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setDeleteKeyConfirm(null)}>Cancel</button>
+              <button type="button" className="btn btn-danger" onClick={handleDeleteKeyConfirmed}>Delete key</button>
             </div>
           </div>
         </div>
@@ -1384,8 +1372,8 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="modal-title">Remove account from Hydra?</div>
             <p className="modal-body">This only removes the account from Hydra — your OpenRouter account, keys, and credits are not affected.</p>
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setDeleteAccountConfirm(false)}>Cancel</button>
+              <button type="button" className="btn btn-danger" onClick={handleDeleteAccountConfirmed}>Remove account</button>
             </div>
           </div>
         </div>

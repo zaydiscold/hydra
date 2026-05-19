@@ -12,8 +12,8 @@ export default function DeleteKeyModal({ hash, onClose, onConfirm }) {
         </p>
         <p className="modal-body">This removes the key from OpenRouter and the local vault. This cannot be undone.</p>
         <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-danger" onClick={onConfirm}>Delete key</button>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-danger" onClick={onConfirm}>Delete key</button>
         </div>
       </div>
     </div>

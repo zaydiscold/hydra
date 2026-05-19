@@ -56,10 +56,10 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
           .map(l => l.trim())
           .filter(Boolean);
 
-        if (lines.length === 0) { 
-          setError('No valid lines entered. Try alias:email:pass or raw session cookies.'); 
-          setLoading(false); 
-          return; 
+        if (lines.length === 0) {
+          setError('No valid lines entered. Try alias:email:pass or raw session cookies.');
+          setLoading(false);
+          return;
         }
         const res = await api.bulkAddAccounts(lines);
         const created = res.data?.created ?? 0;
@@ -87,7 +87,7 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
               Connect accounts to start managing them
             </p>
           </div>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+          <button type="button" className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
 
         <div className="method-tabs" style={{ marginBottom: 'var(--space-lg)' }}>
@@ -97,10 +97,10 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
             { id: 'key',         icon: <KeyIcon size={24} />, title: 'Control Key',   sub: 'Existing management key' },
           ].map(m => (
             <button
+              type="button"
               key={m.id}
               className={`method-tab ${addMethod === m.id ? 'active' : ''}`}
               onClick={() => setAddMethod(m.id)}
-              type="button"
             >
               <span style={{ marginBottom: 4, display: 'block' }}>{m.icon}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -118,17 +118,17 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
                 <label style={{ color: errors.alias ? 'var(--status-error)' : 'inherit' }}>
                   Account Alias
                 </label>
-                <input 
-                  type="text" 
-                  className={`form-input ${errors.alias ? 'error' : ''}`} 
+                <input
+                  type="text"
+                  className={`form-input ${errors.alias ? 'error' : ''}`}
                   placeholder="e.g., Personal, Burner-1..."
-                  value={alias} 
+                  value={alias}
                   onChange={(e) => {
                     setAlias(e.target.value);
                     if (errors.alias) setErrors(prev => ({ ...prev, alias: null }));
-                  }} 
-                  autoFocus 
-                  spellCheck={false} 
+                  }}
+                  autoFocus
+                  spellCheck={false}
                 />
                 {errors.alias && <p className="field-error">{errors.alias}</p>}
               </div>
@@ -136,16 +136,16 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
                 <label style={{ color: errors.managementKey ? 'var(--status-error)' : 'inherit' }}>
                   Management Key
                 </label>
-                <input 
-                  type="password" 
-                  className={`form-input form-input-mono ${errors.managementKey ? 'error' : ''}`} 
+                <input
+                  type="password"
+                  className={`form-input form-input-mono ${errors.managementKey ? 'error' : ''}`}
                   placeholder="sk-or-mgmt-..."
-                  value={managementKey} 
+                  value={managementKey}
                   onChange={(e) => {
                     setManagementKey(e.target.value);
                     if (errors.managementKey) setErrors(prev => ({ ...prev, managementKey: null }));
-                  }} 
-                  spellCheck={false} 
+                  }}
+                  spellCheck={false}
                 />
                 {errors.managementKey && <p className="field-error">{errors.managementKey}</p>}
                 <p className="form-hint">Use a management key for full account control: balances plus creating, disabling, and deleting model API keys. A normal model API key only grants AI request access and cannot manage the account.</p>
@@ -159,17 +159,17 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
                 <label style={{ color: errors.alias ? 'var(--status-error)' : 'inherit' }}>
                   Account Alias
                 </label>
-                <input 
-                  type="text" 
-                  className={`form-input ${errors.alias ? 'error' : ''}`} 
+                <input
+                  type="text"
+                  className={`form-input ${errors.alias ? 'error' : ''}`}
                   placeholder="e.g., Account-1, Main..."
-                  value={alias} 
+                  value={alias}
                   onChange={(e) => {
                     setAlias(e.target.value);
                     if (errors.alias) setErrors(prev => ({ ...prev, alias: null }));
-                  }} 
-                  autoFocus 
-                  spellCheck={false} 
+                  }}
+                  autoFocus
+                  spellCheck={false}
                 />
                 {errors.alias && <p className="field-error">{errors.alias}</p>}
               </div>
@@ -177,17 +177,17 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
                 <label style={{ color: errors.email ? 'var(--status-error)' : 'inherit' }}>
                   Email
                 </label>
-                <input 
-                  type="email" 
-                  className={`form-input ${errors.email ? 'error' : ''}`} 
+                <input
+                  type="email"
+                  className={`form-input ${errors.email ? 'error' : ''}`}
                   placeholder="account@example.com"
-                  value={email} 
+                  value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                     if (errors.email) setErrors(prev => ({ ...prev, email: null }));
-                  }} 
-                  spellCheck={false} 
-                  autoComplete="email" 
+                  }}
+                  spellCheck={false}
+                  autoComplete="email"
                 />
                 {errors.email && <p className="field-error">{errors.email}</p>}
               </div>

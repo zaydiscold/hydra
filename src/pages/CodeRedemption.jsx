@@ -11,7 +11,7 @@ const STATUS = {
 
 function StatusCell({ status, error, errorCode, result }) {
   if (!status) return <span className="text-secondary mono">—</span>;
-  
+
   if (status === 'pending') {
     return (
       <div className="status-cell">
@@ -20,7 +20,7 @@ function StatusCell({ status, error, errorCode, result }) {
       </div>
     );
   }
-  
+
   if (status === 'success') {
     const credits = result?.result?.credits ?? result?.credits;
     const delta =
@@ -42,7 +42,7 @@ function StatusCell({ status, error, errorCode, result }) {
       </div>
     );
   }
-  
+
   if (status === 'error') {
     const short = error?.length > 32 ? error.slice(0, 32) + '…' : error;
     const code = errorCode ?? result?.errorCode;
@@ -348,7 +348,7 @@ export default function CodeRedemption({ addToast }) {
         <div className="col-sidebar redeemer-panel" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)' }}>Accounts</span>
-            <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', minHeight: 'unset', fontSize: '0.68rem' }} onClick={toggleAll} disabled={running}>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', minHeight: 'unset', fontSize: '0.68rem' }} onClick={toggleAll} disabled={running}>
               {selectAll ? 'Clear' : 'All'}
             </button>
           </div>
@@ -418,10 +418,9 @@ export default function CodeRedemption({ addToast }) {
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               {hasResults && (
-                <button className="btn btn-secondary btn-sm" onClick={clearAll} disabled={running}>Clear</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={clearAll} disabled={running}>Clear</button>
               )}
-              <button
-                className="btn btn-primary"
+              <button type="button" className="btn btn-primary"
                 onClick={handleRun}
                 disabled={
                   running ||

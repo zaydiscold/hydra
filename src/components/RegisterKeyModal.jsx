@@ -9,7 +9,7 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
 
   useEffect(() => {
     if (!hash) return;
-    
+
     async function tryPaste() {
         try {
             const text = await navigator.clipboard.readText();
@@ -19,7 +19,7 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
             setPasteHint('Clipboard unavailable; paste the key manually.');
         }
     }
-    
+
     tryPaste();
     setTimeout(() => inputRef.current?.focus(), 50);
   }, [hash]);
@@ -79,8 +79,8 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
           {pasteHint && !error && <p className="field-hint">{pasteHint}</p>}
         </div>
         <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving...' : 'Save Key'}
           </button>
         </div>

@@ -41,8 +41,8 @@ export default function BulkAuthWizard({ addToast }) {
           const active = activeTab === tab.id;
           return (
             <button
-              key={tab.id}
               type="button"
+              key={tab.id}
               onClick={() => {
                 setActiveTab(tab.id);
                 auth.resetErrors();
@@ -71,7 +71,7 @@ export default function BulkAuthWizard({ addToast }) {
       </div>
 
       {activeTab === 'email-link' && (
-        <EmailLinkTab 
+        <EmailLinkTab
           pasteText={auth.pasteText}
           setPasteText={auth.setPasteText}
           creating={auth.creating}
@@ -85,7 +85,7 @@ export default function BulkAuthWizard({ addToast }) {
       )}
 
       {activeTab === 'otp' && (
-        <OtpTab 
+        <OtpTab
           pasteText={auth.pasteText}
           setPasteText={auth.setPasteText}
           creating={auth.creating}

@@ -88,11 +88,11 @@ export default function Dashboard({ onSelectAccount, addToast }) {
           )}
           <div className="dashboard-command-actions">
             <span className="dashboard-last-sync">last sync {lastSyncText}</span>
-            <button className="btn btn-secondary btn-sm" onClick={() => fetchDashboard(true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 92 }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => fetchDashboard(true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 92 }}>
               <span className={refreshing ? 'spin-inline' : ''}>↻</span>
               {refreshing ? 'Syncing...' : 'Sync'}
             </button>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 160 }}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 160 }}>
               <PlusIcon size={16} />
               <span>Add Account</span>
             </button>
@@ -139,7 +139,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
               <h3>No accounts stored locally yet.</h3>
               <p>Add your first OpenRouter account to start monitoring balances and managing keys.</p>
               <div style={{ marginTop: 'var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'stretch', maxWidth: 320, marginLeft: 'auto', marginRight: 'auto' }}>
-                <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+                <button type="button" className="btn btn-primary" onClick={() => setShowAddModal(true)}>
                   + Add Your First Account
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={() => navigate('/bulk-auth')}>

@@ -78,7 +78,7 @@ export default class ErrorBoundary extends React.Component {
           <div className="lock-card" style={{ border: '4px solid var(--status-error)', boxShadow: '12px 12px 0 var(--status-error)' }}>
             <div className="lock-card-icon" style={{ background: 'var(--status-error)', color: 'white' }}>CRITICAL ERR</div>
             <h2 style={{ color: 'var(--status-error)', marginTop: 'var(--space-md)' }}>{display.title}</h2>
-            
+
             <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)', fontSize: '0.9rem' }}>
               The application encountered a terminal exception. Your session state is unstable, but Hydra's locally stored encrypted data remains on disk.
             </p>
@@ -91,17 +91,15 @@ export default class ErrorBoundary extends React.Component {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button 
-                className="btn btn-primary" 
+              <button type="button" className="btn btn-primary"
                 onClick={() => window.location.reload()}
                 style={{ background: 'var(--status-error)', borderColor: 'var(--status-error)', width: '100%' }}
               >
                 REBOOT SYSTEM (F5)
               </button>
-              
+
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button 
-                  className="btn btn-secondary" 
+                <button type="button" className="btn btn-secondary"
                   onClick={() => {
                     localStorage.removeItem('hydra_token');
                     window.location.href = '/';
@@ -110,8 +108,7 @@ export default class ErrorBoundary extends React.Component {
                 >
                   PURGE SESSION
                 </button>
-                <button 
-                  className="btn btn-secondary" 
+                <button type="button" className="btn btn-secondary"
                   onClick={() => window.location.href = '/'}
                   style={{ flex: 1, fontSize: '0.75rem' }}
                 >

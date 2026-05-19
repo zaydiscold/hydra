@@ -14,7 +14,7 @@ export default function AttachSignInModal({ account, onClose, onDone }) {
     e.preventDefault();
     const newErrors = {};
     if (!email.trim()) newErrors.email = 'Email is required';
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;

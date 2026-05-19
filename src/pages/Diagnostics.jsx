@@ -175,10 +175,10 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
             refreshed {lastRefreshedAt.toLocaleTimeString()}
           </span>
         )}
-        <button className="btn btn-secondary btn-sm" onClick={fetchData} disabled={loading}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={fetchData} disabled={loading}>
           <RefreshIcon size={14} /> {loading ? 'Loading…' : 'Refresh'}
         </button>
-        <button className="btn btn-primary btn-sm" onClick={handleCopyBundle} disabled={loading}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={handleCopyBundle} disabled={loading}>
           <CopyIcon size={14} /> {copied ? 'Copied!' : 'Support Bundle'}
         </button>
       </div>
@@ -308,12 +308,12 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
               {nativeInfo.paths.userData && (
-                <button className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('userData', 'Data Folder')}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('userData', 'Data Folder')}>
                   Open Data Folder
                 </button>
               )}
               {nativeInfo.paths.logs && (
-                <button className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('logs', 'Logs Folder')}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('logs', 'Logs Folder')}>
                   Open Logs Folder
                 </button>
               )}

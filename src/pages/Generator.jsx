@@ -210,8 +210,7 @@ export default function Generator({ addToast }) {
               </div>
             </div>
 
-            <button
-              className="btn btn-primary generator-start-btn"
+            <button type="button" className="btn btn-primary generator-start-btn"
               onClick={handleStart}
               disabled={!emailTemplate}
             >
@@ -275,7 +274,7 @@ export default function Generator({ addToast }) {
                     style={{ fontSize: '2rem', letterSpacing: '0.4em', width: '240px' }}
                     spellCheck={false}
                   />
-                  <button className="btn btn-primary" onClick={handleVerify} disabled={otp.length !== 6}>
+                  <button type="button" className="btn btn-primary" onClick={handleVerify} disabled={otp.length !== 6}>
                     [VERIFY]
                   </button>
                 </div>
@@ -285,7 +284,7 @@ export default function Generator({ addToast }) {
             )}
           </div>
 
-          <button className="btn btn-ghost" onClick={cancelJob} style={{ marginTop: 'var(--space-xl)', color: 'var(--status-error)' }}>
+          <button type="button" className="btn btn-ghost" onClick={cancelJob} style={{ marginTop: 'var(--space-xl)', color: 'var(--status-error)' }}>
             <span className="btn-icon">
               <PowerIcon size={18} />
               <span>CANCEL & CLEANUP</span>

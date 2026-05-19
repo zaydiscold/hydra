@@ -2,13 +2,13 @@ import React from 'react';
 import { parseEmails } from '../utils/auth';
 import DevBackendHint from '../components/DevBackendHint';
 
-export default function EmailLinkTab({ 
-  pasteText, 
+export default function EmailLinkTab({
+  pasteText,
   setPasteText,
   creating,
-  rows, 
-  logLines, 
-  localError, 
+  rows,
+  logLines,
+  localError,
   errorCopyCommand,
   onSend,
   onResend
@@ -63,8 +63,8 @@ export default function EmailLinkTab({
                   background: 'var(--bg-secondary)',
                   borderRadius: 6,
                   borderLeft: `3px solid ${
-                    r.status === 'done' ? 'var(--status-success)' : 
-                    r.status === 'error' ? 'var(--status-error)' : 
+                    r.status === 'done' ? 'var(--status-success)' :
+                    r.status === 'error' ? 'var(--status-error)' :
                     'var(--border-subtle)'
                   }`,
                 }}
@@ -77,7 +77,7 @@ export default function EmailLinkTab({
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 }}>{r.message}</div>
                 </div>
                 {r.status === 'error' && (
-                  <button className="btn btn-ghost btn-sm" onClick={() => onResend(r)}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => onResend(r)}>
                     Retry
                   </button>
                 )}

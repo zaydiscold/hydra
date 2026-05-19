@@ -200,7 +200,7 @@ export default function Vault({ addToast }) {
       setProvisioningId(null);
     }
   }, [actionSessionTruth, addToast, loadAccounts]);
-  
+
   const handleEdit = useCallback((acc) => {
     setEditModal({ acc, value: acc.alias });
   }, []);
@@ -337,16 +337,14 @@ export default function Vault({ addToast }) {
               <div className="spinner-sm" /> probing…
             </span>
           )}
-          <button
-            className="btn btn-secondary btn-sm"
+          <button type="button" className="btn btn-secondary btn-sm"
             onClick={() => exportAccountsCSV(accounts)}
             disabled={accounts.length === 0}
             title="Download account metadata as CSV (no secrets exported)"
           >
             ↓ Export CSV
           </button>
-          <button
-            className="btn btn-secondary btn-sm"
+          <button type="button" className="btn btn-secondary btn-sm"
             onClick={() => loadAccounts(true)}
             disabled={loading || probing}
             style={{ gap: 8 }}
@@ -660,8 +658,8 @@ export default function Vault({ addToast }) {
               )}
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-              <button className="btn btn-ghost" onClick={() => setEditModal(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={commitEdit}>Save</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setEditModal(null)}>Cancel</button>
+              <button type="button" className="btn btn-primary" onClick={commitEdit}>Save</button>
             </div>
           </div>
         </div>
@@ -677,8 +675,8 @@ export default function Vault({ addToast }) {
               <strong style={{ color: 'var(--status-error)' }}>This cannot be undone.</strong>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteModal(null)}>Cancel</button>
-              <button className="btn" style={{ background: 'var(--status-error)', color: '#fff', fontWeight: 700 }} onClick={commitDelete}>Delete</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setDeleteModal(null)}>Cancel</button>
+              <button type="button" className="btn" style={{ background: 'var(--status-error)', color: '#fff', fontWeight: 700 }} onClick={commitDelete}>Delete</button>
             </div>
           </div>
         </div>

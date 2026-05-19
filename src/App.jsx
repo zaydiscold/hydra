@@ -6,11 +6,11 @@ import { logger } from './lib/client-logger.js';
 import { isElectron, native as nativeBridge, tryNative } from './lib/native';
 import DevBackendHint from './components/DevBackendHint';
 import ErrorBoundary from './components/ErrorBoundary';
-import { 
-  DashboardIcon, 
-  VaultIcon, 
-  TicketIcon, 
-  GeneratorIcon, 
+import {
+  DashboardIcon,
+  VaultIcon,
+  TicketIcon,
+  GeneratorIcon,
   SettingsIcon,
   LockIcon,
   PowerIcon,
@@ -171,25 +171,25 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
     if (isNuking) {
       const start = Date.now();
       const duration = 10000; // 10 seconds
-      
+
       const update = () => {
         const now = Date.now();
         const nextProgress = Math.min(100, ((now - start) / duration) * 100);
         setNukeProgress(nextProgress);
-        
+
         if (nextProgress < 100 && isNuking) {
           timerRef.current = requestAnimationFrame(update);
         } else if (nextProgress >= 100) {
           handleFinalNuke();
         }
       };
-      
+
       timerRef.current = requestAnimationFrame(update);
     } else if (!isNuking) {
       cancelAnimationFrame(timerRef.current);
       setNukeProgress(0);
     }
-    
+
     return () => cancelAnimationFrame(timerRef.current);
   }, [handleFinalNuke, isNuking]);
 
@@ -381,7 +381,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
           <div className="lock-card-icon" style={{ margin: 0 }}>HYDRA</div>
           <h2 style={{ margin: 0, whiteSpace: 'nowrap' }}>{isSetup ? 'Welcome to Hydra' : 'Unlock Hydra'}</h2>
         </div>
-        
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
           <div className="vault-indicator" style={{ margin: 0 }}>
             <div className="vault-dot" />
@@ -463,9 +463,9 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
 
         {!isSetup && (
           <div style={{ marginTop: 'var(--space-md)', textAlign: 'center' }}>
-            <button 
-              className="btn btn-ghost" 
+            <button
               type="button"
+              className="btn btn-ghost"
               style={{ fontSize: '0.75rem', opacity: 0.6 }}
               onClick={() => {
                 setError('');
@@ -488,8 +488,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
       <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 'var(--space-xl)', paddingTop: 'var(--space-md)' }}>
          {!isSetup && (
            <div style={{ textAlign: 'center' }}>
-             <button 
-               className={`nuke-btn ${isNuking ? 'nuke-active' : ''}`}
+             <button type="button" className={`nuke-btn ${isNuking ? 'nuke-active' : ''}`}
                onMouseDown={handleNukeStart}
                onMouseUp={handleNukeEnd}
                onMouseLeave={handleNukeEnd}
@@ -896,8 +895,7 @@ export default function App() {
           </a>
         <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}${rendererChrome ? ' app-layout--with-chrome' : ''}`}>
           <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`} role="navigation" aria-label="Main navigation">
-            <button
-              className="sidebar-logo"
+            <button type="button" className="sidebar-logo"
               onClick={() => navigate('/')}
               title="Go to Dashboard"
               style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', padding: 0 }}
@@ -930,8 +928,7 @@ export default function App() {
                   ? (location.pathname === '/' || location.pathname.startsWith('/dashboard'))
                   : location.pathname.startsWith(item.path);
                 return (
-                  <button
-                    key={item.id}
+                  <button type="button" key={item.id}
                     className={`nav-link ${isActive ? 'active' : ''}`}
                     aria-current={isActive ? 'page' : undefined}
                     onClick={() => navigate(item.path)}
@@ -945,8 +942,7 @@ export default function App() {
             </nav>
 
             <div className="sidebar-bottom">
-              <button
-                className="nav-link"
+              <button type="button" className="nav-link"
                 style={{ color: 'var(--text-tertiary)', opacity: 0.7 }}
                 onClick={() => setSidebarCollapsed(v => !v)}
                 title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -963,22 +959,22 @@ export default function App() {
               </button>
               {isElectron() ? (
                 <>
-                  <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
+                  <button type="button" className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
                     <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock Vault</span>}
                   </button>
-                  <button className="nav-link" style={{ color: 'var(--status-error)' }} onClick={handleQuit} title="Quit">
+                  <button type="button" className="nav-link" style={{ color: 'var(--status-error)' }} onClick={handleQuit} title="Quit">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Quit</span>}
                   </button>
                 </>
               ) : (
                 <>
-                  <button className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
+                  <button type="button" className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
                     <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock</span>}
                   </button>
-                  <button className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
+                  <button type="button" className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Shutdown</span>}
                   </button>
@@ -1036,11 +1032,11 @@ export default function App() {
                 <div className="modal-title">Shut down Hydra?</div>
                 <p className="modal-body">Quit stops the local proxy. Hide keeps Hydra running in the background so clients can keep using it.</p>
                 <div className="modal-actions">
-                  <button className="btn btn-ghost" onClick={() => setShutdownConfirm(false)}>Cancel</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setShutdownConfirm(false)}>Cancel</button>
                   {isElectron() && (
-                    <button className="btn btn-secondary" onClick={handleHideToBackground}>Hide Window</button>
+                    <button type="button" className="btn btn-secondary" onClick={handleHideToBackground}>Hide Window</button>
                   )}
-                  <button className="btn btn-danger" onClick={handleShutdownConfirmed}>Shut down</button>
+                  <button type="button" className="btn btn-danger" onClick={handleShutdownConfirmed}>Shut down</button>
                 </div>
               </div>
             </div>

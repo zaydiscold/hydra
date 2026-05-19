@@ -192,6 +192,41 @@ test('every source JSX button has an executable action or form submit contract',
   assert.deepEqual(issues, []);
 });
 
+test('every source JSX button declares an explicit button type', () => {
+  const files = listFiles('src', (file) => /\.(jsx|js)$/.test(file));
+  const issues = [];
+
+  for (const file of files) {
+    const source = readRepoFile(file);
+    for (const match of source.matchAll(/<button\b[\s\S]*?>/g)) {
+      const tag = match[0];
+      const typeAttrs = tag.match(/\btype\s*=/g) ?? [];
+      if (typeAttrs.length !== 1) {
+        const line = source.slice(0, match.index).split('\n').length;
+        issues.push(`${file}:${line}: ${tag.replace(/\s+/g, ' ').slice(0, 140)}`);
+      }
+    }
+  }
+
+  assert.deepEqual(issues, []);
+});
+
+test('active source JSX buttons do not guard required click handlers into silent no-ops', () => {
+  const files = listFiles('src', (file) => /\.(jsx|js)$/.test(file));
+  const issues = [];
+  const guardedHandlerPattern = /onClick=\{\s*\(\s*[^)]*\s*\)\s*=>\s*on[A-Z][A-Za-z0-9_]*\s*&&\s*on[A-Z][A-Za-z0-9_]*\s*\(/g;
+
+  for (const file of files) {
+    const source = readRepoFile(file);
+    for (const match of source.matchAll(guardedHandlerPattern)) {
+      const line = source.slice(0, match.index).split('\n').length;
+      issues.push(`${file}:${line}: ${match[0].replace(/\s+/g, ' ')}`);
+    }
+  }
+
+  assert.deepEqual(issues, []);
+});
+
 test('generator keeps instructions compact instead of a second desktop-sized panel', () => {
   const generator = readRepoFile('src/pages/Generator.jsx');
   const css = readRepoFile('src/index.css');

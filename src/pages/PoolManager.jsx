@@ -41,7 +41,7 @@ function CopyButton({ text, label }) {
     }
   };
   return (
-    <button className="btn btn-ghost btn-sm" onClick={() => void handleCopy()} style={{ fontSize: '0.65rem', padding: '2px 6px', gap: 4 }}>
+    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleCopy()} style={{ fontSize: '0.65rem', padding: '2px 6px', gap: 4 }}>
       <CopyIcon size={12} /> {copyFailed ? 'Copy failed' : copied ? 'Copied!' : `Copy ${label}`}
     </button>
   );
@@ -191,7 +191,7 @@ function EndpointCard({
                 {filteredModels.map(m => (
                   <div key={m.id} style={{ padding: '4px 10px', fontSize: '0.7rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="hover-bg">
                     <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{m.id}</span>
-                    <button className="btn btn-ghost btn-sm" onClick={() => void copyModelId(m.id)} style={{ padding: '2px 4px', height: 20 }}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void copyModelId(m.id)} style={{ padding: '2px 4px', height: 20 }}>
                       {copyFailedModelId === m.id ? '!' : copiedModelId === m.id ? '✓' : <CopyIcon size={10} />}
                     </button>
                   </div>
@@ -244,8 +244,8 @@ export default function PoolManager({ addToast }) {
   const filteredAccounts = useMemo(() => {
     if (!search) return accounts;
     const s = search.toLowerCase();
-    return accounts.filter(a => 
-      a.name?.toLowerCase().includes(s) || 
+    return accounts.filter(a =>
+      a.name?.toLowerCase().includes(s) ||
       a.email?.toLowerCase().includes(s) ||
       a.keys.some(k => k.name?.toLowerCase().includes(s) || k.hash.toLowerCase().includes(s))
     );
@@ -277,7 +277,7 @@ export default function PoolManager({ addToast }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-secondary" onClick={() => load(true)} disabled={refreshing}>
+          <button type="button" className="btn btn-secondary" onClick={() => load(true)} disabled={refreshing}>
             {refreshing ? <div className="spinner-sm" /> : <RefreshIcon size={16} />} Refresh
           </button>
         </div>
@@ -291,10 +291,10 @@ export default function PoolManager({ addToast }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
                 <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
                   <SearchIcon size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
-                  <input 
-                    type="text" 
-                    placeholder="Search accounts or keys..." 
-                    className="input" 
+                  <input
+                    type="text"
+                    placeholder="Search accounts or keys..."
+                    className="input"
                     style={{ paddingLeft: 32, height: 36, fontSize: '0.85rem' }}
                     value={search}
                     onChange={e => setSearch(e.target.value)}
@@ -314,9 +314,9 @@ export default function PoolManager({ addToast }) {
                 </div>
               ) : (
                 filteredAccounts.map(a => (
-                  <AccountRow 
-                    key={a.id} 
-                    account={a} 
+                  <AccountRow
+                    key={a.id}
+                    account={a}
                     onToggleKey={onToggleKey}
                     onRegisterKey={(hash, name) => setRegistering({ hash, name })}
                     onDisableKey={handleDisableKey}
@@ -444,7 +444,7 @@ export default function PoolManager({ addToast }) {
 
       {/* Modals */}
       {registering && (
-        <RegisterKeyModal 
+        <RegisterKeyModal
           keyHash={registering.hash}
           keyName={registering.name}
           onClose={() => setRegistering(null)}
@@ -456,7 +456,7 @@ export default function PoolManager({ addToast }) {
       )}
 
       {deleting && (
-        <DeleteKeyModal 
+        <DeleteKeyModal
           keyHash={deleting}
           onClose={() => setDeleting(null)}
           onConfirm={(hash) => {

@@ -1,7 +1,7 @@
 import { useTraffic } from '../hooks/useTraffic';
 import AnimeText from '../components/AnimeText';
 import ScrambleText from '../components/ScrambleText';
-import { 
+import {
   ActivityIcon,
   RefreshIcon,
   AlertIcon,
@@ -38,7 +38,7 @@ export default function Traffic({ addToast }) {
   });
 
   const errorRate = totalRequests > 0 ? ((errorRequests / totalRequests) * 100).toFixed(1) : 0;
-  
+
   // Calculate RPM from logs (very rough estimate based on the last 100 requests)
   let rpm = 0;
   if (logs.length > 1) {
@@ -70,7 +70,7 @@ export default function Traffic({ addToast }) {
               <span>Syncing...</span>
             </div>
           )}
-          <button className="btn btn-secondary" onClick={() => fetchTraffic(true)} disabled={refreshing || loading}>
+          <button type="button" className="btn btn-secondary" onClick={() => fetchTraffic(true)} disabled={refreshing || loading}>
             <span className={refreshing ? 'spin-inline' : ''}><RefreshIcon size={14} /></span>
             {refreshing ? 'Polling' : 'Refresh'}
           </button>

@@ -1,13 +1,13 @@
 import React from 'react';
 import ScrambleText from './ScrambleText';
 
-export default function SummaryCard({ 
-  label, 
-  value, 
-  subtitle, 
-  icon: Icon, 
+export default function SummaryCard({
+  label,
+  value,
+  subtitle,
+  icon: Icon,
   variant = 'default',
-  delay = 0 
+  delay = 0
 }) {
   const getVariantClass = () => {
     if (variant === 'success') return 'success';
