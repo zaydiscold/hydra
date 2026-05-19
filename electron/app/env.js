@@ -157,6 +157,14 @@ export function setupPlatform() {
   // Disable browser features we do not use. Keep GPU compositing enabled:
   // this UI is CSS-heavy, and software compositing makes window open/paint feel laggy.
   app.commandLine.appendSwitch('disable-features', 'Translate');
+  // Hydra does not use Chromium's password manager. On macOS, Chromium can
+  // otherwise touch the user's login keychain during startup and produce
+  // repeated "Hydra wants to use your confidential information" prompts.
+  // Keep app secrets in Hydra's own owner-only files instead.
+  app.commandLine.appendSwitch('password-store', 'basic');
+  if (process.platform === 'darwin') {
+    app.commandLine.appendSwitch('use-mock-keychain');
+  }
 }
 
 // ─── 3. Environment Setup (MUST be before any server import) ────────────────

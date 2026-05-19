@@ -36,6 +36,11 @@ export default function Settings({ addToast }) {
   const [prefs, setPrefs] = useState(null);
   const [biometricInfo, setBiometricInfo] = useState(null);
   const [authTokenStatus, setAuthTokenStatus] = useState(null);
+  const resolvedBiometricInfo = biometricInfo || {
+    available: false,
+    label: inElectron ? 'Touch ID' : 'Biometric',
+    reason: inElectron ? 'Touch ID status is still loading or unavailable.' : 'Biometric unlock is only available in the desktop app.',
+  };
   useEffect(() => {
     if (!inElectron) return;
     let mounted = true;
@@ -358,36 +363,36 @@ export default function Settings({ addToast }) {
       )}
 
       {/* ── Biometric Unlock (#11) ──────────────────────────────────── */}
-      {inElectron && biometricInfo && (
+      {inElectron && (
         <div className="card" style={{ padding: 'var(--space-md)', marginTop: 'var(--space-md)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <LockIcon size={15} style={{ color: 'var(--accent-primary)' }} />
             <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {biometricInfo.label || 'Biometric'} Unlock
+              {resolvedBiometricInfo.label || 'Biometric'} Unlock
             </span>
             <span style={{
               marginLeft: 'auto', fontSize: '0.65rem', fontFamily: 'var(--font-mono)',
-              color: biometricInfo.available ? 'var(--status-success)' : 'var(--text-tertiary)',
+              color: resolvedBiometricInfo.available ? 'var(--status-success)' : 'var(--text-tertiary)',
             }}>
-              {biometricInfo.available ? 'AVAILABLE' : 'UNAVAILABLE'}
+              {resolvedBiometricInfo.available ? 'AVAILABLE' : 'UNAVAILABLE'}
             </span>
           </div>
           <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 10px' }}>
-            {biometricInfo.available
-              ? `Use ${biometricInfo.label} to unlock the vault on this device. Your password is still required for sensitive operations.`
-              : (biometricInfo.reason || `${biometricInfo.label} is not available on this device.`)}
+            {resolvedBiometricInfo.available
+              ? `Use ${resolvedBiometricInfo.label} to unlock the vault on this device. Your password is still required for sensitive operations.`
+              : (resolvedBiometricInfo.reason || `${resolvedBiometricInfo.label} is not available on this device.`)}
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: biometricInfo.available ? 'pointer' : 'not-allowed', opacity: biometricInfo.available ? 1 : 0.5 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: resolvedBiometricInfo.available ? 'pointer' : 'not-allowed', opacity: resolvedBiometricInfo.available ? 1 : 0.5 }}>
               <input
                 type="checkbox"
-                disabled={!biometricInfo.available}
+                disabled={!resolvedBiometricInfo.available}
                 checked={Boolean(prefs?.biometricEnabled)}
                 onChange={(e) => togglePref('biometricEnabled', e.target.checked)}
               />
-              Require {biometricInfo.label} when unlocking the vault
+              Require {resolvedBiometricInfo.label} when unlocking the vault
             </label>
-            {biometricInfo.available && (
+            {resolvedBiometricInfo.available && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={tryBiometricPrompt}>
                 Test Prompt
               </button>

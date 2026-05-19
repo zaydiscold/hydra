@@ -65,6 +65,13 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(main.includes("from 'electron'"), 'main.js must import from electron');
   });
 
+  it('disables Chromium keychain prompts for app startup', () => {
+    const env = readFileSync(resolve(APP_DIR, 'env.js'), 'utf-8');
+
+    assert.match(env, /appendSwitch\('password-store', 'basic'\)/);
+    assert.match(env, /appendSwitch\('use-mock-keychain'\)/);
+  });
+
   it('sets HYDRA_DATA_DIR from app.getPath(userData)', () => {
     const surface = readMainProcessSurface();
     assert.ok(surface.includes('process.env.HYDRA_DATA_DIR'), 'must set HYDRA_DATA_DIR');

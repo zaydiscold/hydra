@@ -347,6 +347,8 @@ test('settings toggles are backed by persisted native preferences', () => {
   const prefsTest = readRepoFile('server/tests/user-prefs.test.mjs');
 
   assert.match(settings, /tryNative\(native\.prefsGetAll\)/);
+  assert.match(settings, /const resolvedBiometricInfo = biometricInfo \|\|/);
+  assert.match(settings, /\{inElectron && \(/);
   assert.match(settings, /await native\.prefsSet\(key, value\)/);
   assert.match(settings, /setPrefs\(\(p\) => \(\{ \.\.\.\(p \|\| \{\}\), \[key\]: value \}\)\)/);
   assert.match(settings, /checked=\{Boolean\(prefs\?\.biometricEnabled\)\}/);
