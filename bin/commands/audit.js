@@ -111,11 +111,19 @@ function buildAudit() {
   const playwrightBrowser = safeRead('server/lib/playwright-browser.js');
   const electronMainProcessTest = safeRead('electron/tests/main-process.test.mjs');
   const electronIpc = safeRead('electron/app/ipc.js');
+  const electronEnv = safeRead('electron/app/env.js');
+  const electronAutoUpdate = safeRead('electron/app/autoUpdate.js');
   const electronBiometric = safeRead('electron/app/biometric.js');
   const electronIpcContractTest = safeRead('server/tests/electron-ipc-contract.test.mjs');
   const filesystemPermissionsTest = safeRead('server/tests/filesystem-permissions.test.mjs');
   const localSecretsTest = safeRead('server/tests/local-secrets.test.mjs');
   const dashboardApi = safeRead('server/services/dashboard-api.js');
+  const accountGenerator = safeRead('server/services/account-generator.js');
+  const accountProxyPool = safeRead('server/services/account-proxy-pool.js');
+  const systemController = safeRead('server/controllers/SystemController.js');
+  const systemRoutes = safeRead('server/routes/system.js');
+  const rendererApi = safeRead('src/api.js');
+  const settingsPage = safeRead('src/pages/Settings.jsx');
   const rotationManager = safeRead('server/services/rotation-manager.js');
   const store = safeRead('server/services/store.js');
   const legacyStorage = safeRead('server/services/legacy-storage.js');
@@ -130,9 +138,18 @@ function buildAudit() {
   const electronPrepare = safeRead('scripts/prepare-electron-resources.mjs');
   const packagedOpenScript = safeRead('scripts/open-packaged-app.mjs');
 
-  const macArmSize = sizeMb('release/Hydra-1.0.0-mac-arm64.zip');
-  const macX64Size = sizeMb('release/Hydra-1.0.0-mac-x64.zip');
-  const winX64Size = sizeMb('release/Hydra-1.0.0-win-x64.exe');
+  const version = pkg.version;
+  const artifactPaths = {
+    macArmZip: `release/Hydra-${version}-mac-arm64.zip`,
+    macArmBlockmap: `release/Hydra-${version}-mac-arm64.zip.blockmap`,
+    macX64Zip: `release/Hydra-${version}-mac-x64.zip`,
+    macX64Blockmap: `release/Hydra-${version}-mac-x64.zip.blockmap`,
+    winX64Exe: `release/Hydra-${version}-win-x64.exe`,
+    winX64Blockmap: `release/Hydra-${version}-win-x64.exe.blockmap`,
+  };
+  const macArmSize = sizeMb(artifactPaths.macArmZip);
+  const macX64Size = sizeMb(artifactPaths.macX64Zip);
+  const winX64Size = sizeMb(artifactPaths.winX64Exe);
   const macX64SmokeRecorded = releaseAudit.includes('HYDRA_BUILD_TARGET=darwin-x64 npm run electron:smoke')
     && releaseAudit.includes('Mach-O 64-bit executable x86_64')
     && releaseAudit.includes('codesign --verify --deep --strict --verbose=2 release/mac/Hydra.app')
@@ -172,20 +189,20 @@ function buildAudit() {
     check(
       'mac-arm-artifact',
       'macOS ARM artifact',
-      macArmSize != null && existsSync(join(ROOT, 'release/Hydra-1.0.0-mac-arm64.zip.blockmap')),
-      macArmSize == null ? '' : `release/Hydra-1.0.0-mac-arm64.zip (${macArmSize} MB) + blockmap`,
+      macArmSize != null && existsSync(join(ROOT, artifactPaths.macArmBlockmap)),
+      macArmSize == null ? '' : `${artifactPaths.macArmZip} (${macArmSize} MB) + blockmap`,
     ),
     check(
       'mac-intel-artifact',
       'macOS Intel artifact',
-      macX64Size != null && existsSync(join(ROOT, 'release/Hydra-1.0.0-mac-x64.zip.blockmap')),
-      macX64Size == null ? '' : `release/Hydra-1.0.0-mac-x64.zip (${macX64Size} MB) + blockmap`,
+      macX64Size != null && existsSync(join(ROOT, artifactPaths.macX64Blockmap)),
+      macX64Size == null ? '' : `${artifactPaths.macX64Zip} (${macX64Size} MB) + blockmap`,
     ),
     check(
       'mac-intel-current',
       'macOS Intel artifact is current',
       macX64Size != null
-        && existsSync(join(ROOT, 'release/Hydra-1.0.0-mac-x64.zip.blockmap'))
+        && existsSync(join(ROOT, artifactPaths.macX64Blockmap))
         && existsSync(join(ROOT, 'release/mac/Hydra.app/Contents/MacOS/Hydra'))
         && macX64SmokeRecorded
         && !blockers.some((row) => /macOS Intel package refresh/.test(row.requirement)),
@@ -194,8 +211,8 @@ function buildAudit() {
     check(
       'windows-installer-artifact',
       'Windows x64 installer artifact',
-      winX64Size != null,
-      winX64Size == null ? '' : `release/Hydra-1.0.0-win-x64.exe (${winX64Size} MB)`,
+      winX64Size != null && existsSync(join(ROOT, artifactPaths.winX64Blockmap)),
+      winX64Size == null ? '' : `${artifactPaths.winX64Exe} (${winX64Size} MB) + blockmap`,
     ),
     deferred(
       'packaged-gui-dogfood',
@@ -217,6 +234,67 @@ function buildAudit() {
       'Package scripts',
       Boolean(pkg.scripts?.['electron:build'] && pkg.scripts?.['electron:smoke'] && pkg.scripts?.['docker:smoke']),
       'package.json exposes electron:build, electron:smoke, and docker:smoke',
+    ),
+    check(
+      'electron-updater-import',
+      'Packaged updater import is ESM-safe',
+      electronAutoUpdate.includes("import electronUpdater from 'electron-updater'")
+        && electronAutoUpdate.includes('function getAutoUpdater')
+        && electronAutoUpdate.includes('electronUpdater.autoUpdater')
+        && electronMainProcessTest.includes('checks GitHub releases for packaged app updates')
+        && electronMainProcessTest.includes('doesNotMatch(updater, /const \\{ autoUpdater \\} = electronUpdater;/)'),
+      'electron/app/autoUpdate.js lazy-loads electron-updater autoUpdater through the default module and the main-process test forbids the crashing named import',
+    ),
+    check(
+      'keychain-startup-calm',
+      'Chromium keychain prompts are disabled for Hydra launch',
+      electronEnv.includes("appendSwitch('password-store', 'basic')")
+        && electronEnv.includes("appendSwitch('use-mock-keychain')")
+        && electronMainProcessTest.includes("appendSwitch\\('password-store', 'basic'\\)")
+        && electronMainProcessTest.includes("appendSwitch\\('use-mock-keychain'\\)"),
+      'electron/app/env.js disables Chromium password-store/keychain access at startup; protected Hydra auth-token release still goes through biometric fail-closed IPC',
+    ),
+    check(
+      'account-proxy-pool',
+      'Encrypted account proxy pool and per-task rotation',
+      accountProxyPool.includes("getDataPath('account-proxies.json.enc')")
+        && accountProxyPool.includes('encryptConfig({ lines')
+        && accountProxyPool.includes('parseProxyLine')
+        && accountProxyPool.includes('Proxy must use ip:port:user:pass format')
+        && accountProxyPool.includes('randomBytes(4).readUInt32BE(0) % proxies.length')
+        && systemController.includes('getAccountProxyPool')
+        && systemController.includes('setAccountProxyPool')
+        && systemRoutes.includes("'/account-proxies'")
+        && rendererApi.includes('getAccountProxies')
+        && rendererApi.includes('setAccountProxies')
+        && settingsPage.includes('Account Proxy Pool')
+        && settingsPage.includes('Save Proxies')
+        && accountGenerator.includes('pickAccountProxy')
+        && accountGenerator.includes('proxy: toPlaywrightProxy(accountProxy)')
+        && dashboardApi.includes('ProxyAgent')
+        && dashboardApi.includes('fetchOptionsWithAccountProxy')
+        && dashboardApi.includes('redeemCodeViaServerAction(sessionCookie, clientCookie, code, accountProxy)')
+        && dashboardApi.includes('tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountProxy)')
+        && dashboardApi.includes('redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, accountProxy)')
+        && String(pkg.scripts?.test || '').includes('test:account-proxy-pool')
+        && backgroundFailureTest.includes('ProxyAgent')
+        && backgroundFailureTest.includes('fetchOptionsWithAccountProxy')
+        && backgroundFailureTest.includes('redeemCodeViaServerAction\\(sessionCookie, clientCookie, code, accountProxy\\)'),
+      'Settings/API store one proxy per line encrypted; signup, management-key, HTTP redemption, REST redemption, and Playwright redemption paths select and use a redacted random account proxy with empty-list fallback',
+    ),
+    check(
+      'readme-navigation',
+      'README navigation and operator grouping',
+      readme.includes('## Navigation')
+        && readme.includes('[Quick Start From Source](#quick-start-from-source)')
+        && readme.includes('## Desktop App')
+        && readme.includes('## Operator Hardening')
+        && readme.includes('## Development And Release Gates')
+        && readme.includes('## Screenshots And Remotion')
+        && readme.includes('Account proxy pool')
+        && readme.includes('ip:port:user:pass')
+        && readme.includes('The README avoids embedding real account data, full API keys, or live secrets'),
+      'README.md has top navigation, grouped CLI/router/hardening/release sections, proxy-pool docs, and packaged-Electron screenshot secrecy guidance',
     ),
     check(
       'dependency-audit',
@@ -455,14 +533,15 @@ function buildAudit() {
   ];
 
   const missing = items.filter((item) => item.state === 'missing');
+  const deferredItems = items.filter((item) => item.state === 'deferred');
   return {
     generatedAt: new Date().toISOString(),
     root: ROOT,
-    complete: missing.length === 0 && blockers.length === 0,
+    complete: missing.length === 0 && blockers.length === 0 && deferredItems.length === 0,
     summary: {
       checked: items.length,
       ok: items.filter((item) => item.state === 'ok').length,
-      deferred: items.filter((item) => item.state === 'deferred').length,
+      deferred: deferredItems.length,
       missing: missing.length,
       blockers: blockers.length,
     },
@@ -504,6 +583,11 @@ export async function run(argv) {
       { key: 'requirement', label: 'NOT VERIFIED' },
       { key: 'blocker', label: 'BLOCKER' },
     ]);
+    return;
+  }
+
+  if (report.summary.deferred > 0) {
+    status('warn', `${report.summary.deferred} deferred manual/live release item(s) remain.`);
     return;
   }
 
