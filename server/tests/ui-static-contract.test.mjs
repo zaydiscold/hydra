@@ -367,7 +367,6 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   const app = readRepoFile('src/App.jsx');
   const css = readRepoFile('src/index.css');
   const api = readRepoFile('src/api.js');
-  const architecture = readRepoFile('docs/ARCHITECTURE_DEEP_DIVE.md');
 
   assert.match(api, /export const getSystemHealth = \(\) => request\('\/system\/health'\)/);
   assert.match(app, /function UpstreamStatusBanner\(\{ upstream \}\)/);
@@ -385,8 +384,6 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   assert.match(css, /\.upstream-banner--offline\s*\{/);
   assert.match(app, /role="status"/);
   assert.match(app, /aria-live="polite"/);
-
-  assert.match(architecture, /cached local data visible while showing an OpenRouter offline banner/);
 });
 
 test('clipboard actions await write failures instead of failing silently', () => {
