@@ -45,6 +45,17 @@ function runPassthrough(command, args, env = {}) {
   return result.status === 0;
 }
 
+function runLaunchDiagnostic(label, command, args) {
+  const result = spawnSync(command, args, {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+  printStatus(result.status === 0, label, output || `exit=${result.status ?? 'unknown'}`);
+  return result.status === 0;
+}
+
 function artifact(path) {
   const abs = join(ROOT, path);
   if (!existsSync(abs)) return { path, ok: false, detail: 'missing' };
@@ -97,6 +108,15 @@ if (flags.has('--smoke')) {
 if (flags.has('--open-app')) {
   console.log('');
   printStatus(runPassthrough('npm', ['run', 'electron:open:mac-arm64']), 'Launch packaged macOS app through LaunchServices');
+}
+
+if (flags.has('--launch-diagnostics')) {
+  console.log('');
+  console.log('LaunchServices diagnostics');
+  runLaunchDiagnostic('Baseline LaunchServices handoff for Calculator.app', 'open', ['-n', '/System/Applications/Calculator.app']);
+  runLaunchDiagnostic('Baseline Finder AppleEvent handoff for Calculator.app', 'osascript', ['-e', 'tell application "Finder" to open POSIX file "/System/Applications/Calculator.app"']);
+  runLaunchDiagnostic('Hydra LaunchServices handoff', 'open', ['-n', join(ROOT, 'release/mac-arm64/Hydra.app')]);
+  runLaunchDiagnostic('Hydra Finder AppleEvent handoff', 'osascript', ['-e', `tell application "Finder" to open POSIX file "${join(ROOT, 'release/mac-arm64/Hydra.app')}"`]);
 }
 
 if (flags.has('--docker-smoke')) {
