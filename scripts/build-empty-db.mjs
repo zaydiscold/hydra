@@ -19,14 +19,15 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, copyFileSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { basename, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..');
 const DATA_DIR = resolve(PROJECT_ROOT, 'data');
 const EMPTY_DB_PATH = resolve(DATA_DIR, 'empty-hydra.db');
 const SCHEMA_PATH = resolve(PROJECT_ROOT, 'prisma/schema.prisma');
+const PRISMA_DIR = dirname(SCHEMA_PATH);
 const PRISMA_CLI = resolve(PROJECT_ROOT, 'node_modules/prisma/build/index.js');
 
 // Ensure data directory exists
@@ -39,7 +40,7 @@ console.log(`[build-empty-db] Schema: ${SCHEMA_PATH}`);
 console.log(`[build-empty-db] Output: ${EMPTY_DB_PATH}`);
 
 // Push the schema to a temporary database file, creating all tables (empty)
-const tempDb = resolve(DATA_DIR, '.hydra-empty-temp.db');
+const tempDb = resolve(PRISMA_DIR, '.hydra-empty-temp.db');
 const tempSql = resolve(DATA_DIR, '.hydra-empty-temp.sql');
 const REQUIRED_TABLES = [...readFileSync(SCHEMA_PATH, 'utf-8').matchAll(/^model\s+(\w+)\s*\{/gm)]
   .map((match) => match[1]);
@@ -158,7 +159,7 @@ PRAGMA foreign_keys=ON;
 `;
 
 function prismaFileUrl(path) {
-  return pathToFileURL(path).href;
+  return `file:${basename(path)}`;
 }
 
 async function listSqliteTables(dbPath) {

@@ -129,10 +129,13 @@ test('empty database generation is portable across release runners', () => {
   const script = read('scripts/build-empty-db.mjs');
 
   assert.match(script, /function prismaFileUrl/, 'empty DB generation must create portable Prisma SQLite URLs');
-  assert.match(script, /pathToFileURL\(path\)\.href/, 'empty DB paths must be normalized as cross-platform file URLs');
+  assert.match(script, /const tempDb = resolve\(PRISMA_DIR, '\.hydra-empty-temp\.db'\)/, 'empty DB generation must use a schema-relative temporary SQLite file');
+  assert.match(script, /file:\$\{basename\(path\)\}/, 'empty DB generation must avoid absolute Windows SQLite URLs');
   assert.match(script, /new PrismaClient/, 'empty DB validation must use Prisma instead of a host sqlite3 binary');
   assert.match(script, /\$queryRawUnsafe\([\s\S]*sqlite_master/, 'empty DB validation must still inspect generated SQLite tables');
   assert.doesNotMatch(script, /execFileSync\(\s*['"]sqlite3['"][\s\S]*sqlite_master/, 'empty DB table validation must not require sqlite3 on Windows runners');
+  const smoke = read('scripts/smoke-electron-package.mjs');
+  assert.match(smoke, /linux-x64\|-x86_64/, 'release smoke must accept electron-builder Linux AppImage arch suffixes');
 });
 
 test('electron package smoke validates the packaged app shell without launching GUI', () => {
