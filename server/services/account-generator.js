@@ -30,6 +30,7 @@ import * as dashboardApi from './dashboard-api.js';
 import { logger } from './logger.js';
 import { taskSupervisor } from './task-supervisor.js';
 import { USER_AGENT, OR_BASE } from '../config.js';
+import { describeProxy, pickAccountProxy, toPlaywrightProxy } from './account-proxy-pool.js';
 
 import {
   detectAuthMethod,
@@ -134,8 +135,18 @@ async function launchSignupFlowPlaywright(task) {
       // build into the packaged app's resourcesPath; `resolveChromiumLaunchOptions`
       // points `executablePath` there.
       const { chromium } = await import('playwright-core');
+      const accountProxy = pickAccountProxy();
+      if (accountProxy) {
+        logger.info(`[Account Generator] Using account proxy ${describeProxy(accountProxy)} for task ${task.taskId}`);
+        taskSupervisor.updateTask(task.taskId, {
+          metadata: { ...task.metadata, proxy: describeProxy(accountProxy) },
+        });
+      }
       const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true, args: launchArgs }));
-      const context = await browser.newContext({ userAgent: USER_AGENT });
+      const context = await browser.newContext({
+        userAgent: USER_AGENT,
+        proxy: toPlaywrightProxy(accountProxy),
+      });
       const page = await context.newPage();
       taskSupervisor.attachResources(task.taskId, { browser, context, page });
 

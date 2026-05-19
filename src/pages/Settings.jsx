@@ -14,6 +14,9 @@ export default function Settings({ addToast }) {
   const [errors, setErrors] = useState({});
   const [lanUrls, setLanUrls] = useState([]);
   const [copied, setCopied] = useState(false);
+  const [accountProxies, setAccountProxies] = useState('');
+  const [accountProxyCount, setAccountProxyCount] = useState(0);
+  const [proxySaving, setProxySaving] = useState(false);
 
   // Electron native info — single hook handles in-Electron check + load
   const inElectron = isElectron();
@@ -105,6 +108,34 @@ export default function Settings({ addToast }) {
       });
     return () => { mounted = false; };
   }, [addToast]);
+
+  useEffect(() => {
+    let mounted = true;
+    api.getAccountProxies()
+      .then(res => {
+        if (!mounted) return;
+        setAccountProxies(res?.data?.lines || '');
+        setAccountProxyCount(Number(res?.data?.count || 0));
+      })
+      .catch((err) => {
+        if (mounted) addToast?.(err?.message || 'Failed to load account proxies', 'error');
+      });
+    return () => { mounted = false; };
+  }, [addToast]);
+
+  async function saveAccountProxies() {
+    setProxySaving(true);
+    try {
+      const res = await api.setAccountProxies(accountProxies);
+      setAccountProxies(res?.data?.lines || '');
+      setAccountProxyCount(Number(res?.data?.count || 0));
+      addToast?.(`Saved ${Number(res?.data?.count || 0)} account prox${Number(res?.data?.count || 0) === 1 ? 'y' : 'ies'}`, 'success');
+    } catch (err) {
+      addToast?.(err?.message || 'Failed to save account proxies', 'error');
+    } finally {
+      setProxySaving(false);
+    }
+  }
 
   async function handleChangePassword(e) {
     e.preventDefault();
@@ -207,6 +238,34 @@ export default function Settings({ addToast }) {
               {lanUrls.slice(1).map(u => <div key={u}>{u}</div>)}
             </div>
           )}
+        </div>
+
+        {/* Account proxy pool */}
+        <div className="card" style={{ padding: 'var(--space-md)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <NetworkIcon size={15} style={{ color: 'var(--accent-primary)' }} />
+            <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Account Proxy Pool</span>
+            <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+              {accountProxyCount} SAVED
+            </span>
+          </div>
+          <textarea
+            className="form-input"
+            value={accountProxies}
+            onChange={(e) => setAccountProxies(e.target.value)}
+            placeholder="ip:port:user:pass"
+            rows={5}
+            spellCheck={false}
+            style={{ width: '100%', resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}
+          />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={proxySaving} onClick={saveAccountProxies}>
+              {proxySaving ? <><div className="spinner-sm" /> Saving...</> : 'Save Proxies'}
+            </button>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
+              Used randomly for new account signup, browser provisioning, and browser code redemption. Stored encrypted.
+            </span>
+          </div>
         </div>
 
         {/* Password */}

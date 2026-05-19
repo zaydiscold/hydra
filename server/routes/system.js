@@ -12,5 +12,7 @@ router.get('/health', requireUnlocked, BaseController.catchAsync(SystemControlle
 // Proxy kill switch
 router.get('/proxy-status', requireUnlocked, BaseController.catchAsync(SystemController.getProxyStatus.bind(SystemController)));
 router.post('/proxy-toggle', requireUnlocked, BaseController.catchAsync(SystemController.toggleProxy.bind(SystemController)));
+router.get('/account-proxies', requireUnlocked, BaseController.catchAsync(SystemController.getAccountProxies.bind(SystemController)));
+router.post('/account-proxies', requireUnlocked, BaseController.catchAsync(SystemController.setAccountProxies.bind(SystemController)));
 
 export default router;

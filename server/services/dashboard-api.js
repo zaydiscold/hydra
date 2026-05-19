@@ -21,6 +21,7 @@ import * as store from './store.js';
 import { getCredits } from './openrouter.js';
 import { runInBatches } from './batch-runner.js';
 import { resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
+import { describeProxy, pickAccountProxy, toPlaywrightProxy } from './account-proxy-pool.js';
 
 import {
   truncateForLog,
@@ -2294,9 +2295,16 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
   let capturedKey = null;
   const networkLogLines = [];
   let traceStarted = false;
+  const accountProxy = cdpUrl ? null : pickAccountProxy();
+  if (accountProxy) {
+    console.warn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for management-key provision account=${accountId}`);
+  }
 
   try {
-    context = await browser.newContext({ userAgent: USER_AGENT });
+    context = await browser.newContext({
+      userAgent: USER_AGENT,
+      proxy: toPlaywrightProxy(accountProxy),
+    });
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
     try {
       await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: OR_ORIGIN });
@@ -3270,6 +3278,10 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
   // The full `playwright` package is dev-only now (see package.json).
   const { chromium } = await import('playwright-core');
+  const accountProxy = pickAccountProxy();
+  if (accountProxy) {
+    console.warn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for code redemption account=${accountId}`);
+  }
   const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED }));
   let result = {
     success: false,
@@ -3297,7 +3309,10 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
   }
 
   try {
-    const context = await browser.newContext({ userAgent: USER_AGENT });
+    const context = await browser.newContext({
+      userAgent: USER_AGENT,
+      proxy: toPlaywrightProxy(accountProxy),
+    });
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
     const page = await context.newPage();
 

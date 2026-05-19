@@ -197,6 +197,8 @@ const routeDefs = [
   op('get', '/api/system/health', { tag: 'system', summary: 'Read server, pool, and upstream health' }),
   op('get', '/api/system/proxy-status', { tag: 'system', summary: 'Read proxy kill-switch status' }),
   op('post', '/api/system/proxy-toggle', { tag: 'system', summary: 'Toggle proxy kill-switch', requestBody: body('Proxy enabled state') }),
+  op('get', '/api/system/account-proxies', { tag: 'system', summary: 'Read encrypted account proxy pool status' }),
+  op('post', '/api/system/account-proxies', { tag: 'system', summary: 'Replace encrypted account proxy pool', requestBody: body('One proxy per line in ip:port:user:pass format') }),
 
   op('post', '/api/debug/trpc-probe', { tag: 'debug', summary: 'Probe OpenRouter tRPC routes with stored session', requestBody: body('Probe options') }),
   op('post', '/api/debug/vampire-mode', { tag: 'debug', summary: 'Run OpenRouter dashboard session diagnostics', requestBody: body('Diagnostic options') }),

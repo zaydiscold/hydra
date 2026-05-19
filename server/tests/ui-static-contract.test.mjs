@@ -59,6 +59,20 @@ test('global form controls cannot fall back to white native browser styling', ()
   assert.doesNotMatch(css, /var\(--bg-hover\)/);
 });
 
+test('settings exposes encrypted account proxy pool controls', () => {
+  const settings = readRepoFile('src/pages/Settings.jsx');
+  const api = readRepoFile('src/api.js');
+
+  assert.match(settings, /Account Proxy Pool/);
+  assert.match(settings, /ip:port:user:pass/);
+  assert.match(settings, /Save Proxies/);
+  assert.match(settings, /Stored encrypted/);
+  assert.match(settings, /api\.getAccountProxies\(\)/);
+  assert.match(settings, /api\.setAccountProxies\(accountProxies\)/);
+  assert.match(api, /getAccountProxies/);
+  assert.match(api, /setAccountProxies/);
+});
+
 test('traffic and panel headers keep readable foreground contrast over the background', () => {
   const css = readRepoFile('src/index.css');
   const traffic = readRepoFile('src/pages/Traffic.jsx');

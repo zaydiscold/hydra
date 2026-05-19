@@ -387,6 +387,8 @@ export const cancelSystemTask = (taskId, reason = 'operator_cancelled') => reque
 export const getSystemHealth = () => request('/system/health');
 export const getProxyStatus = () => request('/system/proxy-status');
 export const toggleProxy = (enabled) => request('/system/proxy-toggle', { method: 'POST', body: { enabled } });
+export const getAccountProxies = () => request('/system/account-proxies');
+export const setAccountProxies = (proxies) => request('/system/account-proxies', { method: 'POST', body: { proxies } });
 
 // Test a stored key against OpenRouter /auth/key
 export const testKey = (accountId, hash) =>

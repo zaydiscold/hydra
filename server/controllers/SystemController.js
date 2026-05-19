@@ -4,6 +4,7 @@ import { rotationManager } from '../services/rotation-manager.js';
 import { proxyGate } from '../services/proxy-gate.js';
 import { getUpstreamHealth, shouldProbeUpstream } from '../services/upstream-health.js';
 import { probeOpenRouterReachability } from '../services/upstream-probe.js';
+import { getAccountProxyPool, setAccountProxyPool } from '../services/account-proxy-pool.js';
 
 class SystemController extends BaseController {
   async getTasks(req, res) {
@@ -30,7 +31,22 @@ class SystemController extends BaseController {
     return this.success(res, { enabled: proxyGate.enabled });
   }
 
+  async getAccountProxies(req, res) {
+    try {
+      return this.success(res, getAccountProxyPool());
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500, err.code || 'ACCOUNT_PROXY_POOL_READ_FAILED');
+    }
+  }
 
+  async setAccountProxies(req, res) {
+    try {
+      const proxies = typeof req.body?.proxies === 'string' ? req.body.proxies : '';
+      return this.success(res, setAccountProxyPool(proxies));
+    } catch (err) {
+      return this.error(res, err.message, err.status || 400, err.code || 'ACCOUNT_PROXY_POOL_SAVE_FAILED');
+    }
+  }
 
   async toggleProxy(req, res) {
     const { enabled } = req.body;

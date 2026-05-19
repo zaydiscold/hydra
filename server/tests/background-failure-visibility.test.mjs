@@ -153,6 +153,10 @@ test('dashboard Playwright automation soft failures are logged', () => {
   const source = readRepoFile('server/services/dashboard-api.js');
   const automationSource = source.slice(source.indexOf('async function dismissOpenRouterBlockingOverlays'));
 
+  assert.match(source, /pickAccountProxy/);
+  assert.match(source, /Using account proxy \$\{describeProxy\(accountProxy\)\} for management-key provision account=\$\{accountId\}/);
+  assert.match(source, /Using account proxy \$\{describeProxy\(accountProxy\)\} for code redemption account=\$\{accountId\}/);
+  assert.match(source, /proxy: toPlaywrightProxy\(accountProxy\)/);
   assert.match(source, /Escape press failed \(\$\{err\.message\}\)/);
   assert.match(source, /dismiss click failed \(\$\{err\.message\}\)/);
   assert.match(source, /captureKeyFromPageImmediate: Copy click failed \(\$\{err\.message\}\)/);
@@ -250,6 +254,14 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   assert.match(openrouter, /OpenRouter API request timed out after \$\{timeoutMs\}ms: \$\{path\}/);
   assert.doesNotMatch(openrouter, /getCredits\(managementKey\)\.catch\(\(\) => \(\{ total: 0, used: 0, remaining: 0 \}\)\)/);
   assert.doesNotMatch(openrouter, /listKeys\(managementKey\)\.catch\(\(\) => \[\]\)/);
+});
+
+test('account generator browser signup uses the encrypted proxy pool when present', () => {
+  const source = readRepoFile('server/services/account-generator.js');
+
+  assert.match(source, /pickAccountProxy/);
+  assert.match(source, /Using account proxy \$\{describeProxy\(accountProxy\)\} for task \$\{task\.taskId\}/);
+  assert.match(source, /proxy: toPlaywrightProxy\(accountProxy\)/);
 });
 
 test('OpenRouter model-list cache requests are timeout bounded', () => {

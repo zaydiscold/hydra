@@ -34,6 +34,7 @@ execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
 const serverModule = await import('../index.js');
 const { recordUpstreamSuccess } = await import('../services/upstream-health.js');
 let baseUrl;
+let authToken;
 
 before(async () => {
   const server = await serverModule.bootstrap({ port: 0, silent: true });
@@ -53,6 +54,19 @@ async function getJson(path, init) {
   return { res, json };
 }
 
+async function getAuthToken() {
+  if (authToken) return authToken;
+  const setup = await getJson('/api/auth/setup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: 'health-test-pass' }),
+  });
+  assert.equal(setup.res.status, 200);
+  authToken = setup.json.data.token;
+  assert.ok(authToken, 'setup must return a bearer token for protected routes');
+  return authToken;
+}
+
 test('GET /api/auth/status returns setup state from a real server', async () => {
   const { res, json } = await getJson('/api/auth/status');
 
@@ -65,14 +79,7 @@ test('GET /api/auth/status returns setup state from a real server', async () => 
 });
 
 test('GET /api/system/health returns real process uptime and server clock facts', async () => {
-  const setup = await getJson('/api/auth/setup', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: 'health-test-pass' }),
-  });
-  assert.equal(setup.res.status, 200);
-  const token = setup.json.data.token;
-  assert.ok(token, 'setup must return a bearer token for protected health');
+  const token = await getAuthToken();
 
   recordUpstreamSuccess({ statusCode: 204 });
   const before = Date.now();
@@ -96,6 +103,42 @@ test('GET /api/system/health returns real process uptime and server clock facts'
 
   const derivedStartedAt = serverNow - json.data.uptime * 1000;
   assert.ok(Math.abs(startedAt - derivedStartedAt) < 5, 'startedAt must derive from process.uptime()');
+});
+
+test('account proxy pool endpoints store encrypted proxies and return masked public state', async () => {
+  const token = await getAuthToken();
+
+  const saved = await getJson('/api/system/account-proxies', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ proxies: '127.0.0.1:8080:user:secret' }),
+  });
+  assert.equal(saved.res.status, 200);
+  assert.equal(saved.json.success, true);
+  assert.equal(saved.json.data.count, 1);
+  assert.equal(saved.json.data.proxies[0].masked, '127.0.0.1:8080:u**r:s****t');
+  assert.equal(saved.json.data.proxies[0].password, undefined);
+
+  const loaded = await getJson('/api/system/account-proxies', {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(loaded.res.status, 200);
+  assert.equal(loaded.json.data.count, 1);
+  assert.equal(loaded.json.data.lines, '127.0.0.1:8080:user:secret');
+
+  const invalid = await getJson('/api/system/account-proxies', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ proxies: '127.0.0.1:99999:user:secret' }),
+  });
+  assert.equal(invalid.res.status, 400);
+  assert.match(invalid.json.error, /Line 1: Proxy port/);
 });
 
 test('protected account routes reject anonymous requests', async () => {
