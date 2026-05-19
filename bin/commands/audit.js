@@ -92,6 +92,8 @@ function buildAudit() {
   const releaseAudit = safeRead('docs/RELEASE_AUDIT.md');
   const dogfoodDoc = safeRead('docs/PACKAGED_ELECTRON_DOGFOOD.md');
   const dockerDoc = safeRead('docs/DOCKER.md');
+  const ciWorkflow = safeRead('.github/workflows/ci.yml');
+  const dockerWorkflow = safeRead('.github/workflows/docker.yml');
   const smokeWorkflow = safeRead('.github/workflows/electron-smoke.yml');
   const releaseWorkflow = safeRead('.github/workflows/release.yml');
   const uiStatic = safeRead('server/tests/ui-static-contract.test.mjs');
@@ -358,6 +360,9 @@ function buildAudit() {
       workflowContract.includes('Windows x64 NSIS')
         && workflowContract.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24')
         && workflowContract.includes('node-version:\\s*24')
+        && ciWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
+        && ciWorkflow.includes('node-version: 24')
+        && dockerWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
         && smokeWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
         && smokeWorkflow.includes('node-version: 24')
         && releaseWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
@@ -397,7 +402,7 @@ function buildAudit() {
         && electronPrepare.includes('PLAYWRIGHT_BROWSERS_PATH cache')
         && workflowContract.includes('electron package smoke validates target-specific Chromium archives')
         && workflowContract.includes('electron package smoke validates distributable release artifacts'),
-      'workflow contract and workflows include Node 24 runner/runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/native-titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
+      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/native-titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
     ),
     check(
       'docker-docs',
