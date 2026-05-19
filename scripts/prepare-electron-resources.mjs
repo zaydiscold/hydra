@@ -141,11 +141,11 @@ function resolveChromiumChildren() {
       return ['chrome-mac-x64', 'chrome-mac'];
     case 'linux-x64':
     case 'linux-arm64':
-      return ['chrome-linux'];
+      return ['chrome-linux', 'chrome-linux64'];
     case 'win32-x64':
     case 'win32-ia32':
     case 'win32-arm64':
-      return ['chrome-win'];
+      return ['chrome-win', 'chrome-win64'];
     default:
       throw new Error(`[prepare-electron-resources] unsupported build target: ${target}`);
   }
@@ -191,8 +191,11 @@ const chromiumBinCandidates = [
   resolve(CHROMIUM_OUT, 'chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
   resolve(CHROMIUM_OUT, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
   resolve(CHROMIUM_OUT, 'chrome-linux', 'chrome'),
+  resolve(CHROMIUM_OUT, 'chrome-linux64', 'chrome'),
   resolve(CHROMIUM_OUT, 'chrome-win', 'chrome.exe'),
+  resolve(CHROMIUM_OUT, 'chrome-win64', 'chrome.exe'),
   resolve(CHROMIUM_OUT, 'chrome-win', 'chrome'),
+  resolve(CHROMIUM_OUT, 'chrome-win64', 'chrome'),
 ];
 const foundBin = chromiumBinCandidates.find((p) => existsSync(p));
 if (foundBin) {
@@ -204,9 +207,30 @@ if (foundBin) {
   );
 }
 
-execFileSync('zip', ['-qry', CHROMIUM_ZIP_OUT, wantedChild], {
-  cwd: CHROMIUM_OUT,
-  stdio: 'inherit',
-});
+function archiveChromiumPayload(child) {
+  if (platform() === 'win32') {
+    execFileSync('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      [
+        '$ErrorActionPreference = "Stop";',
+        'Compress-Archive -Path $args[0] -DestinationPath $args[1] -Force',
+      ].join(' '),
+      child,
+      CHROMIUM_ZIP_OUT,
+    ], {
+      cwd: CHROMIUM_OUT,
+      stdio: 'inherit',
+    });
+    return;
+  }
+
+  execFileSync('zip', ['-qry', CHROMIUM_ZIP_OUT, child], {
+    cwd: CHROMIUM_OUT,
+    stdio: 'inherit',
+  });
+}
+
+archiveChromiumPayload(wantedChild);
 rmSync(CHROMIUM_OUT, { recursive: true, force: true });
 console.log(`[prepare-electron-resources] archived Chromium to ${CHROMIUM_ZIP_OUT}`);

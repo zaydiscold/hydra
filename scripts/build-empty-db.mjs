@@ -20,7 +20,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, copyFileSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..');
@@ -157,6 +157,30 @@ CREATE INDEX "ManagementKey_createdAt_idx" ON "ManagementKey"("createdAt");
 PRAGMA foreign_keys=ON;
 `;
 
+function prismaFileUrl(path) {
+  return pathToFileURL(path).href;
+}
+
+async function listSqliteTables(dbPath) {
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient({
+    datasources: {
+      db: {
+        url: prismaFileUrl(dbPath),
+      },
+    },
+  });
+
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;",
+    );
+    return rows.map((row) => row.name);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 try {
   rmSync(tempDb, { force: true });
   rmSync(`${tempDb}-journal`, { force: true });
@@ -171,7 +195,7 @@ try {
         cwd: PROJECT_ROOT,
         env: {
           ...process.env,
-          DATABASE_URL: `file:${tempDb}`,
+          DATABASE_URL: prismaFileUrl(tempDb),
         },
         stdio: 'pipe',
         timeout: 60_000,
@@ -190,12 +214,7 @@ try {
     });
   }
 
-  const tableRows = execFileSync(
-    'sqlite3',
-    [tempDb, "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"],
-    { encoding: 'utf-8', timeout: 30_000 },
-  );
-  const generatedTables = new Set(tableRows.split('\n').map((line) => line.trim()).filter(Boolean));
+  const generatedTables = new Set(await listSqliteTables(tempDb));
   const missingTables = REQUIRED_TABLES.filter((table) => !generatedTables.has(table));
   if (missingTables.length > 0) {
     throw new Error(`empty DB is missing Prisma table(s): ${missingTables.join(', ')}`);

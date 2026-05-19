@@ -112,14 +112,27 @@ test('electron package smoke validates target-specific Chromium archives', () =>
   assert.match(script, /expectedChromiumChildrenForTarget/, 'smoke must map HYDRA_BUILD_TARGET to expected Chromium zip children');
   assert.match(script, /darwin-arm64[\s\S]*chrome-mac-arm64/, 'smoke must verify Apple Silicon Chromium payloads');
   assert.match(script, /darwin-x64[\s\S]*chrome-mac-x64/, 'smoke must verify Intel macOS Chromium payloads');
-  assert.match(script, /linux-x64[\s\S]*chrome-linux/, 'smoke must verify Linux Chromium payloads');
-  assert.match(script, /win32-x64[\s\S]*chrome-win/, 'smoke must verify Windows Chromium payloads');
+  assert.match(script, /linux-x64[\s\S]*chrome-linux[\s\S]*chrome-linux64/, 'smoke must verify Linux Chromium payloads');
+  assert.match(script, /win32-x64[\s\S]*chrome-win[\s\S]*chrome-win64/, 'smoke must verify Windows Chromium payloads');
   assert.match(script, /Chromium archive target mismatch/, 'smoke must explain wrong-target Chromium archives directly');
   assert.match(script, /unsupported HYDRA_BUILD_TARGET/, 'smoke must reject unknown target names');
   assert.match(prepareScript, /function chromiumCacheGuidance/, 'prepare must explain target-cache misses');
   assert.match(prepareScript, /Build on the target runner\/machine/, 'prepare must distinguish cross-target cache misses from local install misses');
   assert.match(prepareScript, /win32-x64\s+-> Windows x64 GitHub runner or Windows machine/, 'prepare must give Windows runner guidance');
   assert.match(prepareScript, /PLAYWRIGHT_BROWSERS_PATH cache/, 'prepare must document the explicit cache escape hatch');
+  assert.match(prepareScript, /Compress-Archive/, 'prepare must create Chromium zip archives on Windows without requiring zip.exe');
+  assert.match(prepareScript, /chrome-linux64/, 'prepare must accept current Playwright Linux Chromium payload names');
+  assert.match(prepareScript, /chrome-win64/, 'prepare must accept current Playwright Windows Chromium payload names');
+});
+
+test('empty database generation is portable across release runners', () => {
+  const script = read('scripts/build-empty-db.mjs');
+
+  assert.match(script, /function prismaFileUrl/, 'empty DB generation must create portable Prisma SQLite URLs');
+  assert.match(script, /pathToFileURL\(path\)\.href/, 'empty DB paths must be normalized as cross-platform file URLs');
+  assert.match(script, /new PrismaClient/, 'empty DB validation must use Prisma instead of a host sqlite3 binary');
+  assert.match(script, /\$queryRawUnsafe\([\s\S]*sqlite_master/, 'empty DB validation must still inspect generated SQLite tables');
+  assert.doesNotMatch(script, /execFileSync\(\s*['"]sqlite3['"][\s\S]*sqlite_master/, 'empty DB table validation must not require sqlite3 on Windows runners');
 });
 
 test('electron package smoke validates the packaged app shell without launching GUI', () => {

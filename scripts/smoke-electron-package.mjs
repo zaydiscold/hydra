@@ -272,11 +272,11 @@ function expectedChromiumChildrenForTarget() {
       return ['chrome-mac-x64', 'chrome-mac'];
     case 'linux-x64':
     case 'linux-arm64':
-      return ['chrome-linux'];
+      return ['chrome-linux', 'chrome-linux64'];
     case 'win32-x64':
     case 'win32-ia32':
     case 'win32-arm64':
-      return ['chrome-win'];
+      return ['chrome-win', 'chrome-win64'];
     default:
       throw new Error(`[electron-smoke] unsupported HYDRA_BUILD_TARGET: ${target}`);
   }
@@ -297,7 +297,7 @@ function hasBundledChromium(resourcesDir) {
         );
       }
       return hasExpectedTarget &&
-        /chrome-(?:mac|mac-x64|mac-arm64|linux|win)\//.test(listing) &&
+        /chrome-(?:mac|mac-x64|mac-arm64|linux|linux64|win|win64)\//.test(listing) &&
         /(Google Chrome for Testing|Chromium|chrome(?:\.exe)?)/.test(listing);
     } catch (err) {
       if (/Chromium archive target mismatch/.test(err?.message || '')) throw err;
@@ -314,7 +314,9 @@ function hasBundledChromium(resourcesDir) {
     join(resourcesDir, 'chromium/chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'),
     join(resourcesDir, 'chromium/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'),
     join(resourcesDir, 'chromium/chrome-linux/chrome'),
+    join(resourcesDir, 'chromium/chrome-linux64/chrome'),
     join(resourcesDir, 'chromium/chrome-win/chrome.exe'),
+    join(resourcesDir, 'chromium/chrome-win64/chrome.exe'),
   ];
   return candidates.some((candidate) => existsSync(candidate));
 }

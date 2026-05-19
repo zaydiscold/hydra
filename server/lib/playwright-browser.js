@@ -309,9 +309,13 @@ function findChromiumExecutable(root) {
     join(root, 'chromium', 'chromium-browser'),
     // Playwright-downloaded under resourcesPath
     join(root, 'chromium', 'chrome-linux', 'chrome'),
+    join(root, 'chromium', 'chrome-linux64', 'chrome'),
     join(root, 'chromium', 'chrome-win', 'chrome.exe'),
+    join(root, 'chromium', 'chrome-win64', 'chrome.exe'),
     join(root, 'chrome-linux', 'chrome'),
+    join(root, 'chrome-linux64', 'chrome'),
     join(root, 'chrome-win', 'chrome.exe'),
+    join(root, 'chrome-win64', 'chrome.exe'),
     // Generic fallbacks
     join(root, 'browsers', 'chromium', 'chrome'),
     join(root, 'browsers', 'chrome', 'chrome'),
