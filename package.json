@@ -76,6 +76,7 @@
     "// ─── Lint & Quality ────────────────────────────────────────────────────": "",
     "lint": "eslint .",
     "gate": "node scripts/integration-gate.mjs",
+    "dogfood:final": "node scripts/final-dogfood-check.mjs",
     "// ─── Preview & Start ───────────────────────────────────────────────────": "",
     "start": "node scripts/launch.js",
     "preview": "npm run preview:electron",

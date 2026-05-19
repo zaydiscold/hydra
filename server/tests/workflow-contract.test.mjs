@@ -194,3 +194,20 @@ test('packaged app dogfood launcher uses LaunchServices instead of direct execut
   assert.match(script, /Do not launch\s+Contents\/MacOS\/Hydra directly/, 'launcher must warn against direct binary launch');
   assert.doesNotMatch(script, /Contents\/MacOS\/Hydra['"`]/, 'launcher must not spawn the packaged executable directly');
 });
+
+test('final dogfood preflight preserves manual release blockers', () => {
+  const pkg = JSON.parse(read('package.json'));
+  const script = read('scripts/final-dogfood-check.mjs');
+
+  assert.equal(pkg.scripts['dogfood:final'], 'node scripts/final-dogfood-check.mjs');
+  assert.match(script, /node', \['bin\/hydra\.mjs', 'audit', '--json'\]/, 'final dogfood must run the release audit JSON command');
+  assert.match(script, /--smoke/, 'final dogfood must expose packaged smoke reruns');
+  assert.match(script, /--open-app/, 'final dogfood must expose packaged app launch reruns');
+  assert.match(script, /--docker-smoke/, 'final dogfood must expose Docker runtime smoke reruns');
+  assert.match(script, /Packaged GUI launch/, 'manual checklist must include packaged GUI launch');
+  assert.match(script, /Touch ID/, 'manual checklist must include Touch ID validation');
+  assert.match(script, /Live account flows/, 'manual checklist must include live account flows');
+  assert.match(script, /Screenshots/, 'manual checklist must include packaged screenshot capture');
+  assert.match(script, /Windows launch/, 'manual checklist must include Windows launch validation');
+  assert.match(script, /not a release-complete signal while any audit item is deferred or any manual checkbox is unchecked/, 'final dogfood must not claim release completion while manual evidence is missing');
+});
