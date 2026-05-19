@@ -13,7 +13,8 @@ test('electron package smoke workflow covers macOS, Windows, and Linux packages'
   const workflow = read('.github/workflows/electron-smoke.yml');
 
   assert.match(workflow, /pull_request:/, 'package smoke must run on pull requests');
-  assert.match(workflow, /node-version:\s*22/, 'package smoke must use supported Node 22');
+  assert.match(workflow, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:\s*"true"/, 'package smoke must opt into the supported Actions Node 24 runtime');
+  assert.match(workflow, /node-version:\s*24/, 'package smoke must use supported Node 24');
   assert.match(workflow, /npm ci/, 'package smoke must install from lockfile');
   assert.match(workflow, /npm run lint/, 'package smoke must run lint');
   assert.match(workflow, /npm test/, 'package smoke must run the full test suite');
@@ -33,7 +34,8 @@ test('release workflow uploads desktop artifacts for every release target', () =
 
   assert.match(workflow, /tags:\s*\n\s*-\s*'v\*\.\*\.\*'/, 'release workflow must run on version tags');
   assert.match(workflow, /permissions:\s*\n\s*contents:\s*write/, 'release workflow must be allowed to publish releases');
-  assert.match(workflow, /node-version:\s*22/, 'release workflow must use supported Node 22');
+  assert.match(workflow, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:\s*"true"/, 'release workflow must opt into the supported Actions Node 24 runtime');
+  assert.match(workflow, /node-version:\s*24/, 'release workflow must use supported Node 24');
   assert.match(workflow, /npx electron-builder \$\{\{ matrix\.target \}\} --publish never/, 'release workflow must build before publishing verified artifacts');
   assert.match(workflow, /npm run electron:smoke/, 'release workflow must smoke-check packaged resources before upload');
   assert.match(workflow, /npm run electron:smoke[\s\S]*HYDRA_BUILD_TARGET:\s*\$\{\{ matrix\.build_target \}\}/, 'release smoke must verify the target-specific Chromium payload');
