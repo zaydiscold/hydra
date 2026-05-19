@@ -154,6 +154,12 @@ test('dashboard Playwright automation soft failures are logged', () => {
   const automationSource = source.slice(source.indexOf('async function dismissOpenRouterBlockingOverlays'));
 
   assert.match(source, /pickAccountProxy/);
+  assert.match(source, /ProxyAgent/);
+  assert.match(source, /fetchOptionsWithAccountProxy/);
+  assert.match(source, /redeemCodeViaServerAction\(sessionCookie, clientCookie, code, accountProxy\)/);
+  assert.match(source, /trpcCall\(route, input, sessionCookie, clientCookie, headerOverrides, \{ accountProxy: context\.accountProxy \}\)/);
+  assert.match(source, /tryRestApiRedeemCode\(sessionCookie, clientCookie, code, accountProxy\)/);
+  assert.match(source, /redeemCodeViaPlaywright\(userId, accountId, sessionCookie, clientCookie, code, accountProxy\)/);
   assert.match(source, /Using account proxy \$\{describeProxy\(accountProxy\)\} for management-key provision account=\$\{accountId\}/);
   assert.match(source, /Using account proxy \$\{describeProxy\(accountProxy\)\} for code redemption account=\$\{accountId\}/);
   assert.match(source, /proxy: toPlaywrightProxy\(accountProxy\)/);

@@ -8,6 +8,7 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ProxyAgent } from 'undici';
 import { OR_BASE, config, USER_AGENT } from '../config.js';
 import {
   isSessionValid,
@@ -49,6 +50,18 @@ const OR_HOSTNAME = (() => {
   }
 })();
 
+function proxyAgentForAccountProxy(proxy) {
+  if (!proxy) return undefined;
+  const username = encodeURIComponent(proxy.username);
+  const password = encodeURIComponent(proxy.password);
+  return new ProxyAgent(`http://${username}:${password}@${proxy.host}:${proxy.port}`);
+}
+
+function fetchOptionsWithAccountProxy(options = {}, proxy = null) {
+  const dispatcher = proxyAgentForAccountProxy(proxy);
+  return dispatcher ? { ...options, dispatcher } : options;
+}
+
 /** Management key material in tRPC JSON or page text (OpenRouter prefix).
  * NOTE: OpenRouter management keys use 'sk-or-v1-' prefix, NOT 'sk-or-mgmt-'
  */
@@ -88,12 +101,12 @@ const SA_KEYWORDS = ['redeem', 'management-keys', 'managementKey', 'createManage
  * fetch each JS bundle, and return an array of 40-char hex candidates
  * found near any of SA_KEYWORDS.
  */
-async function discoverServerActionHashes(pageUrl) {
+async function discoverServerActionHashes(pageUrl, accountProxy = null) {
   try {
-    const pageRes = await fetch(pageUrl, {
+    const pageRes = await fetch(pageUrl, fetchOptionsWithAccountProxy({
       headers: { 'User-Agent': USER_AGENT },
       signal: AbortSignal.timeout(15000),
-    });
+    }, accountProxy));
     if (!pageRes.ok) return [];
     const html = await pageRes.text();
 
@@ -111,10 +124,10 @@ async function discoverServerActionHashes(pageUrl) {
     // Fetch each bundle and grep for hex strings near keywords
     const fetches = scriptUrls.map(async (url) => {
       try {
-        const jsRes = await fetch(url, {
+        const jsRes = await fetch(url, fetchOptionsWithAccountProxy({
           headers: { 'User-Agent': USER_AGENT },
           signal: AbortSignal.timeout(10000),
-        });
+        }, accountProxy));
         if (!jsRes.ok) {
           console.warn(`[dashboard-api] Hash auto-discovery bundle fetch returned HTTP ${jsRes.status}: ${url}`);
           return;
@@ -154,23 +167,23 @@ async function discoverServerActionHashes(pageUrl) {
  * @param {string} body - Request body
  * @returns {string|null} The new hash if found, or null
  */
-async function selfHealHash(kind, testUrl, baseHeaders, body) {
+async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = null) {
   const pageUrl = kind === 'redeem'
     ? `${OR_BASE}/redeem`
     : `${OR_BASE}/settings/management-keys`;
 
   console.warn(`[dashboard-api] ⚡ Self-healing ${kind} hash — scanning ${pageUrl} JS bundles…`);
-  const candidates = await discoverServerActionHashes(pageUrl);
+  const candidates = await discoverServerActionHashes(pageUrl, accountProxy);
 
   for (const candidate of candidates) {
     try {
       const probeHeaders = { ...baseHeaders, 'Next-Action': candidate };
-      const probeRes = await fetch(testUrl, {
+      const probeRes = await fetch(testUrl, fetchOptionsWithAccountProxy({
         method: 'POST',
         headers: probeHeaders,
         body,
         signal: AbortSignal.timeout(10000),
-      });
+      }, accountProxy));
       // Non-404 means the hash was accepted (even if the action returns an
       // application-level error like "invalid code", it confirms the route).
       if (probeRes.status !== 404) {
@@ -1146,7 +1159,7 @@ function extractHtmlErrorInfo(html) {
 }
 
 /** Headers merged after defaults; use to override Referer per surface (e.g. redeem vs management keys). */
-export async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrides = {}) {
+export async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrides = {}, options = {}) {
   // Get fresh JWT before making tRPC call - OTP sessions have 60s JWTs
   const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
   const jwtToUse = freshJwt || sessionCookie; // Fallback to original if refresh failed
@@ -1158,11 +1171,11 @@ export async function trpcCall(route, input, sessionCookie, clientCookie, header
   const url = `${OR_BASE}/api/trpc/${route}?batch=1`;
   const body = JSON.stringify({ '0': { json: input } });
 
-  const res = await fetch(url, {
+  const res = await fetch(url, fetchOptionsWithAccountProxy({
     method: 'POST',
     headers: dashboardHeaders(jwtToUse, clientCookie, headerOverrides),
     body,
-  });
+  }, options.accountProxy));
 
   const contentType = res.headers.get('content-type') || '';
 
@@ -1291,7 +1304,7 @@ export async function trpcCall(route, input, sessionCookie, clientCookie, header
  */
 async function trpcCallWithMigration(route, input, sessionCookie, clientCookie, headerOverrides = {}, context = {}) {
   try {
-    return await trpcCall(route, input, sessionCookie, clientCookie, headerOverrides);
+    return await trpcCall(route, input, sessionCookie, clientCookie, headerOverrides, { accountProxy: context.accountProxy });
   } catch (err) {
     // Check if this is an HTML error that might be due to missing Cloudflare cookies
     if (err.isHtml && !hasCloudflareCookies(clientCookie)) {
@@ -1303,7 +1316,7 @@ async function trpcCallWithMigration(route, input, sessionCookie, clientCookie, 
         if (migration.migrated) {
           console.error(`[dashboard-api] Migration succeeded, retrying tRPC with fresh cookies`);
           // Retry with fresh cookies from migration
-          return await trpcCall(route, input, migration.sessionCookie, migration.clientCookie, headerOverrides);
+          return await trpcCall(route, input, migration.sessionCookie, migration.clientCookie, headerOverrides, { accountProxy: context.accountProxy });
         } else {
           console.error(`[dashboard-api] Migration not possible: ${migration.message || 'unknown reason'}`);
         }
@@ -1594,7 +1607,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
  * @param {string} code - Redemption code to apply
  * @returns {Promise<{success: boolean, result?: any, error?: string, source: string, probedEndpoints: Array}>}
  */
-async function tryRestApiRedeemCode(sessionCookie, clientCookie, code) {
+async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountProxy = null) {
   const probedEndpoints = [];
 
   try {
@@ -1632,7 +1645,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code) {
       try {
         console.error(`[tryRestApiRedeemCode] Trying ${endpoint.method} ${endpoint.url} body=${JSON.stringify(endpoint.body)}`);
 
-        const res = await fetch(endpoint.url, {
+        const res = await fetch(endpoint.url, fetchOptionsWithAccountProxy({
           method: endpoint.method,
           headers: {
             'Content-Type': 'application/json',
@@ -1643,7 +1656,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code) {
             'User-Agent': USER_AGENT,
           },
           body: JSON.stringify(endpoint.body),
-        });
+        }, accountProxy));
 
         const probeResult = {
           url: endpoint.url,
@@ -2975,7 +2988,7 @@ function trpcResponsePredicateForRedeemCode(response, code) {
  *
  * @returns {{ success: boolean, result?: any, errorCode?: string, message?: string, source: string }}
  */
-async function redeemCodeViaServerAction(sessionCookie, clientCookie, code) {
+async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, accountProxy = null) {
   const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
   const jwtToUse = freshJwt || sessionCookie;
 
@@ -2994,22 +3007,22 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code) {
     'Referer': `${OR_ORIGIN}/redeem`,
   };
 
-  const res = await fetch(url, {
+  const res = await fetch(url, fetchOptionsWithAccountProxy({
     method: 'POST',
     headers,
     body: JSON.stringify([code]),
-  });
+  }, accountProxy));
 
   if (res.status === 404) {
     // ── Self-healing: attempt to discover the new hash and retry ──
-    const newHash = await selfHealHash('redeem', url, headers, JSON.stringify([code]));
+    const newHash = await selfHealHash('redeem', url, headers, JSON.stringify([code]), accountProxy);
     if (newHash) {
       // Retry with the healed hash
-      const retryRes = await fetch(url, {
+      const retryRes = await fetch(url, fetchOptionsWithAccountProxy({
         method: 'POST',
         headers: { ...headers, 'Next-Action': newHash },
         body: JSON.stringify([code]),
-      });
+      }, accountProxy));
       if (retryRes.status !== 404) {
         // Replace `res` so the rest of the function processes the retry response
         // (We read retryRes below instead of `res` by reassigning.)
@@ -3086,13 +3099,17 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code) {
 /** Order: Server Action (fast HTTP) → cached tRPC → tRPC candidates → Playwright fallback */
 export async function redeemCode(userId, accountId, code) {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
+  const accountProxy = pickAccountProxy();
+  if (accountProxy) {
+    console.warn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for code redemption account=${accountId}`);
+  }
 
   // Context for Cloudflare cookie migration
-  const migrationContext = { userId, accountId };
+  const migrationContext = { userId, accountId, accountProxy };
 
   // ── Step 0: Server Action (pure HTTP, confirmed working 2026-04-07) ──────────
   try {
-    const saResult = await redeemCodeViaServerAction(sessionCookie, clientCookie, code);
+    const saResult = await redeemCodeViaServerAction(sessionCookie, clientCookie, code, accountProxy);
     if (saResult.success) return saResult;
   } catch (err) {
     const stale = err.message?.includes('stale');
@@ -3172,7 +3189,7 @@ export async function redeemCode(userId, accountId, code) {
   // ── EXPLOIT #12: REST API fallback probe for credit redemption ──
   // Try REST endpoints with session JWT as Bearer token before Playwright
   console.error('[dashboard-api] All tRPC redeem routes exhausted, trying REST API fallback');
-  const restRedeemResult = await tryRestApiRedeemCode(sessionCookie, clientCookie, code);
+  const restRedeemResult = await tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountProxy);
   if (restRedeemResult?.success) {
     console.error(`[dashboard-api] Redemption succeeded via REST API at ${restRedeemResult.probedUrl || 'unknown endpoint'}`);
     return restRedeemResult;
@@ -3188,7 +3205,7 @@ export async function redeemCode(userId, accountId, code) {
 
   console.error('[dashboard-api] REST API redemption failed, falling back to Playwright browser automation');
 
-  return await redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code);
+  return await redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, accountProxy);
 }
 
 async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapshot, managementKey, attempted, code) {
@@ -3274,15 +3291,12 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
   return row;
 }
 
-async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code) {
+async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, selectedAccountProxy = null) {
   // playwright-core: API-only package, no auto-downloaded browser bundle.
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
   // The full `playwright` package is dev-only now (see package.json).
   const { chromium } = await import('playwright-core');
-  const accountProxy = pickAccountProxy();
-  if (accountProxy) {
-    console.warn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for code redemption account=${accountId}`);
-  }
+  const accountProxy = selectedAccountProxy;
   const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED }));
   let result = {
     success: false,
