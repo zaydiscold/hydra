@@ -126,6 +126,29 @@ test('magic-link cleanup timer is owned by server lifecycle', () => {
   assert.match(server, /stopMagicLinkCleanup\(\)/);
 });
 
+test('long-running background timers do not pin idle Node processes', () => {
+  const pinger = readRepoFile('server/services/health-pinger.js');
+  const refresher = readRepoFile('server/services/session-refresher.js');
+  const supervisor = readRepoFile('server/services/task-supervisor.js');
+  const retention = readRepoFile('server/services/request-log-retention.js');
+
+  assert.match(pinger, /timer\.unref\?\.\(\)/);
+  assert.match(refresher, /_startupTimeoutHandle\.unref\?\.\(\)/);
+  assert.match(refresher, /_intervalHandle\.unref\?\.\(\)/);
+  assert.match(supervisor, /this\.timer\.unref\?\.\(\)/);
+  assert.match(retention, /timer\.unref\?\.\(\)/);
+});
+
+test('file logging is rotated for unattended API-router runs', () => {
+  const loggerSource = readRepoFile('server/services/logger.js');
+
+  assert.match(loggerSource, /HYDRA_LOG_MAX_SIZE/);
+  assert.match(loggerSource, /HYDRA_LOG_MAX_FILES/);
+  assert.match(loggerSource, /maxsize:/);
+  assert.match(loggerSource, /maxFiles:/);
+  assert.match(loggerSource, /tailable: true/);
+});
+
 test('dashboard Playwright automation soft failures are logged', () => {
   const source = readRepoFile('server/services/dashboard-api.js');
   const automationSource = source.slice(source.indexOf('async function dismissOpenRouterBlockingOverlays'));
@@ -216,6 +239,8 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   assert.match(requestLogBuffer, /Queue full; dropped \$\{dropped\} request log row/, 'request log overflow must leave throttled evidence');
   assert.match(requestLogBuffer, /formatPrismaError\(fallbackErr, 'write buffered RequestLog without keyHash'\)/);
   assert.match(requestLogBuffer, /export async function stopRequestLogBuffer/, 'request log buffer must drain on shutdown');
+  assert.match(requestLogBuffer, /HYDRA_REQUEST_LOG_SHUTDOWN_DRAIN_MS/, 'shutdown drain must be bounded');
+  assert.match(requestLogBuffer, /Promise\.race/, 'shutdown drain must not hang indefinitely on SQLite');
   assert.doesNotMatch(requestLogBuffer, /queue\.push[\s\S]*without bound/);
 
   assert.match(openrouter, /Account snapshot credits lookup failed: \$\{err\?\.message \|\| err\}/);

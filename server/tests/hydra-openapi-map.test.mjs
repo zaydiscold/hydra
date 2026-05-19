@@ -37,7 +37,7 @@ function routesFromFile(file, prefix) {
 }
 
 test('Hydra OpenAPI map covers the concrete Express route files', () => {
-  const spec = JSON.parse(readFileSync(join(ROOT, 'docs/hydra-api.openapi.json'), 'utf-8'));
+  const spec = JSON.parse(readFileSync(join(ROOT, 'openapi/hydra-api.openapi.json'), 'utf-8'));
   const missing = [];
 
   for (const [file, prefix] of routeFiles) {

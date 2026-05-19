@@ -59,6 +59,7 @@ export class TaskSupervisor {
         this.reportBackgroundError('task expiry sweep', err);
       });
     }, TASK_SWEEP_INTERVAL_MS);
+    this.timer.unref?.();
   }
 
   stop() {

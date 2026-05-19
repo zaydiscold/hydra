@@ -2,6 +2,8 @@ import path from 'node:path';
 import winston from 'winston';
 
 const { combine, timestamp, printf, colorize } = winston.format;
+const DEFAULT_FILE_MAX_SIZE = 5 * 1024 * 1024;
+const DEFAULT_FILE_MAX_FILES = 3;
 
 const icons = {
   error: '❌',
@@ -58,8 +60,14 @@ const transports = [
 ];
 
 if (process.env.HYDRA_DATA_DIR) {
+  const fileMaxSize = Number(process.env.HYDRA_LOG_MAX_SIZE || DEFAULT_FILE_MAX_SIZE);
+  const fileMaxFiles = Number(process.env.HYDRA_LOG_MAX_FILES || DEFAULT_FILE_MAX_FILES);
+
   transports.push(new winston.transports.File({
     filename: path.join(process.env.HYDRA_DATA_DIR, 'hydra.log'),
+    maxsize: Number.isFinite(fileMaxSize) && fileMaxSize > 0 ? fileMaxSize : DEFAULT_FILE_MAX_SIZE,
+    maxFiles: Number.isFinite(fileMaxFiles) && fileMaxFiles > 0 ? fileMaxFiles : DEFAULT_FILE_MAX_FILES,
+    tailable: true,
     format: combine(
       timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       printf(({ level, message, timestamp, stack }) => {

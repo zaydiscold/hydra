@@ -79,6 +79,7 @@ async function pingRandomKey() {
 export function startPinger() {
   if (timer) return;
   timer = setInterval(pingRandomKey, PING_INTERVAL);
+  timer.unref?.();
   logger.info('[PINGER] Background health pinger initialized');
 }
 

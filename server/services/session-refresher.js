@@ -264,6 +264,8 @@ export function startSessionRefresher() {
     sweepAndRefresh();
   }, 10000);
   _intervalHandle = setInterval(() => sweepAndRefresh(), INTERVAL_MS);
+  _startupTimeoutHandle.unref?.();
+  _intervalHandle.unref?.();
   logger.info(`[AUTO-REFRESH] Session refresher scheduled (every ${INTERVAL_MS / 3600000}h)`);
 }
 

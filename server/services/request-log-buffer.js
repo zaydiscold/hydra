@@ -4,6 +4,7 @@ import { logger } from './logger.js';
 const FLUSH_INTERVAL_MS = Number(process.env.HYDRA_REQUEST_LOG_FLUSH_MS || 1000);
 const MAX_QUEUE = Number(process.env.HYDRA_REQUEST_LOG_QUEUE_MAX || 2000);
 const MAX_FLUSH_BATCH = Number(process.env.HYDRA_REQUEST_LOG_FLUSH_BATCH || 100);
+const MAX_SHUTDOWN_DRAIN_MS = Number(process.env.HYDRA_REQUEST_LOG_SHUTDOWN_DRAIN_MS || 5000);
 const ERROR_LOG_WINDOW_MS = 60 * 1000;
 
 let queue = [];
@@ -101,7 +102,18 @@ export async function flushRequestLogBuffer() {
 export async function stopRequestLogBuffer() {
   if (timer) clearInterval(timer);
   timer = null;
-  await flushRequestLogBuffer();
+  let drainTimeout = null;
+  try {
+    await Promise.race([
+      flushRequestLogBuffer(),
+      new Promise(resolve => {
+        drainTimeout = setTimeout(resolve, MAX_SHUTDOWN_DRAIN_MS);
+        drainTimeout.unref?.();
+      }),
+    ]);
+  } finally {
+    if (drainTimeout) clearTimeout(drainTimeout);
+  }
 }
 
 export function getRequestLogBufferSnapshot() {

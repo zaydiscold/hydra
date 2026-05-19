@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
-const out = resolve(root, 'docs/hydra-api.openapi.json');
+const out = resolve(root, 'openapi/hydra-api.openapi.json');
 
 const json = {
   type: 'object',

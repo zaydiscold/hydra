@@ -2,8 +2,8 @@ import { prisma } from './db.js';
 import { logger } from './logger.js';
 
 const RETENTION_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
-const KEEP_DAYS = 30;
-const KEEP_COUNT = 50000;
+const KEEP_DAYS = Number(process.env.HYDRA_REQUEST_LOG_KEEP_DAYS || 30);
+const KEEP_COUNT = Number(process.env.HYDRA_REQUEST_LOG_KEEP_COUNT || 50000);
 const NETWORK_ERROR_LOG_WINDOW_MS = 60 * 1000;
 
 let timer = null;
@@ -50,6 +50,7 @@ export function startRequestLogRetention() {
   timer = setInterval(() => {
     prunePromise = pruneRequestLogs();
   }, RETENTION_INTERVAL_MS);
+  timer.unref?.();
   prunePromise = pruneRequestLogs();
   prunePromise.catch((err) => {
     logger.error(`[RETENTION] Initial prune failed: ${err.message}`);
