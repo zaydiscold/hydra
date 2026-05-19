@@ -1,13 +1,23 @@
 import { app, dialog } from 'electron';
 import electronUpdater from 'electron-updater';
 
-const { autoUpdater } = electronUpdater;
-
 let updateCheckStarted = false;
+
+function getAutoUpdater(log) {
+  try {
+    return electronUpdater.autoUpdater;
+  } catch (err) {
+    log?.warn?.(`[electron-updater] updater unavailable: ${err?.message || err}`);
+    return null;
+  }
+}
 
 export function setupAutoUpdates({ isDev, getMainWindow, log = console } = {}) {
   if (updateCheckStarted) return false;
   if (isDev || !app.isPackaged) return false;
+
+  const autoUpdater = getAutoUpdater(log);
+  if (!autoUpdater) return false;
 
   updateCheckStarted = true;
   autoUpdater.autoDownload = true;

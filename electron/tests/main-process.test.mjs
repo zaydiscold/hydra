@@ -125,6 +125,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
 
     assert.match(main, /setupAutoUpdates\(\{ isDev, getMainWindow \}\)/);
     assert.match(updater, /from 'electron-updater'/);
+    assert.match(updater, /function getAutoUpdater\(log\)/);
+    assert.doesNotMatch(updater, /const \{ autoUpdater \} = electronUpdater;/);
     assert.match(updater, /if \(isDev \|\| !app\.isPackaged\) return false;/);
     assert.match(updater, /autoUpdater\.checkForUpdates\(\)/);
     assert.match(updater, /autoUpdater\.quitAndInstall\(false, true\)/);
