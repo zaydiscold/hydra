@@ -144,9 +144,10 @@ test('electron package smoke validates the packaged app shell without launching 
 
   assert.match(script, /function assertPackagedShell/, 'smoke must validate the platform shell');
   assert.match(script, /function assertMacPlistContract/, 'smoke must validate macOS LaunchServices plist keys');
-  assert.match(script, /function assertPackagedMacChromeContract/, 'smoke must validate packaged macOS native titlebar source');
-  assert.match(script, /frame: useNativeMacChrome/, 'smoke must require packaged macOS AppKit frame ownership');
-  assert.match(script, /titleBarStyle\\s\*:/, 'smoke must reject packaged hidden-titlebar overrides');
+  assert.match(script, /function assertPackagedMacChromeContract/, 'smoke must validate packaged macOS titlebar source');
+  assert.match(script, /titleBarStyle: 'hiddenInset'/, 'smoke must require packaged macOS hiddenInset titlebar');
+  assert.match(script, /trafficLightPosition: \{ x: 14, y: 12 \}/, 'smoke must keep macOS traffic lights clear of renderer chrome');
+  assert.match(script, /frame: true/, 'smoke must keep non-macOS windows framed');
   assert.match(script, /macOS Info\.plist/, 'smoke must require macOS Info.plist');
   assert.match(script, /CFBundleExecutable must be Hydra/, 'smoke must verify the macOS bundle executable name');
   assert.match(script, /CFBundlePackageType must be APPL/, 'smoke must verify the macOS bundle package type');

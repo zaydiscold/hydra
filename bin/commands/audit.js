@@ -392,7 +392,8 @@ function buildAudit() {
         && electronSmoke.includes('function assertPackagedShell')
         && electronSmoke.includes('function assertMacPlistContract')
         && electronSmoke.includes('function assertPackagedMacChromeContract')
-        && electronSmoke.includes('frame: useNativeMacChrome')
+        && electronSmoke.includes("titleBarStyle: 'hiddenInset'")
+        && electronSmoke.includes('trafficLightPosition: { x: 14, y: 12 }')
         && electronSmoke.includes('function assertReleaseArtifact')
         && electronSmoke.includes('Windows x64 installer blockmap')
         && electronSmoke.includes('query_engine-windows.dll.node')
@@ -404,7 +405,7 @@ function buildAudit() {
         && electronPrepare.includes('PLAYWRIGHT_BROWSERS_PATH cache')
         && workflowContract.includes('electron package smoke validates target-specific Chromium archives')
         && workflowContract.includes('electron package smoke validates distributable release artifacts'),
-      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/native-titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
+      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
     ),
     check(
       'docker-docs',
