@@ -22,6 +22,18 @@ Hydra is a packaged Electron app for running an OpenRouter account fleet from on
 
 It is designed for operators who want a native control plane without shipping account secrets to a hosted service.
 
+## Navigation
+
+- [Highlights](#highlights)
+- [Install](#install)
+- [Quick Start From Source](#quick-start-from-source)
+- [Desktop App](#desktop-app)
+- [CLI](#cli)
+- [Local API Router](#local-api-router)
+- [Operator Hardening](#operator-hardening)
+- [Development And Release Gates](#development-and-release-gates)
+- [Screenshots And Remotion](#screenshots-and-remotion)
+
 ## Highlights
 
 - **Native desktop control plane**: Electron shell with an embedded Express API, tray/menu lifecycle, platform-native user data paths, and packaged runtime resources.
@@ -29,6 +41,7 @@ It is designed for operators who want a native control plane without shipping ac
 - **Long-running API behavior**: bounded proxy concurrency, buffered request-log writes, log rotation, request-log retention, upstream health checks, and graceful shutdown paths.
 - **Fleet account operations**: add accounts, track session health, provision management keys, sync balances, and inspect account readiness.
 - **Key pool management**: rotate across pooled keys, cool down rate-limited keys, disable unhealthy keys, and expose a single local Hydra proxy key.
+- **Account proxy pool**: optional encrypted account-task proxy list for browser-backed signup, key, and code flows.
 - **Promo-code workflows**: preflight readiness, redeem against selected accounts, and keep redemption history.
 - **Local-first security**: local vault password, encrypted secrets, owner-only data directories, redacted CLI output, and loopback-first network binding.
 - **Scriptable operator CLI**: JSON-friendly commands for automation, diagnostics, imports/exports, fleet scans, and router lifecycle control.
@@ -46,7 +59,7 @@ Use the packaged release artifact for your platform:
 
 On first launch, Hydra creates an encrypted local vault and an empty SQLite database in the platform user-data directory. Closing the app window does not have to kill the router; quit from the tray/menu when you want the server fully stopped.
 
-## Quick Start
+## Quick Start From Source
 
 ```bash
 git clone https://github.com/zaydiscold/hydra.git
@@ -70,6 +83,12 @@ npm test
 npm run gate
 ```
 
+## Desktop App
+
+The desktop app is the primary operator surface. It starts the embedded API server, stores secrets in the local vault, exposes tray/menu lifecycle controls, and keeps app data in the platform user-data directory instead of the source checkout.
+
+Settings includes local security controls, router settings, biometric status when available, and the encrypted account proxy pool. The proxy pool accepts one proxy per line in `ip:port:user:pass` format. Empty pools are valid; account tasks continue without proxies when no saved proxy is available.
+
 ## CLI
 
 Hydra ships a local `hydra` binary for operator scripts. Link it during development:
@@ -79,25 +98,16 @@ npm link
 hydra help
 ```
 
-Common commands:
+Common commands are grouped by operator workflow:
 
-```bash
-hydra status
-hydra accounts --json
-hydra account <id-prefix>
-hydra balance
-hydra keys --account <id-prefix>
-hydra scan --json
-hydra proxy status
-hydra codes preflight <code> --all
-hydra openrouter models --json
-hydra ai chat "hello" --route proxy
-hydra doctor --json
-hydra logs --lines 100
-hydra serve --port 3001
-hydra unlock --stdin --token-only
-HYDRA_TOKEN=<token> hydra stop --port 3001
-```
+| Workflow | Commands |
+| --- | --- |
+| Status and diagnostics | `hydra status`, `hydra doctor --json`, `hydra logs --lines 100` |
+| Fleet and accounts | `hydra accounts --json`, `hydra account <id-prefix>`, `hydra balance`, `hydra scan --json` |
+| Keys and codes | `hydra keys --account <id-prefix>`, `hydra codes preflight <code> --all` |
+| Router lifecycle | `hydra proxy status`, `hydra serve --port 3001`, `HYDRA_TOKEN=<token> hydra stop --port 3001` |
+| OpenRouter helpers | `hydra openrouter models --json`, `hydra ai chat "hello" --route proxy` |
+| Vault automation | `hydra unlock --stdin --token-only` |
 
 The CLI defaults to redacted human output and supports `--json` on the commands meant for automation. Secret-bearing flows require explicit flags such as `--yes`, `--stdin`, or an environment token so shell scripts do not accidentally burn codes, rotate proxy keys, or expose credentials.
 
@@ -120,7 +130,7 @@ curl http://127.0.0.1:3001/v1/chat/completions \
 
 The tracked API contract lives at [`openapi/hydra-api.openapi.json`](openapi/hydra-api.openapi.json).
 
-## Runtime Hardening
+## Operator Hardening
 
 Hydra is meant to sit open and take repeated local requests. The server includes guardrails for unattended use:
 
@@ -132,12 +142,21 @@ Hydra is meant to sit open and take repeated local requests. The server includes
 - Background health, retention, refresher, and task timers that do not pin idle Node processes.
 - Loopback-first server binding and authenticated shutdown.
 
-## Development Scripts
+Local security controls are intentionally boring and explicit: vault-backed secrets, owner-only data directories, redacted CLI output, optional biometric unlock status in Settings, and encrypted account proxy storage. The README avoids embedding real account data, full API keys, or live secrets.
+
+## Development And Release Gates
+
+Use these scripts when changing the app locally:
 
 ```bash
 npm run dev:electron        # Electron development loop
 npm run server              # Standalone Express server
 npm run build               # Vite renderer build
+```
+
+Use these gates before treating a change as release-ready:
+
+```bash
 npm run electron:prepare    # Prepare packaged server/runtime resources
 npm run electron:smoke      # Smoke-test packaged Electron artifact
 npm run docker:smoke        # Docker runtime contract check
@@ -149,6 +168,10 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 <a href="https://www.star-history.com/#zaydiscold/hydra&Date">
   <img alt="Hydra star history" src="https://api.star-history.com/svg?repos=zaydiscold/hydra&type=Date" />
 </a>
+
+## Screenshots And Remotion
+
+Release media should be refreshed from the packaged Electron app. Browser-target screenshots are not release-quality evidence for the desktop UI.
 
 ## Screenshot Plan
 
