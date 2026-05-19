@@ -163,6 +163,12 @@ function prismaFileUrl(path) {
 }
 
 async function listSqliteTables(dbPath) {
+  execFileSync(process.execPath, [PRISMA_CLI, 'generate', `--schema=${SCHEMA_PATH}`], {
+    cwd: PROJECT_ROOT,
+    stdio: 'pipe',
+    timeout: 60_000,
+  });
+
   const { PrismaClient } = await import('@prisma/client');
   const prisma = new PrismaClient({
     datasources: {

@@ -174,7 +174,7 @@ function assertReleaseArtifact() {
       assertExists(`${artifact}.blockmap`, 'Windows x64 installer blockmap');
       break;
     case 'linux-x64':
-      artifact = findReleaseArtifact(new RegExp(`Hydra-${escapedVersion}(?:-linux-x64|-x86_64)?\\.AppImage$`));
+      artifact = findReleaseArtifact(new RegExp(`Hydra-${escapedVersion}(?:-linux-x64|-linux-x86_64|-x86_64)?\\.AppImage$`));
       assertExecutable(artifact || '', 'Linux x64 AppImage artifact');
       break;
     default:
