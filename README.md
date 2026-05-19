@@ -22,18 +22,6 @@ Hydra is a packaged Electron app for running an OpenRouter account fleet from on
 
 It is designed for operators who want a native control plane without shipping account secrets to a hosted service.
 
-## Screenshots
-
-<p align="center">
-  <img src="videos/assets/dashboard.png" alt="Hydra dashboard" width="48%" />
-  <img src="videos/assets/pool.png" alt="Hydra proxy pool" width="48%" />
-</p>
-
-<p align="center">
-  <img src="videos/assets/traffic.png" alt="Hydra traffic view" width="48%" />
-  <img src="videos/assets/vault.png" alt="Hydra vault setup" width="48%" />
-</p>
-
 ## Highlights
 
 - **Native desktop control plane**: Electron shell with an embedded Express API, tray/menu lifecycle, platform-native user data paths, and packaged runtime resources.
@@ -164,7 +152,7 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 ## Screenshot Plan
 
-The README uses tracked media under `videos/assets/`. The release-quality capture pass should refresh these from the packaged Electron app, not from a browser target:
+The old tracked dashboard screenshots are intentionally not embedded here because they predate the newer streamlined dashboard/pie-chart UI. The release-quality capture pass should refresh media from the packaged Electron app, not from a browser target, then embed the new assets near the top of this README:
 
 1. **Vault setup**: first-run password/vault screen with no real secrets visible.
 2. **Dashboard**: account fleet overview with balances, health, and status cards redacted or seeded.
