@@ -18,6 +18,7 @@ import {
   openRouterPlaywrightDeviceCookies,
 } from './clerk-auth.js';
 import * as store from './store.js';
+import { logger } from './logger.js';
 import { getCredits } from './openrouter.js';
 import { runInBatches } from './batch-runner.js';
 import { resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
@@ -688,7 +689,7 @@ export async function ensureSession(userId, accountId) {
       // Exploit #14: Cookie stacking — try stacked cookies for proactive refresh
       const refreshInput14 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
       if (remainingMs < 5 * 60 * 1000 && (session.clientCookie || session.clientCookies?.length > 0)) {
-        console.log(`[ensureSession] JWT expires in ${Math.round(remainingMs/1000)}s, refreshing proactively`);
+        logger.info(`[ensureSession] JWT expires in ${Math.round(remainingMs/1000)}s, refreshing proactively`);
         const refreshed = await refreshSession(refreshInput14, session.sessionCookie);
         if (refreshed) {
           const liveStack = Array.isArray(session.clientCookies) && session.clientCookies.length > 0
@@ -723,7 +724,7 @@ export async function ensureSession(userId, accountId) {
   // Exploit #14: Cookie stacking — try all stacked cookies newest-first
   const refreshInput14b = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
   if (refreshInput14b) {
-    console.log(`[ensureSession] JWT expired, refreshing via __client cookie(s)`);
+    logger.info(`[ensureSession] JWT expired, refreshing via __client cookie(s)`);
     const refreshed = await refreshSession(refreshInput14b, session.sessionCookie);
     if (refreshed) {
       const cc = refreshed.clientCookie ?? session.clientCookie;
@@ -740,7 +741,7 @@ export async function ensureSession(userId, accountId) {
       });
       return { sessionCookie: refreshed.sessionCookie, clientCookie: cc };
     }
-    console.log(`[ensureSession] __client refresh failed, __client may be expired`);
+    logger.info(`[ensureSession] __client refresh failed, __client may be expired`);
   }
 
   // No usable __client — try password re-auth for password accounts.
