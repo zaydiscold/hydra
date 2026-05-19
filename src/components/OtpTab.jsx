@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { parseEmails, clerkErrorHint } from '../utils/auth';
 import DevBackendHint from '../components/DevBackendHint';
 
@@ -35,10 +35,46 @@ export default function OtpTab({
   const current = queue[currentIdx] ?? null;
   const total = queue.length;
   const position = total ? currentIdx + 1 : 0;
-  const verifiedCount = queue.filter((q) => q.verified).length;
-  const skippedCount = queue.filter((q) => q.skipped).length;
+  const {
+    verifiedCount,
+    skippedCount,
+    provisioningCount,
+    exportLines,
+    exportPreview,
+    exportRows,
+  } = useMemo(() => {
+    let verified = 0;
+    let skipped = 0;
+    let provisioning = 0;
+    const exported = [];
+    const preview = [];
+
+    for (const item of queue) {
+      if (item.verified) {
+        verified++;
+        preview.push(item.managementKey ? `${item.email}:${item.managementKey}` : `${item.email}:(no key yet)`);
+        if (item.managementKey) exported.push(`${item.email}:${item.managementKey}`);
+      }
+      if (item.skipped) skipped++;
+      if (item.provisioning) provisioning++;
+    }
+
+    return {
+      verifiedCount: verified,
+      skippedCount: skipped,
+      provisioningCount: provisioning,
+      exportLines: exported.join('\n'),
+      exportPreview: preview.join('\n'),
+      exportRows: Math.min(Math.max(verified, 3), 12),
+    };
+  }, [queue]);
   const errorHint = clerkErrorHint(localError);
   const [copyExportStatus, setCopyExportStatus] = useState('');
+  const copyStatusTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (copyStatusTimerRef.current) clearTimeout(copyStatusTimerRef.current);
+  }, []);
 
   const handleCreateStubs = (e) => {
     e.preventDefault();
@@ -47,15 +83,15 @@ export default function OtpTab({
   };
 
   async function handleCopyExport() {
-    const lines = queue.filter((item) => item.verified && item.managementKey).map((item) => `${item.email}:${item.managementKey}`).join('\n');
-    if (!lines) return;
+    if (!exportLines) return;
+    if (copyStatusTimerRef.current) clearTimeout(copyStatusTimerRef.current);
     try {
-      await navigator.clipboard?.writeText(lines);
+      await navigator.clipboard?.writeText(exportLines);
       setCopyExportStatus('Copied export to clipboard');
     } catch (err) {
       setCopyExportStatus(`Clipboard copy failed: ${err.message || 'permission denied'}`);
     }
-    setTimeout(() => setCopyExportStatus(''), 3000);
+    copyStatusTimerRef.current = setTimeout(() => setCopyExportStatus(''), 3000);
   }
 
   return (
@@ -145,9 +181,9 @@ export default function OtpTab({
           >
             <strong>{verifiedCount}</strong> / {total} verified
             {skippedCount > 0 && <> · <strong>{skippedCount}</strong> skipped</>}
-            {queue.some(q => q.provisioning) && (
+            {provisioningCount > 0 && (
               <span style={{ color: 'var(--status-warning)', marginLeft: 8, fontSize: '0.75rem', fontWeight: 600 }}>
-                [{(queue.filter(q => q.provisioning).length)} provisioning in bg…]
+                [{provisioningCount} provisioning in bg…]
               </span>
             )}
           </p>
@@ -245,7 +281,7 @@ export default function OtpTab({
               data-testid="bulk-auth-copy-export"
               className="btn btn-ghost"
               onClick={() => void handleCopyExport()}
-              disabled={!queue.some((item) => item.verified && item.managementKey)}
+              disabled={!exportLines}
             >
               Copy all to clipboard
             </button>
@@ -259,8 +295,8 @@ export default function OtpTab({
             data-testid="bulk-auth-export-textarea"
             className="form-input"
             readOnly
-            rows={Math.min(Math.max(queue.filter((item) => item.verified).length, 3), 12)}
-            value={queue.filter((item) => item.verified).map((item) => item.managementKey ? `${item.email}:${item.managementKey}` : `${item.email}:(no key yet)`).join('\n')}
+            rows={exportRows}
+            value={exportPreview}
             spellCheck={false}
             style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', minHeight: 80, resize: 'vertical' }}
           />
