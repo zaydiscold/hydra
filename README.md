@@ -69,9 +69,14 @@ node bin/hydra.mjs openrouter models --json
 node bin/hydra.mjs codes preflight <code> --json
 ```
 
+## Security Model
+
+Hydra is local-first by design. Account sessions, API keys, and app secrets live
+on the user's machine, and the desktop proxy binds to loopback by default. Do
+not commit `.env`, local databases, release artifacts, or exported account data.
+
 ## Documentation
 
 - [Packaging](docs/PACKAGING.md) covers desktop artifact builds and smoke checks.
 - [Docker Runtime](docs/DOCKER.md) covers the optional server-style deployment.
-- [API Reference](docs/API_REFERENCE.md) covers the local server and app contracts.
-- [Hydra API Map](docs/HYDRA_API_MAP.md) explains the private source-derived API map and CLI boundary.
+- [API Reference](docs/API_REFERENCE.md) covers supported local app contracts.
