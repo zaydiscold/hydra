@@ -135,15 +135,6 @@ test('electron package smoke validates distributable release artifacts', () => {
   assert.match(script, /release artifact is empty/, 'smoke must reject empty artifacts');
 });
 
-test('home Intel package script runs target-specific smoke before copying artifacts', () => {
-  const script = read('scripts/package-home-intel.sh');
-
-  assert.match(script, /npm run electron:build:mac-x64/, 'home package script must build the x64 macOS target');
-  assert.match(script, /HYDRA_BUILD_TARGET=darwin-x64 npm run electron:smoke/, 'home package script must smoke the x64 target artifact');
-  assert.match(script, /codesign --verify --deep --strict --verbose=2 release\/mac\/Hydra\.app/, 'home package script must verify codesign on the x64 app');
-  assert.match(script, /Hydra-1\.0\.0-mac-x64\.zip\.blockmap/, 'home package script must require the x64 blockmap before copy-back');
-});
-
 test('packaged app dogfood launcher uses LaunchServices instead of direct executable spawn', () => {
   const pkg = JSON.parse(read('package.json'));
   const script = read('scripts/open-packaged-app.mjs');

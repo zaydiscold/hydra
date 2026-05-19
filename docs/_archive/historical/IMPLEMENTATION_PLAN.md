@@ -6,7 +6,7 @@
 >
 > **Last updated:** 2026-04-02  
 > **Status:** Historical / planning — implementation has diverged; use cross-links above for truth.  
-> **Project location:** `/Users/zaydk/Desktop/hydra`  
+> **Project location:** local Hydra repository
 > **Reference docs:** `docs/recon/OPENROUTER_RECON.md`, `docs/recon/CLERK_API_GUIDE.md`, `docs/recon/TRPC_ROUTES.md`
 
 ---
@@ -743,7 +743,7 @@ Add sections:
 ## File Tree After Implementation
 
 ```
-/Users/zaydk/Desktop/hydra/
+hydra/
 ├── docs/
 │   ├── AGENTS.md                          — Agent briefing doc
 │   └── recon/

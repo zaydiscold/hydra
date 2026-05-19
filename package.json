@@ -21,7 +21,6 @@
     "electron:build": "npm run build && npm run electron:prepare && electron-builder",
     "electron:build:mac-arm64": "npm run build && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:prepare && electron-builder --mac zip --arm64",
     "electron:build:mac-x64": "npm run build && HYDRA_BUILD_TARGET=darwin-x64 npm run electron:prepare && electron-builder --mac zip --x64",
-    "electron:build:home-intel": "bash scripts/package-home-intel.sh",
     "electron:build:dmg": "npm run build && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:prepare && electron-builder --mac dmg --arm64",
     "electron:build:win": "npm run build && HYDRA_BUILD_TARGET=win32-x64 npm run electron:prepare && electron-builder --win nsis --x64",
     "electron:build:linux": "npm run build && HYDRA_BUILD_TARGET=linux-x64 npm run electron:prepare && electron-builder --linux AppImage --x64",

@@ -68,7 +68,7 @@ Hydra also runs as a native desktop app via Electron:
 - **`npx electron .`** — Production/preview mode: runs the Electron app serving the built `dist/` files. Requires `npm run build` first. Use this to verify the exact artifact users will install.
 - **`npm run electron:build`** — Packages the app into platform artifacts (`.zip` on macOS by default, `.exe` on Windows, `.AppImage` / `.deb` / `.rpm` on Linux). Use `npm run electron:build:dmg` on an unsandboxed Mac release machine when a DMG is required.
 - **`npm run electron:build:mac-arm64`** — Builds the Apple Silicon Mac zip.
-- **`npm run electron:build:mac-x64`** — Builds the Intel Mac zip for machines like the 2019 Intel MacBook Pro reachable as `ssh home`.
+- **`npm run electron:build:mac-x64`** — Builds the Intel Mac zip on an Intel Mac or Intel macOS CI runner.
 
 The `npm run dev` (browser) path is preserved and remains the primary workflow for daily frontend/backend iteration. See [**ELECTRON_MIGRATION_STATUS.md**](ELECTRON_MIGRATION_STATUS.md) for full details.
 

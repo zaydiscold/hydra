@@ -3,7 +3,7 @@
 > **Date:** 2026-05-05  
 > **Status:** Recon-only. No live code testing against authenticated session.  
 > **Researcher:** Hermes Agent (subagent)  
-> **Repo:** `/Users/zaydk/Desktop/openrouter-code-tester`
+> **Repo:** local OpenRouter code tester workspace
 
 ---
 

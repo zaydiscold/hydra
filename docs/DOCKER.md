@@ -1,7 +1,7 @@
 # Docker Runtime
 
 Hydra's primary product is the Electron desktop app. Docker is the server-style
-runtime for always-on hosts, home servers, and repeatable deployments.
+runtime for always-on hosts and repeatable deployments.
 
 ## Local Build
 
@@ -58,39 +58,6 @@ That starts the compose service, polls `http://127.0.0.1:3001/api/auth/status`,
 prints compose state plus recent container logs on failure, and removes the
 smoke container afterward with `docker compose down --remove-orphans`. Add
 `--keep-running` if the smoke run should leave the server up.
-
-## Home Server Notes
-
-For Zayd's Intel Mac home server reachable with `ssh home`, prefer the native
-Intel Electron package when a desktop UI is needed:
-
-```bash
-ssh home
-cd /path/to/hydra
-npm ci
-npm run electron:build:mac-x64
-HYDRA_BUILD_TARGET=darwin-x64 npm run electron:smoke
-```
-
-If the checkout is not on `home` yet, transfer a source snapshot excluding
-`node_modules`, `data`, `dist`, `build`, and `release`, then run the commands
-above on the Intel machine. Do not copy local vault data unless intentionally
-migrating that machine's accounts.
-
-The repo includes a helper for this exact flow:
-
-```bash
-npm run electron:build:home-intel
-```
-
-Use Docker on that machine when Hydra should behave like a persistent web/API
-service instead of a native app:
-
-```bash
-ssh home
-cd /path/to/hydra
-docker compose up -d --build
-```
 
 ## Operational Constraints
 

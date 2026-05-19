@@ -37,7 +37,7 @@ The canonical database is `data/hydra.db`. Both dev mode and Docker use this pat
 
 Your `.env` should have:
 ```
-DATABASE_URL="file:/Users/zaydk/Desktop/hydra/data/hydra.db"
+DATABASE_URL="file:$PWD/data/hydra.db"
 ```
 
 Docker's `docker-compose.yml` overrides with `DATABASE_URL=file:/app/data/hydra.db` (same file, different mount path inside the container).

@@ -85,7 +85,7 @@ All 12 tools are installed at:
 /opt/homebrew/bin/feroxbuster
 /opt/homebrew/bin/amass
 /opt/homebrew/bin/gau
-/Users/zaydk/go/bin/waybackurls
-/Users/zaydk/go/bin/hakrawler
+~/go/bin/waybackurls
+~/go/bin/hakrawler
 /usr/bin/curl
 ```

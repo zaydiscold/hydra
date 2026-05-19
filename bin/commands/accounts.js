@@ -320,13 +320,13 @@ export async function run(argv) {
   const wantJson = argv.includes('--json');
 
   try {
-    const { store } = await loadServices();
-    const user = await resolveUser();
-
     if (argv[0] === 'help' || argv.includes('--help') || argv.includes('-h')) {
       usage();
       return;
     }
+
+    const { store } = await loadServices();
+    const user = await resolveUser();
 
     if (argv[0] === 'purge') {
       await runPurge(argv.slice(1), { store, user, wantJson });

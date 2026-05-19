@@ -15,10 +15,10 @@ npm run electron:smoke
 npm run electron:open:mac-arm64
 ```
 
-On macOS, the default target is a zip artifact. Sandboxed agent environments
-cannot start the `hdiutil` helper (`hdiejectd`) required for DMG creation, so
-the default local build path avoids DMG. For release machines outside that
-sandbox, run:
+On macOS, the default target is a zip artifact. Restricted local environments
+may be unable to start the `hdiutil` helper (`hdiejectd`) required for DMG
+creation, so the default local build path avoids DMG. For release machines that
+support DMG creation, run:
 
 ```bash
 npm run electron:build:dmg
@@ -63,21 +63,11 @@ HYDRA_BUILD_TARGET=win32-x64 npm run electron:smoke
 That proves the Windows package resources and NSIS artifact shape, but final
 Windows acceptance still requires installing and launching on Windows.
 
-For Zayd's Intel home machine:
-
-```bash
-npm run electron:build:home-intel
-```
-
-That script transfers a clean source snapshot to `ssh home` in small chunks,
-assembles it under `$HOME/Desktop/hydra` by default, then runs
-`npm run electron:build:mac-x64`,
-`HYDRA_BUILD_TARGET=darwin-x64 npm run electron:smoke`, and
-`codesign --verify --deep --strict` on the Intel Mac. Existing remote checkouts
-are moved to `$HOME/Desktop/hydra-remote-backups/hydra-<timestamp>`
-instead of being deleted, and the finished x64 zip/blockmap are copied back into
-the local `release/` directory. It intentionally excludes `data/`, `.env*`,
-`node_modules/`, `videos/`, and local build outputs.
+For a native Intel macOS package, run `npm run electron:build:mac-x64` on an
+Intel Mac or an Intel macOS CI runner, then run
+`HYDRA_BUILD_TARGET=darwin-x64 npm run electron:smoke` and
+`codesign --verify --deep --strict --verbose=2 release/mac/Hydra.app` before
+publishing the artifact.
 
 For GitHub Actions, use `macos-14`/`macos-15` for arm64 builds and
 `macos-15-intel` for Intel x64 builds. GitHub's hosted runner reference lists
@@ -251,7 +241,8 @@ That command calls `open -n release/mac-arm64/Hydra.app`. Do not spawn
 direct executable launches can abort during macOS application registration and
 do not represent the normal packaged app launch path.
 
-Use `docs/PACKAGED_ELECTRON_DOGFOOD.md` for the final acceptance checklist.
+Final manual acceptance should launch the packaged Electron app itself, not a
+browser preview or Vite server.
 That runbook is the source of truth for packaged Electron-only dogfood,
 live-flow evidence, Windows installer launch, Docker runtime, and the
 screenshot-last rule. Chrome, `vite preview`, localhost browser tabs, and
