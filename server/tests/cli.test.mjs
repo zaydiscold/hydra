@@ -864,10 +864,11 @@ test('hydra account help is side-effect-light and explicit about redaction', () 
 });
 
 test('hydra account <id> --json returns redacted detail without secret fields', () => {
-  const accounts = JSON.parse(runHydra(['accounts', '--json'])).accounts;
+  const { env } = prepareKeysProvisionDb();
+  const accounts = JSON.parse(runHydra(['accounts', '--json'], env)).accounts;
   assert.ok(accounts.length > 0);
 
-  const report = JSON.parse(runHydra(['account', accounts[0].id.slice(0, 8), '--json']));
+  const report = JSON.parse(runHydra(['account', accounts[0].id.slice(0, 8), '--json'], env));
   assert.equal(report.id, accounts[0].id);
   assert.equal(typeof report.clientCookieCount, 'number');
   assert.equal(typeof report.managementKeyRecords, 'number');
@@ -1064,7 +1065,8 @@ test('hydra scan help is side-effect-light', () => {
 });
 
 test('hydra scan --quick --json returns a local fleet summary without secret fields', () => {
-  const out = runHydra(['scan', '--quick', '--json']);
+  const { env } = prepareKeysProvisionDb();
+  const out = runHydra(['scan', '--quick', '--json'], env);
   const report = JSON.parse(out);
 
   assert.equal(typeof report.summary.accounts, 'number');
@@ -1089,9 +1091,10 @@ test('hydra export help is side-effect-light and explicit about redaction', () =
 });
 
 test('hydra export writes a redacted owner-only metadata file', () => {
+  const { env } = prepareKeysProvisionDb();
   const dir = mkdtempSync(join(tmpdir(), 'hydra-cli-export-'));
   const outPath = join(dir, 'fleet.json');
-  const out = runHydra(['export', '--out', outPath, '--json']);
+  const out = runHydra(['export', '--out', outPath, '--json'], env);
   const summary = JSON.parse(out);
   const raw = readFileSync(outPath, 'utf-8');
   const exported = JSON.parse(raw);
@@ -1113,11 +1116,12 @@ test('hydra export writes a redacted owner-only metadata file', () => {
 });
 
 test('hydra import --dry-run validates a redacted export without writes', () => {
+  const { env } = prepareKeysProvisionDb();
   const dir = mkdtempSync(join(tmpdir(), 'hydra-cli-import-'));
   const outPath = join(dir, 'fleet.json');
-  runHydra(['export', '--out', outPath, '--json']);
+  runHydra(['export', '--out', outPath, '--json'], env);
 
-  const out = runHydra(['import', outPath, '--dry-run', '--json']);
+  const out = runHydra(['import', outPath, '--dry-run', '--json'], env);
   const report = JSON.parse(out);
 
   assert.equal(report.path, outPath);
