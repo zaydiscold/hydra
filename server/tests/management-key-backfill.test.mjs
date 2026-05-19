@@ -4,9 +4,12 @@
  */
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const DB_SPEC = new URL('../services/db.js', import.meta.url).href;
 const CODEC_SPEC = new URL('../services/storage-codec.js', import.meta.url).href;
+const ROOT = new URL('../..', import.meta.url).pathname;
 
 const rows = [];
 
@@ -53,4 +56,12 @@ test('backfillLegacyManagementKey stores once and then skips when rows already e
   const second = await backfillLegacyManagementKey('acct-1', 'sk-or-v1-abcdefghijklmnopqrstuvwxyz0123456789');
   assert.equal(second.backfilled, false);
   assert.equal(rows.length, 1);
+});
+
+test('management-key duplicate scans log unreadable stored rows', () => {
+  const source = readFileSync(join(ROOT, 'server/services/management-key-store.js'), 'utf-8');
+
+  assert.match(source, /Unreadable management-key row skipped during duplicate scan/);
+  assert.match(source, /account=\$\{accountId\}, key=\$\{row\.id\}/);
+  assert.doesNotMatch(source, /catch \{\s*\/\/ Ignore unreadable rows and continue scanning\./);
 });

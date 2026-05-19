@@ -1,4 +1,5 @@
 import React from 'react';
+import { isElectron, native, tryNative } from '../lib/native';
 
 // Generate a short correlation ID for error tracking without exposing internals
 let _correlationCounter = 0;
@@ -22,6 +23,14 @@ export default class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     // Always log the full stack internally for debugging
     console.error('[GLOBAL ERROR]', error, errorInfo);
+  }
+
+  minimizeWindow() {
+    void tryNative(native.minimizeWindow);
+  }
+
+  closeWindow() {
+    void tryNative(native.closeWindow);
   }
 
   /** Return a safe, production-appropriate error message with a correlation ID. */
@@ -60,6 +69,12 @@ export default class ErrorBoundary extends React.Component {
       const display = this.getSafeErrorDisplay();
       return (
         <div className="center-container" style={{ backdropFilter: 'blur(20px)', zIndex: 10000 }}>
+          {isElectron() && (
+            <div className="error-window-controls" aria-label="Window controls">
+              <button type="button" onClick={() => this.minimizeWindow()}>Minimize</button>
+              <button type="button" onClick={() => this.closeWindow()}>Close</button>
+            </div>
+          )}
           <div className="lock-card" style={{ border: '4px solid var(--status-error)', boxShadow: '12px 12px 0 var(--status-error)' }}>
             <div className="lock-card-icon" style={{ background: 'var(--status-error)', color: 'white' }}>CRITICAL ERR</div>
             <h2 style={{ color: 'var(--status-error)', marginTop: 'var(--space-md)' }}>{display.title}</h2>

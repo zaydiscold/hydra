@@ -39,6 +39,20 @@ test('Electron pins HYDRA_DATA_DIR before server import', () => {
   assert.match(envSrc, /process\.env\.HYDRA_DATA_DIR\s*=\s*appRef\.getPath\(['"]userData['"]\)/);
   assert.match(envSrc, /process\.env\.DATABASE_URL\s*=/);
   assert.match(envSrc, /process\.env\.HYDRA_EMBEDDED\s*=\s*['"]1['"]/);
+  assert.equal(
+    (envSrc.match(/await import\(['"]node:fs['"]\)/g) || []).length,
+    1,
+    'packaged runtime setup should consolidate node:fs dynamic imports',
+  );
+  assert.doesNotMatch(envSrc, /\(await import\(['"]node:fs['"]\)\)\./);
+  assert.match(envSrc, /\[env\] log rotation skipped:/);
+  assert.match(envSrc, /\[env\] log stream close failed:/);
+  assert.match(envSrc, /disk-space check failed:/);
+  assert.match(envSrc, /corrupt db backup failed:/);
+  assert.match(envSrc, /invalid db removal failed:/);
+  assert.doesNotMatch(envSrc, /statfsSync\(userData\);[\s\S]{0,260}catch \{\s*\/\/ statfsSync may not be available everywhere/);
+  assert.doesNotMatch(envSrc, /copyFileSync\(dbPath, dbPath \+ '\.corrupt'\); \} catch \{ \/\* best effort \*\/ \}/);
+  assert.doesNotMatch(envSrc, /unlinkSync\(dbPath\); \} catch \{ \/\* best effort \*\/ \}/);
   assert.match(mainSrc, /await ensurePackagedRuntimeState\(\)/);
   assert.ok(
     mainSrc.indexOf('await ensurePackagedRuntimeState()') < mainSrc.indexOf("import('../server/index.js')"),
@@ -60,12 +74,21 @@ test('Electron exposes 24-hour renderer auth-token persistence', () => {
   assert.match(ipcSrc, /native:auth-token:status/);
   assert.match(ipcSrc, /native:auth-token:set/);
   assert.match(ipcSrc, /native:auth-token:clear/);
+  assert.match(ipcSrc, /native:open-app-location/);
+  assert.match(ipcSrc, /redactedPathInfo\(['"]Hydra data folder['"]\)/);
+  assert.match(ipcSrc, /redactedPathInfo\(['"]Hydra logs folder['"]\)/);
   assert.match(preloadSrc, /getAuthToken:\s*\(\)\s*=>\s*ipcRenderer\.invoke\(['"]native:auth-token:get['"]\)/);
   assert.match(preloadSrc, /authTokenStatus:\s*\(\)\s*=>\s*ipcRenderer\.invoke\(['"]native:auth-token:status['"]\)/);
+  assert.match(preloadSrc, /openAppLocation:\s*\(location\)\s*=>\s*ipcRenderer\.invoke\(['"]native:open-app-location['"],\s*location\)/);
   assert.match(nativeSrc, /authTokenStatus:\s*\(\)\s*=>\s*invokeNative\(['"]authTokenStatus['"]\)/);
+  assert.match(nativeSrc, /openAppLocation:\s*\(location\)\s*=>\s*invokeNative\(['"]openAppLocation['"],\s*location\)/);
+  assert.doesNotMatch(ipcSrc, /native:get-paths[\s\S]{0,220}app\.getPath\(['"]userData['"]\)/);
+  assert.doesNotMatch(ipcSrc, /path:\s*authTokenPath\(\)/);
+  assert.match(apiSrc, /import\s+\{\s*invokeNative,\s*NotInElectronError\s*\}\s+from ['"]\.\/lib\/native['"]/);
   assert.match(apiSrc, /hydrateToken\(\)/);
   assert.match(apiSrc, /await\s+nativeAuthToken\(['"]setAuthToken['"],\s*token\)/);
   assert.match(apiSrc, /const nativeToken\s*=\s*await\s+nativeAuthToken\(['"]getAuthToken['"]\)/);
+  assert.doesNotMatch(apiSrc, /window\??\.hydraNative|globalThis\.window\??\.hydraNative/);
   assert.match(authMiddlewareSrc, /AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS\s*=\s*24\s*\*\s*60\s*\*\s*60/);
   assert.match(configSrc, /HYDRA_MASTER_JWT_TTL:[\s\S]*default\(['"]24h['"]\)/);
 });

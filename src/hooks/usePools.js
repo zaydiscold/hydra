@@ -29,12 +29,16 @@ export function usePools({ addToast }) {
     if (!quiet) setLoading(true);
     else setRefreshing(true);
     try {
+      const optionalPoolCall = (label, promise) => promise.catch((err) => {
+        console.warn(`[POOLS] ${label} unavailable:`, err.message);
+        return null;
+      });
       const [poolRes, keyRes, modelsRes, syncRes, proxyRes] = await Promise.all([
         api.getPoolData(),
         api.getMasterKey(),
-        api.getPoolModels().catch(() => null),
-        api.getPoolSyncStatus().catch(() => null),
-        api.getProxyStatus().catch(() => null),
+        optionalPoolCall('model catalog', api.getPoolModels()),
+        optionalPoolCall('sync status', api.getPoolSyncStatus()),
+        optionalPoolCall('proxy toggle status', api.getProxyStatus()),
       ]);
       const rawAccounts = poolRes.data?.accounts ?? [];
       setAccounts(rawAccounts.map((a) => {
@@ -75,7 +79,8 @@ export function usePools({ addToast }) {
         cooldowns: data.cooldowns ?? 0,
         uptime: data.uptime ?? 0,
       });
-    } catch {
+    } catch (err) {
+      console.warn('[POOLS] Proxy status probe failed:', err.message);
       setProxyStatus('offline');
       setProxyStatusStats(null);
     }

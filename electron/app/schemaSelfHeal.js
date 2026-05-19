@@ -7,12 +7,45 @@ import { acquireMigrationLock } from './schemaLock.js';
 async function checkpointWal(dbPath) {
   const { execFile } = await import('node:child_process');
   await new Promise((resolve) => {
-    const child = execFile('sqlite3', [dbPath, 'PRAGMA wal_checkpoint(TRUNCATE);'], { timeout: 15_000 }, () => resolve());
-    child.once('error', () => resolve());
+    const child = execFile('sqlite3', [dbPath, 'PRAGMA wal_checkpoint(TRUNCATE);'], { timeout: 15_000 }, (err) => {
+      if (err) console.warn(`[electron] WAL checkpoint failed before self-heal: ${err.message}`);
+      resolve();
+    });
+    child.once('error', (err) => {
+      console.warn(`[electron] WAL checkpoint process failed before self-heal: ${err.message}`);
+      resolve();
+    });
   });
 }
 
-function backupDatabase(dbPath) {
+function unlinkBackupPart(filePath, label) {
+  try {
+    fs.unlinkSync(filePath);
+  } catch (e) {
+    if (e?.code !== 'ENOENT') {
+      console.warn(`[electron] failed to prune old backup ${label}: ${e.message}`);
+    }
+  }
+}
+
+function cleanupMigrationLock(lockFd, lockPath) {
+  if (lockFd !== null) {
+    try {
+      fs.closeSync(lockFd);
+    } catch (e) {
+      console.warn(`[electron] failed to close migration lock after self-heal failure: ${e.message}`);
+    }
+  }
+  try {
+    fs.unlinkSync(lockPath);
+  } catch (e) {
+    if (e?.code !== 'ENOENT') {
+      console.warn(`[electron] failed to remove migration lock after self-heal failure: ${e.message}`);
+    }
+  }
+}
+
+export function backupDatabase(dbPath) {
   const backupPath = `${dbPath}.backup-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   fs.copyFileSync(dbPath, backupPath);
   for (const suffix of ['-wal', '-shm']) {
@@ -20,18 +53,19 @@ function backupDatabase(dbPath) {
     if (fs.existsSync(sidecar)) fs.copyFileSync(sidecar, backupPath + suffix);
   }
   console.log(`[electron] backed up database (with WAL/SHM) before self-heal: ${backupPath}`);
+  return backupPath;
 }
 
-function pruneOldBackups(userDataDir) {
+export function pruneOldBackups(userDataDir) {
   try {
     const backups = fs.readdirSync(userDataDir)
-      .filter(f => /^hydra\.db\.backup-/.test(f))
+      .filter(f => /^hydra\.db\.backup-/.test(f) && !/-(?:wal|shm)$/.test(f))
       .map(f => ({ name: f, path: path.join(userDataDir, f) }))
       .sort((a, b) => a.name.localeCompare(b.name));
     while (backups.length > 5) {
       const old = backups.shift();
       for (const suffix of ['', '-wal', '-shm']) {
-        try { fs.unlinkSync(old.path + suffix); } catch { /* file may not exist */ }
+        unlinkBackupPart(old.path + suffix, `${old.name}${suffix}`);
       }
       console.log(`[electron] pruned old backup: ${old.name}`);
     }
@@ -70,10 +104,7 @@ export async function runSelfHealSync() {
     return summary.errors === 0;
   } catch (e) {
     console.error('[electron] db-self-heal failed completely:', e.message);
-    try {
-      if (lockFd !== null) fs.closeSync(lockFd);
-      fs.unlinkSync(lockPath);
-    } catch { /* best effort */ }
+    cleanupMigrationLock(lockFd, lockPath);
     return false;
   }
 }

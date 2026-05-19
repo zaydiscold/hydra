@@ -5,7 +5,7 @@
 **Hydra is shipping as a native Electron desktop app.** The Docker path still
 exists in-repo but is no longer the primary distribution channel.
 
-**Branch:** `master` | **DMG output:** ~272 MB / app size ~683 MB (Chromium for Playwright is the bulk; lazy-download is a planned win — see ROADMAP_NEXT)
+**Branch:** `master` | **macOS zip output:** ~285 MB / app size ~534 MB (Chromium for Playwright is the bulk; lazy-download is still tracked in `docs/IDEAS.md`)
 
 ### Major architectural pieces
 
@@ -64,15 +64,14 @@ exists in-repo but is no longer the primary distribution channel.
 
 ### Where to pick up
 
-- `docs/ROADMAP_NEXT.md` — only one item left planned: the **first-launch
-  onboarding wizard (#7)**. Everything else has shipped.
+- `docs/IDEAS.md` — single canonical "what's not done yet" doc. Top open
+  items are the splash → password fold, auto-update, lazy Chromium download,
+  Windows Hello, CLI account creation, and optional private MCP wrapper.
 - `docs/_archive/2026-05-06-reviews/` — full punch lists from the security,
   perf, sweep, and swarm reviews. All flagged criticals + highs are addressed
   in current code; remaining items are low-priority polish tracked in the
   swarm doc.
-- `docs/_archive/historical/` — completed plans (Implementation, Electron
-  Master Plan, Project Status April 2026, SitRep, Docker Plan). Reference
-  only — code state is current truth.
+- `docs/_archive/historical/` — completed long-form reference docs. Code state is current truth.
 
 ---
 
@@ -83,7 +82,9 @@ Do not be lazy. We are the hardest workers; that's what separates the boys from 
 ## Agent reading order
 
 1. Read this file for repo-level rules.
-2. Read `~/.claude/plans/hydra_plan.md` for the current living plan and research log.
+2. Read `docs/IDEAS.md` for the current open work and maintenance debt.
+   Replaces the old `~/.claude/plans/hydra_plan.md` which is now stale and out
+   of repo.
 3. Read task-relevant docs and code before making changes.
 
 ## gstack
@@ -103,9 +104,9 @@ Available gstack skills:
 `/office-hours` `/plan-ceo-review` `/plan-eng-review` `/plan-design-review` `/design-consultation` `/design-shotgun` `/design-html` `/review` `/ship` `/land-and-deploy` `/canary` `/benchmark` `/browse` `/connect-chrome` `/qa` `/qa-only` `/design-review` `/setup-browser-cookies` `/setup-deploy` `/retro` `/investigate` `/document-release` `/codex` `/cso` `/autoplan` `/plan-devex-review` `/devex-review` `/careful` `/freeze` `/guard` `/unfreeze` `/gstack-upgrade` `/learn` `/pair-agent` `/health` `/checkpoint`
 
 ## Master Plan
-**→ `~/.claude/plans/hydra_plan.md`** — the living todo/plan/research log. Always read this before starting work. Append new findings, mark completed items, keep it current.
+**→ `docs/IDEAS.md`** — the single canonical "what's not done yet" doc. Items move OUT once they ship; new tracked-but-unbuilt items move IN. Append findings here, not into a parallel scratch file.
 
-**When the user says "display plan", "show plan", "show status", "what's the plan", or similar:** read `~/.claude/plans/hydra_plan.md` and output a status table grouped by P0/P1/P2/P3/P4 showing ✅ done / 🟡 in progress / ❌ not started for every item.
+**When the user says "display plan", "show plan", "show status", "what's the plan", or similar:** read `docs/IDEAS.md` and output a status table grouped by P0/P1/P2/P3 showing ✅ shipped / 🟡 in progress / ❌ not started for every item under "Planned".
 
 ## Critical Rules
 
@@ -160,6 +161,14 @@ Each finding needs: what, how, why it matters, raw evidence (redact secrets), re
 
 **Triggers:** undocumented endpoints, auth/session mechanics differing from docs, creative approaches, rate limits or fingerprinting, reusable patterns, cookie/token scope discoveries.
 
+## Private API-Map Boundary
+
+Hydra is a private local app. Do not run Printing Press upload, registration,
+public-library sync, or generated endpoint-tool publishing flows for it. The
+useful part of that workflow is the methodology only: extract route truth from
+source, generate the local OpenAPI map, keep it test-covered, and build curated
+Hydra-owned CLI commands that work while Electron is closed.
+
 ## Docs Map
 
 **Live (current truth):**
@@ -168,9 +177,12 @@ Each finding needs: what, how, why it matters, raw evidence (redact secrets), re
 - [**Project Structure**](docs/PROJECT_STRUCTURE.md) — Electron-first directory map and runtime flow.
 - [**Server Architecture**](docs/SERVER_ARCHITECTURE.md) — middleware stack, route bindings, controller patterns, response shapes.
 - [**API Reference**](docs/API_REFERENCE.md) — internal server routes and data models. Response envelope: `{ok, data, error?, code?}`.
+- [**Hydra API Map**](docs/HYDRA_API_MAP.md) — private source-derived OpenAPI map workflow and no-public-Printing-Press boundary.
+- [**Hydra CLI and AI API Plan**](docs/HYDRA_CLI_AND_AI_API_PLAN.md) — closed-app CLI command inventory, implemented slices, and future operator commands.
+- [**Release Audit**](docs/RELEASE_AUDIT.md) — current verification evidence and remaining dogfood/runtime gaps.
 - [**Electron Migration Status**](docs/ELECTRON_MIGRATION_STATUS.md) — current packaging status + what's validated.
 - [**Packaging**](docs/PACKAGING.md) — `electron:build` pipeline, signing, notarization, smoke checks.
-- [**IDEAS / running plan**](docs/IDEAS.md) — single source of truth for "what's not done yet" (replaces the older ROADMAP_NEXT). Items move out as they ship.
+- [**IDEAS / running plan**](docs/IDEAS.md) — single source of truth for "what's not done yet". Items move out as they ship.
 - [**Security**](docs/SECURITY.md) — AES-256-GCM encryption, local auth, telemetry policy.
 - [**CLIProxyAPI & gateway synthesis**](docs/CLIPROXYAPI_GATEWAY_SYNTHESIS.md) — Hydra vs sidecar vs LiteLLM decision; optional CLIProxyAPI ports/config.
 - [**Dashboard Account States**](docs/DASHBOARD_ACCOUNT_STATES.md) — card badge logic, session labels.
@@ -183,8 +195,7 @@ Each finding needs: what, how, why it matters, raw evidence (redact secrets), re
 
 **Archived (`docs/_archive/`):**
 
-- `_archive/historical/` — completed plans (Implementation, Electron Master Plan, Project Status April 2026, SitRep, Docker Plan). Reference only — every actionable item has been verified shipped or extracted into `docs/IDEAS.md`.
-- `_archive/2026-04-27/` — Electron-migration sprint archive (PAIN_POINTS, SKEPTIC_AUDIT, LINT_AUDIT, session notes). All TODOs / phases shipped; remaining ideas extracted into `docs/IDEAS.md`.
+- `_archive/historical/` — completed plans (Implementation, Electron Master Plan, Docker Plan). Reference only — every actionable item has been verified shipped or extracted into `docs/IDEAS.md`.
 - `_archive/2026-05-06-reviews/` — security/perf/sweep/swarm review punch lists from the 2026-05-06 audit. All criticals + highs are addressed; remaining LOW polish tracked in IDEAS.
 - `_archive/recon-html/` — captured HTML from OpenRouter recon (large; rarely needed).
 

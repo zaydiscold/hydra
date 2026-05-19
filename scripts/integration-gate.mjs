@@ -116,6 +116,9 @@ async function run() {
     assertPattern(envSrc, /HYDRA_EMBEDDED/, 'must set HYDRA_EMBEDDED');
     assertPattern(windowsSrc, /BrowserWindow/, 'must create BrowserWindow');
     assertPattern(mainSrc, /gracefulShutdown/, 'must use gracefulShutdown');
+    assertPattern(mainSrc, /showStartupErrorDialog/, 'startup and setup failures must use actionable dialog');
+    if (/showErrorBox/.test(mainSrc)) throw new Error('main.js must not use bare dialog.showErrorBox');
+    assertPattern(windowsSrc, /alwaysOnTop:\s*false/, 'splash must not force always-on-top');
     assertPattern(envSrc + windowsSrc, /ICON_PATH|iconPath/, 'must set icon path');
     assertPattern(schemaSrc, /runSelfHeal|db-self-heal/, 'must include packaged schema self-heal');
   });
@@ -146,6 +149,11 @@ async function run() {
       throw new Error('electron not installed');
     if (!pkg.scripts['dev:electron'])
       throw new Error('dev:electron script missing');
+    if (pkg.scripts['dev:electron'] !== 'node scripts/dev-electron.mjs')
+      throw new Error('dev:electron must use scripts/dev-electron.mjs so VITE_DEV_SERVER_URL is portable');
+    const devElectronSrc = readFileSync(resolve(ROOT, 'scripts/dev-electron.mjs'), 'utf-8');
+    assertPattern(devElectronSrc, /HYDRA_VITE_PORT/, 'dev launcher must read HYDRA_VITE_PORT');
+    assertPattern(devElectronSrc, /VITE_DEV_SERVER_URL/, 'dev launcher must set VITE_DEV_SERVER_URL');
     if (pkg.main !== 'electron/main.js')
       throw new Error('main entry wrong');
   });

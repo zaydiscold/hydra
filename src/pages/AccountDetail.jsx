@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import * as api from '../api';
+import AnimeText from '../components/AnimeText';
 import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
 import SessionDot from '../components/SessionDot';
@@ -21,7 +22,7 @@ import {
   EditIcon,
 } from '../components/Icons';
 
-function CreateKeyModal({ accountId, onClose, onCreated }) {
+function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');
   const [limitReset, setLimitReset] = useState('');
@@ -57,10 +58,14 @@ function CreateKeyModal({ accountId, onClose, onCreated }) {
     setLoading(false);
   }
 
-  function handleCopy() {
-    navigator.clipboard.writeText(createdKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(createdKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      onCopyError?.(err);
+    }
   }
 
   if (createdKey) {
@@ -271,12 +276,13 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     try {
       const res = await api.checkSessionLive(resolvedAccountId);
       setLiveSessionStatus(res.data?.status ?? null);
-    } catch {
-      // Non-fatal; stale heuristic stays as fallback
+    } catch (err) {
+      console.warn(`[ACCOUNT_DETAIL] Live session probe failed for ${resolvedAccountId}:`, err.message);
+      addToast?.('Live session check failed. Showing cached session state.', 'warning');
     } finally {
       setSessionProbing(false);
     }
-  }, [resolvedAccountId]);
+  }, [addToast, resolvedAccountId]);
 
   useEffect(() => {
     if (!resolvedAccountId) {
@@ -367,10 +373,15 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     setLoadingMgmtReveal(false);
   }
 
-  function copyKey(hash, value) {
-    navigator.clipboard.writeText(value || hash);
-    setCopiedKey(hash);
-    setTimeout(() => setCopiedKey(null), 2000);
+  async function copyKey(hash, value) {
+    try {
+      await navigator.clipboard.writeText(value || hash);
+      setCopiedKey(hash);
+      addToast?.('Copied key to clipboard', 'success');
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch (err) {
+      addToast?.(`Clipboard copy failed: ${err.message || 'permission denied'}`, 'error');
+    }
   }
 
   async function handleTestKey(hash) {
@@ -474,9 +485,9 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             >
               ← back
             </button>
-            <h2 style={{ margin: 0 }}>{accountMeta.alias}</h2>
+            <AnimeText as="h2" mode="words" variant="scanline" delay={26} style={{ margin: 0 }}>{accountMeta.alias}</AnimeText>
           </div>
-          <p style={{ margin: 0 }}>Account details and API key management</p>
+          <p style={{ margin: 0 }}>Control-plane keys, model-access API keys, and account health</p>
         </div>
 
         {/* Error banner */}
@@ -560,12 +571,14 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           )}
         </div>
 
-        {/* Management keys */}
-        <div style={{ marginBottom: 'var(--space-md)', border: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}
-            </span>
+        {/* Control-plane access */}
+        <section className="account-access-section account-access-section--control">
+          <div className="account-access-header">
+            <div>
+              <div className="account-access-kicker">Control Plane</div>
+              <h3>Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}</h3>
+              <p>Full account-control credentials. Snapshot is degraded, but stored management keys remain visible here.</p>
+            </div>
             <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
               {loadingMgmtKeys ? '…' : '↻'}
             </button>
@@ -589,11 +602,11 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             </div>
           )}
           {managementKeys.map((key) => (
-            <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-card)', borderTop: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontWeight: 500 }}>{key.name}</span>
-              <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>{key.status}</span>
-              <code style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{key.preview}</code>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{formatDate(key.createdAt)}</span>
+            <div key={key.id} className="access-key-row">
+              <span className="access-key-name">{key.name}</span>
+              <span className="access-key-status">{key.status}</span>
+              <code className="access-key-secret">{key.preview}</code>
+              <span className="access-key-date">{formatDate(key.createdAt)}</span>
               {key.status === 'active' && (
                 <button
                   className="btn btn-ghost btn-sm"
@@ -605,7 +618,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               )}
             </div>
           ))}
-          <div style={{ padding: '6px 10px' }}>
+          <div className="access-key-import">
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => setShowImport(v => !v)}
@@ -636,14 +649,14 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                 />
                 {importError && <p className="field-error">{importError}</p>}
                 <button type="submit" className="btn btn-primary btn-sm" disabled={importLoading || !importKey}>
-                  {importLoading ? 'Importing…' : 'Import Key'}
+                  {importLoading ? 'Importing…' : 'Import Management Key'}
                 </button>
               </form>
             )}
           </div>
-        </div>
+        </section>
 
-        {/* Snapshot placeholder */}
+        {/* Snapshot-unavailable fallback */}
         <div style={{
           padding: '24px 16px', marginBottom: 'var(--space-md)',
           border: '1px dashed var(--border-subtle)',
@@ -855,7 +868,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h2 style={{ margin: 0 }}>{snapshot.alias}</h2>
+              <AnimeText as="h2" mode="words" variant="scanline" delay={26} style={{ margin: 0 }}>{snapshot.alias}</AnimeText>
               <button
                 className="btn btn-ghost"
                 style={{ padding: '4px 6px', minHeight: 'unset', opacity: 0.6 }}
@@ -867,7 +880,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             </div>
           )}
         </div>
-        <p style={{ margin: 0 }}>Account details and API key management</p>
+        <p style={{ margin: 0 }}>Control-plane keys, model-access API keys, and account health</p>
       </div>
 
       {/* Identity strip */}
@@ -982,39 +995,41 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         );
       })()}
 
-      {/* Management keys */}
+      {/* Control-plane access */}
       {(snapshot.managementKeyPreview || managementKeys.length > 0 || managementKeysLoadError || loadingMgmtKeys || managementKeysLoaded) && (
-        <div style={{ marginBottom: 'var(--space-md)', border: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}
-            </span>
+        <section className="account-access-section account-access-section--control">
+          <div className="account-access-header">
+            <div>
+              <div className="account-access-kicker">Control Plane</div>
+              <h3>Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}</h3>
+              <p>Full account-control credentials: balances, API-key creation, disable/delete, and account maintenance.</p>
+            </div>
             <button className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
               {loadingMgmtKeys ? '…' : '↻'}
             </button>
           </div>
           {/* Active key preview (from snapshot) */}
           {snapshot.managementKeyPreview && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-tertiary)' }}>
-              <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--status-success)', textTransform: 'uppercase' }}>active</span>
-              <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', userSelect: 'text', flex: 1 }}>
+            <div className="access-key-row access-key-row--active">
+              <span className="access-key-status">active</span>
+              <span className="mono access-key-secret">
                 {revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview}
               </span>
               <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.6 }} onClick={handleRevealMgmtKey} title={revealedMgmt ? 'Hide' : 'Reveal'} disabled={loadingMgmtReveal}>
                 {loadingMgmtReveal ? <span style={{ fontSize: '0.65rem' }}>…</span> : revealedMgmt ? <EyeOffIcon size={11} /> : <EyeIcon size={11} />}
               </button>
-              <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }} onClick={() => copyKey('mgmt', revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview)}>
+              <button className="btn btn-ghost" style={{ padding: '2px 4px', minHeight: 'unset', opacity: 0.5 }} onClick={() => void copyKey('mgmt', revealedMgmt && mgmtKeyFull ? mgmtKeyFull : snapshot.managementKeyPreview)}>
                 {copiedKey === 'mgmt' ? <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={11} />}
               </button>
             </div>
           )}
           {/* All stored management keys */}
           {managementKeys.length > 0 && managementKeys.map((key) => (
-            <div key={key.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--bg-card)', borderTop: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontWeight: 500 }}>{key.name}</span>
-              <span style={{ fontSize: '0.65rem', color: 'var(--status-success)' }}>{key.status}</span>
-              <code style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{key.preview}</code>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{formatDate(key.createdAt)}</span>
+            <div key={key.id} className="access-key-row">
+              <span className="access-key-name">{key.name}</span>
+              <span className="access-key-status">{key.status}</span>
+              <code className="access-key-secret">{key.preview}</code>
+              <span className="access-key-date">{formatDate(key.createdAt)}</span>
               {key.status === 'active' && (
                 <button
                   className="btn btn-ghost btn-sm"
@@ -1044,7 +1059,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               </button>
             </div>
           )}
-          <div style={{ padding: '6px 10px' }}>
+          <div className="access-key-import">
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => setShowImport(v => !v)}
@@ -1075,12 +1090,12 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                 />
                 {importError && <p className="field-error">{importError}</p>}
                 <button type="submit" className="btn btn-primary btn-sm" disabled={importLoading || !importKey}>
-                  {importLoading ? 'Importing…' : 'Import Key'}
+                  {importLoading ? 'Importing…' : 'Import Management Key'}
                 </button>
               </form>
             )}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Credit stats */}
@@ -1136,7 +1151,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         </div>
       </div>
 
-      {/* Keys section */}
+      {/* Model-access API keys */}
       <div className="section-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h3>API Keys</h3>
@@ -1151,6 +1166,9 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           </button>
         </div>
       </div>
+      <p className="account-section-helper">
+        Model-access keys are for Cursor, agents, scripts, and OpenAI-compatible clients. They do not let Hydra manage the account by themselves; management keys above are the account-control layer.
+      </p>
 
       {keys.length === 0 ? (
         <div className="empty-state">
@@ -1209,7 +1227,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                             className="btn btn-ghost"
                             style={{ padding: '2px 4px', minHeight: 'unset' }}
                             title="Copy key"
-                            onClick={() => copyKey(key.hash, key.plaintextKey || key.label)}
+                            onClick={() => void copyKey(key.hash, key.plaintextKey || key.label)}
                           >
                             {copiedKey === key.hash ? <span style={{ fontSize: '0.7rem', color: 'var(--status-success)' }}>✓</span> : <CopyIcon size={12} />}
                           </button>
@@ -1331,6 +1349,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             addToast('API key created!', 'success');
             fetchSnapshot();
           }}
+          onCopyError={(err) => addToast(`Clipboard copy failed: ${err.message || 'permission denied'}`, 'error')}
         />
       )}
 

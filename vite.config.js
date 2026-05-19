@@ -15,7 +15,9 @@ export default defineConfig({
     // to clients.  Maps are written to dist/ for error-tracking tools but the
     // bundles themselves contain no reference to them.
     sourcemap: 'hidden',
-    // Electron 28 = Chromium 120 — target modern syntax to reduce bundle ~5-10%
+    // Electron 42 = Chromium 146 — target modern syntax to reduce bundle ~5-10%.
+    // Keep chrome120 as a conservative floor until packaged GUI dogfood
+    // confirms the full Electron 42 runtime path.
     target: 'chrome120',
     rollupOptions: {
       output: {
@@ -23,8 +25,13 @@ export default defineConfig({
         // separate chunk.  These libraries change rarely — isolating them lets
         // the browser cache them across Hydra version updates, reducing initial
         // JS parse time by ~200KB and speeding up cold starts after upgrades.
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+        manualChunks(id) {
+          if (id.includes('/node_modules/react/')
+            || id.includes('/node_modules/react-dom/')
+            || id.includes('/node_modules/react-router-dom/')) {
+            return 'vendor';
+          }
+          return undefined;
         },
       },
     },

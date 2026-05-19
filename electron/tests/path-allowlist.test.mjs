@@ -45,7 +45,11 @@ before(() => {
 
 after(() => {
   for (const dir of [tmp, outsideTmp]) {
-    try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(`[path-allowlist-test] failed to remove temp dir ${dir}: ${err.message}`);
+    }
   }
 });
 

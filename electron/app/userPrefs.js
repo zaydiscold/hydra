@@ -46,7 +46,13 @@ function prefsPath() {
 }
 
 async function ensureUserDataDir() {
-  await mkdir(app.getPath('userData'), { recursive: true });
+  const dir = app.getPath('userData');
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') {
+    await chmod(dir, 0o700).catch((chmodErr) => {
+      console.warn('[prefs] userData chmod failed:', chmodErr?.message || chmodErr);
+    });
+  }
 }
 
 /**
@@ -100,7 +106,9 @@ export async function setPref(key, value) {
   // next read returns a value the user never persisted.
   try {
     await writeFile(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
-    await chmod(tmp, 0o600).catch(() => {});
+    await chmod(tmp, 0o600).catch((chmodErr) => {
+      console.warn('[prefs] temp file chmod failed:', chmodErr?.message || chmodErr);
+    });
     await rename(tmp, dest);
     cache = next;
   } catch (e) {

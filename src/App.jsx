@@ -1,9 +1,9 @@
 import { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react';
-import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import './index.css';
 import * as api from './api';
 import { logger } from './lib/client-logger.js';
-import { isElectron, native as nativeBridge } from './lib/native';
+import { isElectron, native as nativeBridge, tryNative } from './lib/native';
 import DevBackendHint from './components/DevBackendHint';
 import ErrorBoundary from './components/ErrorBoundary';
 import { 
@@ -16,8 +16,7 @@ import {
   PowerIcon,
   NetworkIcon,
   ActivityIcon,
-  BulkAuthIcon,
-  InfoIcon
+  BulkAuthIcon
 } from './components/Icons';
 
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
@@ -26,7 +25,6 @@ const Vault = lazy(() => import('./pages/Vault.jsx'));
 const CodeRedemption = lazy(() => import('./pages/CodeRedemption.jsx'));
 const Generator = lazy(() => import('./pages/Generator.jsx'));
 const Settings = lazy(() => import('./pages/Settings.jsx'));
-const Diagnostics = lazy(() => import('./pages/Diagnostics.jsx'));
 const PoolManager = lazy(() => import('./pages/PoolManager.jsx'));
 const Traffic = lazy(() => import('./pages/Traffic.jsx'));
 const BulkAuthWizard = lazy(() => import('./pages/BulkAuthWizard.jsx'));
@@ -68,6 +66,24 @@ function GlobalLoadingBar() {
 
   if (!loading) return null;
   return <div className="global-nprogress" />;
+}
+
+function UpstreamStatusBanner({ upstream }) {
+  if (!upstream || upstream.status === 'online') return null;
+
+  const isOffline = upstream.status === 'offline';
+  const title = isOffline ? 'OPENROUTER OFFLINE' : 'OPENROUTER STATUS UNKNOWN';
+  const detail = isOffline
+    ? 'Cached local data remains available. Proxy, provisioning, signup, OTP, and code redemption may fail until connectivity returns.'
+    : 'Hydra has not confirmed upstream connectivity yet. Cached local data remains available.';
+
+  return (
+    <div className={`upstream-banner upstream-banner--${isOffline ? 'offline' : 'unknown'}`} role="status" aria-live="polite">
+      <div className="upstream-banner__title">{title}</div>
+      <div className="upstream-banner__detail">{detail}</div>
+      {upstream.lastError && <div className="upstream-banner__error">{upstream.lastError}</div>}
+    </div>
+  );
 }
 
 function HydraLoadFrame({ tone = 'normal', title = 'HYDRA', status = 'INITIALIZING', detail, compact = false }) {
@@ -114,12 +130,16 @@ function HydraLoadFrame({ tone = 'normal', title = 'HYDRA', status = 'INITIALIZI
 // ─── Auth Screen ─────────────────────────────────────────────────────────────
 function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
   const isSetup = mode === 'setup';
+  const [setupStage, setSetupStage] = useState('password');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [managementAlias, setManagementAlias] = useState('Primary');
+  const [managementKey, setManagementKey] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [setupAccount, setSetupAccount] = useState(null);
 
   // ── Nuclear Reset Logic ──
   const [nukeProgress, setNukeProgress] = useState(0); // 0 to 100
@@ -176,6 +196,15 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
   const handleNukeStart = () => setIsNuking(true);
   const handleNukeEnd = () => setIsNuking(false);
 
+  useEffect(() => {
+    if (!isSetup) {
+      setSetupStage('password');
+      setSetupAccount(null);
+      setManagementKey('');
+      setManagementAlias('Primary');
+    }
+  }, [isSetup]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -207,12 +236,139 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
       // Await — saveToken now persists to native main-process file too
       // (essential for packaged-build session persistence across launches).
       await api.saveToken(token);
-      onSuccess();
+      if (isSetup) {
+        setSetupStage('key');
+      } else {
+        onSuccess();
+      }
     } catch (err) {
       setError(err.message);
     }
     setLoading(false);
   }
+
+  async function handleManagementKeySubmit(e) {
+    e.preventDefault();
+    setError('');
+    const trimmedKey = managementKey.trim();
+    const trimmedAlias = managementAlias.trim() || 'Primary';
+
+    if (!trimmedKey) {
+      setErrors({ managementKey: 'Paste a management key or skip this step' });
+      return;
+    }
+
+    setLoading(true);
+    setErrors({});
+    try {
+      const res = await api.addAccount(trimmedAlias, trimmedKey);
+      const payload = res?.data ?? res ?? {};
+      setSetupAccount(payload);
+      setSetupStage('tour');
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  }
+
+  const handleSkipManagementKey = () => {
+    setError('');
+    setErrors({});
+    setSetupAccount(null);
+    setSetupStage('tour');
+  };
+
+  const handleEnterApp = () => {
+    setError('');
+    onSuccess();
+  };
+
+  const renderSetupStepper = () => {
+    if (!isSetup) return null;
+    const steps = [
+      ['password', '1', 'Password'],
+      ['key', '2', 'Control key'],
+      ['tour', '3', 'Launch'],
+    ];
+    return (
+      <div className="setup-stepper" aria-label="First-run setup steps">
+        {steps.map(([id, number, label]) => (
+          <div key={id} className={`setup-stepper__item${setupStage === id ? ' setup-stepper__item--active' : ''}${steps.findIndex(([stepId]) => stepId === setupStage) > steps.findIndex(([stepId]) => stepId === id) ? ' setup-stepper__item--done' : ''}`}>
+            <span>{number}</span>
+            <strong>{label}</strong>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderSetupKeyStage = () => (
+    <>
+      <p className="setup-stage-copy">
+        Add an OpenRouter management key now, or skip and import accounts from Vault later.
+      </p>
+      <form onSubmit={handleManagementKeySubmit} noValidate className="setup-key-form">
+        <div className="form-group">
+          <label className="setup-field-label">Account Alias</label>
+          <input
+            type="text"
+            className="form-input"
+            value={managementAlias}
+            onChange={(e) => setManagementAlias(e.target.value)}
+            placeholder="Primary"
+            autoComplete="off"
+          />
+        </div>
+        <div className="form-group">
+          <label className="setup-field-label">Management Key</label>
+          <textarea
+            className={`form-input form-input-mono setup-management-key-input ${errors.managementKey ? 'error' : ''}`}
+            value={managementKey}
+            onChange={(e) => {
+              setManagementKey(e.target.value);
+              if (errors.managementKey) setErrors(prev => ({ ...prev, managementKey: null }));
+            }}
+            placeholder="sk-or-v1-..."
+            spellCheck={false}
+            autoComplete="off"
+          />
+          {errors.managementKey && <p className="field-error">{errors.managementKey}</p>}
+        </div>
+        {error && <p className="form-error" style={{ marginBottom: 'var(--space-md)' }}>{error}</p>}
+        <div className="setup-actions">
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? <><div className="spinner-sm" /> Importing...</> : 'Import Key'}
+          </button>
+          <button type="button" className="btn btn-ghost" disabled={loading} onClick={handleSkipManagementKey}>
+            Skip
+          </button>
+        </div>
+      </form>
+    </>
+  );
+
+  const renderSetupTourStage = () => (
+    <>
+      <div className="setup-tour" role="status" aria-live="polite">
+        <div>
+          <strong>Dashboard</strong>
+          <span>{setupAccount?.alias ? `${setupAccount.alias} is ready for local monitoring.` : 'Local vault is ready.'}</span>
+        </div>
+        <div>
+          <strong>Vault</strong>
+          <span>Add OTP accounts, attach credentials, and import more control keys.</span>
+        </div>
+        <div>
+          <strong>Proxy</strong>
+          <span>Use pooled keys through Hydra once accounts are configured.</span>
+        </div>
+      </div>
+      {error && <p className="form-error" style={{ marginBottom: 'var(--space-md)' }}>{error}</p>}
+      <button type="button" className="btn btn-primary btn-full" onClick={handleEnterApp}>
+        Enter Dashboard
+      </button>
+    </>
+  );
 
   return (
     <div className="lock-screen">
@@ -241,12 +397,14 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
             ? 'Create a local password to protect your account data. This only lives on your machine.'
             : 'Enter your password to access your OpenRouter accounts.'}
         </p>
+        {renderSetupStepper()}
 
+        {isSetup && setupStage === 'key' ? renderSetupKeyStage() : isSetup && setupStage === 'tour' ? renderSetupTourStage() : (
         <form onSubmit={handleSubmit} noValidate>
 
 
           <div className="form-group" style={{ position: 'relative' }}>
-            <label style={{ fontSize: '0.82rem', color: errors.password ? 'var(--status-error)' : 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+            <label className="setup-field-label" style={{ color: errors.password ? 'var(--status-error)' : 'var(--text-secondary)' }}>
               {isSetup ? 'Create Password' : 'Password'}
             </label>
             <div style={{ position: 'relative' }}>
@@ -275,7 +433,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
 
           {isSetup && (
             <div className="form-group">
-              <label style={{ fontSize: '0.82rem', color: errors.confirm ? 'var(--status-error)' : 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+              <label className="setup-field-label" style={{ color: errors.confirm ? 'var(--status-error)' : 'var(--text-secondary)' }}>
                 Confirm Password
               </label>
               <input
@@ -297,10 +455,11 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading
               ? <><div className="spinner-sm" /> {isSetup ? 'Setting up...' : 'Unlocking...'}</>
-              : isSetup ? 'Create Password & Enter' : 'Unlock'
+              : isSetup ? 'Create Password' : 'Unlock'
             }
           </button>
         </form>
+        )}
 
         {!isSetup && (
           <div style={{ marginTop: 'var(--space-md)', textAlign: 'center' }}>
@@ -367,9 +526,44 @@ const navItems = [
   { id: 'codes', label: 'Redeem', icon: <TicketIcon size={18} />, path: '/codes' },
   { id: 'generator', label: 'Generator', icon: <GeneratorIcon size={18} />, path: '/generator' },
   { id: 'traffic', label: 'Traffic', icon: <ActivityIcon size={18} />, path: '/traffic' },
-  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} />, path: '/settings' },
-  { id: 'diagnostics', label: 'Diagnostics', icon: <InfoIcon size={18} />, path: '/diagnostics' }
+  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} />, path: '/settings' }
 ];
+
+function isMacUserAgent() {
+  return typeof navigator !== 'undefined' && /\bMacintosh\b|\bMac OS X\b/.test(navigator.userAgent);
+}
+
+function AppChrome() {
+  if (!isElectron()) return null;
+
+  if (isMacUserAgent()) return null;
+
+  const handleMinimize = () => void tryNative(nativeBridge.minimizeWindow);
+  const handleMaximize = () => void tryNative(nativeBridge.toggleMaximizeWindow);
+  const handleClose = () => void tryNative(nativeBridge.closeWindow);
+
+  return (
+    <div className="app-chrome" role="banner">
+      <div className="app-chrome__brand" aria-hidden="true">
+        <div className="app-chrome__mark">H</div>
+        <div className="app-chrome__titles">
+          <span className="app-chrome__name">Hydra</span>
+        </div>
+      </div>
+      <div className="app-chrome__controls" aria-label="Window controls">
+        <button type="button" onClick={handleMinimize} title="Minimize" aria-label="Minimize window">
+          <span aria-hidden="true">-</span>
+        </button>
+        <button type="button" onClick={handleMaximize} title="Maximize" aria-label="Maximize window">
+          <span aria-hidden="true">[]</span>
+        </button>
+        <button type="button" className="app-chrome__close" onClick={handleClose} title="Close" aria-label="Close window">
+          <span aria-hidden="true">x</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -377,17 +571,33 @@ export default function App() {
   const [authError, setAuthError] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
+  const [upstreamHealth, setUpstreamHealth] = useState(null);
   const recentToastsRef = useRef(new Map());
   const navigate = useNavigate();
   const location = useLocation();
+  const electronMode = isElectron();
+  const rendererChrome = electronMode && !isMacUserAgent();
 
-  // #70: Dynamic window title based on current route
+  // #70: Keep Electron/Finder window titles aligned with the current route.
   useEffect(() => {
-    const path = location.pathname;
-    const page = path === '/' ? 'Dashboard' : path.split('/').filter(Boolean)[0];
-    const title = page ? `${page.charAt(0).toUpperCase() + page.slice(1)} — Hydra` : 'Hydra';
-    document.title = title;
-  }, [location.pathname]);
+    const routeTitle =
+      location.pathname.startsWith('/account/')
+        ? 'Account Detail'
+        : {
+            '/': 'Dashboard',
+            '/dashboard': 'Dashboard',
+            '/bulk-auth': 'Bulk Account Import',
+            '/vault': 'Vault',
+            '/pool': 'Pool Manager',
+            '/codes': 'Code Redeemer',
+            '/generator': 'Account Generator',
+            '/traffic': 'Traffic Console',
+            '/settings': location.hash === '#diagnostics' ? 'Diagnostics' : 'Settings',
+            '/diagnostics': 'Diagnostics',
+          }[location.pathname] || 'Dashboard';
+
+    document.title = `Hydra — ${routeTitle}`;
+  }, [location.hash, location.pathname]);
 
   const addToast = useCallback((message, type = 'info', options = {}) => {
     const durationMs = options.durationMs ?? (type === 'error' ? 10000 : 4000);
@@ -419,7 +629,7 @@ export default function App() {
       const res = await api.getAuthStatus();
       const payload = res?.data ?? res ?? {};
       // Server wraps response: { success, data: { setup, authenticated }, timestamp }
-      const { setup, authenticated, error, needsRestart, bootstrapRequired } = payload || {};
+      const { setup, authenticated, error, needsRestart } = payload || {};
 
       if (storedToken && !authenticated) {
         await api.clearToken();
@@ -440,9 +650,6 @@ export default function App() {
       if (authenticated) {
         setAuthError(null);
         setAuthState('app');
-      } else if (bootstrapRequired) {
-        setAuthError(null);
-        setAuthState('setup');
       } else if (setup) {
         // Account exists — show login
         setAuthError(null);
@@ -467,14 +674,54 @@ export default function App() {
     checkAuth();
   }, [checkAuth]);
 
+  useEffect(() => {
+    if (authState !== 'app') {
+      setUpstreamHealth(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const refreshHealth = async () => {
+      try {
+        const res = await api.getSystemHealth();
+        if (cancelled) return;
+        const payload = res?.data ?? res ?? {};
+        setUpstreamHealth(payload.upstream ?? null);
+      } catch (err) {
+        logger.warn('Upstream health refresh failed:', err.message);
+        if (!cancelled) setUpstreamHealth(null);
+      }
+    };
+
+    refreshHealth();
+    const interval = setInterval(refreshHealth, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [authState]);
+
   // ── Listen for main-process navigation (e.g. Cmd+, → Preferences) ──
   // onNavigate returns an unsubscribe — without calling it on cleanup, every
-  // remount stacks another listener (Diagnostics → Settings → back fires the
+  // remount stacks another listener (Settings → back fires the
   // navigate handler N+1 times the (N+1)-th visit).
   useEffect(() => {
     const off = nativeBridge.onNavigate((path) => navigate(path));
     return off;
   }, [navigate]);
+
+  useEffect(() => {
+    const off = nativeBridge.onMenuEvent(({ type, payload }) => {
+      if (type === 'native:copied-proxy-url') {
+        addToast('Proxy URL copied.', 'success');
+      } else if (type === 'native:copy-proxy-url-not-ready') {
+        addToast('Proxy URL is not ready yet. Try again after Hydra finishes starting.', 'warning');
+      } else if (type === 'native:clipboard-copy-failed') {
+        addToast(`${payload?.label || 'Menu copy'} failed: ${payload?.message || 'clipboard unavailable'}`, 'error');
+      }
+    });
+    return off;
+  }, [addToast]);
 
   const handleAuthSuccess = useCallback(() => setAuthState('app'), []);
 
@@ -484,20 +731,26 @@ export default function App() {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    try { await api.logout(); } catch { /* fine */ }
+    try {
+      await api.logout();
+    } catch (err) {
+      logger.warn('Logout request failed before local lock:', err.message);
+      addToast('Server logout failed; local session was cleared.', 'warning');
+    }
     await api.clearToken();
     setAuthState('login');
     navigate('/dashboard');
-  }, [navigate]);
+  }, [addToast, navigate]);
 
   const handleShutdown = useCallback(() => setShutdownConfirm(true), []);
   const handleHideToBackground = useCallback(async () => {
     setShutdownConfirm(false);
     try {
       await nativeBridge.hideWindow();
-    } catch {
+    } catch (err) {
       // Either we're not in Electron or the bridge rejected — fall back to
       // a hint so the user still understands the close-vs-quit distinction.
+      logger.warn('Hide window failed:', err.message);
       addToast('Close the window to keep Hydra running in the background.', 'info');
     }
   }, [addToast]);
@@ -508,7 +761,8 @@ export default function App() {
     // runs correctly. Falls back to window.close() outside Electron.
     try {
       await nativeBridge.quitApp();
-    } catch {
+    } catch (err) {
+      logger.warn('Native quit failed; falling back to window.close:', err.message);
       window.close();
     }
   }, []);
@@ -525,11 +779,16 @@ export default function App() {
       try {
         await nativeBridge.quitApp();
         return;
-      } catch {
+      } catch (err) {
         // fall through to legacy path if bridge rejected
+        logger.warn('Native shutdown failed; falling back to API shutdown:', err.message);
       }
     }
-    try { await api.shutdownServer(); } catch { /* ok */ }
+    try {
+      await api.shutdownServer();
+    } catch (err) {
+      logger.warn('API shutdown request failed before window close:', err.message);
+    }
     window.close();
   }, []);
 
@@ -560,42 +819,52 @@ export default function App() {
   // Shutdown
   if (authState === 'shutdown') {
     return (
-      <div className="center-container">
-        <HydraLoadFrame tone="error" status="SERVER OFFLINE" detail="You may now close this tab safely." />
-      </div>
+      <ErrorBoundary>
+        <AppChrome />
+        <div className={`center-container${rendererChrome ? ' center-container--with-chrome' : ''}`}>
+          <HydraLoadFrame tone="error" status="SERVER OFFLINE" detail="You may now close this tab safely." />
+        </div>
+      </ErrorBoundary>
     );
   }
 
   // Restart required
   if (authState === 'restart') {
     return (
-      <div className="center-container">
-        <HydraLoadFrame
-          tone="warning"
-          status="RESTART REQUIRED"
-          detail={authError || 'Restart the Hydra server once to regenerate local secrets, then refresh this page.'}
-        />
-      </div>
+      <ErrorBoundary>
+        <AppChrome />
+        <div className={`center-container${rendererChrome ? ' center-container--with-chrome' : ''}`}>
+          <HydraLoadFrame
+            tone="warning"
+            status="RESTART REQUIRED"
+            detail={authError || 'Restart the Hydra server once to regenerate local secrets, then refresh this page.'}
+          />
+        </div>
+      </ErrorBoundary>
     );
   }
 
   // Offline / backend unavailable
   if (authState === 'offline') {
     return (
-      <div className="center-container">
-        <HydraLoadFrame tone="error" status="SERVER OFFLINE" detail={authError || 'Start the local Hydra server to continue.'} />
-        <div style={{ marginTop: '1rem', color: 'var(--text-tertiary)', fontSize: '0.85rem', maxWidth: 520, textAlign: 'center', position: 'relative', zIndex: 2 }}>
-          <DevBackendHint
-            message={authError || 'Start the local Hydra server to continue.'}
-            copyCommand={import.meta.env.DEV ? api.HYDRA_DEV_START_COMMAND : ''}
-          />
+      <ErrorBoundary>
+        <AppChrome />
+        <div className={`center-container${rendererChrome ? ' center-container--with-chrome' : ''}`}>
+          <HydraLoadFrame tone="error" status="SERVER OFFLINE" detail={authError || 'Start the local Hydra server to continue.'} />
+          <div style={{ marginTop: '1rem', color: 'var(--text-tertiary)', fontSize: '0.85rem', maxWidth: 520, textAlign: 'center', position: 'relative', zIndex: 2 }}>
+            <DevBackendHint
+              message={authError || 'Start the local Hydra server to continue.'}
+              copyCommand={import.meta.env.DEV ? api.HYDRA_DEV_START_COMMAND : ''}
+            />
+          </div>
         </div>
-      </div>
+      </ErrorBoundary>
     );
   }
 
   return (
     <ErrorBoundary>
+      <AppChrome />
       <GlobalLoadingBar />
       {/* Brutalist Space Background Assets (Now global) */}
       <div className="starfield" />
@@ -625,7 +894,7 @@ export default function App() {
           <a href="#main-content" className="skip-to-content">
             Skip to main content
           </a>
-        <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+        <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}${rendererChrome ? ' app-layout--with-chrome' : ''}`}>
           <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`} role="navigation" aria-label="Main navigation">
             <button
               className="sidebar-logo"
@@ -719,6 +988,7 @@ export default function App() {
           </aside>
 
           <main id="main-content" className={`main-content${sidebarCollapsed ? ' main-content--expanded' : ''}`}>
+            <UpstreamStatusBanner upstream={upstreamHealth} />
             <div key={location.pathname} className="animate-fade-in">
               {/*
                 * Inter-page lazy-route fallback: render NOTHING.
@@ -750,7 +1020,7 @@ export default function App() {
                   <Route path="/codes" element={<CodeRedemption addToast={addToast} />} />
                   <Route path="/generator" element={<Generator addToast={addToast} />} />
                   <Route path="/settings" element={<Settings addToast={addToast} onLogout={handleLogout} />} />
-                  <Route path="/diagnostics" element={<Diagnostics addToast={addToast} />} />
+                  <Route path="/diagnostics" element={<Navigate to="/settings#diagnostics" replace />} />
                   {/* Catch all to redirect to dashboard */}
                   <Route path="*" element={<Dashboard onSelectAccount={navigateToAccount} addToast={addToast} />} />
                 </Routes>

@@ -2,19 +2,22 @@
 
 # ============================================================
 # Stage 1: UI Builder
-# Builds the Vite frontend into dist/ using a lightweight Alpine image.
-# NO native modules compiled here — pure JS/TS only.
+# Builds the Vite frontend into dist/ on the same Debian family as runtime.
+# Electron 42 tooling requires Node >=22.12, and Prisma generation should not
+# run on Alpine/musl when the runtime is Debian/glibc.
 # ============================================================
-FROM node:20-alpine AS builder
+FROM node:22-bookworm AS builder
 
 WORKDIR /app
 
 # Skip Playwright browser download during npm ci (not needed for build)
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-# Install dependencies first (layer caching)
+# Install dependencies first (layer caching). Ignore postinstall here: the
+# builder stage only runs Prisma generation and Vite, so Electron native rebuild
+# work is unnecessary inside Docker.
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 # Copy source and build
 COPY . .
@@ -22,31 +25,32 @@ RUN npx prisma generate
 RUN npm run build
 
 # ============================================================
-# Stage 2: Production Runtime (node:20-bookworm)
+# Stage 2: Production Runtime (node:22-bookworm)
 #
 # MIGRATION NOTE (2026-04-21):
 # Was: mcr.microsoft.com/playwright:v1.58.2-jammy (~2.1GB bundled Chromium)
-# Now: node:20-bookworm (~500MB) + on-demand Chromium (~350MB) = ~1.1GB total
+# Now: node:22-bookworm (~500MB) + on-demand Chromium (~350MB) = ~1.1GB total
 #
-# Why bookworm: node:20-jammy no longer exists on Docker Hub. bookworm is
+# Why bookworm: node:*-jammy is not available for the current runtime line.
+# bookworm is
 # Debian 12, glibc-based (not Alpine/musl), so native C++ addons link correctly.
 #
-# Why no tini: Node 20 handles SIGTERM fine. Also avoids apt-get which was
+# Why no tini: Node handles SIGTERM fine. Also avoids apt-get which was
 # failing with 403 Forbidden from deb.debian.org behind Docker Desktop proxy.
 #
-# Why no --with-deps: node:20-bookworm already includes most Chromium system
+# Why no --with-deps: node:22-bookworm already includes most Chromium system
 # libraries. --with-deps runs apt-get which fails in this Docker environment.
 # If Chromium crashes at runtime, install deps manually in the container.
 #
 # Layer order is load-bearing — npm ci MUST run BEFORE playwright install.
 # ============================================================
-FROM node:20-bookworm AS runtime
+FROM node:22-bookworm AS runtime
 
 WORKDIR /app
 
-# Skip tini, Node 20 handles SIGTERM fine via exec in entrypoint.
+# Skip tini, Node handles SIGTERM fine via exec in entrypoint.
 # This avoids apt-get hitting 403 from deb.debian.org behind Docker Desktop proxy.
-# See docs/HTTP_SIGNUP_MIGRATION.md for full context.
+# Browser fallback remains available for CAPTCHA-gated signup flows.
 
 # Production environment defaults
 ENV NODE_ENV=production \
@@ -70,7 +74,7 @@ RUN npm ci --omit=dev --ignore-scripts
 
 # Install Chromium for Playwright fallback (dashboard-api provisioning path).
 # Must run AFTER npm ci so the playwright binary exists in node_modules/.bin.
-# node:20-bookworm already includes most Chromium system deps (libglib2.0, libdbus-1-3, etc.)
+# node:22-bookworm already includes most Chromium system deps (libglib2.0, libdbus-1-3, etc.)
 # so we skip --with-deps (which runs apt-get and can fail behind Docker Desktop proxy).
 # If you get runtime Chromium errors, add --with-deps back and fix the proxy first.
 RUN npx playwright install chromium

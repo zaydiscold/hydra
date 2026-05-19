@@ -76,7 +76,8 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
       const cookieInput = cookieStack;
       result = await refreshSession(cookieInput, sessionCookie);
       status = result ? 'active' : 'expired';
-    } catch {
+    } catch (err) {
+      logger.warn(`[SESSION] Live refresh probe failed for account=${accountId || 'unknown'}: ${err.message}`);
       status = 'error';
     }
 
@@ -159,7 +160,8 @@ function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed, accou
 function readSessionPlainResult(account) {
   try {
     return { plain: decrypt(account.sessionToken) || '', decryptFailed: false };
-  } catch {
+  } catch (err) {
+    logger.warn(`[STORE] Stored session token decrypt failed for account=${account.id}: ${err.message}`);
     return { plain: '', decryptFailed: true };
   }
 }
@@ -182,6 +184,62 @@ function readSessionToken(account) {
     error.cause = err;
     throw error;
   }
+}
+
+function clerkSessionIdFromJwt(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(token).split('.')[1] || '', 'base64url').toString('utf8'));
+    return payload?.sid || payload?.session_id || payload?.sessionId || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function revokeSessionsByClerkSessionId(clerkSessionId, reason = 'clerk_webhook') {
+  const targetSid = String(clerkSessionId || '').trim();
+  if (!targetSid) return { matched: 0, revoked: 0 };
+
+  const accounts = await prisma.account.findMany({
+    select: {
+      id: true,
+      userId: true,
+      sessionToken: true,
+      config: true,
+    },
+  });
+
+  let matched = 0;
+  let revoked = 0;
+  for (const account of accounts) {
+    const { plain } = readSessionPlainResult(account);
+    if (clerkSessionIdFromJwt(plain) !== targetSid) continue;
+
+    matched++;
+    const config = readConfig(account);
+    config.sessionExpiry = null;
+    config.sessionRevokedAt = new Date().toISOString();
+    config.sessionRevokedReason = reason;
+    config.sessionRefreshedAt = null;
+    config.events = Array.isArray(config.events) ? config.events : [];
+    config.events.unshift({
+      type: 'SESSION_REVOKED',
+      message: `Clerk session ${targetSid} revoked via webhook (${reason})`,
+      timestamp: new Date().toISOString(),
+    });
+    if (config.events.length > 20) config.events = config.events.slice(0, 20);
+
+    await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        sessionToken: encrypt(''),
+        config: encryptConfig(config),
+      },
+    });
+    invalidateSessionStatusCache(account.id);
+    revoked++;
+  }
+
+  return { matched, revoked };
 }
 
 async function canonicalizeManagementKeyState(account) {
@@ -236,7 +294,8 @@ async function assertAccountUniqueForUser(userId, { alias, email }, excludeAccou
     let config;
     try {
       config = readConfig(account);
-    } catch {
+    } catch (err) {
+      logger.warn(`[STORE] Skipping unreadable account during uniqueness check id=${account.id}: ${err.message}`);
       // Skip corrupt records; they will be purged by getAllAccountsWithKeys().
       continue;
     }
@@ -379,7 +438,9 @@ export async function getAllAccountsWithKeys(userId) {
     } catch (err) {
       // Log and auto-purge accounts whose encrypted config is unreadable (stale secrets, schema mismatch)
       logger.error(`[STORE] Corrupt account detected (id=${account.id}, alias="${account.alias}") — purging: ${err.message}`);
-      prisma.account.delete({ where: { id: account.id } }).catch(() => { });
+      prisma.account.delete({ where: { id: account.id } }).catch((deleteErr) => {
+        logger.error(`[STORE] Failed to purge corrupt account id=${account.id}: ${deleteErr.message}`);
+      });
       return [];
     }
   }));
@@ -829,7 +890,8 @@ export async function getFirstStoredApiKeyString(userId) {
   if (!keyRecord?.key) return null;
   try {
     return decrypt(keyRecord.key);
-  } catch {
+  } catch (err) {
+    logger.warn(`[STORE] Failed to decrypt first stored API key hash=${keyRecord.hash}: ${err.message}`);
     return null;
   }
 }
@@ -862,7 +924,8 @@ export async function getLocalKeys(userId, accountId) {
     if (keyRecord.key) {
       try {
         key = decrypt(keyRecord.key) || null;
-      } catch {
+      } catch (err) {
+        logger.warn(`[STORE] Failed to decrypt local key hash=${keyRecord.hash}: ${err.message}`);
         key = null;
       }
     }

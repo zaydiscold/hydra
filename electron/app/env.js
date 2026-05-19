@@ -34,8 +34,10 @@ export const isDev = !app.isPackaged;
 // electron-log electron-side) as redundant. Removing one halves the
 // logging-stack maintenance and saves ~300 KB in the packaged app.
 const FILE_ROTATE_BYTES = 5 * 1024 * 1024;
+const rawConsoleWarn = console.warn.bind(console);
 let _logStream = null;
 let _logPath = null;
+let _logWriteFailureReported = false;
 
 function rotateLogIfNeeded() {
   if (!_logPath) return;
@@ -43,13 +45,15 @@ function rotateLogIfNeeded() {
     const stat = fs.statSync(_logPath);
     if (stat.size < FILE_ROTATE_BYTES) return;
     const rotated = _logPath + '.1';
-    try { fs.unlinkSync(rotated); } catch { /* may not exist */ }
+    if (fs.existsSync(rotated)) fs.unlinkSync(rotated);
     fs.renameSync(_logPath, rotated);
     if (_logStream) {
       _logStream.end();
       _logStream = fs.createWriteStream(_logPath, { flags: 'a' });
     }
-  } catch { /* missing file or rotate race — next write recreates */ }
+  } catch (e) {
+    console.warn('[env] log rotation skipped:', e?.message ?? e);
+  }
 }
 
 function writeLogLine(level, args) {
@@ -61,7 +65,14 @@ function writeLogLine(level, args) {
     .join(' ');
   const line = `${stamp} [${level}] ${text}\n`;
   if (_logStream) {
-    try { _logStream.write(line); } catch { /* stream closed during shutdown */ }
+    try {
+      _logStream.write(line);
+    } catch (e) {
+      if (!_logWriteFailureReported) {
+        _logWriteFailureReported = true;
+        rawConsoleWarn('[env] log stream write failed:', e?.message ?? e);
+      }
+    }
   }
 }
 
@@ -96,12 +107,12 @@ export function setupLogging() {
     // Flush + close on quit so the last lines aren't lost in the kernel
     // page cache when the process exits hard.
     app.once('before-quit', () => {
-      try { _logStream?.end(); } catch { /* fine */ }
+      try { _logStream?.end(); } catch (e) { rawConsoleWarn('[env] log stream close failed:', e?.message ?? e); }
       _logStream = null;
     });
   } catch (e) {
     // If logging setup fails, fall back to plain console — never block boot.
-    console.warn('[env] log file setup failed:', e?.message ?? e);
+    rawConsoleWarn('[env] log file setup failed:', e?.message ?? e);
   }
 }
 
@@ -121,7 +132,8 @@ export const EXTERNAL_URL_ALLOWLIST = new Set(['github.com', 'openrouter.ai']);
 export function isAllowedLocalUiUrl(rawUrl, allowedPort = null) {
   try {
     const parsed = new URL(rawUrl);
-    const isLoopback = LOCAL_UI_HOSTS.has(parsed.hostname);
+    const hostname = parsed.hostname.replace(/^\[(.*)\]$/, '$1');
+    const isLoopback = LOCAL_UI_HOSTS.has(hostname);
     const isHttp = parsed.protocol === 'http:' || parsed.protocol === 'https:';
     const portMatches = allowedPort == null || Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80)) === Number(allowedPort);
     return isLoopback && isHttp && portMatches;
@@ -187,14 +199,15 @@ export async function ensurePackagedRuntimeState() {
 
   if (isDev) return summary;
 
-  const { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, statfsSync } = await import('node:fs');
+  const { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, statfsSync } = await import('node:fs');
   const { randomBytes } = await import('node:crypto');
   const userData = app.getPath('userData');
 
   // #79: Guard against full disk — mkdirSync can throw ENOSPC.
   // Also check available space before writing.
   try {
-    mkdirSync(userData, { recursive: true });
+    mkdirSync(userData, { recursive: true, mode: 0o700 });
+    if (process.platform !== 'win32') chmodSync(userData, 0o700);
   } catch (e) {
     summary.errors.push('cannot create userData directory: ' + e.message);
     summary.jwtSecret = 'existing';
@@ -210,8 +223,8 @@ export async function ensurePackagedRuntimeState() {
     if (freeMB < 10) {
       summary.errors.push(`disk space critical: only ${freeMB}MB free on the userData volume — writes may fail`);
     }
-  } catch {
-    // statfsSync may not be available everywhere; best-effort only
+  } catch (e) {
+    summary.errors.push('disk-space check failed: ' + e.message);
   }
 
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'hydra-dev-secret-unsafe') {
@@ -257,8 +270,16 @@ export async function ensurePackagedRuntimeState() {
       if (!header || header.length < 16 || Buffer.compare(header.subarray(0, 16), Buffer.from(magic)) !== 0) {
         summary.errors.push('db copy failed: invalid SQLite header after copy');
         summary.db = 'skipped';
-        try { copyFileSync(dbPath, dbPath + '.corrupt'); } catch { /* best effort */ }
-        try { (await import('node:fs')).unlinkSync(dbPath); } catch { /* best effort */ }
+        try {
+          copyFileSync(dbPath, dbPath + '.corrupt');
+        } catch (backupErr) {
+          summary.errors.push('corrupt db backup failed: ' + backupErr.message);
+        }
+        try {
+          unlinkSync(dbPath);
+        } catch (unlinkErr) {
+          summary.errors.push('invalid db removal failed: ' + unlinkErr.message);
+        }
         return summary;
       }
       summary.db = 'copied';

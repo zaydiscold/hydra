@@ -2,6 +2,7 @@ import { OR_BASE, config } from '../config.js';
 import { prisma } from './db.js';
 
 const MODELS_PATH = '/api/v1/models';
+const MODEL_LIST_TIMEOUT_MS = 30000;
 
 export function normalizeUpstreamModel(m) {
   return {
@@ -43,6 +44,7 @@ export async function fetchOpenRouterModelsList(apiKey) {
       Authorization: `Bearer ${apiKey}`,
       'HTTP-Referer': modelsReferer(),
     },
+    signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS),
   });
   if (!res.ok) {
     return { ok: false, status: res.status, data: null, raw: null };

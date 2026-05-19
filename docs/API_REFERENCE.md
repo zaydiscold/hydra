@@ -71,7 +71,7 @@ Implemented in `server/routes/auth.js` and `server/controllers/AuthController.js
 
 | Method | Route | Auth | Purpose | Notes |
 | --- | --- | --- | --- | --- |
-| `GET` | `/api/auth/status` | Public | Check whether setup is complete, whether the current token is valid, and whether a restart is required | Returns `setup`, `authenticated`, `error`, `needsRestart` |
+| `GET` | `/api/auth/status` | Public | Check whether local password setup is complete, whether the current token is valid, and whether a restart is required | Returns `setup`, `authenticated`, `error`, `needsRestart`, `hasUser`, `hasAccounts`, `needsFirstAccount`. `setup` means the local admin password exists; a fresh install with zero OpenRouter accounts now returns `setup: true` after password creation so relaunch goes to unlock/dashboard rather than setup again. |
 | `POST` | `/api/auth/setup` | Public | Create the initial local admin password | Body: `{ password }` |
 | `POST` | `/api/auth/login` | Public | Log into the local dashboard and receive a JWT | Body: `{ password }` |
 | `POST` | `/api/auth/logout` | JWT | Stateless logout | Frontend deletes its stored token |
@@ -298,7 +298,7 @@ Implemented in `server/routes/webhooks.js`.
 
 | Method | Route | Auth | Purpose | Notes |
 | --- | --- | --- | --- | --- |
-| `POST` | `/api/webhooks/clerk` | Public | Accept Clerk webhook delivery | Uses an idempotency table so duplicates are ignored |
+| `POST` | `/api/webhooks/clerk` | Public | Accept Clerk webhook delivery | Uses an idempotency table so duplicates are ignored. `session.ended` and `session.revoked` clear matching local dashboard sessions by comparing the Clerk session id against the stored `__session` JWT `sid` claim, forcing affected accounts back to re-auth instead of showing stale active sessions. |
 
 ## Internal Services Behind the API
 
@@ -314,13 +314,15 @@ These are not routes, but they are the logic the routes call:
 - `server/services/proxy-gate.js` — in-memory proxy kill switch (`proxyGate.enabled`). Shared by `server/index.js` middleware and `SystemController` toggle endpoint. Resets to `true` on server restart.
 - `server/services/session-refresher.js` — background sweeper (`startSessionRefresher`). Runs on startup; iterates all accounts and calls `clerkAuth.refreshSession` for rows whose session is expiring or missing. Logs `SESSION_REFRESH_FAILED` events on failure. Cadence: aligned with `REFRESH_WINDOW_MS` (24 h).
 - `server/services/task-supervisor.js` — lightweight in-memory task registry. Tracks background jobs (provision, redeem, generator) with `status`, `startedAt`, `error`, and heartbeat timestamps. Exposed via `GET /api/system/tasks`; individual tasks cancellable via `POST /api/system/tasks/:taskId/cancel`.
-- `server/services/health-pinger.js` — background key health checks
+- `server/services/health-pinger.js` — background key health checks; updates upstream OpenRouter reachability state
+- `server/services/upstream-health.js` — in-memory OpenRouter connectivity snapshot for system health and offline UI
+- `server/services/upstream-probe.js` — throttled unauthenticated OpenRouter reachability probe used by `/api/system/health`
 
 ### System Routes (`/api/system`)
 
 | Method | Route | Auth | Purpose |
 |---|---|---|---|
-| `GET` | `/api/system/health` | JWT | Uptime, pool stats, task supervisor snapshot |
+| `GET` | `/api/system/health` | JWT | Uptime, pool stats, task supervisor snapshot, and OpenRouter upstream reachability |
 | `GET` | `/api/system/tasks` | JWT | List active + recent background tasks |
 | `POST` | `/api/system/tasks/:taskId/cancel` | JWT | Cancel a running task |
 | `GET` | `/api/system/proxy-status` | JWT | Returns `{ enabled: bool }` — current proxy gate state |

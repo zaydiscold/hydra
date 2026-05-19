@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '../api';
+import AnimeText from '../components/AnimeText';
 import {
   GeneratorIcon,
   PlusIcon,
@@ -43,8 +44,12 @@ export default function Generator({ addToast }) {
     const currentTaskId = activeTaskRef.current;
     if (!currentTaskId) return Promise.resolve();
     activeTaskRef.current = null;
-    return api.cleanupGeneratorJob(currentTaskId, reason, options).catch(() => {});
-  }, []);
+    return api.cleanupGeneratorJob(currentTaskId, reason, options).catch((err) => {
+      const message = err.message || 'Generator cleanup failed';
+      console.warn('[GENERATOR] Cleanup failed:', message);
+      if (!options.keepalive) addToast?.(message, 'warning');
+    });
+  }, [addToast]);
 
   useEffect(() => {
     if (!taskId || isTerminalStatus(status)) return undefined;
@@ -89,7 +94,9 @@ export default function Generator({ addToast }) {
     const handlePageHide = () => {
       const currentTaskId = activeTaskRef.current;
       if (!currentTaskId) return;
-      void api.cleanupGeneratorJob(currentTaskId, 'client_disconnect', { keepalive: true }).catch(() => {});
+      void api.cleanupGeneratorJob(currentTaskId, 'client_disconnect', { keepalive: true }).catch((err) => {
+        console.warn('[GENERATOR] Keepalive cleanup failed:', err.message || 'Generator cleanup failed');
+      });
     };
 
     window.addEventListener('pagehide', handlePageHide);
@@ -157,12 +164,12 @@ export default function Generator({ addToast }) {
 
   return (
     <>
-      <div className="page-header">
+      <div className="page-header page-header--panel generator-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <GeneratorIcon size={32} style={{ color: 'var(--accent-primary)' }} />
           <div>
-            <h2>Account Generator</h2>
-            <p>Automatically sign up for OpenRouter accounts using Playwright automation.</p>
+            <AnimeText as="h2" mode="words" variant="scanline" delay={42}>Account Generator</AnimeText>
+            <p>Create one isolated OpenRouter account, pause for OTP, store the finished session locally.</p>
           </div>
         </div>
       </div>
@@ -174,42 +181,53 @@ export default function Generator({ addToast }) {
       )}
 
       {status === 'idle' || isTerminalStatus(status) ? (
-        <div className="card shine-sweep animate-spring stagger-delay-0">
-          <div className="form-group">
-            <label>Gmail Alias</label>
-            <input
-              type="email"
-              className="form-input form-input-mono"
-              value={emailTemplate}
-              onChange={e => setEmailTemplate(e.target.value)}
-              placeholder="zayd+1@gmail.com"
-              spellCheck={false}
-              autoComplete="email"
-            />
-          </div>
-          <div className="form-group">
-            <label>Password to assign</label>
-            <input
-              type="text"
-              className="form-input form-input-mono"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              spellCheck={false}
-              autoComplete="new-password"
-            />
-          </div>
+        <div className="generator-grid">
+          <div className="card generator-card shine-sweep animate-spring stagger-delay-0">
+            <div className="generator-card-title">New account</div>
+            <div className="generator-form-grid">
+              <div className="form-group">
+                <label>Gmail Alias</label>
+                <input
+                  type="email"
+                  className="form-input form-input-mono"
+                  value={emailTemplate}
+                  onChange={e => setEmailTemplate(e.target.value)}
+                  placeholder="alias+1@example.com"
+                  spellCheck={false}
+                  autoComplete="email"
+                />
+              </div>
+              <div className="form-group">
+                <label>Password to assign</label>
+                <input
+                  type="text"
+                  className="form-input form-input-mono"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  spellCheck={false}
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
 
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: '1rem', padding: '1rem', fontSize: '1.2rem', fontWeight: 'bold' }}
-            onClick={handleStart}
-            disabled={!emailTemplate}
-          >
-            <span className="btn-icon" style={{ justifyContent: 'center' }}>
-              <PlusIcon size={24} />
-              <span>START GENERATION</span>
-            </span>
-          </button>
+            <button
+              className="btn btn-primary generator-start-btn"
+              onClick={handleStart}
+              disabled={!emailTemplate}
+            >
+              <span className="btn-icon" style={{ justifyContent: 'center' }}>
+                <PlusIcon size={20} />
+                <span>Start Generation</span>
+              </span>
+            </button>
+
+            <div className="generator-steps" aria-label="Generator flow">
+              <span>1. Email alias</span>
+              <span>2. Isolated browser</span>
+              <span>3. Paste OTP</span>
+              <span>4. Session saved</span>
+            </div>
+          </div>
 
           {status === 'completed' && (
             <div className="success-banner" style={{ marginTop: '1rem' }}>

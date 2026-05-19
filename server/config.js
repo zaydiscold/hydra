@@ -7,6 +7,8 @@ function parseBoolean(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 }
 
+const DEV_JWT_SECRET = 'hydra-dev-secret-unsafe-local-only-32chars';
+
 const optionalHexSecret = z
   .string()
   .regex(/^[0-9a-fA-F]{64}$/, 'must be a 64-character hex string')
@@ -29,10 +31,10 @@ const configSchema = z.object({
     ),
   JWT_SECRET: z
     .string()
-    .min(1, 'JWT_SECRET is required')
+    .default(DEV_JWT_SECRET)
     .transform((s) => s.trim())
-    .refine((s) => s.length >= 32, 'JWT_SECRET must be at least 32 characters after trimming')
-    .default('hydra-dev-secret-unsafe'),
+    .refine((s) => s.length > 0, 'JWT_SECRET is required')
+    .refine((s) => s.length >= 32, 'JWT_SECRET must be at least 32 characters after trimming'),
   /** Master lock-screen JWT lifetime (jsonwebtoken `expiresIn`, e.g. 8h, 24h, 7d). */
   HYDRA_MASTER_JWT_TTL: z.string().min(1).max(48).default('24h'),
   LOCAL_STORAGE_KEY: optionalHexSecret,
@@ -139,12 +141,6 @@ export const OR_BASE = config.OR_BASE;
 export const CLERK_ORIGIN = config.CLERK_ORIGIN;
 export const CLERK_REFERER = config.CLERK_REFERER;
 
-/**
- * DEPRECATED: Config validation runs at module load via configSchema.parse().
- * Kept as a no-op for backward compatibility with callers that expect a
- * pre-boot validation gate (e.g. server/index.js). Safe to remove once the
- * call site is migrated.
- */
 export function validateConfig() {
-  return true;
+  return config;
 }

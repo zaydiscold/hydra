@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import * as api from '../api';
-import { LockIcon, NetworkIcon, SettingsIcon, InfoIcon, RefreshIcon, CopyIcon } from '../components/Icons';
+import AnimeText from '../components/AnimeText';
+import { LockIcon, NetworkIcon, SettingsIcon, InfoIcon } from '../components/Icons';
 import { isElectron, native, tryNative, useNativeInfo } from '../lib/native';
+import { DiagnosticsPanel } from './Diagnostics.jsx';
 
 export default function Settings({ addToast }) {
-  const navigate = useNavigate();
+  const location = useLocation();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,6 +18,14 @@ export default function Settings({ addToast }) {
   // Electron native info — single hook handles in-Electron check + load
   const inElectron = isElectron();
   const { data: nativeInfo, loading: nativeLoading } = useNativeInfo();
+
+  useEffect(() => {
+    if (location.hash !== '#diagnostics') return;
+    const t = setTimeout(() => {
+      document.getElementById('diagnostics')?.scrollIntoView({ block: 'start' });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [location.hash]);
 
   // Privacy + biometric prefs (Electron-only). The Result-type wrapper
   // already hides the "not in Electron" path via tryNative — we just
@@ -56,6 +66,15 @@ export default function Settings({ addToast }) {
       addToast?.('Biometric prompt succeeded', 'success');
     } catch (e) {
       addToast?.(e?.message || 'Biometric prompt failed', 'error');
+    }
+  }
+
+  async function openAppLocation(locationName, label) {
+    try {
+      await native.openAppLocation(locationName);
+      addToast?.(`${label} opened`, 'success');
+    } catch (err) {
+      addToast?.(`Failed to open ${label}: ${err.message || 'native bridge unavailable'}`, 'error');
     }
   }
 
@@ -117,23 +136,31 @@ export default function Settings({ addToast }) {
   }
 
   async function copyUrl() {
+    let didCopy = false;
     try {
       await navigator.clipboard.writeText(primaryUrl);
-    } catch {
+      didCopy = true;
+    } catch (err) {
+      console.warn('[SETTINGS] Clipboard API copy failed:', err.message);
       // Fallback for non-secure contexts (e.g., HTTP in Electron)
+      let ta = null;
       try {
-        const ta = document.createElement('textarea');
+        ta = document.createElement('textarea');
         ta.value = primaryUrl;
         ta.style.position = 'fixed';
         ta.style.left = '-9999px';
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      } catch {
-        addToast('Failed to copy to clipboard', 'error');
+        didCopy = document.execCommand('copy');
+        if (!didCopy) throw new Error('execCommand returned false');
+      } catch (fallbackErr) {
+        console.warn('[SETTINGS] Clipboard fallback copy failed:', fallbackErr.message);
+        addToast(`Failed to copy to clipboard: ${fallbackErr.message || 'permission denied'}`, 'error');
+      } finally {
+        if (ta?.parentNode) document.body.removeChild(ta);
       }
     }
+    if (!didCopy) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -144,7 +171,7 @@ export default function Settings({ addToast }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <SettingsIcon size={28} style={{ color: 'var(--accent-primary)' }} />
           <div>
-            <h2 style={{ margin: 0 }}>Settings</h2>
+            <AnimeText as="h2" mode="words" variant="scanline" delay={34} style={{ margin: 0 }}>Settings</AnimeText>
           </div>
         </div>
         {/* Inline status strip */}
@@ -243,10 +270,18 @@ export default function Settings({ addToast }) {
               <div><span style={{ color: 'var(--text-tertiary)' }}>Platform: </span>{nativeInfo.platform}</div>
             )}
             {nativeInfo.paths?.userData && (
-              <div><span style={{ color: 'var(--text-tertiary)' }}>Data Dir: </span><code style={{ fontSize: '0.75rem', color: 'var(--accent-primary)' }}>{nativeInfo.paths.userData}</code></div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--text-tertiary)' }}>Data Dir: </span>
+                <span>redacted</span>
+                <button className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('userData', 'Data Dir')}>Open</button>
+              </div>
             )}
             {nativeInfo.paths?.logs && (
-              <div><span style={{ color: 'var(--text-tertiary)' }}>Logs Dir: </span><code style={{ fontSize: '0.75rem', color: 'var(--accent-primary)' }}>{nativeInfo.paths.logs}</code></div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--text-tertiary)' }}>Logs Dir: </span>
+                <span>redacted</span>
+                <button className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('logs', 'Logs Dir')}>Open</button>
+              </div>
             )}
             {authTokenStatus && (
               <div>
@@ -354,16 +389,16 @@ export default function Settings({ addToast }) {
         </div>
       )}
 
-      {/* Diagnostics link */}
-      <div style={{ marginTop: 'var(--space-lg)', paddingTop: 'var(--space-md)', borderTop: '1px solid var(--border-subtle)' }}>
-        <button
-          className="btn btn-ghost"
-          onClick={() => navigate('/diagnostics')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}
-        >
-          <InfoIcon size={14} />
-          View Diagnostics &amp; Support Bundle
-        </button>
+      <div
+        id="diagnostics"
+        style={{
+          marginTop: 'var(--space-lg)',
+          paddingTop: 'var(--space-md)',
+          borderTop: '1px solid var(--border-subtle)',
+          scrollMarginTop: 24,
+        }}
+      >
+        <DiagnosticsPanel addToast={addToast} embedded />
       </div>
     </>
   );

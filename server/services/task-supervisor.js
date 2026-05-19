@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { logger } from './logger.js';
 
 const TASK_HISTORY_LIMIT = 25;
 const TASK_SWEEP_INTERVAL_MS = 5 * 1000;
@@ -41,7 +42,7 @@ function withErrorCode(message, code, status = 409) {
   return err;
 }
 
-class TaskSupervisor {
+export class TaskSupervisor {
   constructor() {
     this.tasks = new Map();
     this.recentTasks = [];
@@ -54,7 +55,9 @@ class TaskSupervisor {
   start() {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      this.expireTasks().catch(() => {});
+      this.expireTasks().catch((err) => {
+        this.reportBackgroundError('task expiry sweep', err);
+      });
     }, TASK_SWEEP_INTERVAL_MS);
   }
 
@@ -149,7 +152,9 @@ class TaskSupervisor {
       };
 
       this.batchQueue.push(queued);
-      this.drainBatchQueue().catch(() => {});
+      this.drainBatchQueue().catch((err) => {
+        this.reportBackgroundError('batch queue drain', err);
+      });
     });
   }
 
@@ -181,7 +186,9 @@ class TaskSupervisor {
         })
         .finally(() => {
           this.activeBatchCount = Math.max(0, this.activeBatchCount - 1);
-          this.drainBatchQueue().catch(() => {});
+          this.drainBatchQueue().catch((err) => {
+            this.reportBackgroundError('batch queue drain', err);
+          });
         });
     }
   }
@@ -391,7 +398,12 @@ class TaskSupervisor {
       await this.runCleanup(task);
     } catch (err) {
       task.error = task.error || err.message;
+      this.reportBackgroundError(`cleanup for ${task.type} ${task.taskId}`, err);
     }
+  }
+
+  reportBackgroundError(context, err) {
+    logger.warn(`[TASK] ${context} failed: ${err?.message || String(err)}`);
   }
 
   async runCleanup(task) {
@@ -404,15 +416,18 @@ class TaskSupervisor {
     // #22: Close Playwright resources to prevent browser/context/page leaks.
     // Order matters: page → context → browser (child before parent).
     if (task.resources.page) {
-      try { await task.resources.page.close(); } catch { /* already closed */ }
+      try { await task.resources.page.close(); }
+      catch (err) { this.reportBackgroundError(`page cleanup for ${task.type} ${task.taskId}`, err); }
       task.resources.page = null;
     }
     if (task.resources.context) {
-      try { await task.resources.context.close(); } catch { /* already closed */ }
+      try { await task.resources.context.close(); }
+      catch (err) { this.reportBackgroundError(`context cleanup for ${task.type} ${task.taskId}`, err); }
       task.resources.context = null;
     }
     if (task.resources.browser) {
-      try { await task.resources.browser.close(); } catch { /* already closed */ }
+      try { await task.resources.browser.close(); }
+      catch (err) { this.reportBackgroundError(`browser cleanup for ${task.type} ${task.taskId}`, err); }
       task.resources.browser = null;
     }
 

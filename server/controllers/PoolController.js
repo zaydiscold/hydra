@@ -7,6 +7,7 @@ import { syncApiKeys } from '../services/dashboard-api.js';
 import { rotationManager } from '../services/rotation-manager.js';
 import { assertManagementKey, assertStandardKey } from '../services/key-utils.js';
 import { rotateProxySecret } from '../services/local-secrets.js';
+import { logger } from '../services/logger.js';
 
 // Cache OpenRouter listKeys results per account — 2 min TTL.
 // Pool Manager hits this on every page load; no need to hammer OR on every visit.
@@ -245,10 +246,19 @@ class PoolController extends BaseController {
         return this.error(res, 'Invalid OpenRouter key. Connection refused or key revoked.', 400);
       }
 
-      const validatedKey = await orTest.json().catch(() => null);
+      let validatedKey;
+      try {
+        validatedKey = await orTest.json();
+      } catch (err) {
+        logger.warn(`[POOL] OpenRouter key validation returned invalid JSON for hash=${hash}: ${err?.message || err}`);
+        return this.error(res, 'OpenRouter key validation returned an invalid response. Try again before pooling this key.', 502);
+      }
       const validatedHash = this.extractValidatedKeyHash(validatedKey);
       if (validatedHash && validatedHash !== hash) {
         return this.error(res, 'Pasted key does not match the selected key hash.', 400);
+      }
+      if (!validatedHash) {
+        logger.warn(`[POOL] OpenRouter key validation response did not include a hash for selected hash=${hash}`);
       }
 
       await store.registerKeyString(req.user.id, hash, keyString);
@@ -267,8 +277,9 @@ class PoolController extends BaseController {
       pooled = status.totalPooled;
       available = status.available;
       cooldowns = status.activeCooldowns;
-    } catch {
+    } catch (err) {
       // Pool not loaded yet or DB hiccup — still return online so UI buttons don't lock
+      logger.warn(`[POOL] Status fallback used because rotation manager status failed: ${err.message}`);
     }
     return this.success(res, {
       proxy: 'online',
@@ -332,7 +343,9 @@ class PoolController extends BaseController {
           const hash = item.hash || item.plaintextKey;
           await store.registerKeyString(req.user.id, hash, item.plaintextKey);
           synced++;
-        } catch { /* key may not be in DB yet — will be picked up on next pool reload */ }
+        } catch (err) {
+          logger.warn(`[POOL] Failed to register synced key material for account=${accountId}: ${err.message}`);
+        }
       }
       await rotationManager.reload();
       return this.success(res, { synced, total: revealed.length, source: revealed[0]?.source ?? 'none' });

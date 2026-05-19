@@ -40,6 +40,7 @@ before(() => {
   mock.module(sm('health-pinger'), { namedExports: { startPinger() {}, stopPinger() {} } });
   mock.module(sm('request-log-retention'), { namedExports: { startRequestLogRetention() {}, stopRequestLogRetention() {} } });
   mock.module(sm('session-refresher'), { namedExports: { startSessionRefresher() {}, stopSessionRefresher() {} } });
+  mock.module(sm('magic-link-manager'), { namedExports: { startMagicLinkCleanup() {}, stopMagicLinkCleanup() {}, pendingMagicLinks: new Map() } });
   mock.module(sm('legacy-storage'), { namedExports: { enforceLegacyStorageReset() { return Promise.resolve(); } } });
   mock.module(sm('task-supervisor'), { namedExports: { taskSupervisor: { start() {}, shutdown() { return Promise.resolve(); } } } });
   mock.module(sm('rotation-manager'), { namedExports: { rotationManager: { reload() { return Promise.resolve(); }, cancelReload() {} } } });

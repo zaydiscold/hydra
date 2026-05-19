@@ -50,16 +50,21 @@ export async function run(argv) {
     // server uses), so the answer is correct even when the server isn't
     // running yet (just the keys+gate, not the live port).
     let masterKey = null, genericKey = null, gateEnabled = null;
+    const warnings = [];
     try {
       const masterFn = store.getMasterProxyKey || (await import('../../server/services/store.js')).getMasterProxyKey;
       const genericFn = store.getGenericProxyKey || (await import('../../server/services/store.js')).getGenericProxyKey;
       masterKey = typeof masterFn === 'function' ? masterFn() : null;
       genericKey = typeof genericFn === 'function' ? genericFn() : null;
-    } catch { /* keys not derivable yet */ }
+    } catch (err) {
+      warnings.push(`proxy key derivation failed: ${err?.message || err}`);
+    }
     try {
       const { proxyGate } = await import('../../server/services/proxy-gate.js');
       gateEnabled = proxyGate?.enabled ?? null;
-    } catch { /* gate not loaded */ }
+    } catch (err) {
+      warnings.push(`proxy gate status failed: ${err?.message || err}`);
+    }
 
     const portOpen = await probePort(DEFAULT_PROXY_PORT);
     const proxyUrl = portOpen ? `http://localhost:${DEFAULT_PROXY_PORT}/v1` : null;
@@ -86,6 +91,7 @@ export async function run(argv) {
         masterKey: maskKey(masterKey),
         genericKey: maskKey(genericKey),
       },
+      warnings,
     };
 
     if (wantJson) {
@@ -120,6 +126,9 @@ export async function run(argv) {
     }
     if (masterKey) {
       process.stdout.write(`    ${c.dim('Hydra key:')}    ${c.dim(maskKey(masterKey))}\n`);
+    }
+    for (const warning of warnings) {
+      process.stdout.write(`    ${c.dim('Warning:')}      ${c.warn(warning)}\n`);
     }
 
     // Footer

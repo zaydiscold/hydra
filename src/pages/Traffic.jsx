@@ -1,4 +1,5 @@
 import { useTraffic } from '../hooks/useTraffic';
+import AnimeText from '../components/AnimeText';
 import ScrambleText from '../components/ScrambleText';
 import { 
   ActivityIcon,
@@ -50,15 +51,15 @@ export default function Traffic({ addToast }) {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in traffic-page">
       {/* Header */}
-      <div className="page-header">
+      <div className="page-header page-header--panel">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           <div style={{ color: 'var(--accent-primary)', opacity: 0.9 }}>
             <ActivityIcon size={40} />
           </div>
           <div>
-            <h2 style={{ margin: 0 }}>Traffic Console</h2>
+            <AnimeText as="h2" mode="chars" variant="scanline" delay={14} style={{ margin: 0 }}>Traffic Console</AnimeText>
             <p style={{ margin: 0, marginTop: 2, color: 'var(--text-secondary)' }}>Live proxy observability and routing logs</p>
           </div>
         </div>
@@ -78,7 +79,7 @@ export default function Traffic({ addToast }) {
 
       {/* Stats */}
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-        <div className="stat-card stat-card-highlight shine-sweep animate-spring stagger-delay-0">
+        <div className="stat-card stat-card-highlight traffic-stat-card shine-sweep animate-spring stagger-delay-0">
           <div className="stat-card-header">
             <div className="stat-card-label">Est. Request Rate</div>
             <ActivityIcon className="stat-icon" />
@@ -88,7 +89,7 @@ export default function Traffic({ addToast }) {
           </div>
           <div className="stat-card-sub">based on recent buffer</div>
         </div>
-        <div className="stat-card shine-sweep animate-spring stagger-delay-50">
+        <div className="stat-card traffic-stat-card shine-sweep animate-spring stagger-delay-50">
           <div className="stat-card-header">
             <div className="stat-card-label">Total 24h Volume</div>
             <DatabaseIcon className="stat-icon" />
@@ -98,7 +99,7 @@ export default function Traffic({ addToast }) {
           </div>
           <div className="stat-card-sub">requests cleared</div>
         </div>
-        <div className="stat-card shine-sweep animate-spring stagger-delay-100">
+        <div className="stat-card traffic-stat-card shine-sweep animate-spring stagger-delay-100">
           <div className="stat-card-header">
             <div className="stat-card-label">Global Error Rate</div>
             <AlertIcon className="stat-icon" />

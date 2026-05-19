@@ -41,10 +41,10 @@ Hydra has two different ways to run:
 
 Optional **global CLI** (same flows, discoverable one-word commands):
 
-- [`bin/hydra.mjs`](../bin/hydra.mjs) — `hydra` → `node launch.js` (same as `npm start`), `hydra dev` → `npm run dev`, `hydra help`.
+- [`bin/hydra.mjs`](../bin/hydra.mjs) — `hydra start` → `node launch.js` (same as `npm start`), `hydra dev` → `npm run dev`, `hydra doctor/logs --json`, `hydra status/accounts/balance`, `hydra help`. Bare `hydra` prints usage so it is safe to run from any directory.
 - Enable with `npm link` from the repo root (ties the global `hydra` to that clone). Documented in [`README.md`](../README.md) and [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
-**Research / constraints:** Browsers cannot spawn local Node from a web button. Current desktop packaging details live in [`PACKAGING.md`](PACKAGING.md); historical launch research is archived at [`_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md`](_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md).
+**Research / constraints:** Browsers cannot spawn local Node from a web button. Current desktop packaging details live in [`PACKAGING.md`](PACKAGING.md).
 
 For day-to-day UI work:
 
@@ -377,7 +377,7 @@ Selection strategy:
 - It prefers active keys with larger remaining limits.
 - If weighting fails, it falls back to round-robin.
 
-The health pinger in `server/services/health-pinger.js` periodically hits OpenRouter with a cheap test request so the pool can discover dead, limited, or out-of-credit keys before a user request hits them.
+The health pinger in `server/services/health-pinger.js` periodically hits OpenRouter with a cheap test request so the pool can discover dead, limited, or out-of-credit keys before a user request hits them. It also updates `server/services/upstream-health.js`: non-5xx HTTP responses from OpenRouter mark upstream connectivity online because 401/402/429 still prove reachability, while 5xx responses, fetch failures, and timeouts mark it offline/degraded with the status or error preserved. `GET /api/system/health` runs a throttled unauthenticated reachability probe through `server/services/upstream-probe.js` when the snapshot is missing or stale, then exposes the snapshot so the desktop app can keep cached local data visible while showing an OpenRouter offline banner.
 
 ### 8. Redeem codes
 
@@ -447,6 +447,7 @@ Implementation:
 
 - `server/routes/webhooks.js` accepts the webhook payload.
 - `server/services/webhook-idempotency.js` writes a normalized event ID into a small SQLite table.
+- `session.ended` and `session.revoked` clear any local account whose encrypted `__session` JWT has the same Clerk `sid`, so revoked sessions do not stay visually active in Hydra.
 - Duplicate events return `202` and are ignored.
 
 This keeps Clerk retries from causing duplicate work.
@@ -485,7 +486,7 @@ Client-side wrappers live in `src/api.js`. When adding a feature, update the wra
 
 After each step, merge any new device cookies from `Set-Cookie` before the next Clerk call. Session resolution after **`status=complete`** (password, email OTP, or TOTP second factor) follows this order: **`__session`** from `Set-Cookie`; embedded JWT via **`sessionJwtFromClerkClientPayload`**, which scans **`client`**, Client-shaped **`response`**, raw **`response`**, and **`client.sign_in`** for **`session` / `sessions` / `last_active_session`** (and camelCase variants), including **`sessions[]`** entries with **`jwt`** or **`last_active_token.jwt`**. If still missing and the sign-in payload includes **`created_session_id`** / **`createdSessionId`**, Hydra calls **`POST /v1/client/sessions/{id}/touch`** (browser **`setActive`** parity), then re-reads cookies and the touch response body. Finally **`getSessionToken`** issues **`GET /client`** over HTTPS (up to three attempts with short backoff) using the updated **`__client`**.
 
-**Debugging:** `CLERK_DEBUG_OTP=1` logs Set-Cookie **names** (not values), **`sign_in`** key hints (**`created_session_id`**, etc., presence only), and the same style of lines for each **`GET /client`** attempt during fallback resolution—not only after email OTP **`attempt_first_factor`**. **`CLERK_ORIGIN`** / **`CLERK_REFERER`** override default browser-parity headers (see **`.env.example`**). Run **`npm run check:clerk`** to verify TLS and **`Set-Cookie`** visibility from this host. With debug on, **`AccountController`** errors on Clerk-heavy paths (`login`, **`otp/start`**, **`otp/verify`**, **`detect-auth`**, **`refresh`**) also return JSON **`clerkDebugOtp: true`** and **`clerkDebugHint`**; **`src/api.js`** surfaces the hint in the UI via **`formatApiErrorMessage`**. Details: `IMPLEMENTATION_PLAN.md` (Clerk FAPI section).
+**Debugging:** `CLERK_DEBUG_OTP=1` logs Set-Cookie **names** (not values), **`sign_in`** key hints (**`created_session_id`**, etc., presence only), and the same style of lines for each **`GET /client`** attempt during fallback resolution—not only after email OTP **`attempt_first_factor`**. **`CLERK_ORIGIN`** / **`CLERK_REFERER`** override default browser-parity headers (see **`.env.example`**). Run **`npm run check:clerk`** to verify TLS and **`Set-Cookie`** visibility from this host. With debug on, **`AccountController`** errors on Clerk-heavy paths (`login`, **`otp/start`**, **`otp/verify`**, **`detect-auth`**, **`refresh`**) also return JSON **`clerkDebugOtp: true`** and **`clerkDebugHint`**; **`src/api.js`** surfaces the hint in the UI via **`formatApiErrorMessage`**. Details: `_archive/historical/IMPLEMENTATION_PLAN.md` (Clerk FAPI section; archived reference, superseded by `docs/IDEAS.md` for live work).
 
 ## What To Read Next
 

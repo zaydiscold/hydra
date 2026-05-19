@@ -1,8 +1,8 @@
 /**
  * Hydra Electron — Auxiliary Process Cleanup
  *
- * Uses `ps` to find and terminate leftover Hydra auxiliary processes
- * (e.g., prisma studio) that may be lingering from a previous run.
+ * Finds and terminates leftover Hydra auxiliary processes (e.g. prisma studio
+ * and bundled Playwright Chromium) that may be lingering from a previous run.
  */
 import { execFile } from 'node:child_process';
 import { APP_ROOT } from '../app/env.js';
@@ -18,13 +18,16 @@ import { APP_ROOT } from '../app/env.js';
  *      Chromium is reparented to launchd and lives forever — invisible
  *      (no UI), unkillable by Cmd+Q, and capable of ballooning to many
  *      GB of memory if a page has a runaway loop. We recognize them by
- *      the bundled-Chromium path (build/electron/chromium/...) OR the
- *      Playwright cache path (~/.cache/ms-playwright/...).
+ *      the bundled/extracted Chromium path (build/electron/chromium/... in
+ *      dev packaging work, userData/Hydra/chromium/... in packaged runtime)
+ *      OR the Playwright cache path (~/.cache/ms-playwright/...).
  *
  * @param {string} command - the full command string from `ps -axo command=`
  * @returns {boolean}
  */
 export function isHydraAuxiliaryProcess(command) {
+  if (!command) return false;
+
   // 1. prisma studio
   if (command.includes('prisma studio')) {
     return (
@@ -36,12 +39,13 @@ export function isHydraAuxiliaryProcess(command) {
   }
 
   // 2. Playwright Chromium orphans
-  // The bundled Chromium ships at `Hydra.app/Contents/Resources/app/chromium/...`
-  // (see scripts/prepare-electron-resources.mjs). The dev-mode binary lives
-  // in `~/.cache/ms-playwright/chromium-XXXX/...`. Match both.
+  // The packaged Chromium ships as chromium.zip and extracts to the Hydra
+  // userData dir on first use. The build-time/dev binary may also live under
+  // build/electron/chromium while preparing packages. Match both.
   const isChromiumForTesting = (
     command.includes('Google Chrome for Testing') ||
-    command.includes('chrome-mac-arm64/Google Chrome for Testing')
+    command.includes('chrome-mac-arm64/Google Chrome for Testing') ||
+    command.includes('chrome-mac-x64/Google Chrome for Testing')
   );
   if (isChromiumForTesting) {
     // Be conservative: only kill Chromiums whose path traces back to Hydra.
@@ -61,28 +65,68 @@ export function isHydraAuxiliaryProcess(command) {
   return false;
 }
 
+function execFileText(command, args, timeout = 3000) {
+  return new Promise((resolve) => {
+    execFile(command, args, { timeout, windowsHide: true }, (_err, stdout) => resolve(stdout || ''));
+  });
+}
+
+async function listProcesses() {
+  if (process.platform === 'win32') {
+    const script = [
+      'Get-CimInstance Win32_Process',
+      '| Select-Object ProcessId,CommandLine',
+      '| ConvertTo-Json -Compress',
+    ].join(' ');
+    const output = await execFileText('powershell.exe', ['-NoProfile', '-Command', script], 5000);
+    if (!output.trim()) return [];
+    try {
+      const parsed = JSON.parse(output);
+      return (Array.isArray(parsed) ? parsed : [parsed])
+        .map((row) => ({
+          pid: Number(row.ProcessId),
+          command: String(row.CommandLine || ''),
+        }))
+        .filter((row) => Number.isFinite(row.pid) && row.command);
+    } catch (e) {
+      console.warn('[electron] Windows process list parse failed:', e.message);
+      return [];
+    }
+  }
+
+  const output = await execFileText('ps', ['-axo', 'pid=,command='], 3000);
+  return output
+    .split('\n')
+    .map((line) => {
+      const match = line.trim().match(/^(\d+)\s+(.+)$/);
+      if (!match) return null;
+      return { pid: Number(match[1]), command: match[2] };
+    })
+    .filter(Boolean);
+}
+
+async function terminateProcess(pid) {
+  if (process.platform === 'win32') {
+    await execFileText('taskkill.exe', ['/PID', String(pid), '/T', '/F'], 5000);
+    return;
+  }
+  process.kill(pid, 'SIGTERM');
+}
+
 /**
  * Kill any lingering Hydra auxiliary processes (e.g. prisma studio).
- * Skips the current process (ownPid). Windows is a no-op.
+ * Skips the current process (ownPid).
  *
  * @param {string} reason - label for logging (e.g. 'startup sweep', 'shutdown')
  * @returns {Promise<void>}
  */
 export async function killKnownHydraAuxiliaryProcesses(reason) {
-  if (process.platform === 'win32') return;
   try {
-    const output = await new Promise((resolve) => {
-      execFile('ps', ['-axo', 'pid=,command='], { timeout: 3000 }, (_err, stdout) => resolve(stdout || ''));
-    });
     const ownPid = process.pid;
-    for (const line of output.split('\n')) {
-      const match = line.trim().match(/^(\d+)\s+(.+)$/);
-      if (!match) continue;
-      const pid = Number(match[1]);
-      const command = match[2];
+    for (const { pid, command } of await listProcesses()) {
       if (!pid || pid === ownPid || !isHydraAuxiliaryProcess(command)) continue;
       try {
-        process.kill(pid, 'SIGTERM');
+        await terminateProcess(pid);
         console.log(`[electron] stopped auxiliary process ${pid} (${reason}): ${command}`);
       } catch (e) {
         console.warn(`[electron] failed to stop auxiliary process ${pid}: ${e.message}`);

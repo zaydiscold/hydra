@@ -24,7 +24,14 @@ const changePasswordSchema = z.object({
 
 class AuthController extends BaseController {
   async getStatus(req, res) {
-    const { setup, error, hasUser = false, hasAccounts = false, bootstrapRequired = false } = await auth.getSetupStatus();
+    const {
+      setup,
+      error,
+      hasUser = false,
+      hasAccounts = false,
+      needsFirstAccount = false,
+      bootstrapRequired = false,
+    } = await auth.getSetupStatus();
     const token = extractAuthToken(req);
     const authenticated = !!(token && await auth.validateToken(token));
     const needsRestart = auth.isRestartRequired();
@@ -36,6 +43,7 @@ class AuthController extends BaseController {
       needsRestart,
       hasUser,
       hasAccounts,
+      needsFirstAccount,
       bootstrapRequired,
     });
   }

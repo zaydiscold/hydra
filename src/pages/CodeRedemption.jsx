@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import * as api from '../api';
+import AnimeText from '../components/AnimeText';
 
 const STATUS = {
   idle: null,
@@ -75,11 +76,17 @@ export default function CodeRedemption({ addToast }) {
   });
   const didInitialLoadRef = useRef(false);
   const [historyLogs, setHistoryLogs] = useState([]);
+  const [historyError, setHistoryError] = useState('');
 
   function fetchHistory() {
+    setHistoryError('');
     api.getRedemptionLogs()
       .then(res => setHistoryLogs(Array.isArray(res?.data) ? res.data : []))
-      .catch(() => {}); // non-fatal
+      .catch((err) => {
+        const message = err.message || 'Failed to load redemption history';
+        setHistoryError(message);
+        console.warn('[CODES] Redemption history failed:', message);
+      });
   }
 
   const blockedAccountIds = useMemo(
@@ -276,9 +283,9 @@ export default function CodeRedemption({ addToast }) {
 
   return (
     <>
-      <div className="page-header">
+      <div className="page-header page-header--panel">
         <div>
-          <h2>Code Redeemer</h2>
+          <AnimeText as="h2" mode="words">Code Redeemer</AnimeText>
         </div>
       </div>
 
@@ -336,9 +343,9 @@ export default function CodeRedemption({ addToast }) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 'var(--space-md)' }}>
+      <div className="redeemer-grid">
         {/* Left: Account selector */}
-        <div className="col-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+        <div className="col-sidebar redeemer-panel" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)' }}>Accounts</span>
             <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', minHeight: 'unset', fontSize: '0.68rem' }} onClick={toggleAll} disabled={running}>
@@ -387,7 +394,7 @@ export default function CodeRedemption({ addToast }) {
         </div>
 
         {/* Right: Code input */}
-        <div className="col-main" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+        <div className="col-main redeemer-panel" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)' }}>Promo Codes</span>
             <span style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
@@ -433,6 +440,11 @@ export default function CodeRedemption({ addToast }) {
           </div>
         </div>
       </div>
+      {historyError && (
+        <p role="status" style={{ marginTop: 'var(--space-sm)', fontSize: '0.75rem', color: 'var(--status-warning)' }}>
+          Redemption history unavailable: {historyError}
+        </p>
+      )}
 
       {/* Results matrix */}
       {hasResults && codeList.length > 0 && selectedAccountIds.length > 0 && (

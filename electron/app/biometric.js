@@ -23,18 +23,23 @@
  *
  * Why not `node-mac-auth`: Electron exposes `systemPreferences.canPromptTouchID()`
  * and `systemPreferences.promptTouchID()` natively on macOS, so we don't need
- * an external native dep. Windows Hello support is stubbed for later — most
- * `windows-hello` packages have rough install stories and we want to keep
- * dependencies lean.
+ * an external native dep. Windows Hello support stays unavailable until we can
+ * ship it without adding fragile native package installs.
  */
 import { systemPreferences } from 'electron';
 
 const PLATFORM = process.platform;
+let _availabilityFailureReported = false;
+
+function warnBiometricFailure(scope, error) {
+  const message = error?.message || String(error);
+  console.warn(`[biometric] ${scope}: ${message}`);
+}
 
 /**
  * Does this device support biometric unlock at all?
  *   • macOS: Touch ID enrolled and policy available
- *   • Windows: Hello (stubbed — returns false until we implement)
+ *   • Windows: Hello is unavailable in this build
  *   • Linux: not supported
  */
 export function canPromptBiometric() {
@@ -44,8 +49,12 @@ export function canPromptBiometric() {
       // if no fingerprint is enrolled. We treat both as "not available".
       return Boolean(systemPreferences?.canPromptTouchID?.());
     }
-    return false; // Windows Hello / Linux not implemented yet
-  } catch {
+    return false; // Windows Hello / Linux unavailable in this build
+  } catch (err) {
+    if (!_availabilityFailureReported) {
+      warnBiometricFailure('Touch ID availability check failed', err);
+      _availabilityFailureReported = true;
+    }
     return false;
   }
 }
@@ -77,11 +86,12 @@ export async function promptBiometric(reason = 'Unlock Hydra') {
       if (/cancel|user.+denied|user.+rejected/.test(msg)) e.code = 'BIOMETRIC_CANCELLED';
       else if (/not.+available|disabled|policy/.test(msg)) e.code = 'BIOMETRIC_UNAVAILABLE';
       else e.code = 'BIOMETRIC_FAILED';
+      warnBiometricFailure(`Touch ID prompt failed (${e.code})`, e);
       throw e;
     }
   }
   // Should be unreachable given canPromptBiometric guard, but leave a clear error.
-  const err = new Error('Biometric prompt not implemented for this platform');
+  const err = new Error('Biometric prompt is unavailable for this platform');
   err.code = 'UNSUPPORTED_PLATFORM';
   throw err;
 }
@@ -105,7 +115,7 @@ export function describeBiometricSupport() {
       available: false,
       platform: 'win32',
       label: 'Windows Hello',
-      reason: 'Not implemented in this build',
+      reason: 'Windows Hello is unavailable in this build',
     };
   }
   return {

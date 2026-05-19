@@ -98,19 +98,37 @@ export async function showStartupErrorDialog(info) {
       // Open Logs Folder — best-effort; app.getPath('logs') is set after
       // electron-log initializes, but even pre-init Electron returns a
       // platform default (~/Library/Logs/Hydra on macOS).
-      try { await shell.openPath(app.getPath('logs')); } catch { /* ignore */ }
+      try {
+        await shell.openPath(app.getPath('logs'));
+      } catch (e) {
+        console.error('[startupError] open logs failed:', e?.message || e);
+        await dialog.showMessageBox({
+          type: 'error',
+          title: 'Hydra',
+          message: 'Failed to open logs folder.',
+          detail: String(e?.message || e || 'Unknown error'),
+          buttons: ['OK'],
+          defaultId: 0,
+        });
+      }
       continue;
     }
 
     if (response === 2) {
-      // Copy Details — clipboard.writeText is synchronous and never throws.
-      try { clipboard.writeText(bundle); } catch { /* ignore */ }
-      // Re-show with a hint that the copy succeeded.
+      let copied = false;
+      try {
+        clipboard.writeText(bundle);
+        copied = true;
+      } catch (e) {
+        console.error('[startupError] copy details failed:', e?.message || e);
+      }
       await dialog.showMessageBox({
-        type: 'info',
+        type: copied ? 'info' : 'error',
         title: 'Hydra',
-        message: 'Error details copied to clipboard.',
-        detail: 'Paste this into a support ticket or GitHub issue. The clipboard contents include version, platform, phase, message, and stack.',
+        message: copied ? 'Error details copied to clipboard.' : 'Failed to copy error details.',
+        detail: copied
+          ? 'Paste this into a support ticket or GitHub issue. The clipboard contents include version, platform, phase, message, and stack.'
+          : 'Use Open Logs Folder or copy the console output from the terminal that launched Hydra.',
         buttons: ['OK'],
         defaultId: 0,
       });

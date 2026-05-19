@@ -92,9 +92,9 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
 
         <div className="method-tabs" style={{ marginBottom: 'var(--space-lg)' }}>
           {[
-            { id: 'credentials', icon: <LockIcon size={24} />, title: 'Email + Pass', sub: 'Password or OTP + provision' },
+            { id: 'credentials', icon: <LockIcon size={24} />, title: 'Email + Pass', sub: 'Sign in, then provision control' },
             { id: 'bulk',        icon: <DatabaseIcon size={24} />, title: 'Bulk Import', sub: 'Batch paste' },
-            { id: 'key',         icon: <KeyIcon size={24} />, title: 'Static Key',   sub: 'Existing keys' },
+            { id: 'key',         icon: <KeyIcon size={24} />, title: 'Control Key',   sub: 'Existing management key' },
           ].map(m => (
             <button
               key={m.id}
@@ -134,7 +134,7 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
               </div>
               <div className="form-group">
                 <label style={{ color: errors.managementKey ? 'var(--status-error)' : 'inherit' }}>
-                  Management API Key
+                  Management Key
                 </label>
                 <input 
                   type="password" 
@@ -148,7 +148,7 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
                   spellCheck={false} 
                 />
                 {errors.managementKey && <p className="field-error">{errors.managementKey}</p>}
-                <p className="form-hint">Import existing API or management keys. Balances readable; no auto-refresh.</p>
+                <p className="form-hint">Use a management key for full account control: balances plus creating, disabling, and deleting model API keys. A normal model API key only grants AI request access and cannot manage the account.</p>
               </div>
             </>
           )}

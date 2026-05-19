@@ -1,3 +1,5 @@
+import { invokeNative, NotInElectronError } from './lib/native';
+
 const API = '/api';
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const RETRY_DELAY_MS = 150;
@@ -74,12 +76,12 @@ function clearAuthCookie() {
 }
 
 async function nativeAuthToken(method, token) {
-  const native = globalThis.window?.hydraNative;
-  const fn = native?.[method];
-  if (typeof fn !== 'function') return null;
-  const result = await fn(token);
-  if (!result?.ok) return null;
-  return result.data ?? null;
+  try {
+    return await invokeNative(method, token);
+  } catch (err) {
+    if (err instanceof NotInElectronError) return null;
+    throw err;
+  }
 }
 
 export async function hydrateToken() {
@@ -113,6 +115,18 @@ function isAbortError(err) {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readAuthErrorPayload(res, path) {
+  try {
+    return await res.clone().json();
+  } catch (parseErr) {
+    const err = new Error(`Hydra API returned an invalid auth response from ${path} (${res.status}).`);
+    err.status = res.status;
+    err.code = 'INVALID_API_RESPONSE';
+    err.cause = parseErr;
+    throw err;
+  }
 }
 
 let activeRequests = 0;
@@ -158,8 +172,8 @@ async function request(path, options = {}) {
       if (res.status === 401) {
         // Never reload on intentional auth endpoints - they handle errors in the UI
         if (path.startsWith('/auth/')) {
-          let errMsg = 'Invalid credentials';
-          try { const d = await res.clone().json(); errMsg = d?.error || errMsg; } catch (err) { void err; }
+          const d = await readAuthErrorPayload(res, path);
+          const errMsg = d?.error || 'Invalid credentials';
           throw new Error(errMsg);
         }
         clearToken();
@@ -181,12 +195,16 @@ async function request(path, options = {}) {
       let data;
       try {
         data = await res.json();
-      } catch {
+      } catch (parseErr) {
         if (attempt < attempts && isRetryableResponseStatus(res.status)) {
           await wait(RETRY_DELAY_MS * attempt);
           continue;
         }
-        throw new Error('Hydra API returned an invalid response.');
+        const err = new Error(`Hydra API returned an invalid response from ${path} (${res.status}).`);
+        err.status = res.status;
+        err.code = 'INVALID_API_RESPONSE';
+        err.cause = parseErr;
+        throw err;
       }
 
       if (!res.ok) {

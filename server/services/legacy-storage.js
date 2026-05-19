@@ -18,7 +18,8 @@ async function hasUnreadableLegacyCiphertext() {
   if (account?.config) {
     try {
       JSON.parse(decrypt(account.config));
-    } catch {
+    } catch (err) {
+      logger.warn(`[STORAGE] Legacy account config unreadable during migration check: ${err.message}`);
       return true;
     }
   }
@@ -26,7 +27,8 @@ async function hasUnreadableLegacyCiphertext() {
   if (account?.sessionToken) {
     try {
       decrypt(account.sessionToken);
-    } catch {
+    } catch (err) {
+      logger.warn(`[STORAGE] Legacy account session token unreadable during migration check: ${err.message}`);
       return true;
     }
   }
@@ -39,7 +41,8 @@ async function hasUnreadableLegacyCiphertext() {
   if (keyRecord?.key) {
     try {
       decrypt(keyRecord.key);
-    } catch {
+    } catch (err) {
+      logger.warn(`[STORAGE] Legacy key ciphertext unreadable during migration check: ${err.message}`);
       return true;
     }
   }

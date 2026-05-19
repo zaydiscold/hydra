@@ -11,9 +11,10 @@
  */
 import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { existsSync, rmSync, statSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import {
   resolveChromiumLaunchOptions,
@@ -49,7 +50,11 @@ afterEach(() => {
 const cleanupDirs = [];
 afterEach(() => {
   for (const dir of cleanupDirs) {
-    try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(`[playwright-isolation-test] failed to remove temp dir ${dir}: ${err.message}`);
+    }
   }
   cleanupDirs.length = 0;
 });
@@ -194,5 +199,58 @@ describe('browser isolation — overall sanity', () => {
       'isolation args + caller args yield a non-empty list');
     assert.ok(opts.userDataDir,
       'every launch has a userDataDir set (either ephemeral or caller-supplied)');
+  });
+
+  it('packaged mode extracts archived Chromium into userData before launch', () => {
+    const root = join(tmpdir(), `hydra-chromium-archive-test-${process.pid}`);
+    const resources = join(root, 'resources');
+    const archiveSrc = join(root, 'archive-src');
+    const dataDir = join(root, 'data');
+    const bin = join(archiveSrc, 'chrome-linux', 'chrome');
+    cleanupDirs.push(root);
+    mkdirSync(join(archiveSrc, 'chrome-linux'), { recursive: true });
+    mkdirSync(resources, { recursive: true });
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(bin, '#!/bin/sh\nexit 0\n');
+    chmodSync(bin, 0o755);
+
+    const zip = spawnSync('zip', ['-qry', join(resources, 'chromium.zip'), 'chrome-linux'], {
+      cwd: archiveSrc,
+      encoding: 'utf8',
+    });
+    assert.equal(zip.status, 0, zip.stderr || zip.stdout);
+
+    const script = `
+      Object.defineProperty(process, 'resourcesPath', { value: ${JSON.stringify(resources)}, configurable: true });
+      process.env.HYDRA_EMBEDDED = '1';
+      process.env.HYDRA_DATA_DIR = ${JSON.stringify(dataDir)};
+      const { resolveChromiumLaunchOptions } = await import(${JSON.stringify(new URL('../lib/playwright-browser.js', import.meta.url).href)});
+      const opts = resolveChromiumLaunchOptions();
+      if (!opts.executablePath || !opts.executablePath.includes('/chromium/chrome-linux/chrome')) {
+        throw new Error('unexpected executablePath: ' + opts.executablePath);
+      }
+      const { existsSync } = await import('node:fs');
+      if (!existsSync(opts.executablePath)) throw new Error('extracted executable missing');
+      console.log(opts.executablePath);
+    `;
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HYDRA_EMBEDDED: '1',
+        HYDRA_DATA_DIR: dataDir,
+      },
+    });
+    assert.equal(child.status, 0, child.stderr || child.stdout);
+    assert.match(child.stdout, /chromium\/chrome-linux\/chrome/);
+  });
+
+  it('stale profile sweep failures keep path-level warning evidence', () => {
+    const source = readFileSync(new URL('../lib/playwright-browser.js', import.meta.url), 'utf-8');
+
+    assert.match(source, /sweep: cannot stat stale profile \$\{full\}: \$\{e\.message\}/);
+    assert.match(source, /sweep: failed to remove stale profile \$\{full\}: \$\{e\.message\}/);
+    assert.doesNotMatch(source, /catch \{\s*continue;\s*\}/);
+    assert.doesNotMatch(source, /catch \{\s*stats\.failed \+= 1;\s*\}/);
   });
 });

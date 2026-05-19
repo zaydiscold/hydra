@@ -23,7 +23,10 @@ export function useMetrics({ addToast }) {
     try {
       const [res, syncRes] = await Promise.all([
         api.getDashboard(),
-        api.getPoolSyncStatus().catch(() => ({ data: {} })),
+        api.getPoolSyncStatus().catch((err) => {
+          console.warn('[METRICS] Pool sync status unavailable:', err.message);
+          return { data: {} };
+        }),
       ]);
       setData(res.data);
       setCooldownMap(syncRes.data?.cooldownMap ?? {});
@@ -74,7 +77,9 @@ export function useMetrics({ addToast }) {
               .then((res) => {
                 if (!cancelled) results[acct.id] = res?.data?.status || res?.data;
               })
-              .catch(() => { /* keep existing */ })
+              .catch((err) => {
+                console.warn(`[METRICS] Display session probe failed for ${acct.id}:`, err.message);
+              })
               .finally(() => {
                 active--;
                 if (idx < accounts.length) next();
@@ -175,8 +180,10 @@ export function useMetrics({ addToast }) {
       const live = await api.checkSessionLive(accountId);
       truthStatus = live?.data?.status ?? 'unknown';
       setActionSessionTruth((prev) => ({ ...prev, [accountId]: truthStatus }));
-    } catch {
+    } catch (err) {
+      console.warn(`[METRICS] Provision session gate failed for ${accountId}:`, err.message);
       truthStatus = truthStatus ?? 'error';
+      addToast('Live session check failed before provisioning. Sign in or refresh session first.', 'warning');
     }
 
     if (!(truthStatus === 'active' || truthStatus === 'expiring')) {
@@ -210,7 +217,9 @@ export function useMetrics({ addToast }) {
       addToast(`${account.alias}: session restored silently`, 'success');
       fetchDashboard(true);
       return true;
-    } catch {
+    } catch (err) {
+      console.warn(`[METRICS] Silent refresh failed for ${account.id}:`, err.message);
+      addToast(`${account.alias}: silent refresh failed. Sign in again to refresh the session.`, 'warning');
       return false;
     }
   }, [addToast, fetchDashboard]);

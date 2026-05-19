@@ -6,9 +6,8 @@
  */
 
 import { Router } from 'express';
-import { Readable, Transform, pipeline } from 'stream';
-
 import { OR_BASE } from '../config.js';
+import { SseUsageObserver, forwardSseStream } from '../lib/sse-stream.js';
 import {
   cachedRowToClientModel,
   fetchOpenRouterModelsList,
@@ -150,8 +149,9 @@ function logRequest(keyHash, model, status, latencyMs, tokens = {}, clientHint =
           },
         });
         return;
-      } catch {
-        // fall through to error logging below
+      } catch (fallbackErr) {
+        const { formatPrismaError } = await import('../lib/prisma-error.js');
+        logger.error(`[PROXY] ${formatPrismaError(fallbackErr, 'write RequestLog without keyHash')}`);
       }
     }
 
@@ -183,8 +183,9 @@ async function createRequestLog(keyHash, model, status, latencyMs, clientHint = 
             clientHint,
           },
         });
-      } catch {
-        // fall through
+      } catch (fallbackErr) {
+        const { formatPrismaError } = await import('../lib/prisma-error.js');
+        logger.error(`[PROXY] ${formatPrismaError(fallbackErr, 'create RequestLog placeholder without keyHash')}`);
       }
     }
     const { formatPrismaError } = await import('../lib/prisma-error.js');
@@ -206,75 +207,6 @@ function updateRequestLog(logId, model, latencyMs, tokens = {}) {
   }).catch((err) => {
     logger.error(`[PROXY] Failed to update RequestLog: ${err.message}`);
   });
-}
-
-/**
- * SseUsageObserver — a Transform stream that sits between the upstream
- * (OpenRouter) response and the client, observing SSE frames without
- * altering them.  It buffers incoming bytes into SSE frames (delimited
- * by blank lines), parses each `data:` line for JSON, and captures the
- * last `usage` and `model` fields seen before the stream ends.
- */
-class SseUsageObserver extends Transform {
-  constructor(options = {}) {
-    super(options);
-    this._buffer = '';
-    this._usage = null;
-    this._extractedModel = null;
-    this._sawDone = false;
-  }
-
-  _transform(chunk, _encoding, callback) {
-    // Pass through unmodified — observation only
-    this.push(chunk);
-    // Accumulate for SSE parsing
-    this._buffer += chunk.toString('utf8');
-    this._parseFrames();
-    callback();
-  }
-
-  _flush(callback) {
-    // Drain any partial frame remaining in the buffer
-    if (this._buffer.trim()) this._parseFrames();
-    callback();
-  }
-
-  _parseFrames() {
-    while (true) {
-      const boundary = this._buffer.indexOf('\n\n');
-      if (boundary < 0) break;
-
-      const frame = this._buffer.slice(0, boundary);
-      this._buffer = this._buffer.slice(boundary + 2);
-
-      const dataLines = frame
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trim())
-        .filter(Boolean);
-
-      for (const dataLine of dataLines) {
-        if (dataLine === '[DONE]') {
-          this._sawDone = true;
-          continue;
-        }
-        try {
-          const parsed = JSON.parse(dataLine);
-          if (parsed?.usage) this._usage = parsed.usage;
-          if (parsed?.model) this._extractedModel = parsed.model;
-        } catch {
-          // Ignore non-JSON SSE events.
-        }
-      }
-    }
-  }
-
-  /** The last `usage` object extracted from SSE frames (or null). */
-  get usage() { return this._usage; }
-  /** The last `model` string extracted from SSE frames (or null). */
-  get extractedModel() { return this._extractedModel; }
-  /** True iff a `data: [DONE]` sentinel was observed in the stream. */
-  get sawDone() { return this._sawDone; }
 }
 
 // ─── Main proxy handler ───────────────────────────────────────────────────────
@@ -415,7 +347,11 @@ router.use(async (req, res) => {
       if (upstreamRes.status === 429) {
         // Peek at body to distinguish IP-level vs key-level rate limit
         let bodyText = '';
-        try { bodyText = await upstreamRes.text(); } catch { /* ignore */ }
+        try {
+          bodyText = await upstreamRes.text();
+        } catch (err) {
+          logger.warn(`Failed to read OpenRouter 429 response body: ${err?.message || err}`);
+        }
         const isIpLimit = bodyText && !bodyText.toLowerCase().includes('key') &&
           bodyText.toLowerCase().includes('rate limit');
 
@@ -503,42 +439,27 @@ router.use(async (req, res) => {
         );
         const sseObserver = new SseUsageObserver();
 
-        req.on('close', () => {
-          if (upstreamRes.body?.cancel) upstreamRes.body.cancel();
-        });
-
-        const nodeStream = Readable.fromWeb(upstreamRes.body);
-
-        // Pipeline: OR response → SseUsageObserver (pass-through) → client
-        // The observer extracts usage/model from SSE frames without altering data.
-        pipeline(nodeStream, sseObserver, res, (err) => {
+        // Explicit forwarding instead of `pipeline(..., res)`: pipeline ends
+        // or destroys the response before its callback, which made it too late
+        // to append a final STREAM_INTERRUPTED SSE frame for truncated streams.
+        void forwardSseStream({
+          upstreamBody: upstreamRes.body,
+          res,
+          observer: sseObserver,
+          abortUpstream: () => upstreamRes.body?.cancel?.(),
+        }).then(({ interrupted, reason }) => {
           const finalModel = sseObserver.extractedModel || currentModel();
           const finalUsage = sseObserver.usage || {};
           const latency = Date.now() - startTime;
 
-          if (err) {
-            logger.error(`[PROXY] Stream pipeline failed: ${err.message}`);
-          }
-
-          // Item #26: if the upstream stream errors OR closes prematurely
-          // (no final `data: [DONE]` sentinel), inject an OpenAI-compatible
-          // error frame + DONE marker so clients (Cursor, OpenAI SDK, etc.)
-          // see a definite end state instead of hanging on a truncated stream.
-          // Guard with writableEnded so we never write after the response closed.
-          const sawDone = sseObserver?.sawDone === true;
-          if ((err || !sawDone) && res && !res.writableEnded) {
-            try {
-              const reason = err?.message || 'upstream stream closed prematurely';
-              const errorFrame = `data: ${JSON.stringify({ error: { message: reason, code: 'STREAM_INTERRUPTED' } })}\n\n`;
-              res.write(errorFrame);
-              res.write('data: [DONE]\n\n');
-              res.end();
-            } catch (writeErr) {
-              logger.warn(`[PROXY] Failed to write SSE error frame: ${writeErr.message}`);
-            }
+          if (interrupted && reason !== 'client disconnected') {
+            logger.warn(`[PROXY] Stream interrupted: ${reason}`);
           }
 
           updateRequestLog(requestLog?.id, finalModel, latency, finalUsage);
+        }).catch((err) => {
+          logger.error(`[PROXY] Stream forwarder failed: ${err.message}`);
+          updateRequestLog(requestLog?.id, currentModel(), Date.now() - startTime, {});
         });
         return;
       }
@@ -643,6 +564,7 @@ async function handleModelList(req, res, { freeOnly = false } = {}) {
 
     const result = await fetchOpenRouterModelsList(keyEntry.keyString);
     if (!result.ok) {
+      logger.warn(`[PROXY] Live model list fetch returned HTTP ${result.status}; serving static model fallback`);
       res.setHeader('X-Hydra-Models-Source', 'static');
       return res.json({ object: 'list', data: STATIC_MODELS });
     }
@@ -654,7 +576,8 @@ async function handleModelList(req, res, { freeOnly = false } = {}) {
     res.setHeader('X-Hydra-Key-Hash', keyEntry.hash.slice(0, 8));
     res.setHeader('X-Hydra-Models-Source', 'live');
     return res.json(result.raw);
-  } catch {
+  } catch (err) {
+    logger.warn(`[PROXY] Model list fallback used because live/cache lookup failed: ${err?.message || err}`);
     res.setHeader('X-Hydra-Models-Source', 'static');
     return res.json({ object: 'list', data: STATIC_MODELS });
   }

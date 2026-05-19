@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, openSync, writeSync, fsyncSync, closeSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, openSync, writeSync, fsyncSync, closeSync, unlinkSync } from 'node:fs';
 
 import { config } from '../config.js';
-import { getDataDir, getDataPath } from '../lib/data-dir.js';
+import { ensureDataDirSync, getDataDir, getDataPath } from '../lib/data-dir.js';
 import { logger } from './logger.js';
 
 const DATA_DIR = getDataDir();
@@ -24,6 +24,27 @@ function generateSecret() {
   return randomBytes(32).toString('hex');
 }
 
+function fsyncDataDirBestEffort() {
+  let fd = null;
+  try {
+    fd = openSync(DATA_DIR, 'r');
+    fsyncSync(fd);
+  } catch (error) {
+    // Directory fsync is not consistently supported across platforms and
+    // filesystems. The file itself is still fsynced; directory fsync is a
+    // best-effort durability upgrade for POSIX filesystems.
+    logger.warn(`[SECRETS] Directory fsync skipped for ${DATA_DIR}: ${error?.message || error}`);
+  } finally {
+    if (fd !== null) {
+      try {
+        closeSync(fd);
+      } catch (error) {
+        logger.warn(`[SECRETS] Directory fsync handle close failed for ${DATA_DIR}: ${error?.message || error}`);
+      }
+    }
+  }
+}
+
 function loadPersistedSecrets() {
   if (!existsSync(SECRETS_PATH)) return {};
 
@@ -34,7 +55,11 @@ function loadPersistedSecrets() {
       proxySecret: normalizeSecret(parsed.proxySecret, 'Persisted proxySecret'),
     };
   } catch (error) {
-    throw new Error(`Failed to read ${SECRETS_PATH}: ${error.message}`);
+    if (error?.code) throw error;
+    const wrapped = new Error(`Failed to read ${SECRETS_PATH}: ${error.message}`);
+    wrapped.code = 'HYDRA_LOCAL_SECRETS_CORRUPT';
+    wrapped.cause = error;
+    throw wrapped;
   }
 }
 
@@ -42,17 +67,37 @@ function persistSecrets(secrets) {
   // #51: Restrict DATA_DIR to owner-only (0o700) to prevent world-readable
   // secrets. The default mkdir mode is 0o777 modified by umask, which can
   // leave the directory world-readable on some systems.
-  mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
-  // #55: Open with fd to fsync after write — prevents truncated/corrupt
-  // secrets file on crash. Without fsync, the OS may cache the write
-  // indefinitely, and a power loss or kernel panic yields an empty or
-  // partially-written secrets file.
-  const fd = openSync(SECRETS_PATH, 'w', 0o600);
+  ensureDataDirSync();
+  // #55: Write to an owner-only temp file, fsync it, then atomically rename.
+  // Opening SECRETS_PATH directly with "w" would truncate the current key
+  // before the replacement is durable, which can orphan encrypted account data
+  // on a crash or power loss.
+  const tempPath = `${SECRETS_PATH}.tmp-${process.pid}-${Date.now()}-${randomBytes(4).toString('hex')}`;
+  let fd = null;
   try {
+    fd = openSync(tempPath, 'wx', 0o600);
     writeSync(fd, `${JSON.stringify(secrets, null, 2)}\n`);
     fsyncSync(fd);
-  } finally {
     closeSync(fd);
+    fd = null;
+    renameSync(tempPath, SECRETS_PATH);
+    fsyncDataDirBestEffort();
+  } catch (error) {
+    if (fd !== null) {
+      try {
+        closeSync(fd);
+      } catch (closeError) {
+        logger.warn(`[SECRETS] Temp secrets file close failed after write error for ${tempPath}: ${closeError?.message || closeError}`);
+      }
+    }
+    try {
+      unlinkSync(tempPath);
+    } catch (unlinkError) {
+      if (unlinkError?.code !== 'ENOENT') {
+        logger.warn(`[SECRETS] Temp secrets file cleanup failed for ${tempPath}: ${unlinkError?.message || unlinkError}`);
+      }
+    }
+    throw error;
   }
 }
 
@@ -86,11 +131,12 @@ function resolveSecrets() {
 // those cases would orphan every encrypted account blob the user owns.
 function isCorruptionError(error) {
   if (!error) return false;
+  if (error.code === 'HYDRA_LOCAL_SECRETS_CORRUPT') return true;
   if (error instanceof SyntaxError) return true;  // JSON.parse failure
   // resolveSecrets() throws plain Error('invalid hex...') on hex decode fail.
   // Match defensively but specifically.
   const msg = error.message || '';
-  return /invalid hex|malformed|unexpected token|JSON/i.test(msg);
+  return /invalid hex|64-character hex|malformed|unexpected token|JSON/i.test(msg);
 }
 
 function safeResolveSecrets() {

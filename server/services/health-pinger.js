@@ -1,11 +1,12 @@
 import { rotationManager } from './rotation-manager.js';
 import { logger } from './logger.js';
 import { config, OR_BASE } from '../config.js';
+import { recordUpstreamFailure, recordUpstreamHttpResult } from './upstream-health.js';
 
 // How often to test a random key in the background (default 5 mins)
 const PING_INTERVAL = 5 * 60 * 1000;
-// Free model used for cheap health pings — update when OR deprecates it
-const PING_MODEL = 'google/gemini-2.0-flash-lite:free';
+// Validate key metadata without spending completion tokens.
+const PING_PATH = '/api/v1/auth/key';
 const PING_TIMEOUT_MS = 10 * 1000;
 const NETWORK_ERROR_LOG_WINDOW_MS = 60 * 1000;
 let timer = null;
@@ -22,27 +23,31 @@ async function pingRandomKey() {
     await rotationManager.ensureLoaded();
     if (rotationManager.pool.length === 0) return;
 
-    // Pick a random key from the active pool
-    const randomIndex = Math.floor(Math.random() * rotationManager.pool.length);
-    const keyEntry = rotationManager.pool[randomIndex];
+    const keyEntry = await rotationManager.getNextKey();
+    if (!keyEntry) return;
+
     const ctrl = new AbortController();
     timeoutId = setTimeout(() => ctrl.abort(), PING_TIMEOUT_MS);
 
-    const res = await fetch(`${OR_BASE}/api/v1/chat/completions`, {
-      method: 'POST',
+    const res = await fetch(`${OR_BASE}${PING_PATH}`, {
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${keyEntry.keyString}`,
-        'Content-Type': 'application/json',
         'HTTP-Referer': `http://localhost:${config.PORT}`,
       },
-      // 1-token cheap payload
-      body: JSON.stringify({
-        model: PING_MODEL,
-        messages: [{ role: 'user', content: 'hello' }],
-        max_tokens: 1
-      }),
       signal: ctrl.signal
     });
+
+    // Non-5xx HTTP responses mean the machine can reach OpenRouter. Key-specific
+    // statuses are handled below; upstream/server failures are tracked as offline.
+    const reachable = recordUpstreamHttpResult({
+      statusCode: res.status,
+      source: 'OpenRouter key health check',
+    });
+    if (!reachable) {
+      logger.warn(`[PINGER] Health check returned upstream HTTP ${res.status}; leaving key state unchanged`);
+      return;
+    }
 
     if (res.status === 401) {
       logger.warn(`[PINGER] Background health check discovered dead key: ${keyEntry.hash.slice(0, 8)}`);
@@ -52,10 +57,10 @@ async function pingRandomKey() {
     } else if (res.status === 402) {
       rotationManager.applyCooldown(keyEntry.hash, 402);
     } else {
-      // Key is healthy
-      // logger.debug(`[PINGER] Key ${keyEntry.hash.slice(0,8)} is healthy`);
+      rotationManager.recordSuccess(keyEntry.hash);
     }
   } catch (err) {
+    recordUpstreamFailure(err);
     const now = Date.now();
     if (now - lastNetworkErrorAt >= NETWORK_ERROR_LOG_WINDOW_MS) {
       if (err?.name === 'AbortError') {

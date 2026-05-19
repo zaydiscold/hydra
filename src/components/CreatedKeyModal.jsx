@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { CopyIcon, EyeIcon, EyeOffIcon, KeyIcon, NetworkIcon } from './Icons';
 
 /**
@@ -9,15 +9,32 @@ import { CopyIcon, EyeIcon, EyeOffIcon, KeyIcon, NetworkIcon } from './Icons';
 export default function CreatedKeyModal({ keyData, onClose, onAddToPool }) {
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
   const [addingToPool, setAddingToPool] = useState(false);
   const [poolAdded, setPoolAdded] = useState(false);
+  const [poolError, setPoolError] = useState('');
 
-  // Auto-copy to clipboard when modal opens
+  const copyToClipboard = useCallback(async (value, { quiet = false } = {}) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyError('');
+      if (!quiet) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch (err) {
+      setCopied(false);
+      setCopyError(`Clipboard copy failed: ${err.message || 'permission denied'}`);
+    }
+  }, []);
+
+  // Auto-copy to clipboard when modal opens. If macOS/browser permission blocks it,
+  // the modal shows the same failure state as the manual copy button.
   useEffect(() => {
     if (keyData?.key) {
-      navigator.clipboard.writeText(keyData.key).catch(() => {});
+      void copyToClipboard(keyData.key, { quiet: true });
     }
-  }, [keyData]);
+  }, [keyData, copyToClipboard]);
 
   if (!keyData) return null;
 
@@ -26,19 +43,18 @@ export default function CreatedKeyModal({ keyData, onClose, onAddToPool }) {
   const maskedKey = displayKey.slice(0, 12) + '…' + displayKey.slice(-8);
 
   function handleCopy() {
-    navigator.clipboard.writeText(displayKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    void copyToClipboard(displayKey);
   }
 
   async function handleAddToPool() {
     if (!onAddToPool) return;
     setAddingToPool(true);
+    setPoolError('');
     try {
       await onAddToPool();
       setPoolAdded(true);
-    } catch {
-      // Error handled by parent
+    } catch (err) {
+      setPoolError(err.message || 'Failed to add key to pool');
     } finally {
       setAddingToPool(false);
     }
@@ -142,8 +158,8 @@ export default function CreatedKeyModal({ keyData, onClose, onAddToPool }) {
                 {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.4 }}>
-              The key has been copied to your clipboard. Store it securely — you won&apos;t see it again.
+            <div style={{ fontSize: '0.68rem', color: copyError ? 'var(--status-error)' : 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.4 }}>
+              {copyError || "The key has been copied to your clipboard. Store it securely — you won't see it again."}
             </div>
           </div>
 
@@ -185,6 +201,11 @@ export default function CreatedKeyModal({ keyData, onClose, onAddToPool }) {
                   </>
                 )}
               </button>
+              {poolError && (
+                <div style={{ fontSize: '0.68rem', color: 'var(--status-error)', marginTop: 8 }} role="status" aria-live="polite">
+                  {poolError}
+                </div>
+              )}
             </div>
           )}
 

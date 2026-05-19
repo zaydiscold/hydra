@@ -63,5 +63,7 @@ export async function shutdown() {
   try {
     const { db } = await loadServices();
     await db.disconnectPrisma?.();
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.warn(`[hydra cli] service shutdown cleanup failed: ${err?.message || err}`);
+  }
 }

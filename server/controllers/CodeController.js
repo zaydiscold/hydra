@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { addRedemptionRecord, getRedemptionRecords } from '../services/redemption-log.js';
 import { runInBatches } from '../services/batch-runner.js';
+import { logger } from '../services/logger.js';
 
 const redeemSchema = z.object({
   accountId: z.string().min(1, 'accountId is required'),
@@ -27,16 +28,27 @@ const preflightSchema = z.object({
   accountIds: z.array(z.string()).min(1, 'accountIds array is required'),
 });
 
+async function recordRedemptionAttempt(userId, { code, accountId, accountAlias, success, message, creditsAdded }) {
+  let alias = accountAlias;
+  if (!alias) {
+    try {
+      const account = await store.getAccountWithKey(userId, accountId);
+      alias = account.alias;
+    } catch (err) {
+      alias = accountId;
+      logger.warn(`[CODES] Redemption history alias lookup failed for account=${accountId}: ${err.message}`);
+    }
+  }
+  addRedemptionRecord({ code, accountId, accountAlias: alias, success, message, creditsAdded });
+}
+
 class CodeController extends BaseController {
   async redeem(req, res) {
     try {
       const { accountId, code } = this.validate(req.body, redeemSchema);
       const result = await dashboardApi.redeemCode(req.user.id, accountId, code);
       // P16 — log redemption
-      try {
-        const account = await store.getAccountWithKey(req.user.id, accountId);
-        addRedemptionRecord({ code, accountId, accountAlias: account.alias, success: !!result?.success, message: result?.message, creditsAdded: result?.creditsAdded ?? null });
-      } catch { /* non-fatal */ }
+      await recordRedemptionAttempt(req.user.id, { code, accountId, success: !!result?.success, message: result?.message, creditsAdded: result?.creditsAdded ?? null });
       return this.success(res, result);
     } catch (err) {
       const status = err.status || 500;
@@ -62,7 +74,7 @@ class CodeController extends BaseController {
           // P16 — log each outcome
           if (Array.isArray(res)) {
             for (const r of res) {
-              try { addRedemptionRecord({ code, accountId: r.accountId, accountAlias: r.alias ?? r.accountId, success: r.status === 'fulfilled', message: r.message ?? r.error }); } catch { /* non-fatal */ }
+              await recordRedemptionAttempt(req.user.id, { code, accountId: r.accountId, accountAlias: r.alias, success: r.status === 'fulfilled', message: r.message ?? r.error });
             }
           }
           return res;
@@ -89,7 +101,7 @@ class CodeController extends BaseController {
               const result = await dashboardApi.redeemCode(req.user.id, accountId, code);
               const payload = { accountId, alias: account.alias, code, ...result, status: 'fulfilled' };
               // P16 — log success
-              try { addRedemptionRecord({ code, accountId, accountAlias: account.alias, success: true, message: result?.message, creditsAdded: result?.creditsAdded ?? null }); } catch { /* non-fatal */ }
+              await recordRedemptionAttempt(req.user.id, { code, accountId, accountAlias: account.alias, success: true, message: result?.message, creditsAdded: result?.creditsAdded ?? null });
               return payload;
             } catch (err) {
               const { errorCode, message } = dashboardApi.classifyRedeemFailure(err.message, err);
@@ -102,7 +114,7 @@ class CodeController extends BaseController {
                 errorCode,
               };
               // P16 — log failure
-              try { addRedemptionRecord({ code, accountId, accountAlias: accountId, success: false, message }); } catch { /* non-fatal */ }
+              await recordRedemptionAttempt(req.user.id, { code, accountId, success: false, message });
               return payload;
             }
           });

@@ -82,7 +82,9 @@ router.get('/magic-callback', async (req, res) => {
       try {
         const pr = await dashboardApi.createManagementKey(pending.userId, pending.accountId);
         if (pr?.key) provisionNote = ' Management key auto-provisioned.';
-      } catch { /* non-fatal */ }
+      } catch (err) {
+        console.warn(`[auth] magic-link management-key auto-provision failed for account=${pending.accountId}: ${err?.message || err}`);
+      }
     }
 
     pendingMagicLinks.delete(signInId);
@@ -111,7 +113,9 @@ router.get('/magic-callback', async (req, res) => {
           email: ${JSON.stringify(pending.email)},
         }, window.location.origin);
       }
-    } catch (e) { /* cross-origin or blocked — fallback is the 5s poller */ }
+    } catch (e) {
+      console.warn('[hydra] magic-link opener notification failed:', e && e.message ? e.message : e);
+    }
 
     // Shrink the progress bar then close
     requestAnimationFrame(() => {

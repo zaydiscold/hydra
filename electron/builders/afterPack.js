@@ -8,7 +8,7 @@
  *
  * https://github.com/electron-userland/electron-builder/issues/3537
  */
-import { existsSync, mkdirSync, cpSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, cpSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,6 +50,25 @@ function prunePrismaClientRuntime(unpackedNodeModules) {
   }
 }
 
+function resolveMacAppPath(appOutDir, packager) {
+  const productFilename = packager?.appInfo?.productFilename || packager?.appInfo?.productName || 'Hydra';
+  const candidate = path.join(appOutDir, `${productFilename}.app`);
+  if (existsSync(candidate)) return candidate;
+
+  const appBundle = readdirSync(appOutDir).find((entry) => entry.endsWith('.app'));
+  if (appBundle) return path.join(appOutDir, appBundle);
+
+  return candidate;
+}
+
+function ensureMacPkgInfo(appOutDir, packager, platform) {
+  if (platform !== 'darwin') return;
+  const appPath = resolveMacAppPath(appOutDir, packager);
+  const pkgInfoPath = path.join(appPath, 'Contents', 'PkgInfo');
+  writeFileSync(pkgInfoPath, 'APPL????');
+  console.log(`[afterPack] ✅ wrote macOS PkgInfo: ${pkgInfoPath}`);
+}
+
 export default async function afterPack(context) {
   const { appOutDir, packager } = context;
 
@@ -66,6 +85,8 @@ export default async function afterPack(context) {
   const resourcesDir = typeof packager.getResourcesDir === 'function'
     ? packager.getResourcesDir(appOutDir)
     : path.join(appOutDir, 'Contents', 'Resources');
+
+  ensureMacPkgInfo(appOutDir, packager, platform);
 
   // Detect asar:true vs asar:false layout.
   // asar:true  → Resources/app.asar.unpacked/node_modules/

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api';
+import AnimeText from '../components/AnimeText';
 import LoginAccountModal from '../components/LoginAccountModal';
 import { VaultIcon, RefreshIcon, LockIcon, SettingsIcon, ShieldIcon, EditIcon, TrashIcon, SearchIcon } from '../components/Icons';
 import { accountNeedsSession, canProvisionWithSession } from '../utils/accountSession';
@@ -48,6 +49,33 @@ export default function Vault({ addToast }) {
   const [modalErrors, setModalErrors] = useState({});
   const warnedRef = useRef(false);
 
+  // ── Concurrency-limited session probe ──
+  const probeStatuses = useCallback(async (accts) => {
+    if (!accts.length) return;
+    setProbing(true);
+    const results = {};
+    let failed = 0;
+    const queue = [...accts];
+    const CONCURRENCY = 3;
+    const workers = Array.from({ length: CONCURRENCY }, async () => {
+      while (queue.length) {
+        const acct = queue.shift();
+        try {
+          const r = await api.getSessionStatus(acct.id);
+          results[acct.id] = r?.data?.status ?? r?.status ?? 'unknown';
+        } catch (err) {
+          failed += 1;
+          console.warn('[VAULT] Session status probe failed:', acct.id, err.message);
+          results[acct.id] = 'unknown';
+        }
+      }
+    });
+    await Promise.all(workers);
+    setLiveStatuses((prev) => ({ ...prev, ...results }));
+    if (failed > 0) addToast?.(`${failed} session status probe(s) failed; showing unknown until refresh.`, 'warning');
+    setProbing(false);
+  }, [addToast]);
+
   // ── Load accounts from dashboard endpoint ──
   const loadAccounts = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -86,30 +114,7 @@ export default function Vault({ addToast }) {
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
-
-  // ── Concurrency-limited session probe ──
-  async function probeStatuses(accts) {
-    if (!accts.length) return;
-    setProbing(true);
-    const results = {};
-    const queue = [...accts];
-    const CONCURRENCY = 3;
-    const workers = Array.from({ length: CONCURRENCY }, async () => {
-      while (queue.length) {
-        const acct = queue.shift();
-        try {
-          const r = await api.getSessionStatus(acct.id);
-          results[acct.id] = r?.data?.status ?? r?.status ?? 'unknown';
-        } catch {
-          results[acct.id] = 'unknown';
-        }
-      }
-    });
-    await Promise.all(workers);
-    setLiveStatuses((prev) => ({ ...prev, ...results }));
-    setProbing(false);
-  }
+  }, [addToast, probeStatuses]);
 
   const probeProvisionTruth = useCallback(async (accts) => {
     const candidates = (accts || []).filter(
@@ -122,6 +127,7 @@ export default function Vault({ addToast }) {
     }
 
     const results = {};
+    let failed = 0;
     const queue = [...candidates];
     const CONCURRENCY = 2;
     const workers = Array.from({ length: CONCURRENCY }, async () => {
@@ -130,7 +136,9 @@ export default function Vault({ addToast }) {
         try {
           const res = await api.checkSessionLive(acct.id);
           results[acct.id] = res?.data?.status ?? 'unknown';
-        } catch {
+        } catch (err) {
+          failed += 1;
+          console.warn('[VAULT] Provision readiness probe failed:', acct.id, err.message);
           results[acct.id] = 'unknown';
         }
       }
@@ -138,7 +146,8 @@ export default function Vault({ addToast }) {
 
     await Promise.all(workers);
     setActionSessionTruth(results);
-  }, []);
+    if (failed > 0) addToast?.(`${failed} provisioning readiness check(s) failed; sign-in may be required.`, 'warning');
+  }, [addToast]);
 
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
@@ -166,7 +175,9 @@ export default function Vault({ addToast }) {
       const live = await api.checkSessionLive(acc.id);
       truthStatus = live?.data?.status ?? 'unknown';
       setActionSessionTruth((prev) => ({ ...prev, [acc.id]: truthStatus }));
-    } catch {
+    } catch (err) {
+      console.warn('[VAULT] Live session check before provisioning failed:', acc.id, err.message);
+      addToast?.(`Could not verify ${acc.alias} session: ${err.message}`, 'warning');
       truthStatus = truthStatus ?? 'unknown';
     }
 
@@ -273,8 +284,8 @@ export default function Vault({ addToast }) {
       } else {
         if (addToast) addToast('Silent refresh failed — use Sign In to re-authenticate', 'error');
       }
-    } catch {
-      if (addToast) addToast('Silent refresh failed — use Sign In to re-authenticate', 'error');
+    } catch (err) {
+      if (addToast) addToast(`Silent refresh failed: ${err.message || 'use Sign In to re-authenticate'}`, 'error');
     } finally {
       setSilentRefreshingId(null);
     }
@@ -314,7 +325,7 @@ export default function Vault({ addToast }) {
             <VaultIcon size={40} />
           </div>
           <div>
-            <h2 style={{ margin: 0 }}>Vault</h2>
+            <AnimeText as="h2" mode="words" variant="scanline" delay={34} style={{ margin: 0 }}>Vault</AnimeText>
             <p style={{ margin: 0, marginTop: 2, color: 'var(--text-secondary)' }}>
               All accounts — parallel overview
             </p>

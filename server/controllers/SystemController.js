@@ -2,6 +2,8 @@ import BaseController from './BaseController.js';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { rotationManager } from '../services/rotation-manager.js';
 import { proxyGate } from '../services/proxy-gate.js';
+import { getUpstreamHealth, shouldProbeUpstream } from '../services/upstream-health.js';
+import { probeOpenRouterReachability } from '../services/upstream-probe.js';
 
 class SystemController extends BaseController {
   async getTasks(req, res) {
@@ -41,15 +43,24 @@ class SystemController extends BaseController {
 
   async getHealth(req, res) {
     try {
+      if (shouldProbeUpstream()) {
+        await probeOpenRouterReachability();
+      }
       const pool = await rotationManager.getStatusAsync();
+      const uptime = process.uptime();
+      const serverNow = new Date();
       return this.success(res, {
-        uptime: process.uptime(),
+        uptime,
+        serverNow: serverNow.toISOString(),
+        startedAt: new Date(serverNow.getTime() - uptime * 1000).toISOString(),
+        pid: process.pid,
         tasks: taskSupervisor.getHealthSnapshot(),
         pool: {
           pooled: pool.totalPooled,
           available: pool.available,
           cooldowns: pool.activeCooldowns,
         },
+        upstream: getUpstreamHealth(),
       });
     } catch (err) {
       return this.error(res, err.message, err.status || 500, err.code || 'SYSTEM_HEALTH_FAILED');

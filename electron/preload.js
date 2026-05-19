@@ -15,6 +15,12 @@
  */
 import { contextBridge, ipcRenderer } from 'electron';
 
+const MENU_EVENT_CHANNELS = new Set([
+  'native:copied-proxy-url',
+  'native:copy-proxy-url-not-ready',
+  'native:clipboard-copy-failed',
+]);
+
 contextBridge.exposeInMainWorld('hydraNative', {
   /**
    * App version string.
@@ -23,7 +29,7 @@ contextBridge.exposeInMainWorld('hydraNative', {
   appVersion: () => ipcRenderer.invoke('native:get-version'),
 
   /**
-   * Native paths object: { userData, logs }
+   * Native path availability metadata. Real filesystem paths stay in main.
    * @returns {Promise<{ok:true,data:object}|{ok:false,error:string,code?:string}>}
    */
   appPaths: () => ipcRenderer.invoke('native:get-paths'),
@@ -41,6 +47,13 @@ contextBridge.exposeInMainWorld('hydraNative', {
    * @returns {Promise<{ok:true,data:true}|{ok:false,error:string,code?:string}>}
    */
   openPath: (targetPath) => ipcRenderer.invoke('native:open-path', targetPath),
+
+  /**
+   * Open a known app-owned folder without exposing its absolute path to the renderer.
+   * @param {'userData'|'logs'} location
+   * @returns {Promise<{ok:true,data:true}|{ok:false,error:string,code?:string}>}
+   */
+  openAppLocation: (location) => ipcRenderer.invoke('native:open-app-location', location),
 
   /**
    * OS platform string (darwin/win32/linux).
@@ -70,6 +83,13 @@ contextBridge.exposeInMainWorld('hydraNative', {
   quitApp: () => ipcRenderer.invoke('native:quit-app'),
 
   /**
+   * Frameless-window controls for Hydra's renderer-owned app chrome.
+   */
+  minimizeWindow: () => ipcRenderer.invoke('native:window:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('native:window:toggle-maximize'),
+  closeWindow: () => ipcRenderer.invoke('native:window:close'),
+
+  /**
    * Listen for main-process navigation requests (e.g., from app menu).
    * Returns the wrapped listener so the caller can pass it to offNavigate
    * to remove the subscription. Without this the renderer accumulates a
@@ -85,6 +105,30 @@ contextBridge.exposeInMainWorld('hydraNative', {
   /** Remove a listener previously registered via onNavigate. */
   offNavigate: (wrapped) => {
     if (typeof wrapped === 'function') ipcRenderer.removeListener('navigate', wrapped);
+  },
+
+  /**
+   * Listen for main-process menu action feedback events.
+   * @param {(event: {type:string,payload:any}) => void} callback
+   * @returns {Array<[string, Function]>} listener handles for offMenuEvent
+   */
+  onMenuEvent: (callback) => {
+    const listeners = [];
+    for (const channel of MENU_EVENT_CHANNELS) {
+      const wrapped = (_event, payload) => callback({ type: channel, payload });
+      ipcRenderer.on(channel, wrapped);
+      listeners.push([channel, wrapped]);
+    }
+    return listeners;
+  },
+  /** Remove listeners previously registered via onMenuEvent. */
+  offMenuEvent: (listeners) => {
+    if (!Array.isArray(listeners)) return;
+    for (const [channel, wrapped] of listeners) {
+      if (MENU_EVENT_CHANNELS.has(channel) && typeof wrapped === 'function') {
+        ipcRenderer.removeListener(channel, wrapped);
+      }
+    }
   },
 
   // ── User preferences (theme, telemetry, biometric, …) ──────────────────

@@ -91,7 +91,7 @@ must be right at once** or your real Chrome leaks in.
 ```
 HYDRA_PLAYWRIGHT_EXECUTABLE_PATH (env)   → opt-in, never set by default
 HYDRA_PLAYWRIGHT_CHANNEL         (env)   → opt-in, never set by default
-process.env.HYDRA_EMBEDDED === '1'       → packaged: scan resourcesPath/chromium/...
+process.env.HYDRA_EMBEDDED === '1'       → packaged: extract resourcesPath/chromium.zip, then scan HYDRA_DATA_DIR/chromium/...
 fallthrough                              → dev: Playwright's bundled Chromium
 ```
 
@@ -103,7 +103,7 @@ join(resourcesPath, 'chromium', 'chrome-mac-arm64',
      'Google Chrome for Testing')
 ```
 
-`scripts/prepare-electron-resources.mjs` populates `build/electron/chromium/`
+`scripts/prepare-electron-resources.mjs` stages the target browser under `build/electron/chromium/`, archives it to `build/electron/chromium.zip`, then removes the staging directory.
 with **only the matching-platform-arch Chrome for Testing** before each
 electron-builder run. Your `/Applications/Google Chrome.app` is never copied
 or referenced.
@@ -189,7 +189,7 @@ Run while a Hydra Playwright task is in flight:
 # 1. Confirm the launched binary is Chrome for Testing, NOT real Chrome
 ps -ax -o command= | grep -i chrome | head -5
 # Expect to see paths like:
-#   .../Hydra.app/Contents/Resources/app/chromium/chrome-mac-arm64/...
+#   .../Library/Application Support/Hydra/chromium/chrome-mac-arm64/...
 #   .../node_modules/playwright/.local-browsers/chromium-XXXX/...
 # Should NOT see:
 #   /Applications/Google Chrome.app/...

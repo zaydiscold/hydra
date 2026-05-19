@@ -11,6 +11,7 @@
 import crypto from 'node:crypto';
 
 import { prisma } from './db.js';
+import { logger } from './logger.js';
 import { encrypt, decrypt } from './storage-codec.js';
 
 const LEGACY_BACKFILL_NAME = 'Migrated Legacy Key';
@@ -34,8 +35,8 @@ async function findMatchingKeyRecord(accountId, plainKey) {
   for (const row of keys) {
     try {
       if (decrypt(row.encryptedKey) === plainKey) return row;
-    } catch {
-      // Ignore unreadable rows and continue scanning.
+    } catch (err) {
+      logger.warn(`[MGMT-KEY] Unreadable management-key row skipped during duplicate scan (account=${accountId}, key=${row.id}): ${err?.message || err}`);
     }
   }
   return null;

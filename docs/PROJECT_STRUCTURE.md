@@ -57,16 +57,16 @@ The Express server is **not** a separately-deployed backend — it runs as a chi
 
 The Electron shell that wraps the web app as a native desktop application.
 
-- **`main.js`** — Electron main process: sets platform-native paths, starts embedded Express server, creates BrowserWindow, handles app lifecycle (`window-all-closed`, `before-quit`, `activate`). Splash → main serialization with 7 s minimum visible time.
-- **`preload.js`** — Secure renderer bridge via `contextBridge`. `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Surfaces: `appVersion`, `appPaths`, `status`, `platform`, `openPath`, auth-token CRUD, `hideWindow`, `quitApp`, `prefsGetAll/Set`, `biometricDescribe/Prompt`, `onNavigate`. **Renderer must access via `src/lib/native.js`, never directly.**
+- **`main.js`** — Electron main process: sets platform-native paths, starts embedded Express server, creates BrowserWindow, handles app lifecycle (`window-all-closed`, `before-quit`, `activate`). Splash → main serialization with 10 s minimum visible time.
+- **`preload.js`** — Secure renderer bridge via `contextBridge`. `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Surfaces: `appVersion`, redacted `appPaths`, `status`, `platform`, allowlisted `openPath`, `openAppLocation`, auth-token CRUD, `hideWindow`, `quitApp`, `prefsGetAll/Set`, `biometricDescribe/Prompt`, `onNavigate`. **Renderer must access via `src/lib/native.js`, never directly.**
 - **`app/state.js`** — Mutable runtime singleton (mainWindow, splashWindow, tray, expressPort, forceQuit flag, etc.).
 - **`app/ipc.js`** — All IPC handlers, returning `{ok, data}` / `{ok, error, code}` envelopes. Reads window/tray refs from `state.js` directly.
-- **`app/windows.js`** — Splash + main window factories. Splash CSS `fillbar` keyframe must stay in lockstep with `SPLASH_MIN_VISIBLE_MS` in `main.js` (currently 7 s).
+- **`app/windows.js`** — Splash + main window factories. Splash CSS `fillbar` keyframe must stay in lockstep with `SPLASH_MIN_VISIBLE_MS` in `main.js` (currently 10 s).
 - **`app/windowActions.js`** — Shared external URL opening and show/focus/respawn behavior.
 - **`app/schemaSync.js`** — Boot-time schema sync orchestrator (hash, lock, self-heal).
 - **`app/shutdown.js`** — `shutdownEverything` orchestration: tracked-children kill → server graceful → tray destroy.
 - **`app/startupError.js`** — Rich startup-failure dialog with **Open Logs Folder / Copy Details / Quit** buttons.
-- **`app/userPrefs.js`** — JSON-backed key/value store at `userData/preferences.json` for device-local UX prefs (telemetry, biometric, theme). Atomic writes, mode 0600.
+- **`app/userPrefs.js`** — JSON-backed key/value store at `userData/preferences.json` for device-local UX prefs (telemetry, biometric, theme). Ensures the userData directory is mode 0700 on POSIX and writes preferences atomically with file mode 0600.
 - **`app/telemetry.js`** — Opt-in Sentry crash reporting. No-op without `HYDRA_SENTRY_DSN` env var + Settings toggle. PII scrubbing.
 - **`app/biometric.js`** — Touch ID prompt via `systemPreferences.promptTouchID()` (no native dep). Windows Hello stubbed for later.
 - **`utils/migrateLegacyData.js`** — One-time migration from `./data/` to platform `userData` on first Electron launch.
@@ -88,7 +88,7 @@ Platform-specific assets and build resources for the Electron desktop build.
 - **`icons/icon.icns`** — macOS icon bundle.
 - **`icons/icon.ico`** — Windows icon bundle.
 - **`icons/README.md`** — Icon generation notes.
-- **`entitlements.mac.plist`** — macOS code signing entitlements (build resources copy).
+- **`desktop/entitlements.mac.plist`** — macOS code signing entitlements (build resources copy).
 
 ### 🗄️ Database (`/prisma`)
 
@@ -119,7 +119,7 @@ Platform-specific assets and build resources for the Electron desktop build.
 ## 🚀 Lifecycle & Build
 
 - **`launch.js`** — A multi-platform bootloader that checks for dependencies and starts the production environment.
-- **`bin/hydra.mjs`** — Optional global CLI (`hydra`, `hydra dev`) after `npm link` in the repo root.
+- **`bin/hydra.mjs`** — Optional global CLI after `npm link` in the repo root: `hydra start`, `hydra dev`, `hydra status/accounts/balance`, `hydra doctor --json`, `hydra logs --json`, `hydra data-dir`, `hydra version`.
 - **`Launch Hydra.command`** — macOS shortcut for running this repo clone in production-style mode.
 - **`vite.config.js`** — Build configuration for the frontend assets.
 - **`electron-builder.yml`** — Electron packaging configuration (dmg, nsis, AppImage).
@@ -130,7 +130,7 @@ Platform-specific assets and build resources for the Electron desktop build.
 
 ## 🔁 Runtime Flow
 
-**Production (the way users run Hydra):** double-click `Hydra.app` (or `Hydra Setup.exe` / `Hydra.AppImage`) → Electron main process boots, picks a free port, starts Express bound to `127.0.0.1`, opens BrowserWindow against the embedded server, and parks a tray icon. The window can be closed without exiting; the proxy stays alive in the menu bar / system tray until the user picks **Quit Hydra** or the tray's **Quit Hydra Completely** item.
+**Production (the way users run Hydra):** double-click `Hydra.app` (or `Hydra-<version>-win-x64.exe` / `Hydra.AppImage`) → Electron main process boots, picks a free port, starts Express bound to `127.0.0.1`, opens BrowserWindow against the embedded server, and parks a tray icon. The window can be closed without exiting; the proxy stays alive in the menu bar / system tray until the user picks **Quit Hydra** or the tray's **Quit Hydra Completely** item.
 
 **Dev (the way contributors run Hydra):**
 

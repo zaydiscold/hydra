@@ -56,8 +56,9 @@ function scrubEvent(event) {
     for (const re of PII_PATTERNS) serialized = serialized.replace(re, '[REDACTED]');
     serialized = serialized.replace(HOME_RE, '<HOME>');
     return JSON.parse(serialized);
-  } catch {
+  } catch (err) {
     // If serialization round-trip fails, drop rather than risk leaking
+    console.warn('[telemetry] dropping event because scrub failed:', err?.message || err);
     return null;
   }
 }
@@ -72,7 +73,12 @@ export async function initTelemetry() {
   if (!dsn) return false; // no DSN → telemetry can't run regardless of opt-in
 
   let prefs;
-  try { prefs = await getAllPrefs(); } catch { prefs = {}; }
+  try {
+    prefs = await getAllPrefs();
+  } catch (err) {
+    console.warn('[telemetry] could not read preferences; telemetry disabled:', err?.message || err);
+    prefs = {};
+  }
   if (!prefs.telemetryEnabled) return false;
 
   // Lazy-import so non-telemetry installs never load the Sentry SDK at all.
@@ -103,7 +109,9 @@ export async function initTelemetry() {
       ignoreSystemCrashHandler: true,
       submitURL: '',
     });
-  } catch { /* some platforms refuse pre-init; ignore */ }
+  } catch (err) {
+    console.warn('[telemetry] crash reporter start failed:', err?.message || err);
+  }
 
   initialized = true;
   return true;
@@ -124,7 +132,9 @@ export async function setTelemetryEnabled(enabled) {
         const opts = client.getOptions();
         if (opts) opts.enabled = false;
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.warn('[telemetry] failed to disable Sentry client:', err?.message || err);
+    }
   }
 }
 
@@ -134,5 +144,9 @@ export async function setTelemetryEnabled(enabled) {
  */
 export function captureError(err, context = {}) {
   if (!initialized || !SentryRef) return;
-  try { SentryRef.captureException(err, { extra: context }); } catch { /* ignore */ }
+  try {
+    SentryRef.captureException(err, { extra: context });
+  } catch (captureErr) {
+    console.warn('[telemetry] failed to capture exception:', captureErr?.message || captureErr);
+  }
 }

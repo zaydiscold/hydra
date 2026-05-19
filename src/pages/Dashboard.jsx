@@ -4,8 +4,10 @@ import { useMetrics } from '../hooks/useMetrics';
 import AccountCard from '../components/AccountCard';
 import SummaryCard from '../components/SummaryCard';
 import AddAccountModal from '../components/AddAccountModal';
+import AnimeText from '../components/AnimeText';
 import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
 import { formatCurrency } from '../utils/format';
+import { getCardHealth } from '../utils/cardHealth';
 import { 
   WalletIcon, 
   CreditsIcon, 
@@ -63,18 +65,28 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     return getAccountDashboardCardState({ ...a, sessionStatus: mergedSessionStatus }).isReady;
   }).length;
   const attentionCount = accounts.length - syncedCount;
+  const fleetHealth = getFleetHealth(accounts, liveStatuses);
+  const burnRate = ((totals.totalUsed || 0) / 30);
+  const lastSyncLabel = getLastSyncLabel(accounts);
+  const activity = getDashboardActivity(accounts, liveStatuses, cooldownMap);
+  const statusLabel = attentionCount > 0 ? 'FLEET ATTENTION' : accounts.length > 0 ? 'FLEET NOMINAL' : 'FLEET EMPTY';
+  const statusClass = attentionCount > 0 ? 'warning' : accounts.length > 0 ? 'success' : 'neutral';
 
   return (
     <>
-      <div className="page-header">
+      <div className="page-header dashboard-command-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           <div style={{ color: 'var(--accent-primary)', opacity: 0.9 }}>
             <HydraIcon size={40} />
           </div>
           <div>
-            <h2 style={{ margin: 0 }}>Dashboard</h2>
+            <AnimeText as="h2" mode="words" variant="signal" delay={28} style={{ margin: 0 }}>Dashboard</AnimeText>
             <p style={{ margin: 0, marginTop: 2, color: 'var(--text-secondary)' }}>Local Management Vault for OpenRouter</p>
           </div>
+        </div>
+        <div className={`fleet-status-pill fleet-status-pill--${statusClass}`}>
+          <span />
+          {statusLabel}
         </div>
         <div className="page-actions" style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
           {refreshing && (
@@ -96,87 +108,109 @@ export default function Dashboard({ onSelectAccount, addToast }) {
         </div>
       </div>
 
-      <div className="stats-grid">
-        <SummaryCard 
-          label="Total Balance"
-          value={formatCurrency(totals.totalRemaining)}
-          subtitle={`across ${accounts.length} accounts`}
-          icon={WalletIcon}
-          variant="highlight"
-          delay={0}
-        />
-        <SummaryCard 
-          label="Total Credits"
-          value={formatCurrency(totals.totalCredits)}
-          icon={CreditsIcon}
-          variant="accent"
-          delay={50}
-        />
-        <SummaryCard 
-          label="Used"
-          value={formatCurrency(totals.totalUsed)}
-          icon={DatabaseIcon}
-          variant="warning"
-          delay={100}
-        />
-        <SummaryCard 
-          label="Accounts"
-          value={accounts.length.toString()}
-          subtitle={`${syncedCount} synced${attentionCount > 0 ? ` · ${attentionCount} alerts` : ''}`}
-          variant="info"
-          delay={150}
-        />
-        <SummaryCard 
-          label="Active Keys"
-          value={(totals.totalActiveKeys || 0).toString()}
-          variant="accent"
-          delay={200}
-        />
-      </div>
+      <div className="dashboard-command-layout">
+        <aside className="dashboard-command-rail">
+          <FleetHealthPanel
+            fleetHealth={fleetHealth}
+            accountsCount={accounts.length}
+            totals={totals}
+          />
+          <BurnRatePanel burnRate={burnRate} />
+          <ActivityPanel events={activity} />
+        </aside>
 
-      <div className="section-header">
-        <h3>Accounts</h3>
-        <div className="section-count">{accounts.length}</div>
-      </div>
-      
-      {accounts.length > 0 && (
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', margin: '0 0 var(--space-md)', maxWidth: '52rem', lineHeight: 1.45 }}>
-          Dot + border: <strong>green</strong> = session active + management key · <strong>yellow</strong> = management key present but session not active · <strong>red</strong> = missing key or account error.
-          <strong>MGMT KEY</strong> badge = key stored · <strong>NO KEY</strong> = key missing.
-        </p>
-      )}
-
-      {accounts.length === 0 ? (
-        <div className="empty-state animate-spring">
-          <div className="empty-state-icon pulsar">[EMPTY]</div>
-          <h3>No accounts stored locally yet.</h3>
-          <p>Add your first OpenRouter account to start monitoring balances and managing keys.</p>
-          <div style={{ marginTop: 'var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'stretch', maxWidth: 320, marginLeft: 'auto', marginRight: 'auto' }}>
-            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-              + Add Your First Account
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => navigate('/bulk-auth')}>
-              Bulk email OTP login
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="accounts-grid">
-          {accounts.map((account, index) => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              index={index}
-              onSelect={onSelectAccount}
-              onProvision={handleProvision}
-              provisioningIds={provisioningIds}
-              liveStatuses={liveStatuses}
-              actionSessionTruth={actionSessionTruth}
-              cooldownMap={cooldownMap}
+        <section className="dashboard-command-main">
+          <div className="stats-grid dashboard-stats-strip">
+            <SummaryCard
+              label="Total Balance"
+              value={formatCurrency(totals.totalRemaining)}
+              subtitle={`across ${accounts.length} accounts`}
+              icon={WalletIcon}
+              variant="highlight"
+              delay={0}
             />
-          ))}
+            <SummaryCard
+              label="Total Credits"
+              value={formatCurrency(totals.totalCredits)}
+              icon={CreditsIcon}
+              variant="accent"
+              delay={50}
+            />
+            <SummaryCard
+              label="Used"
+              value={formatCurrency(totals.totalUsed)}
+              icon={DatabaseIcon}
+              variant="warning"
+              delay={100}
+            />
+            <SummaryCard
+              label="Accounts"
+              value={accounts.length.toString()}
+              subtitle={`${syncedCount} synced${attentionCount > 0 ? ` · ${attentionCount} alerts` : ''}`}
+              variant="info"
+              delay={150}
+            />
+            <SummaryCard
+              label="Active Keys"
+              value={(totals.totalActiveKeys || 0).toString()}
+              variant="accent"
+              delay={200}
+            />
+          </div>
+
+          <div className="section-header dashboard-accounts-header">
+            <div>
+              <h3>Accounts</h3>
+              {accounts.length > 0 && (
+                <p className="dashboard-key-legend">
+                  <strong>CONTROL</strong> is the management plane. <strong>API</strong> is usable model access.
+                </p>
+              )}
+            </div>
+            <div className="section-count">{accounts.length}</div>
+          </div>
+
+          {accounts.length === 0 ? (
+            <div className="empty-state animate-spring">
+              <div className="empty-state-icon pulsar">[EMPTY]</div>
+              <h3>No accounts stored locally yet.</h3>
+              <p>Add your first OpenRouter account to start monitoring balances and managing keys.</p>
+              <div style={{ marginTop: 'var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'stretch', maxWidth: 320, marginLeft: 'auto', marginRight: 'auto' }}>
+                <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+                  + Add Your First Account
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => navigate('/bulk-auth')}>
+                  Bulk email OTP login
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="accounts-grid dashboard-mini-grid">
+              {accounts.map((account, index) => (
+                <AccountCard
+                  key={account.id}
+                  account={account}
+                  index={index}
+                  onSelect={onSelectAccount}
+                  onProvision={handleProvision}
+                  provisioningIds={provisioningIds}
+                  liveStatuses={liveStatuses}
+                  actionSessionTruth={actionSessionTruth}
+                  cooldownMap={cooldownMap}
+                  compact
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <div className="dashboard-mobile-only">
+        <div className="section-header">
+          <h3>Fleet Snapshot</h3>
+          <div className="section-count">{lastSyncLabel}</div>
         </div>
-      )}
+      </div>
 
       {showAddModal && (
         <AddAccountModal
@@ -187,4 +221,153 @@ export default function Dashboard({ onSelectAccount, addToast }) {
 
     </>
   );
+}
+
+function FleetHealthPanel({ fleetHealth, accountsCount, totals }) {
+  const totalCredits = totals.totalCredits || 0;
+  const totalRemaining = totals.totalRemaining || 0;
+  const remainingPct = totalCredits > 0 ? Math.round((totalRemaining / totalCredits) * 100) : 0;
+  const circumference = 2 * Math.PI * 45;
+  const healthyLen = accountsCount > 0 ? (fleetHealth.healthy / accountsCount) * circumference : 0;
+  const partialLen = accountsCount > 0 ? (fleetHealth.partial / accountsCount) * circumference : 0;
+  const deadLen = accountsCount > 0 ? (fleetHealth.dead / accountsCount) * circumference : 0;
+
+  return (
+    <section className="dashboard-command-panel fleet-health-panel" aria-label="Fleet health chart">
+      <div className="fleet-donut" data-testid="fleet-health-donut">
+        <svg viewBox="0 0 110 110" role="img" aria-label={`${fleetHealth.healthy} ready, ${fleetHealth.partial} attention, ${fleetHealth.dead} error accounts`}>
+          <circle className="fleet-donut-track" cx="55" cy="55" r="45" />
+          <circle className="fleet-donut-ready" cx="55" cy="55" r="45" strokeDasharray={`${healthyLen} ${circumference}`} strokeDashoffset="0" />
+          <circle className="fleet-donut-attention" cx="55" cy="55" r="45" strokeDasharray={`${partialLen} ${circumference}`} strokeDashoffset={-healthyLen} />
+          <circle className="fleet-donut-error" cx="55" cy="55" r="45" strokeDasharray={`${deadLen} ${circumference}`} strokeDashoffset={-(healthyLen + partialLen)} />
+        </svg>
+        <div className="fleet-donut-center">
+          <strong>{accountsCount}</strong>
+          <span>ACCOUNTS</span>
+        </div>
+      </div>
+      <div className="fleet-health-copy">
+        <div className="command-kicker">FLEET BALANCE</div>
+        <div className="fleet-balance-value mono">{formatCurrency(totalRemaining)}</div>
+        <p>{remainingPct}% of {formatCurrency(totalCredits)}</p>
+        <HealthRow tone="ready" label="ready" value={fleetHealth.healthy} />
+        <HealthRow tone="attention" label="attention" value={fleetHealth.partial} />
+        <HealthRow tone="error" label="error" value={fleetHealth.dead} />
+      </div>
+    </section>
+  );
+}
+
+function HealthRow({ tone, label, value }) {
+  return (
+    <div className={`health-row health-row--${tone}`}>
+      <span />
+      <em>{label}</em>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function BurnRatePanel({ burnRate }) {
+  return (
+    <section className="dashboard-command-panel burn-rate-panel">
+      <div className="command-kicker">BURN RATE</div>
+      <div className="burn-rate-value mono">
+        {formatCurrency(burnRate)}
+        <span>/ day · 30d avg</span>
+      </div>
+      <svg className="burn-sparkline" viewBox="0 0 200 42" aria-hidden="true">
+        <defs>
+          <linearGradient id="hydra-burn-spark" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor="var(--accent-secondary)" />
+            <stop offset="1" stopColor="var(--accent-secondary)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d="M0,29 L18,26 L36,31 L54,23 L72,21 L90,18 L108,22 L126,15 L144,17 L162,12 L180,10 L200,6" />
+        <path className="burn-sparkline-fill" d="M0,29 L18,26 L36,31 L54,23 L72,21 L90,18 L108,22 L126,15 L144,17 L162,12 L180,10 L200,6 L200,42 L0,42 Z" />
+      </svg>
+    </section>
+  );
+}
+
+function ActivityPanel({ events }) {
+  return (
+    <section className="dashboard-command-panel activity-panel">
+      <div className="activity-panel-header">
+        <div className="command-kicker">ACTIVITY</div>
+        <span>local</span>
+      </div>
+      <div className="activity-list">
+        {events.map((event) => (
+          <div className={`activity-row activity-row--${event.tone}`} key={`${event.title}-${event.detail}`}>
+            <span className="activity-dot" />
+            <div>
+              <strong>{event.title}</strong>
+              <em>{event.detail}</em>
+            </div>
+            <time>{event.time}</time>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function getFleetHealth(accounts, liveStatuses = {}) {
+  return accounts.reduce((acc, account) => {
+    const sessionStatus = liveStatuses[account.id] ?? account.sessionStatus ?? 'none';
+    const hasErrorState = account.status === 'error' || account.sessionDecryptFailed;
+    const health = getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
+    acc[health] += 1;
+    return acc;
+  }, { healthy: 0, partial: 0, dead: 0 });
+}
+
+function getLastSyncLabel(accounts) {
+  const latest = accounts
+    .map((account) => Date.parse(account.lastSyncAt || account.updatedAt || account.lastLoginAt || ''))
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a)[0];
+  if (!latest) return 'no sync';
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - latest) / 60000));
+  if (diffMinutes < 1) return 'now';
+  if (diffMinutes < 60) return `${diffMinutes}m`;
+  return `${Math.floor(diffMinutes / 60)}h`;
+}
+
+function getDashboardActivity(accounts, liveStatuses = {}, cooldownMap = {}) {
+  if (accounts.length === 0) {
+    return [
+      { tone: 'neutral', title: 'vault ready', detail: 'add accounts to begin fleet monitoring', time: 'now' },
+      { tone: 'info', title: 'bulk OTP available', detail: 'batch import accounts from the sidebar flow', time: 'next' },
+      { tone: 'success', title: 'proxy standby', detail: 'pooled keys activate after account setup', time: 'idle' },
+    ];
+  }
+
+  const now = Date.now();
+  const events = [];
+  for (const account of accounts) {
+    const alias = account.alias || account.email || 'account';
+    const sessionStatus = liveStatuses[account.id] ?? account.sessionStatus ?? 'none';
+    const lockedKeys = (account.keys?.list || []).filter((key) => cooldownMap[key.hash] && cooldownMap[key.hash] > now);
+    const remaining = account.credits?.remaining ?? 0;
+    const total = account.credits?.total ?? 0;
+    const pct = total > 0 ? (remaining / total) * 100 : 0;
+
+    if (account.status === 'error' || account.sessionDecryptFailed) {
+      events.push({ tone: 'error', title: 'account needs repair', detail: alias, time: getLastSyncLabel([account]) });
+    } else if (!account.hasManagementKey) {
+      events.push({ tone: 'error', title: 'control key missing', detail: alias, time: getLastSyncLabel([account]) });
+    } else if (sessionStatus === 'expired' || sessionStatus === 'none') {
+      events.push({ tone: 'warning', title: 'session needs sign-in', detail: alias, time: getLastSyncLabel([account]) });
+    } else if (lockedKeys.length > 0) {
+      events.push({ tone: 'warning', title: `${lockedKeys.length} key cooldown`, detail: alias, time: 'now' });
+    } else if (total > 0 && pct < 20) {
+      events.push({ tone: 'warning', title: 'low balance', detail: `${alias} · ${formatCurrency(remaining)}`, time: getLastSyncLabel([account]) });
+    } else {
+      events.push({ tone: 'success', title: 'account synced', detail: alias, time: getLastSyncLabel([account]) });
+    }
+  }
+
+  return events.slice(0, 5);
 }

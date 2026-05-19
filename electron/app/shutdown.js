@@ -26,7 +26,9 @@ export function killTrackedChildren(trackedChildren) {
       // #75: Windows has no SIGTERM — child.kill() with no signal name
       // defaults to SIGTERM on POSIX and TerminateProcess on Windows.
       child.kill();
-    } catch { /* already dead */ }
+    } catch (err) {
+      console.warn('[electron] tracked child kill failed:', err?.message || err);
+    }
   }
   trackedChildren.clear();
 }

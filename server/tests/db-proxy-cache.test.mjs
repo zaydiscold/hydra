@@ -8,12 +8,15 @@ import assert from 'node:assert/strict';
 const PRISMA_SPEC = '@prisma/client';
 
 let constructCount = 0;
+let disconnectError = null;
 
 class FakePrismaClient {
   constructor() {
     constructCount += 1;
     this.instanceId = constructCount;
-    this.$disconnect = mock.fn(async () => {});
+    this.$disconnect = mock.fn(async () => {
+      if (disconnectError) throw disconnectError;
+    });
   }
 
   ping() {
@@ -42,4 +45,26 @@ test('prisma proxy caches bound methods per client and resets after disconnect',
   assert.equal(constructCount, 2, 'client should reinitialize after disconnect');
   assert.notStrictEqual(ping3, ping1, 'cache should be rebuilt for the new client');
   assert.equal(ping3(), 2, 'rebuilt bound method should target the new client');
+});
+
+test('prisma disconnect failures are visible and still reset the proxy lifecycle', async () => {
+  const originalWarn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.join(' '));
+  disconnectError = new Error('disconnect refused');
+
+  try {
+    await disconnectPrisma();
+  } finally {
+    disconnectError = null;
+    console.warn = originalWarn;
+  }
+
+  assert.ok(
+    warnings.some((line) => line.includes('[db] Prisma disconnect failed: disconnect refused')),
+    'disconnect failure should leave warning evidence',
+  );
+
+  const pingAfterFailure = prisma.ping;
+  assert.equal(pingAfterFailure(), constructCount, 'proxy should reinitialize after failed disconnect');
 });

@@ -39,6 +39,46 @@ test('extractAuthToken falls back to hydra_token cookie', () => {
   assert.equal(extractAuthToken(req), 'cookie-token/with/chars');
 });
 
+test('malformed cookie encoding does not throw during token extraction', () => {
+  const req = {
+    headers: {
+      cookie: `${AUTH_TOKEN_COOKIE}=bad%ZZtoken`,
+    },
+  };
+
+  assert.equal(extractAuthToken(req), 'bad%ZZtoken');
+});
+
+test('requireUnlocked rejects malformed cookie tokens as normal auth misses', async () => {
+  const req = {
+    headers: {
+      cookie: `${AUTH_TOKEN_COOKIE}=bad%ZZtoken`,
+    },
+  };
+  const res = {
+    statusCode: null,
+    body: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+  let calledNext = false;
+
+  await requireUnlocked(req, res, () => {
+    calledNext = true;
+  });
+
+  assert.equal(calledNext, false);
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.body, { error: 'Not authenticated' });
+  assert.equal(validateCalls.at(-1), 'bad%ZZtoken');
+});
+
 test('requireUnlocked accepts cookie token', async () => {
   const req = {
     headers: {

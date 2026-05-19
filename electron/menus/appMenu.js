@@ -5,6 +5,27 @@ const isMac = process.platform === 'darwin';
 const REPO_URL = 'https://github.com/zaydiscold/hydra';
 const ISSUES_URL = `${REPO_URL}/issues/new`;
 
+async function openAppFolder(location, label) {
+  try {
+    const result = await shell.openPath(app.getPath(location));
+    if (result) console.warn(`[electron] ${label} failed: ${result}`);
+  } catch (err) {
+    console.warn(`[electron] ${label} failed: ${err?.message || err}`);
+  }
+}
+
+async function copyTextToClipboard(text, label, focusedWindow) {
+  try {
+    const { clipboard } = await import('electron');
+    clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    console.warn(`[electron] ${label} failed: ${err?.message || err}`);
+    focusedWindow?.webContents?.send?.('native:clipboard-copy-failed', { label, message: err?.message || String(err) });
+    return false;
+  }
+}
+
 export function setupAppMenu({
   isDev = false,
   openExternalUrl = async () => false,
@@ -99,7 +120,6 @@ export function setupAppMenu({
           label: 'Copy Proxy URL',
           accelerator: 'CmdOrCtrl+Shift+C',
           click: async (_item, focusedWindow) => {
-            const { clipboard } = await import('electron');
             // Bug fix: getServerUrl() returns the real chosen port (random
             // in packaged builds). The previous `|| 'http://localhost:3001'`
             // fallback would silently copy the WRONG url if the server URL
@@ -110,8 +130,9 @@ export function setupAppMenu({
               focusedWindow?.webContents?.send?.('native:copy-proxy-url-not-ready');
               return;
             }
-            clipboard.writeText(`${url}/v1`);
-            focusedWindow?.webContents?.send?.('native:copied-proxy-url');
+            if (await copyTextToClipboard(`${url}/v1`, 'copy proxy URL', focusedWindow)) {
+              focusedWindow?.webContents?.send?.('native:copied-proxy-url');
+            }
           },
         },
         { type: 'separator' },
@@ -145,17 +166,17 @@ export function setupAppMenu({
         },
         { type: 'separator' },
         {
-          label: 'Diagnostics',
+          label: 'Diagnostics in Settings',
           accelerator: 'CmdOrCtrl+D',
           click: navigateToDiagnostics,
         },
         {
           label: 'Show Logs Folder',
-          click: () => { shell.openPath(app.getPath('logs')); },
+          click: () => { openAppFolder('logs', 'show logs folder'); },
         },
         {
           label: 'Show Data Folder',
-          click: () => { shell.openPath(app.getPath('userData')); },
+          click: () => { openAppFolder('userData', 'show data folder'); },
         },
         { type: 'separator' },
         {
@@ -183,9 +204,10 @@ export function setupAppMenu({
               noLink: true,
             }).then(({ response }) => {
               if (response === 1) {
-                // Lazy import to avoid pulling clipboard into module scope
-                import('electron').then(({ clipboard }) => clipboard.writeText(info));
+                void copyTextToClipboard(info, 'copy build info', focusedWindow);
               }
+            }).catch((err) => {
+              console.warn(`[electron] build info dialog failed: ${err?.message || err}`);
             });
           },
         },

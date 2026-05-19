@@ -367,9 +367,19 @@ class DebugController extends BaseController {
             'x-trpc-source': 'nextjs-react',
           },
         });
-        const profileData = await profileRes.json().catch(() => null);
+        if (!profileRes.ok) {
+          logger.warn(`[DEBUG] vampire profile preload returned HTTP ${profileRes.status} for account=${accountId}`);
+        }
+        let profileData = null;
+        try {
+          profileData = await profileRes.json();
+        } catch (err) {
+          logger.warn(`[DEBUG] vampire profile preload returned invalid JSON for account=${accountId}: ${err?.message || err}`);
+        }
         currentBio = profileData?.[0]?.result?.data?.json?.bio ?? '';
-      } catch { /* best-effort — proceed with empty bio */ }
+      } catch (err) {
+        logger.warn(`[DEBUG] vampire profile preload failed for account=${accountId}: ${err?.message || err}`);
+      }
 
       const results = [];
 

@@ -147,6 +147,14 @@ mock.module(new URL('../services/session-refresher.js', import.meta.url).href, {
   namedExports: { startSessionRefresher: noop, stopSessionRefresher: noop },
 });
 
+mock.module(new URL('../services/magic-link-manager.js', import.meta.url).href, {
+  namedExports: {
+    startMagicLinkCleanup: noop,
+    stopMagicLinkCleanup: noop,
+    pendingMagicLinks: new Map(),
+  },
+});
+
 mock.module(new URL('../services/proxy-gate.js', import.meta.url).href, {
   namedExports: {
     proxyGate: { enabled: true },

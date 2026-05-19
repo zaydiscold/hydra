@@ -17,8 +17,9 @@
  * @module playwright-browser
  */
 
+import { execFileSync } from 'node:child_process';
 import { basename, join, relative } from 'node:path';
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { config } from '../config.js';
 
@@ -131,7 +132,9 @@ export function sweepStaleEphemeralProfiles(minAgeMs = 60_000) {
     let age;
     try {
       age = now - statSync(full).mtimeMs;
-    } catch {
+    } catch (e) {
+      stats.failed += 1;
+      console.warn(`[playwright-browser] sweep: cannot stat stale profile ${full}: ${e.message}`);
       continue;
     }
     if (age < minAgeMs) {
@@ -141,8 +144,9 @@ export function sweepStaleEphemeralProfiles(minAgeMs = 60_000) {
     try {
       rmSync(full, { recursive: true, force: true, maxRetries: 1 });
       stats.removed += 1;
-    } catch {
+    } catch (e) {
       stats.failed += 1;
+      console.warn(`[playwright-browser] sweep: failed to remove stale profile ${full}: ${e.message}`);
     }
   }
   if (stats.removed || stats.failed) {
@@ -236,23 +240,81 @@ export function resolveChromiumLaunchOptions(overrides = {}) {
  */
 function resolveBundledChromium() {
   const resourcePath = process.resourcesPath;
+  const extractedRoot = ensureBundledChromiumExtracted(resourcePath);
+  const searchRoots = [resourcePath];
+  if (extractedRoot) searchRoots.unshift(extractedRoot);
+
+  for (const root of searchRoots) {
+    const resolved = findChromiumExecutable(root);
+    if (resolved) return resolved;
+  }
+  return null;
+}
+
+function ensureBundledChromiumExtracted(resourcePath) {
+  const archivePath = join(resourcePath, 'chromium.zip');
+  if (!existsSync(archivePath)) return null;
+
+  const dataDir = process.env.HYDRA_DATA_DIR;
+  if (!dataDir) return null;
+
+  const extractRoot = join(dataDir, 'chromium');
+  const existing = findChromiumExecutable(extractRoot);
+  if (existing) return extractRoot;
+
+  rmSync(extractRoot, { recursive: true, force: true });
+  mkdirSync(extractRoot, { recursive: true, mode: 0o700 });
+
+  try {
+    if (process.platform === 'darwin') {
+      execFileSync('ditto', ['-x', '-k', archivePath, extractRoot], { stdio: 'ignore' });
+    } else if (process.platform === 'win32') {
+      execFileSync('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Expand-Archive -LiteralPath ${JSON.stringify(archivePath)} -DestinationPath ${JSON.stringify(extractRoot)} -Force`,
+      ], { stdio: 'ignore', windowsHide: true });
+    } else {
+      execFileSync('unzip', ['-q', archivePath, '-d', extractRoot], { stdio: 'ignore' });
+    }
+  } catch (err) {
+    rmSync(extractRoot, { recursive: true, force: true });
+    throw new Error(`Failed to extract bundled Chromium archive: ${err.message}`);
+  }
+
+  return extractRoot;
+}
+
+function findChromiumExecutable(root) {
   const candidates = [
     // macOS: bundled inside Chromium.app
-    join(resourcePath, 'chromium', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
-    join(resourcePath, 'chromium', 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
-    join(resourcePath, 'chromium', 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
-    join(resourcePath, 'chromium', 'chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
-    join(resourcePath, 'chromium', 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join(root, 'chromium', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(root, 'chromium', 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(root, 'chromium', 'chrome-mac-x64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(root, 'chromium', 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(root, 'chromium', 'chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join(root, 'chromium', 'chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join(root, 'chromium', 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join(root, 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(root, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(root, 'chrome-mac-x64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(root, 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+    join(root, 'chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join(root, 'chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    join(root, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
     // Linux / Windows: plain executable
-    join(resourcePath, 'chromium', 'chrome'),
-    join(resourcePath, 'chromium', 'chromium'),
-    join(resourcePath, 'chromium', 'chromium-browser'),
+    join(root, 'chromium', 'chrome'),
+    join(root, 'chromium', 'chromium'),
+    join(root, 'chromium', 'chromium-browser'),
     // Playwright-downloaded under resourcesPath
-    join(resourcePath, 'chromium', 'chrome-linux', 'chrome'),
-    join(resourcePath, 'chromium', 'chrome-win', 'chrome.exe'),
+    join(root, 'chromium', 'chrome-linux', 'chrome'),
+    join(root, 'chromium', 'chrome-win', 'chrome.exe'),
+    join(root, 'chrome-linux', 'chrome'),
+    join(root, 'chrome-win', 'chrome.exe'),
     // Generic fallbacks
-    join(resourcePath, 'browsers', 'chromium', 'chrome'),
-    join(resourcePath, 'browsers', 'chrome', 'chrome'),
+    join(root, 'browsers', 'chromium', 'chrome'),
+    join(root, 'browsers', 'chrome', 'chrome'),
   ];
 
   for (const candidate of candidates) {

@@ -101,12 +101,16 @@ export const native = {
   status: () => invokeNative('status'),
   platform: () => invokeNative('platform'),
   openPath: (target) => invokeNative('openPath', target),
+  openAppLocation: (location) => invokeNative('openAppLocation', location),
   getAuthToken: () => invokeNative('getAuthToken'),
   authTokenStatus: () => invokeNative('authTokenStatus'),
   setAuthToken: (token) => invokeNative('setAuthToken', token),
   clearAuthToken: () => invokeNative('clearAuthToken'),
   hideWindow: () => invokeNative('hideWindow'),
   quitApp: () => invokeNative('quitApp'),
+  minimizeWindow: () => invokeNative('minimizeWindow'),
+  toggleMaximizeWindow: () => invokeNative('toggleMaximizeWindow'),
+  closeWindow: () => invokeNative('closeWindow'),
   // Preferences (telemetry, biometric, theme, …)
   prefsGetAll: () => invokeNative('prefsGetAll'),
   prefsSet: (key, value) => invokeNative('prefsSet', key, value),
@@ -124,6 +128,13 @@ export const native = {
     const wrapped = window.hydraNative.onNavigate?.(cb);
     return () => {
       if (wrapped) window.hydraNative.offNavigate?.(wrapped);
+    };
+  },
+  onMenuEvent: (cb) => {
+    if (!isElectron()) return () => {};
+    const listeners = window.hydraNative.onMenuEvent?.(cb);
+    return () => {
+      if (listeners) window.hydraNative.offMenuEvent?.(listeners);
     };
   },
 };

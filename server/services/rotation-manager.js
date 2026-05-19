@@ -12,6 +12,7 @@ const COOLDOWN_429 = 60 * 1000;        // 1 min for rate-limits
 const COOLDOWN_402 = 10 * 60 * 1000;   // 10 min for credit-depleted keys
 const MAX_RETRIES = 4;                 // Drop key after 4 consecutive proxy failures
 const MAX_LOGIN_ATTEMPTS = 4;          // Stop login attempts after 4 consecutive failures (prevents account lockout)
+const SELECTION_FALLBACK_LOG_WINDOW_MS = 60 * 1000;
 
 class RotationManager {
   constructor() {
@@ -30,6 +31,7 @@ class RotationManager {
     this.lastSyncAt = null;
     /** @type {AbortController|null} — cancels in-flight reload during shutdown */
     this._reloadController = null;
+    this._lastSelectionFallbackWarningAt = 0;
   }
 
   /** Called lazily on first request if pool was never initialized */
@@ -108,6 +110,13 @@ class RotationManager {
       return key;
     };
 
+    const warnSelectionFallback = (err) => {
+      const warningNow = Date.now();
+      if (warningNow - this._lastSelectionFallbackWarningAt < SELECTION_FALLBACK_LOG_WINDOW_MS) return;
+      logger.warn(`[POOL] Weighted key selection failed for ${available.length} available key(s); using round-robin fallback: ${err?.message || err}`);
+      this._lastSelectionFallbackWarningAt = warningNow;
+    };
+
     // ── Weighted Selection ──
     try {
       // Map each key to a weight (min weight of 0.1 to avoid $0 keys starving completely)
@@ -115,19 +124,24 @@ class RotationManager {
       const weights = available.map(k => {
         // If a key has no limit, treat it as very healthy (e.g. $50 default weight)
         let weight = k.limitRemaining === null ? 50.0 : Math.max(0.1, Number(k.limitRemaining));
+        if (!Number.isFinite(weight)) {
+          throw new Error(`invalid limitRemaining for key ${String(k.hash || '').slice(0, 8) || 'unknown'}`);
+        }
         totalWeight += weight;
         return { key: k, weight };
       });
 
-      if (totalWeight <= 0) return fallbackRobin();
+      if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
+        throw new Error(`invalid total selection weight ${totalWeight}`);
+      }
 
       let random = Math.random() * totalWeight;
       for (const item of weights) {
         if (random < item.weight) return item.key;
         random -= item.weight;
       }
-    } catch {
-      // safe fallback
+    } catch (err) {
+      warnSelectionFallback(err);
     }
 
     return fallbackRobin();

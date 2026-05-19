@@ -113,7 +113,10 @@ async function discoverServerActionHashes(pageUrl) {
           headers: { 'User-Agent': USER_AGENT },
           signal: AbortSignal.timeout(10000),
         });
-        if (!jsRes.ok) return;
+        if (!jsRes.ok) {
+          console.warn(`[dashboard-api] Hash auto-discovery bundle fetch returned HTTP ${jsRes.status}: ${url}`);
+          return;
+        }
         const js = await jsRes.text();
 
         // Strategy 1: find hex40 within ~200 chars of a keyword
@@ -129,7 +132,9 @@ async function discoverServerActionHashes(pageUrl) {
             idx = found + kw.length;
           }
         }
-      } catch { /* bundle fetch failed — skip */ }
+      } catch (err) {
+        console.warn(`[dashboard-api] Hash auto-discovery bundle fetch failed for ${url}: ${err?.message || err}`);
+      }
     });
     await Promise.allSettled(fetches);
     return [...candidates];
@@ -175,7 +180,9 @@ async function selfHealHash(kind, testUrl, baseHeaders, body) {
         }
         return candidate;
       }
-    } catch { /* probe failed — try next candidate */ }
+    } catch (err) {
+      console.warn(`[dashboard-api] Self-heal ${kind} hash probe failed for candidate ${candidate}: ${err?.message || err}`);
+    }
   }
 
   console.warn(`[dashboard-api] ❌ Self-healing ${kind} hash failed — no valid candidate found among ${candidates.length} candidates`);
@@ -1858,7 +1865,11 @@ async function playwrightCookiesForOpenRouter(sessionCookie, clientCookie) {
  */
 async function dismissOpenRouterBlockingOverlays(page, accountId) {
   for (let i = 0; i < 3; i++) {
-    await page.keyboard.press('Escape').catch(() => {});
+    try {
+      await page.keyboard.press('Escape');
+    } catch (err) {
+      provisionStepLog(accountId, `dismissOpenRouterBlockingOverlays: Escape press failed (${err.message})`);
+    }
     await page.waitForTimeout(180);
   }
   const dismissButtons = [
@@ -1875,14 +1886,41 @@ async function dismissOpenRouterBlockingOverlays(page, accountId) {
   for (const loc of dismissButtons) {
     try {
       if (await loc.isVisible({ timeout: 400 }).catch(() => false)) {
-        await loc.click({ timeout: 2000 }).catch(() => {});
+        try {
+          await loc.click({ timeout: 2000 });
+        } catch (err) {
+          provisionStepLog(accountId, `dismissOpenRouterBlockingOverlays: dismiss click failed (${err.message})`);
+          continue;
+        }
         provisionStepLog(accountId, 'dismissOpenRouterBlockingOverlays: clicked dismiss-like control');
         await page.waitForTimeout(350);
       }
-    } catch {
-      void 0;
+    } catch (err) {
+      provisionStepLog(accountId, `dismissOpenRouterBlockingOverlays: overlay probe failed (${err.message})`);
     }
   }
+}
+
+async function readClipboardKeyFromPage(page, pattern, accountId, label) {
+  const result = await page.evaluate(async (source) => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const re = new RegExp(source, 'g');
+      const all = [...text.normalize('NFC').matchAll(re)].map(m => m[0]);
+      return { key: all.find(k => !k.includes('...') && k.length >= 40) || null, error: null };
+    } catch (err) {
+      return { key: null, error: err?.message || String(err) };
+    }
+  }, pattern).catch((err) => {
+    provisionStepLog(accountId, `${label} evaluate failed: ${err.message}`);
+    return { key: null, error: null };
+  });
+
+  if (result?.error) {
+    provisionStepLog(accountId, `${label} clipboard read failed: ${result.error}`);
+  }
+
+  return result?.key ?? null;
 }
 
 async function clickFirstVisibleCreateControl(page) {
@@ -1982,7 +2020,10 @@ async function captureKeyFromPageImmediate(page, accountId) {
     for (const m of bodyText.matchAll(re)) candidates.add(m[0]);
 
     return [...candidates];
-  }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch(() => []);
+  }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch((err) => {
+    provisionStepLog(accountId, `captureKeyFromPageImmediate: DOM eval failed (${err.message})`);
+    return [];
+  });
 
   for (const k of fromEval) {
     if (isValidKey(k)) {
@@ -1992,14 +2033,12 @@ async function captureKeyFromPageImmediate(page, accountId) {
   }
 
   // 2. Clipboard read (may work in non-headless or when permission granted)
-  const fromClip = await page.evaluate(async (pattern) => {
-    try {
-      const text = await navigator.clipboard.readText();
-      const re = new RegExp(pattern, 'g');
-      const all = [...text.matchAll(re)].map(m => m[0]);
-      return all.find(k => !k.includes('...') && k.length >= 40) || null;
-    } catch { return null; }
-  }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch(() => null);
+  const fromClip = await readClipboardKeyFromPage(
+    page,
+    'sk-or-v1-[A-Za-z0-9_.\\-]+',
+    accountId,
+    'captureKeyFromPageImmediate',
+  );
   if (fromClip && isValidKey(fromClip)) {
     provisionStepLog(accountId, `captureKeyFromPageImmediate: found in clipboard (len=${fromClip.length})`);
     return fromClip;
@@ -2008,17 +2047,19 @@ async function captureKeyFromPageImmediate(page, accountId) {
   // 3. Try clicking any Copy button that appeared (key then goes to clipboard)
   const copyBtn = page.locator('button:has-text("Copy"), button[aria-label*="copy" i], [data-testid*="copy" i]').first();
   if (await copyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await copyBtn.click().catch(() => {});
+    try {
+      await copyBtn.click();
+    } catch (err) {
+      provisionStepLog(accountId, `captureKeyFromPageImmediate: Copy click failed (${err.message})`);
+    }
     await page.waitForTimeout(400);
     // Re-check clipboard after click
-    const afterClick = await page.evaluate(async (pattern) => {
-      try {
-        const text = await navigator.clipboard.readText();
-        const re = new RegExp(pattern, 'g');
-        const all = [...text.matchAll(re)].map(m => m[0]);
-        return all.find(k => !k.includes('...') && k.length >= 40) || null;
-      } catch { return null; }
-    }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch(() => null);
+    const afterClick = await readClipboardKeyFromPage(
+      page,
+      'sk-or-v1-[A-Za-z0-9_.\\-]+',
+      accountId,
+      'captureKeyFromPageImmediate: after Copy click',
+    );
     if (afterClick && isValidKey(afterClick)) {
       provisionStepLog(accountId, `captureKeyFromPageImmediate: found in clipboard after Copy click`);
       return afterClick;
@@ -2030,7 +2071,10 @@ async function captureKeyFromPageImmediate(page, accountId) {
       const t = document.body?.innerText || '';
       const all = [...t.matchAll(re)].map(m => m[0]);
       return all.find(k => !k.includes('...') && k.length >= 40) || null;
-    }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch(() => null);
+    }, 'sk-or-v1-[A-Za-z0-9_.\\-]+').catch((err) => {
+      provisionStepLog(accountId, `captureKeyFromPageImmediate: DOM eval after Copy click failed (${err.message})`);
+      return null;
+    });
     if (afterDom && isValidKey(afterDom)) {
       provisionStepLog(accountId, `captureKeyFromPageImmediate: found in DOM after Copy click`);
       return afterDom;
@@ -2062,23 +2106,22 @@ async function tryCopyRevealManagementKeyUi(page, accountId) {
     
     for (const loc of copyLocators) {
       if (await loc.isVisible({ timeout: 800 }).catch(() => false)) {
-        await loc.click().catch(() => {});
+        try {
+          await loc.click();
+        } catch (err) {
+          provisionStepLog(accountId, `Copy button click failed (attempt ${attempt}): ${err.message}`);
+          continue;
+        }
         provisionStepLog(accountId, `Clicked copy button (attempt ${attempt})`);
         await page.waitForTimeout(600);
         
         // Try clipboard read
-        const fromClip = await page
-          .evaluate(async (pattern) => {
-            try {
-              const text = await navigator.clipboard.readText();
-              const re = new RegExp(pattern);
-              const m = text.match(re);
-              return m ? m[0] : null;
-            } catch {
-              return null;
-            }
-          }, MGMT_KEY_RE.source)
-          .catch(() => null);
+        const fromClip = await readClipboardKeyFromPage(
+          page,
+          MGMT_KEY_RE.source,
+          accountId,
+          `clipboard read after copy attempt ${attempt}`,
+        );
           
         if (fromClip && !fromClip.includes('...') && fromClip.length >= 40) {
           provisionStepLog(accountId, `Got full key from clipboard (attempt ${attempt})`);
@@ -2097,7 +2140,12 @@ async function tryCopyRevealManagementKeyUi(page, accountId) {
     
     for (const loc of revealLocators) {
       if (await loc.isVisible({ timeout: 800 }).catch(() => false)) {
-        await loc.click().catch(() => {});
+        try {
+          await loc.click();
+        } catch (err) {
+          provisionStepLog(accountId, `Reveal button click failed (attempt ${attempt}): ${err.message}`);
+          continue;
+        }
         provisionStepLog(accountId, `Clicked reveal button (attempt ${attempt})`);
         await page.waitForTimeout(600);
         
@@ -2183,7 +2231,8 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   if (await saveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     try {
       await saveBtn.click();
-    } catch {
+    } catch (err) {
+      console.warn(`[dashboard-api] Management key Save click failed for account=${accountId}; retrying with force: ${err?.message || err}`);
       await saveBtn.click({ force: true });
     }
     return;
@@ -2199,7 +2248,8 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   }
   try {
     await submit.first().click();
-  } catch {
+  } catch (err) {
+    console.warn(`[dashboard-api] Management key fallback submit click failed for account=${accountId}; retrying with force: ${err?.message || err}`);
     await submit.first().click({ force: true });
   }
 }
@@ -2250,8 +2300,8 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
     try {
       await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: OR_ORIGIN });
-    } catch {
-      void 0;
+    } catch (err) {
+      provisionStepLog(accountId, `clipboard permission grant failed: ${err.message}`);
     }
     if (provisionDebugArtifactsEnabled()) {
       await context.tracing.start({ screenshots: true, snapshots: true });
@@ -2277,20 +2327,24 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           // need the body to extract the management key. Debug body content is captured via tracing instead.
           line += '\n---';
           networkLogLines.push(line);
-        } catch {
-          void 0;
+        } catch (err) {
+          provisionStepLog(accountId, `provision network response log failed: ${err.message}`);
         }
       });
     }
 
     await page.goto(`${OR_BASE}/settings/management-keys`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => {});
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 45000 });
+    } catch (err) {
+      provisionStepLog(accountId, `management-keys networkidle wait failed: ${err.message}`);
+    }
     {
       let title = '';
       try {
         title = await page.title();
-      } catch {
-        void 0;
+      } catch (err) {
+        provisionStepLog(accountId, `management-keys title read failed: ${err.message}`);
       }
       provisionStepLog(accountId, 'after goto management-keys', { url: page.url(), title });
     }
@@ -2468,7 +2522,11 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
 
     // Fallback 1: wait for the key to appear as visible text anywhere on the page
     if (!capturedKey) {
-      await page.getByText(MGMT_KEY_RE).first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+      try {
+        await page.getByText(MGMT_KEY_RE).first().waitFor({ state: 'visible', timeout: 15000 });
+      } catch (err) {
+        provisionStepLog(accountId, `visible key text wait failed: ${err.message}`);
+      }
       await page.waitForTimeout(2000);
     }
     if (!capturedKey) {
@@ -2579,7 +2637,10 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           }
         }
         return null;
-      }, MGMT_KEY_RE.source).catch(() => null);
+      }, MGMT_KEY_RE.source).catch((err) => {
+        provisionStepLog(accountId, `management-key DOM input scan failed: ${err.message}`);
+        return null;
+      });
       if (capturedKey) provisionStepLog(accountId, 'Found key via DOM evaluate() input scan');
     }
 
@@ -2599,15 +2660,12 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     // Fallback 6: try clipboard API (some UIs auto-copy the key on creation)
     // Note: This rarely works in headless mode due to clipboard permissions, but try anyway.
     if (!capturedKey) {
-      const mgmtKeyPattern = MGMT_KEY_RE.source;
-      capturedKey = await page.evaluate(async (pattern) => {
-        try {
-          const text = await navigator.clipboard.readText();
-          const re = new RegExp(pattern);
-          const m = text.normalize('NFC').match(re);
-          return m ? m[0] : null;
-        } catch { return null; }
-      }, mgmtKeyPattern).catch(() => null);
+      capturedKey = await readClipboardKeyFromPage(
+        page,
+        MGMT_KEY_RE.source,
+        accountId,
+        'management-key final clipboard fallback',
+      );
       if (capturedKey) provisionStepLog(accountId, 'Found key in clipboard');
     }
 
@@ -2623,8 +2681,8 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
             provisionStepLog(accountId, 'Found key in child frame innerText');
             break;
           }
-        } catch {
-          void 0;
+        } catch (err) {
+          provisionStepLog(accountId, `child frame key scan failed: ${err.message}`);
         }
       }
     }
@@ -2670,8 +2728,8 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       let pageUrlAtFailure = '';
       try {
         pageUrlAtFailure = page.url() || '';
-      } catch {
-        void 0;
+      } catch (err) {
+        provisionStepLog(accountId, `failure page URL read failed: ${err.message}`);
       }
       const debugDir = join(tmpdir(), PROVISION_DEBUG_DIR_BASENAME);
       throw new ProvisionKeyNotCapturedError(
@@ -2696,7 +2754,11 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     }
 
     if (traceStarted && context) {
-      await context.tracing.stop().catch(() => {});
+      try {
+        await context.tracing.stop();
+      } catch (err) {
+        console.error('[dashboard-api] Could not stop provision tracing after success:', err.message);
+      }
       traceStarted = false;
     }
 
@@ -2722,11 +2784,19 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
         (/Could not capture management key after HTTP/i.test(err.message) ||
           err.message.includes('Could not extract management key via Playwright')));
     if (extractFail && page) {
-      await captureProvisionDebugArtifacts(page, accountId).catch(() => {});
+      try {
+        await captureProvisionDebugArtifacts(page, accountId);
+      } catch (debugErr) {
+        console.error('[dashboard-api] Could not capture provision debug artifacts:', debugErr.message);
+      }
     }
     throw err;
   } finally {
-    await browser.close().catch(() => {});
+    try {
+      await browser.close();
+    } catch (closeErr) {
+      console.error('[dashboard-api] Provision browser close failed:', closeErr.message);
+    }
   }
 }
 
@@ -2857,8 +2927,8 @@ async function pollCreditsAfterRedeem(managementKey, beforeTotal, attempts = 4, 
     try {
       const after = await getCredits(managementKey);
       if (Number(after.total) > Number(beforeTotal)) return after;
-    } catch {
-      /* skip poll */
+    } catch (err) {
+      console.warn(`[dashboard-api] Redeem credit poll failed (attempt ${i + 1}/${attempts}): ${err?.message || err}`);
     }
   }
   return null;
@@ -2872,8 +2942,8 @@ async function persistRedeemTrpcRouteFromResponse(response, code) {
     if (!rawPath) return;
     const route = decodeURIComponent(rawPath.split(',')[0] || rawPath);
     await store.saveDiscoveredEndpoints({ redeemCode: { route, discoveredAt: new Date().toISOString() } });
-  } catch {
-    /* ignore */
+  } catch (err) {
+    console.warn(`[dashboard-api] Redeem tRPC route persistence failed: ${err?.message || err}`);
   }
 }
 
@@ -3141,8 +3211,8 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
         if (uiFeedback) fail.uiFeedback = uiFeedback;
         return fail;
       }
-    } catch {
-      /* fall through to UI / credits */
+    } catch (err) {
+      console.warn(`[dashboard-api] Redeem tRPC outcome parse failed; falling through to UI/credits: ${err?.message || err}`);
     }
   }
 
@@ -3217,12 +3287,13 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
       managementKey = acct.managementKey.trim();
       try {
         creditsSnapshot = await getCredits(managementKey);
-      } catch {
+      } catch (err) {
+        console.warn(`[dashboard-api] Redeem credits preflight failed for account=${accountId}: ${err?.message || err}`);
         creditsSnapshot = null;
       }
     }
-  } catch {
-    /* no account row — skip credits verification */
+  } catch (err) {
+    console.warn(`[dashboard-api] Redeem account lookup failed for account=${accountId}; skipping credits verification: ${err?.message || err}`);
   }
 
   try {
@@ -3269,7 +3340,11 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
       await page.waitForTimeout(600);
       const openModalBtn = page.locator('button:has-text("Redeem"), a:has-text("Redeem Credit")');
       if (await openModalBtn.count() > 0) {
-        await openModalBtn.first().click().catch(() => {});
+        try {
+          await openModalBtn.first().click();
+        } catch (err) {
+          console.warn(`[dashboard-api] Redeem modal open click failed: ${err.message}`);
+        }
         await page.waitForTimeout(500);
       }
       const dialog = page.locator('[role="dialog"], .modal, .cl-modal, .modal-content').first();
@@ -3314,7 +3389,11 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
       };
     }
   } finally {
-    await browser.close().catch(() => {});
+    try {
+      await browser.close();
+    } catch (closeErr) {
+      console.error('[dashboard-api] Redeem browser close failed:', closeErr.message);
+    }
   }
   return result;
 }
@@ -3365,7 +3444,8 @@ export async function getUserProfile(sessionCookie, clientCookie) {
 
   try {
     return await trpcCall('user.me', null, sessionCookie, clientCookie);
-  } catch {
+  } catch (err) {
+    console.warn(`[dashboard-api] getUserProfile tRPC fallback failed: ${err?.message || err}`);
     return null;
   }
 }
@@ -3411,8 +3491,8 @@ export async function syncApiKeys(userId, accountId) {
         synced: true,
         source: 'trpc',
       }));
-    } catch {
-      // next candidate
+    } catch (err) {
+      console.warn(`[dashboard-api] syncApiKeys tRPC candidate ${route} failed for account=${accountId}: ${err?.message || err}`);
     }
   }
 
@@ -3452,7 +3532,9 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
       try {
         await btn.click({ timeout: 3000 });
         await page.waitForTimeout(600);
-      } catch { /* skip */ }
+      } catch (err) {
+        console.warn(`[syncApiKeys] Reveal button click failed: ${err.message}`);
+      }
     }
 
     // Extract any visible sk-or-v1-* strings from the DOM
@@ -3468,6 +3550,10 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
     console.error('[syncApiKeys] Playwright scrape failed:', err.message);
     return [];
   } finally {
-    await browser.close().catch(() => {});
+    try {
+      await browser.close();
+    } catch (closeErr) {
+      console.error('[syncApiKeys] Browser close failed:', closeErr.message);
+    }
   }
 }

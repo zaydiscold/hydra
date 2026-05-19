@@ -64,7 +64,11 @@ export const prisma = new Proxy({}, {
 
 export async function disconnectPrisma() {
   if (_prisma) {
-    try { await _prisma.$disconnect(); } catch { /* best effort */ }
+    try {
+      await _prisma.$disconnect();
+    } catch (err) {
+      console.warn(`[db] Prisma disconnect failed: ${err?.message || err}`);
+    }
     _prisma = null;
     // Reset the bound-method cache so a future re-init doesn't return
     // bindings against the disconnected client. WeakMap entries for the

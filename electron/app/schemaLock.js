@@ -38,7 +38,11 @@ export async function acquireMigrationLock(lockPath) {
     const stale = payload && (Date.now() - payload.ts > LOCK_TTL_MS || !(await isPidAlive(payload.pid)));
     if (stale) {
       console.warn(`[electron] migration lock at ${lockPath} is stale (pid=${payload.pid}, age=${Date.now() - payload.ts}ms) — breaking lock`);
-      try { fs.unlinkSync(lockPath); } catch { /* another process may have cleaned it */ }
+      try {
+        fs.unlinkSync(lockPath);
+      } catch (err) {
+        console.warn(`[electron] failed to remove stale migration lock at ${lockPath}: ${err.message}`);
+      }
     }
   }
 

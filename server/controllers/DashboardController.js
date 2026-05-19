@@ -172,7 +172,9 @@ class DashboardController extends BaseController {
               store.updateAccountBalance(account.id, {
                 remaining: snapshot.credits?.remaining,
                 total: snapshot.credits?.total,
-              }).catch(() => {});
+              }).catch((err) => {
+                logger.warn(`[DASHBOARD] Balance cache update failed (account=${account.id}): ${err.message}`);
+              });
               return result;
               
             } catch (err) {
@@ -231,8 +233,9 @@ class DashboardController extends BaseController {
               const meta = metaById.get(snapshot.id);
               if (meta?.sessionExpiry) snapshot.sessionExpiry = meta.sessionExpiry;
             }
-          } catch {
+          } catch (err) {
             // Non-fatal: keep existing sessionStatus from meta
+            logger.warn(`[DASHBOARD] Stored session status payload failed (account=${snapshot.id}): ${err.message}`);
           }
         }))
       );

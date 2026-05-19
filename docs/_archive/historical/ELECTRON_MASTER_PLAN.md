@@ -7,8 +7,6 @@
 >
 > For current troubleshooting, see [ELECTRON_TROUBLESHOOTING.md](./ELECTRON_TROUBLESHOOTING.md).
 >
-> **Historical doc links:** [ELECTRON_PAIN_POINTS.md](./2026-04-27/ELECTRON_PAIN_POINTS.md) — 16 issues, exact file:line numbers, recommended fixes (archived).
-
 ---
 
 ## 0. Executive Summary

@@ -48,7 +48,7 @@ Developing Hydra requires understanding the interplay between the React frontend
 - `http://localhost:5173` — Vite client development server.
 - `http://localhost:3001` — Express API server.
 
-The Express server binds to `127.0.0.1` by default. Use `HYDRA_LAN=1` to bind `0.0.0.0`, or `HYDRA_LISTEN_HOST=<host>` for an explicit host. Browser CORS accepts loopback origins and origins listed in `HYDRA_CORS_ORIGINS`; curl/same-origin requests without an `Origin` header are accepted.
+The Express server binds to `127.0.0.1` by default. Use `HYDRA_LAN=1` to bind `0.0.0.0`, or `HYDRA_LISTEN_HOST=<host>` for an explicit host. Browser CORS accepts the current server origin, the configured Vite dev origin (`HYDRA_VITE_PORT`, default `5173`) outside production, and origins listed in `HYDRA_CORS_ORIGINS`; curl and other no-origin requests are accepted.
 
 ### Why the UI cannot start the server from a button
 
@@ -56,18 +56,19 @@ A normal browser tab **cannot** launch `node server/index.js` on your machine (s
 
 - **Development:** Run **`npm run dev`** so **both** Express (`http://localhost:3001`) and Vite (`http://localhost:5173`) start. If you only open the Vite URL while Express is down, the UI will show API errors until the backend is up.
 - **Production-style:** **`npm start`** runs [`launch.js`](../launch.js) and serves the built app and API on one port (default `3001`).
-- **CLI shortcut:** From the repo root, **`npm link`** once, then run **`hydra`** (production-style) or **`hydra dev`** from anywhere — see [`bin/hydra.mjs`](../bin/hydra.mjs).
+- **CLI shortcut:** From the repo root, **`npm link`** once, then run **`hydra start`** (production-style), **`hydra dev`**, **`hydra doctor --json`**, or **`hydra logs --json`** from anywhere — see [`bin/hydra.mjs`](../bin/hydra.mjs). Bare **`hydra`** prints usage.
 
-Current desktop packaging details live in [**PACKAGING.md**](PACKAGING.md). The older comparison of launch options is archived at [**_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md**](_archive/2026-04-27/HYDRA_LAUNCH_RESEARCH.md).
+Current desktop packaging details live in [**PACKAGING.md**](PACKAGING.md).
 
 ### Electron Desktop Mode
 
 Hydra also runs as a native desktop app via Electron:
 
-- **`npm run dev:electron`** — Development mode: runs Vite HMR alongside `electron .`. The Electron window loads `http://localhost:5173` with full HMR support. Best for testing Electron-specific APIs (IPC, native menus, window behavior).
+- **`npm run dev:electron`** — Development mode: runs Vite HMR alongside `electron .`. The Electron window loads `VITE_DEV_SERVER_URL` when set, otherwise `http://localhost:${HYDRA_VITE_PORT:-5173}`. Best for testing Electron-specific APIs (IPC, native menus, window behavior).
 - **`npx electron .`** — Production/preview mode: runs the Electron app serving the built `dist/` files. Requires `npm run build` first. Use this to verify the exact artifact users will install.
-- **`npm run electron:build`** — Packages the app into platform installers (`.dmg` on macOS, `.exe` on Windows, `.AppImage` on Linux).
-- The default macOS package target in `electron-builder.yml` is Apple Silicon (`arm64`) only. Build `--x64` or `--universal` explicitly if an Intel Mac release is required.
+- **`npm run electron:build`** — Packages the app into platform artifacts (`.zip` on macOS by default, `.exe` on Windows, `.AppImage` / `.deb` / `.rpm` on Linux). Use `npm run electron:build:dmg` on an unsandboxed Mac release machine when a DMG is required.
+- **`npm run electron:build:mac-arm64`** — Builds the Apple Silicon Mac zip.
+- **`npm run electron:build:mac-x64`** — Builds the Intel Mac zip for machines like the 2019 Intel MacBook Pro reachable as `ssh home`.
 
 The `npm run dev` (browser) path is preserved and remains the primary workflow for daily frontend/backend iteration. See [**ELECTRON_MIGRATION_STATUS.md**](ELECTRON_MIGRATION_STATUS.md) for full details.
 

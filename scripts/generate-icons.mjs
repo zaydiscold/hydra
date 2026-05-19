@@ -185,7 +185,9 @@ async function listGenerated() {
         console.log(`    ${f}  (${kb} KB)`);
       }
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    warn(`Could not list generated icon files in ${ICONS_DIR}: ${err.message}`);
+  }
 }
 
 main().catch(err => {

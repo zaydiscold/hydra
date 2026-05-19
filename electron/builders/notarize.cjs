@@ -25,11 +25,22 @@
 
 exports.default = async function afterSign(context) {
   if (context.electronPlatformName !== 'darwin') return;
+  const appName = context.packager.appInfo.productFilename;
+  const appPath = `${context.appOutDir}/${appName}.app`;
+
   if (process.env.HYDRA_SKIP_NOTARIZE === '1') {
     console.log('[notarize] HYDRA_SKIP_NOTARIZE=1 set — skipping');
     return;
   }
   if (!process.env.APPLE_ID || !process.env.APPLE_APP_SPECIFIC_PASSWORD || !process.env.APPLE_TEAM_ID) {
+    if (process.env.HYDRA_SKIP_ADHOC_SIGN !== '1') {
+      const { execFileSync } = require('node:child_process');
+      console.warn(
+        '[notarize] Missing Apple signing credentials — applying local ad-hoc signature ' +
+        'so the unpacked .app has a valid bundle signature for local dogfood.'
+      );
+      execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], { stdio: 'inherit' });
+    }
     console.warn(
       '[notarize] Missing APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID — ' +
       'skipping notarization. The .app will still build, but Gatekeeper will warn on first launch. ' +
@@ -40,8 +51,6 @@ exports.default = async function afterSign(context) {
   // Lazy-require so contributors who don't notarize never need the dep on PATH.
   const { notarize } = require('@electron/notarize');
   const appBundleId = (context.packager && context.packager.config && context.packager.config.appId) || 'com.zayd.hydra';
-  const appName = context.packager.appInfo.productFilename;
-  const appPath = `${context.appOutDir}/${appName}.app`;
 
   console.log(`[notarize] Submitting ${appPath} to Apple Notary Service...`);
   const started = Date.now();

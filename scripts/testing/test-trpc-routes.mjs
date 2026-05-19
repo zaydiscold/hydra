@@ -4,13 +4,21 @@
  * Tests various tRPC routes with proper authentication
  */
 
-import * as store from './server/services/store.js';
-import { openRouterDashboardDeviceCookies } from './server/services/clerk-auth.js';
+import * as store from '../../server/services/store.js';
+import { openRouterDashboardDeviceCookies } from '../../server/services/clerk-auth.js';
 
 const USER_ID = '26d94c8c-5294-4841-855c-2ae12d4490fe';
 const ACCOUNT_ID = 'cecff6a9-cbcc-4110-93ec-409299474b82';
 const OR_BASE = 'https://openrouter.ai';
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+function warnProbe(message, details = {}) {
+  const suffix = Object.entries(details)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key}=${value}`)
+    .join(' ');
+  console.warn(`[trpc-route-probe] ${message}${suffix ? ` (${suffix})` : ''}`);
+}
 
 // tRPC routes to test for management key creation
 const TRPC_ROUTES = [
@@ -71,6 +79,9 @@ async function getFreshJwt(sessionCookie, clientCookie) {
     }
     return null;
   } catch (err) {
+    warnProbe('failed to refresh Clerk JWT; continuing with stored session cookie', {
+      error: err.message,
+    });
     return null;
   }
 }
@@ -110,7 +121,13 @@ async function testTrpcRoute(route, payload, sessionCookie, clientCookie, freshJ
     if (isJson && !isHtml) {
       try {
         parsedData = JSON.parse(responseBody);
-      } catch {}
+      } catch (err) {
+        warnProbe('failed to parse JSON response body', {
+          route,
+          status: response.status,
+          error: err.message,
+        });
+      }
     }
     
     return {

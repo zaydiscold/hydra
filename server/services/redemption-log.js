@@ -5,18 +5,18 @@
  * Never stores full code strings — only first 4 chars + ****.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
 import { logger } from './logger.js';
-import { getDataDir } from '../lib/data-dir.js';
+import { ensureDataDirSync, getDataDir } from '../lib/data-dir.js';
 
 const DATA_DIR = getDataDir();
 const LOG_PATH = join(DATA_DIR, 'redemption-log.json');
 const MAX_RECORDS = 100;
 
 function ensureDir() {
-  mkdirSync(DATA_DIR, { recursive: true });
+  ensureDataDirSync();
 }
 
 /**
@@ -51,7 +51,8 @@ export function getRedemptionRecords() {
   if (!existsSync(LOG_PATH)) return [];
   try {
     return JSON.parse(readFileSync(LOG_PATH, 'utf-8'));
-  } catch {
+  } catch (err) {
+    logger.warn('[REDEMPTION-LOG] Failed to read log:', err.message);
     return [];
   }
 }

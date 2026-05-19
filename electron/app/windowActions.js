@@ -6,7 +6,10 @@ function isAllowedExternalUrl(rawUrl) {
   try {
     const parsed = new URL(rawUrl);
     return parsed.protocol === 'https:' && EXTERNAL_URL_ALLOWLIST.has(parsed.hostname);
-  } catch { return false; }
+  } catch (err) {
+    console.warn(`[electron] invalid external URL blocked: ${rawUrl} (${err?.message || err})`);
+    return false;
+  }
 }
 
 export async function openExternalUrl(rawUrl) {
@@ -14,8 +17,13 @@ export async function openExternalUrl(rawUrl) {
     console.warn(`[electron] blocked external URL: ${rawUrl}`);
     return false;
   }
-  await shell.openExternal(rawUrl);
-  return true;
+  try {
+    await shell.openExternal(rawUrl);
+    return true;
+  } catch (err) {
+    console.warn(`[electron] failed to open external URL ${rawUrl}: ${err?.message || err}`);
+    return false;
+  }
 }
 
 export async function showAndFocusMainWindow() {

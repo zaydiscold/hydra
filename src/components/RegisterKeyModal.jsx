@@ -4,6 +4,7 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
   const [pasteVal, setPasteVal] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pasteHint, setPasteHint] = useState('');
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -13,7 +14,10 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
         try {
             const text = await navigator.clipboard.readText();
             if (text.trim()) setPasteVal(text.trim());
-        } catch { /* user types manually */ }
+        } catch (err) {
+            console.warn('[REGISTER-KEY] Clipboard read failed:', err.message);
+            setPasteHint('Clipboard unavailable; paste the key manually.');
+        }
     }
     
     tryPaste();
@@ -72,6 +76,7 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
             }}
           />
           {error && <p className="field-error">{error}</p>}
+          {pasteHint && !error && <p className="field-hint">{pasteHint}</p>}
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>

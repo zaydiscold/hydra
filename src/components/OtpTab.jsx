@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { parseEmails, clerkErrorHint } from '../utils/auth';
 import DevBackendHint from '../components/DevBackendHint';
 
@@ -38,12 +38,25 @@ export default function OtpTab({
   const verifiedCount = queue.filter((q) => q.verified).length;
   const skippedCount = queue.filter((q) => q.skipped).length;
   const errorHint = clerkErrorHint(localError);
+  const [copyExportStatus, setCopyExportStatus] = useState('');
 
   const handleCreateStubs = (e) => {
     e.preventDefault();
     const emails = parseEmails(pasteText);
     onCreateStubs(emails);
   };
+
+  async function handleCopyExport() {
+    const lines = queue.filter((item) => item.verified && item.managementKey).map((item) => `${item.email}:${item.managementKey}`).join('\n');
+    if (!lines) return;
+    try {
+      await navigator.clipboard?.writeText(lines);
+      setCopyExportStatus('Copied export to clipboard');
+    } catch (err) {
+      setCopyExportStatus(`Clipboard copy failed: ${err.message || 'permission denied'}`);
+    }
+    setTimeout(() => setCopyExportStatus(''), 3000);
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
@@ -231,15 +244,16 @@ export default function OtpTab({
               type="button"
               data-testid="bulk-auth-copy-export"
               className="btn btn-ghost"
-              onClick={() => {
-                const lines = queue.filter((item) => item.verified && item.managementKey).map((item) => `${item.email}:${item.managementKey}`).join('\n');
-                if (!lines) return;
-                navigator.clipboard?.writeText(lines);
-              }}
+              onClick={() => void handleCopyExport()}
               disabled={!queue.some((item) => item.verified && item.managementKey)}
             >
               Copy all to clipboard
             </button>
+            {copyExportStatus && (
+              <span role="status" style={{ alignSelf: 'center', fontSize: '0.75rem', color: copyExportStatus.startsWith('Clipboard') ? 'var(--status-error)' : 'var(--status-success)' }}>
+                {copyExportStatus}
+              </span>
+            )}
           </div>
           <textarea
             data-testid="bulk-auth-export-textarea"

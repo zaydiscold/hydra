@@ -42,6 +42,13 @@ prisma/dev.db
 # Recon / capture artifacts
 capture-*.json
 capture-*.png
+.playwright-mcp/
+*.tmp
+*.tmp-*
+*.corrupt-*
+*.backup-*
+hydra.db.backup-*
+local-secrets.json.tmp-*
 
 # Local audit/review notes — personal scratchpads from review passes,
 # not part of the repo. Re-runnable via the corresponding skill.

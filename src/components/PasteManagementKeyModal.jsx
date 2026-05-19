@@ -49,7 +49,7 @@ export default function PasteManagementKeyModal({ account, onClose, onDone }) {
             <a href="https://openrouter.ai/settings/management-keys" target="_blank" rel="noreferrer">
               OpenRouter → Management keys
             </a>
-            . Use a management key when possible; other <span className="mono">sk-or-…</span> keys are accepted if OpenRouter allows them for this account. Stored encrypted in Hydra.
+            . Use a management key for account control. Normal model API keys are for AI requests only and may not allow Hydra to create, disable, or delete other keys. Stored encrypted in Hydra.
           </p>
           <div className="form-group">
             <label style={{ color: error ? 'var(--status-error)' : 'inherit' }}>

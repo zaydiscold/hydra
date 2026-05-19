@@ -40,7 +40,7 @@ If the app won't start and you can't reach the Diagnostics panel, you can find t
 ### Logs
 
 - **macOS:** `~/Library/Logs/Hydra/main.log`
-- **Windows:** `%APPDATA%/hydra/logs/main.log`
+- **Windows:** `%APPDATA%/Hydra/logs/main.log`
 - **Linux:** `~/.config/hydra/logs/main.log`
 - **Dev mode:** console output (Winston, console-only)
 
@@ -48,8 +48,8 @@ If the app won't start and you can't reach the Diagnostics panel, you can find t
 
 The `HYDRA_DATA_DIR` env var (set by Electron to `app.getPath('userData')`):
 
-- **macOS:** `~/Library/Application Support/hydra/`
-- **Windows:** `%APPDATA%/hydra/`
+- **macOS:** `~/Library/Application Support/Hydra/`
+- **Windows:** `%APPDATA%/Hydra/`
 - **Linux:** `~/.config/hydra/`
 
 Contains `hydra.db`, `local-secrets.json`, and other runtime data. **Do not share the contents of this directory** — it contains encrypted credentials.
@@ -61,7 +61,7 @@ Contains `hydra.db`, `local-secrets.json`, and other runtime data. **Do not shar
 - `prisma/schema.prisma` — database schema
 - `prisma/migrations/` — migration history
 - `data/empty-hydra.db` — shipped empty database
-- `chromium/` — bundled Playwright Chromium
+- `chromium.zip` — bundled Playwright Chromium archive; runtime extracts it to the app data directory on first Playwright use
 
 ## Troubleshooting with the Bundle
 
@@ -69,6 +69,6 @@ Common checks when reviewing a support bundle:
 
 1. **Version mismatch** — compare Hydra version against known-good releases
 2. **Port conflicts** — verify no other process is bound to the port
-3. **Missing resources** — confirm `prisma/schema.prisma`, `chromium/`, and `data/empty-hydra.db` exist in resources
+3. **Missing resources** — confirm `prisma/schema.prisma`, `chromium.zip`, and `data/empty-hydra.db` exist in resources
 4. **Permission errors** — check that the user can read/write the data directory
 5. **Disk space** — ensure sufficient free space in the data directory volume

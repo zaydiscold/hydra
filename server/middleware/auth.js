@@ -1,4 +1,5 @@
 import { validateToken } from '../services/auth.js';
+import { logger } from '../services/logger.js';
 
 export const AUTH_TOKEN_COOKIE = 'hydra_token';
 const AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
@@ -8,7 +9,13 @@ function parseCookies(header) {
   return Object.fromEntries(header.split(';').map((entry) => {
     const [rawName, ...rawValue] = entry.trim().split('=');
     if (!rawName) return null;
-    return [rawName, decodeURIComponent(rawValue.join('=') || '')];
+    const encodedValue = rawValue.join('=') || '';
+    try {
+      return [rawName, decodeURIComponent(encodedValue)];
+    } catch (err) {
+      logger.warn(`[auth] malformed cookie ignored: ${rawName} (${err.message})`);
+      return [rawName, encodedValue];
+    }
   }).filter(Boolean));
 }
 

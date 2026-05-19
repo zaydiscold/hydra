@@ -34,7 +34,7 @@ export function createSplashWindow() {
     y: 0,
     frame: false,
     transparent: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
@@ -162,13 +162,19 @@ export function createSplashWindow() {
   let userGreetingName = '';
   try {
     if (process.platform === 'darwin') {
-      try { userGreetingName = execSync('id -F', { timeout: 200, encoding: 'utf-8' }).trim(); } catch { /* fall back */ }
+      try {
+        userGreetingName = execSync('id -F', { timeout: 200, encoding: 'utf-8' }).trim();
+      } catch (err) {
+        console.warn(`[electron] full-name greeting lookup failed, using username fallback: ${err.message}`);
+      }
     }
     if (!userGreetingName) {
       const u = os.userInfo();
       userGreetingName = (u && u.username) ? u.username.charAt(0).toUpperCase() + u.username.slice(1) : '';
     }
-  } catch { /* greeting is best-effort */ }
+  } catch (err) {
+    console.warn(`[electron] greeting name fallback failed: ${err.message}`);
+  }
   // Inject as JS literal — escape any chars that could break out of the
   // single-quoted string in the data URL (newlines, single quotes,
   // backslashes). Defensive even though `id -F` only returns one name.
@@ -302,13 +308,16 @@ export function createSplashWindow() {
     +   'rgba(0,0,0,.10) 35%,'
     +   'transparent 60%);'
     + 'pointer-events:none;z-index:3}'
-    + '.vines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:.9}'
-    + '.vines .crawl{fill:none;stroke-linecap:round;stroke-linejoin:round;'
-    + 'stroke-dasharray:1 860;stroke-dashoffset:0;animation:crawl 9.6s cubic-bezier(.16,1,.3,1) forwards}'
-    + '.vines .hexcell{fill:none;stroke:rgba(168,85,247,.28);stroke-width:1;'
-    + 'transform-origin:center;animation:hexPulse 5.4s ease-in-out infinite}'
-    + '@keyframes crawl{0%{stroke-dasharray:1 860;opacity:.08}18%{opacity:.92}100%{stroke-dasharray:860 1;opacity:.78}}'
-    + '@keyframes hexPulse{0%,100%{opacity:.34;transform:scale(.98)}50%{opacity:.72;transform:scale(1.02)}}'
+    + '.vines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:.95}'
+    + '.vines .stem,.vines .twig{fill:none;stroke-linecap:round;stroke-linejoin:round;'
+    + 'stroke-dasharray:0 1400;stroke-dashoffset:0;animation:grow 10s cubic-bezier(.18,.86,.2,1) forwards}'
+    + '.vines .stem{filter:drop-shadow(0 0 7px rgba(168,85,247,.28))}'
+    + '.vines .twig{stroke-dasharray:0 360;opacity:.72;animation-name:growTwig}'
+    + '.vines .bud{fill:rgba(190,242,255,.70);opacity:0;transform-box:fill-box;transform-origin:center;'
+    + 'animation:bud 10s cubic-bezier(.16,1,.3,1) forwards;filter:drop-shadow(0 0 5px rgba(96,165,250,.35))}'
+    + '@keyframes grow{0%{stroke-dasharray:0 1400;opacity:.02}12%{opacity:.55}100%{stroke-dasharray:1400 0;opacity:.86}}'
+    + '@keyframes growTwig{0%,18%{stroke-dasharray:0 360;opacity:0}100%{stroke-dasharray:360 0;opacity:.68}}'
+    + '@keyframes bud{0%,42%{opacity:0;transform:scale(.25)}70%{opacity:.75;transform:scale(1.08)}100%{opacity:.58;transform:scale(1)}}'
     // Canvas is clipped by the outer stage, making that stage the physics world.
     + 'canvas#field{position:absolute;inset:0;width:100%;height:100%;'
     + 'pointer-events:none;z-index:2;display:block}'
@@ -361,8 +370,8 @@ export function createSplashWindow() {
     + '.deco-bot__ticks span{display:block;width:14px;height:2px;background:rgba(255,255,255,.18);border-radius:1px}'
     + '.deco-bot__ticks span:nth-child(3){width:24px;background:rgba(168,85,247,.6)}'
     + '.deco-bot__ticks span:nth-child(5){width:8px;background:rgba(120,200,255,.5)}'
-    + '.hex{position:absolute;inset:0;pointer-events:none;opacity:.20;z-index:1;'
-    + 'mask-image:radial-gradient(ellipse at center,transparent 0 30%,#000 42%,#000 88%,transparent 100%)}'
+    + '.hex{position:absolute;inset:0;pointer-events:none;opacity:.045;z-index:1;'
+    + 'mask-image:radial-gradient(ellipse at center,transparent 0 40%,#000 58%,transparent 100%)}'
     + '.hex svg{width:100%;height:100%;display:block}'
     + '.band{position:absolute;left:0;right:0;top:38%;height:24%;'
     + 'background:linear-gradient(90deg,rgba(18,6,38,.86),rgba(36,10,58,.94) 50%,rgba(18,6,38,.86));'
@@ -396,17 +405,27 @@ export function createSplashWindow() {
     + '</style></head><body>'
     + '<div class="outer">'
     + '<svg class="vines" viewBox="0 0 1280 860" preserveAspectRatio="none">'
-    + '<defs><linearGradient id="vineA" x1="0" x2="1"><stop stop-color="#a855f7"/><stop offset=".52" stop-color="#ec4899"/><stop offset="1" stop-color="#60a5fa"/></linearGradient></defs>'
-    + '<path class="crawl" d="M640 430 C560 390 472 326 382 250 S204 160 78 136" stroke="url(#vineA)" stroke-width="1.6"/>'
-    + '<path class="crawl" d="M640 430 C724 366 812 292 920 246 S1116 214 1222 128" stroke="url(#vineA)" stroke-width="1.4" style="animation-delay:.18s"/>'
-    + '<path class="crawl" d="M640 430 C538 474 456 552 358 642 S178 726 62 770" stroke="rgba(96,165,250,.82)" stroke-width="1.3" style="animation-delay:.34s"/>'
-    + '<path class="crawl" d="M640 430 C746 494 824 574 930 640 S1100 716 1226 770" stroke="rgba(236,72,153,.82)" stroke-width="1.4" style="animation-delay:.44s"/>'
-    + '<path class="crawl" d="M430 430 C322 396 248 368 166 314" stroke="rgba(168,85,247,.58)" stroke-width="1" style="animation-delay:.75s"/>'
-    + '<path class="crawl" d="M850 430 C960 390 1036 354 1118 300" stroke="rgba(96,165,250,.58)" stroke-width="1" style="animation-delay:.9s"/>'
-    + '<polygon class="hexcell" points="188,122 224,142 224,184 188,204 152,184 152,142"/>'
-    + '<polygon class="hexcell" points="1088,154 1126,176 1126,220 1088,242 1050,220 1050,176" style="animation-delay:.4s"/>'
-    + '<polygon class="hexcell" points="208,692 252,718 252,770 208,796 164,770 164,718" style="animation-delay:.8s"/>'
-    + '<polygon class="hexcell" points="1044,672 1090,699 1090,752 1044,779 998,752 998,699" style="animation-delay:1.1s"/>'
+    + '<defs><linearGradient id="vineA" x1="0" x2="1"><stop stop-color="#a855f7"/><stop offset=".48" stop-color="#ec4899"/><stop offset="1" stop-color="#67e8f9"/></linearGradient>'
+    + '<linearGradient id="vineB" x1="1" x2="0"><stop stop-color="#60a5fa"/><stop offset=".55" stop-color="#a855f7"/><stop offset="1" stop-color="#34d399"/></linearGradient></defs>'
+    + '<path class="stem" d="M640 430 C586 398 530 354 474 300 C402 232 316 188 222 154 C164 132 114 116 64 84" stroke="url(#vineA)" stroke-width="1.7"/>'
+    + '<path class="stem" d="M640 430 C712 386 782 328 864 278 C962 218 1082 178 1228 88" stroke="url(#vineB)" stroke-width="1.55" style="animation-delay:.18s"/>'
+    + '<path class="stem" d="M640 430 C560 480 496 548 418 618 C330 696 214 746 54 808" stroke="rgba(103,232,249,.78)" stroke-width="1.45" style="animation-delay:.28s"/>'
+    + '<path class="stem" d="M640 430 C724 486 790 558 878 626 C976 704 1094 752 1226 814" stroke="rgba(236,72,153,.78)" stroke-width="1.5" style="animation-delay:.36s"/>'
+    + '<path class="twig" d="M474 300 C430 296 392 274 354 238" stroke="rgba(190,242,255,.52)" stroke-width=".9" style="animation-delay:1.8s"/>'
+    + '<path class="twig" d="M402 232 C366 202 340 166 322 122" stroke="rgba(168,85,247,.56)" stroke-width=".85" style="animation-delay:2.4s"/>'
+    + '<path class="twig" d="M222 154 C190 184 154 206 104 216" stroke="rgba(236,72,153,.48)" stroke-width=".85" style="animation-delay:3.1s"/>'
+    + '<path class="twig" d="M864 278 C908 270 954 244 1002 204" stroke="rgba(190,242,255,.52)" stroke-width=".9" style="animation-delay:1.9s"/>'
+    + '<path class="twig" d="M962 218 C996 180 1026 140 1048 92" stroke="rgba(96,165,250,.52)" stroke-width=".85" style="animation-delay:2.8s"/>'
+    + '<path class="twig" d="M1082 178 C1126 206 1164 222 1218 224" stroke="rgba(52,211,153,.42)" stroke-width=".85" style="animation-delay:3.4s"/>'
+    + '<path class="twig" d="M418 618 C374 596 332 574 286 534" stroke="rgba(96,165,250,.50)" stroke-width=".85" style="animation-delay:3.0s"/>'
+    + '<path class="twig" d="M330 696 C292 724 256 766 232 826" stroke="rgba(103,232,249,.46)" stroke-width=".85" style="animation-delay:4.2s"/>'
+    + '<path class="twig" d="M878 626 C930 606 980 576 1032 524" stroke="rgba(236,72,153,.50)" stroke-width=".9" style="animation-delay:3.2s"/>'
+    + '<path class="twig" d="M976 704 C1010 742 1046 782 1080 826" stroke="rgba(168,85,247,.48)" stroke-width=".85" style="animation-delay:4.35s"/>'
+    + '<circle class="bud" cx="354" cy="238" r="2.8" style="animation-delay:4.4s"/><circle class="bud" cx="322" cy="122" r="2.4" style="animation-delay:5.1s"/>'
+    + '<circle class="bud" cx="104" cy="216" r="2.2" style="animation-delay:5.6s"/><circle class="bud" cx="1002" cy="204" r="2.7" style="animation-delay:4.6s"/>'
+    + '<circle class="bud" cx="1048" cy="92" r="2.3" style="animation-delay:5.4s"/><circle class="bud" cx="1218" cy="224" r="2.2" style="animation-delay:6.0s"/>'
+    + '<circle class="bud" cx="286" cy="534" r="2.4" style="animation-delay:5.8s"/><circle class="bud" cx="232" cy="826" r="2.6" style="animation-delay:6.6s"/>'
+    + '<circle class="bud" cx="1032" cy="524" r="2.5" style="animation-delay:5.9s"/><circle class="bud" cx="1080" cy="826" r="2.5" style="animation-delay:6.8s"/>'
     + '</svg>'
     + '<div class="hex"><svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">'
     + '<defs><pattern id="hexGrid" x="0" y="0" width="56" height="48.5" patternUnits="userSpaceOnUse">'
@@ -702,12 +721,14 @@ export function createSplashWindow() {
 
 // ─── Main Window ─────────────────────────────────────────────────────────────
 export function createMainWindow({ show = false } = {}) {
+  const useNativeMacChrome = process.platform === 'darwin';
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 640,
     title: 'Hydra',
+    frame: useNativeMacChrome,
     icon: ICON_PATH,
     backgroundColor: '#0a0014',
     webPreferences: {

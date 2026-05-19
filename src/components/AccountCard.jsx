@@ -14,6 +14,7 @@ const AccountCard = memo(function AccountCard({
   liveStatuses,
   actionSessionTruth,
   cooldownMap = {},
+  compact = false,
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const cardRef = useRef(null);
@@ -62,7 +63,8 @@ const AccountCard = memo(function AccountCard({
 
   // MGMT KEY badge: success = has key, neutral = no key
   const mgmtBadgeClass = account.hasManagementKey ? 'badge-success' : 'badge-neutral';
-  const mgmtBadgeLabel = account.hasManagementKey ? 'MGMT KEY' : 'NO KEY';
+  const mgmtBadgeLabel = account.hasManagementKey ? 'CONTROL' : 'NO CONTROL';
+  const apiKeyCount = account.keys?.active || 0;
 
   // eslint-disable-next-line react-hooks/purity
   const nowMs = Date.now();
@@ -76,7 +78,7 @@ const AccountCard = memo(function AccountCard({
   return (
     <div
       ref={cardRef}
-      className={`card card-clickable account-card ${isVisible ? 'animate-spring' : ''}`}
+      className={`card card-clickable account-card ${compact ? 'account-card--compact' : ''} ${isVisible ? 'animate-spring' : ''}`}
       style={{
         animationDelay: `${Math.min(index * 30, 500)}ms`,
         borderColor,
@@ -119,63 +121,73 @@ const AccountCard = memo(function AccountCard({
       </div>
 
       <div className="account-card-footer">
+        <div className="account-card-plane-row">
+          <span className={`account-card-plane ${account.hasManagementKey ? 'account-card-plane--ready' : 'account-card-plane--missing'}`}>
+            <span className="account-card-plane-label">CONTROL</span>
+            <strong>{account.hasManagementKey ? 'READY' : 'MISSING'}</strong>
+          </span>
+          <span className="account-card-plane">
+            <span className="account-card-plane-label">API</span>
+            <strong>{apiKeyCount}</strong>
+          </span>
+        </div>
         <div className="account-card-meta account-card-meta-row mono">
-          <span>[KEYS] <strong>{account.keys?.active || 0}</strong></span>
           {lockedMinutes > 0 && (
             <span style={{ color: 'var(--status-warning)' }}>[LOCKED {lockedMinutes}m]</span>
           )}
           <span>[USED] <strong>{formatCurrency(account.credits?.used)}</strong></span>
         </div>
-        {/* Auth method LEFT — MGMT KEY RIGHT, with provision button when applicable */}
-        <div className="account-card-auth-wrap">
-          <AuthBadge
-            method={account.authMethod}
-            hasManagementKey={!!account.hasManagementKey}
-            hasCredentials={!!account.hasCredentials}
-            sessionActive={sessionStatus === 'active' || sessionStatus === 'expiring'}
-          />
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {canProvisionNow && (
-              <button
-                type="button"
-                className={`badge ${needsKey ? 'badge-warning' : 'badge-neutral'}`}
-                title={provisioning ? 'Provisioning…' : (needsKey ? 'Provision Management Key' : 'Rotate Management Key')}
-                disabled={provisioning}
-                onClick={handleProvision}
-                style={{
-                  cursor: provisioning ? 'not-allowed' : 'pointer',
-                  opacity: provisioning ? 0.6 : 1,
-                  background: needsKey ? 'color-mix(in srgb, var(--status-warning) 10%, transparent)' : 'none',
-                  padding: '4px 10px',
-                  minWidth: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontFamily: 'var(--font-mono)',
-                  borderStyle: needsKey ? 'solid' : 'dashed',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  color: needsKey ? 'var(--status-warning)' : 'var(--text-secondary)',
-                  gap: 6,
-                  margin: 0,
-                  fontSize: '0.72rem',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {provisioning ? (
-                  <div className="spinner" style={{ width: 10, height: 10, borderWidth: '2px' }} />
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {!needsKey && <span style={{ fontSize: '1rem', marginTop: '-1px' }}>↺</span>}
-                    <span>{needsKey ? 'PROVISION' : 'ROTATE'}</span>
-                  </div>
-                )}
-              </button>
-            )}
-            <span className={`badge ${mgmtBadgeClass}`} style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
-              {mgmtBadgeLabel}
-            </span>
+        {!compact && (
+          <div className="account-card-auth-wrap">
+            <AuthBadge
+              method={account.authMethod}
+              hasManagementKey={!!account.hasManagementKey}
+              hasCredentials={!!account.hasCredentials}
+              sessionActive={sessionStatus === 'active' || sessionStatus === 'expiring'}
+            />
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {canProvisionNow && (
+                <button
+                  type="button"
+                  className={`badge ${needsKey ? 'badge-warning' : 'badge-neutral'}`}
+                  title={provisioning ? 'Provisioning…' : (needsKey ? 'Provision Management Key' : 'Rotate Management Key')}
+                  disabled={provisioning}
+                  onClick={handleProvision}
+                  style={{
+                    cursor: provisioning ? 'not-allowed' : 'pointer',
+                    opacity: provisioning ? 0.6 : 1,
+                    background: needsKey ? 'color-mix(in srgb, var(--status-warning) 10%, transparent)' : 'none',
+                    padding: '4px 10px',
+                    minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: 'var(--font-mono)',
+                    borderStyle: needsKey ? 'solid' : 'dashed',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    color: needsKey ? 'var(--status-warning)' : 'var(--text-secondary)',
+                    gap: 6,
+                    margin: 0,
+                    fontSize: '0.72rem',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {provisioning ? (
+                    <div className="spinner" style={{ width: 10, height: 10, borderWidth: '2px' }} />
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {!needsKey && <span style={{ fontSize: '1rem', marginTop: '-1px' }}>↺</span>}
+                      <span>{needsKey ? 'PROVISION' : 'ROTATE'}</span>
+                    </div>
+                  )}
+                </button>
+              )}
+              <span className={`badge ${mgmtBadgeClass}`} style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                {mgmtBadgeLabel}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {account.status === 'error' && account.error && (

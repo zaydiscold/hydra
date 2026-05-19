@@ -18,7 +18,7 @@ import path from 'node:path';
 
 import { getWindowURL, getExpressPort, getMainWindow, setForceQuit } from './state.js';
 import { isPathInAllowlist } from './path-allowlist.js';
-import { canPromptBiometric, describeBiometricSupport, promptBiometric } from './biometric.js';
+import { describeBiometricSupport, promptBiometric } from './biometric.js';
 import { getAllPrefs, getPref, setPref } from './userPrefs.js';
 import { setTelemetryEnabled } from './telemetry.js';
 
@@ -62,6 +62,14 @@ function isPathAllowed(target) {
   ]);
 }
 
+function redactedPathInfo(name) {
+  return {
+    available: true,
+    label: name,
+    redacted: true,
+  };
+}
+
 /**
  * Register all IPC handlers. No arguments — handlers source their state
  * from `app/state.js` so the wiring is uniform across call sites.
@@ -74,8 +82,8 @@ export function registerIpcHandlers() {
   ipcMain.handle('native:get-paths', async () => {
     try {
       return ok({
-        userData: app.getPath('userData'),
-        logs: app.getPath('logs'),
+        userData: redactedPathInfo('Hydra data folder'),
+        logs: redactedPathInfo('Hydra logs folder'),
       });
     } catch (e) { return err(e.message); }
   });
@@ -107,6 +115,19 @@ export function registerIpcHandlers() {
     } catch (e) { return err(e.message, 'OPEN_FAILED'); }
   });
 
+  ipcMain.handle('native:open-app-location', async (_event, location) => {
+    const targets = {
+      userData: () => app.getPath('userData'),
+      logs: () => app.getPath('logs'),
+    };
+    if (!Object.hasOwn(targets, location)) return err('unknown app location', 'BAD_ARG');
+    try {
+      const r = await shell.openPath(targets[location]());
+      if (r) return err(r, 'OPEN_FAILED');
+      return ok(true);
+    } catch (e) { return err(e.message, 'OPEN_FAILED'); }
+  });
+
   ipcMain.handle('native:platform', async () => ok(process.platform));
 
   ipcMain.handle('native:auth-token:get', async () => {
@@ -116,11 +137,16 @@ export function registerIpcHandlers() {
       // On denial or cancel we return null so the renderer falls back to
       // the password screen (no error toast — denial is a normal flow).
       const biometricOn = await getPref('biometricEnabled');
-      if (biometricOn && canPromptBiometric()) {
+      if (biometricOn) {
         try {
           await promptBiometric('Unlock Hydra');
-        } catch {
-          return ok(null); // user cancelled / failed — fall back to password
+        } catch (promptErr) {
+          console.warn(
+            '[ipc] biometric auth-token gate denied release:',
+            promptErr?.code || 'BIOMETRIC_DENIED',
+            promptErr?.message || promptErr,
+          );
+          return ok(null); // user cancelled, failed, or unavailable — fall back to password
         }
       }
       const parsed = await readAuthTokenRecord();
@@ -151,7 +177,6 @@ export function registerIpcHandlers() {
         expired,
         expiresAt,
         ttlSeconds: tokenPresent && expiresAtMs ? Math.max(0, Math.floor((expiresAtMs - now) / 1000)) : 0,
-        path: authTokenPath(),
         biometricGate: Boolean(await getPref('biometricEnabled')),
       });
     } catch (e) {
@@ -170,7 +195,9 @@ export function registerIpcHandlers() {
         expiresAt: new Date(now + AUTH_TOKEN_TTL_MS).toISOString(),
         ttlSeconds: AUTH_TOKEN_TTL_MS / 1000,
       }), { mode: 0o600 });
-      await chmod(file, 0o600).catch(() => {});
+      await chmod(file, 0o600).catch((chmodErr) => {
+        console.warn('[ipc] renderer auth-token chmod failed:', chmodErr?.message || chmodErr);
+      });
       return ok(true);
     } catch (e) {
       return err(e.message, 'TOKEN_WRITE_FAILED');
@@ -215,6 +242,40 @@ export function registerIpcHandlers() {
       return ok(true);
     } catch (e) {
       return err(e.message, 'QUIT_FAILED');
+    }
+  });
+
+  ipcMain.handle('native:window:minimize', async () => {
+    const win = getMainWindow();
+    if (!win || win.isDestroyed()) return err('main window not available', 'NO_WINDOW');
+    try {
+      win.minimize();
+      return ok(true);
+    } catch (e) {
+      return err(e.message, 'MINIMIZE_FAILED');
+    }
+  });
+
+  ipcMain.handle('native:window:toggle-maximize', async () => {
+    const win = getMainWindow();
+    if (!win || win.isDestroyed()) return err('main window not available', 'NO_WINDOW');
+    try {
+      if (win.isMaximized()) win.unmaximize();
+      else win.maximize();
+      return ok(win.isMaximized());
+    } catch (e) {
+      return err(e.message, 'MAXIMIZE_FAILED');
+    }
+  });
+
+  ipcMain.handle('native:window:close', async () => {
+    const win = getMainWindow();
+    if (!win || win.isDestroyed()) return err('main window not available', 'NO_WINDOW');
+    try {
+      win.close();
+      return ok(true);
+    } catch (e) {
+      return err(e.message, 'CLOSE_FAILED');
     }
   });
 

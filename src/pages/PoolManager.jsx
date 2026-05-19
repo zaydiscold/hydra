@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePools } from '../hooks/usePools';
+import AnimeText from '../components/AnimeText';
 import DeleteKeyModal from '../components/DeleteKeyModal';
 import RegisterKeyModal from '../components/RegisterKeyModal';
 import AccountRow from '../components/AccountRow';
@@ -25,14 +26,23 @@ function formatModelCacheSubtitle(modelCache) {
 /* --- Sub-component: CopyButton --- */
 function CopyButton({ text, label }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.warn(`[POOL_MANAGER] Copy ${label} failed:`, err.message);
+      setCopied(false);
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 3000);
+    }
   };
   return (
-    <button className="btn btn-ghost btn-sm" onClick={handleCopy} style={{ fontSize: '0.65rem', padding: '2px 6px', gap: 4 }}>
-      <CopyIcon size={12} /> {copied ? 'Copied!' : `Copy ${label}`}
+    <button className="btn btn-ghost btn-sm" onClick={() => void handleCopy()} style={{ fontSize: '0.65rem', padding: '2px 6px', gap: 4 }}>
+      <CopyIcon size={12} /> {copyFailed ? 'Copy failed' : copied ? 'Copied!' : `Copy ${label}`}
     </button>
   );
 }
@@ -51,6 +61,22 @@ function EndpointCard({
   const [modelsOpen, setModelsOpen] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
   const [keyVisible, setKeyVisible] = useState(false);
+  const [copiedModelId, setCopiedModelId] = useState(null);
+  const [copyFailedModelId, setCopyFailedModelId] = useState(null);
+
+  async function copyModelId(modelId) {
+    try {
+      await navigator.clipboard.writeText(modelId);
+      setCopyFailedModelId(null);
+      setCopiedModelId(modelId);
+      setTimeout(() => setCopiedModelId(null), 2000);
+    } catch (err) {
+      console.warn(`[POOL_MANAGER] Copy model id failed for ${modelId}:`, err.message);
+      setCopiedModelId(null);
+      setCopyFailedModelId(modelId);
+      setTimeout(() => setCopyFailedModelId(null), 3000);
+    }
+  }
 
   const maskedKey = masterKey
     ? masterKey.slice(0, 10) + '••••••••••••••••••••••••' + masterKey.slice(-4)
@@ -165,8 +191,8 @@ function EndpointCard({
                 {filteredModels.map(m => (
                   <div key={m.id} style={{ padding: '4px 10px', fontSize: '0.7rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="hover-bg">
                     <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{m.id}</span>
-                    <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard.writeText(m.id)} style={{ padding: '2px 4px', height: 20 }}>
-                      <CopyIcon size={10} />
+                    <button className="btn btn-ghost btn-sm" onClick={() => void copyModelId(m.id)} style={{ padding: '2px 4px', height: 20 }}>
+                      {copyFailedModelId === m.id ? '!' : copiedModelId === m.id ? '✓' : <CopyIcon size={10} />}
                     </button>
                   </div>
                 ))}
@@ -244,7 +270,7 @@ export default function PoolManager({ addToast }) {
         <div>
           <h1 style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <DatabaseIcon size={24} color="var(--accent-primary)" />
-            Pool Manager
+            <AnimeText mode="words" variant="scanline" delay={26}>Pool Manager</AnimeText>
           </h1>
           <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem', marginTop: 4 }}>
             Manage your keys and accounts in the unified routing pool.

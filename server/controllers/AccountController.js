@@ -100,7 +100,9 @@ export class AccountController extends BaseController {
           let existingAccounts = [];
           try {
             existingAccounts = await store.getAccounts(req.user.id);
-          } catch { /* ignore — dedup becomes best-effort */ }
+          } catch (err) {
+            logger.warn(`[ACCOUNT] Bulk add dedup preload failed; duplicates may be reported as skipped errors: ${err.message}`);
+          }
 
           const batchResults = [];
           for (const [index, lineStr] of lines.entries()) {
@@ -196,8 +198,8 @@ export class AccountController extends BaseController {
       let allAccounts = [];
       try {
         allAccounts = await store.getAccounts(req.user.id);
-      } catch {
-        // ignore — accounts list is best-effort for 409 dedup
+      } catch (err) {
+        logger.warn(`[ACCOUNT] Bulk OTP dedup preload failed; duplicate emails may not reuse existing rows: ${err.message}`);
       }
 
       /**
@@ -302,7 +304,9 @@ export class AccountController extends BaseController {
             invalidateSnapshotCache(req.params.id);
             return this.success(res, { success: true, recovered: true, message: 'Session recovered silently — no re-auth needed.' });
           }
-        } catch { /* fall through to manual re-auth */ }
+        } catch (err) {
+          logger.warn(`[ACCOUNT] Silent refresh recovery failed during refresh-login (account=${req.params.id}): ${err.message}`);
+        }
       }
 
       // No recovery possible — clear session so UI prompts re-auth
@@ -908,7 +912,8 @@ export class AccountController extends BaseController {
       try {
         const cookieInput851 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
         refreshed = await clerkAuth.refreshSession(cookieInput851, session.sessionCookie);
-      } catch {
+      } catch (err) {
+        logger.warn(`[ACCOUNT] Silent refresh failed (account=${req.params.id}): ${err.message}`);
         return this.error(res, 'Silent refresh failed — use Sign In to re-authenticate', 400);
       }
 

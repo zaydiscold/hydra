@@ -4,7 +4,7 @@
  * Delegates to split modules under app/ and utils/.
  * All shared runtime state lives in app/state.js.
  */
-import { app, dialog, Menu, Tray, nativeImage, shell } from 'electron';
+import { app, Menu, Tray, nativeImage, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,16 +65,18 @@ function createTray() {
   let img = createTrayImage();
   const tray = new Tray(img);
   tray.setToolTip('Hydra — local OpenRouter proxy');
+  tray._hydraProxyEnabled = true;
   const rebuildMenu = () => {
     const url = getWindowURL();
+    const proxyEnabled = tray._hydraProxyEnabled !== false;
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Show Hydra', click: showAndFocusMainWindow },
       { type: 'separator' },
-      { label: `Status: ${url ? 'proxy running' : 'starting'}`, enabled: false },
+      { label: `Status: ${url ? (proxyEnabled ? 'proxy running' : 'proxy disabled') : 'starting'}`, enabled: false },
       { label: url ? `Proxy URL: ${url}/v1` : 'Proxy URL: starting', enabled: false },
       { type: 'separator' },
-      { label: 'Open Logs Folder', click: () => { shell.openPath(app.getPath('logs')); } },
-      { label: 'Open Data Folder', click: () => { shell.openPath(app.getPath('userData')); } },
+      { label: 'Open Logs Folder', click: () => { openTrayFolder('logs'); } },
+      { label: 'Open Data Folder', click: () => { openTrayFolder('userData'); } },
       { type: 'separator' },
       { label: 'Hide Window', click: () => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.hide(); } },
       { label: 'Quit Hydra Completely', click: () => { setForceQuit(true); app.quit(); } },
@@ -86,6 +88,34 @@ function createTray() {
   tray.on('click', showAndFocusMainWindow);
   setTray(tray);
   return tray;
+}
+
+async function openTrayFolder(location) {
+  try {
+    const result = await shell.openPath(app.getPath(location));
+    if (result) console.warn(`[electron] tray open ${location} folder failed: ${result}`);
+  } catch (err) {
+    console.warn(`[electron] tray open ${location} folder failed: ${err?.message || err}`);
+  }
+}
+
+async function bindTrayProxyState() {
+  const tray = getTray();
+  if (!tray || tray.isDestroyed() || tray._hydraProxyUnsubscribe) return;
+
+  try {
+    const { proxyGate } = await import('../server/services/proxy-gate.js');
+    tray._hydraProxyEnabled = proxyGate.enabled;
+    tray._hydraRebuildMenu?.();
+    tray._hydraProxyUnsubscribe = proxyGate.onChange(({ enabled }) => {
+      const currentTray = getTray();
+      if (!currentTray || currentTray.isDestroyed()) return;
+      currentTray._hydraProxyEnabled = enabled;
+      currentTray._hydraRebuildMenu?.();
+    });
+  } catch (e) {
+    console.warn('[electron] failed to bind tray proxy state:', e?.message || e);
+  }
 }
 
 function createTrayImage() {
@@ -267,11 +297,12 @@ app.whenReady().then(async () => {
       navigateToDiagnostics: () => {
         showAndFocusMainWindow();
         const mw = getMainWindow();
-        if (mw && !mw.isDestroyed()) mw.webContents.send('navigate', '/diagnostics');
+        if (mw && !mw.isDestroyed()) mw.webContents.send('navigate', '/settings#diagnostics');
       },
     });
 
     createTray();
+    await bindTrayProxyState();
 
     // ─── STRICT SPLASH → MAIN SERIALIZATION ────────────────────────────────
     //
@@ -353,18 +384,31 @@ app.whenReady().then(async () => {
     }, 5000);
 
     performance.mark('hydra:startup:loadurl-begin');
-    try { await mainWindow.loadURL(url); } finally { clearTimeout(safetyTimeout); }
+    let loadSucceeded = false;
+    try {
+      await mainWindow.loadURL(url);
+      loadSucceeded = true;
+    } finally {
+      clearTimeout(safetyTimeout);
+      if (loadSucceeded && !mainShown) {
+        console.warn('[electron] loadURL resolved before ready-to-show — showing main window');
+        showMainOnce();
+      }
+    }
     performance.mark('hydra:startup:loadurl-done');
 
     if (needsSync) {
-      firstLaunchSetup(trackedChildren).catch(e => {
+      firstLaunchSetup(trackedChildren).catch(async e => {
         console.error('[electron] background firstLaunchSetup failed:', e);
         const w = getMainWindow();
         if (w && !w.isDestroyed()) {
-          dialog.showErrorBox('Database Setup Error',
-            'Hydra was unable to sync the database schema.\n\n' +
-            'This may mean the app needs to be restarted. If the problem persists, your database may be corrupt.\n\n' +
-            'Error: ' + (e.message || String(e)));
+          await showStartupErrorDialog({
+            message: 'Hydra was unable to sync the database schema.\n\n'
+              + 'This may mean the app needs to be restarted. If the problem persists, your database may be corrupt.\n\n'
+              + 'Error: ' + (e.message || String(e)),
+            stack: e?.stack || null,
+            phase: 'background-firstLaunchSetup',
+          });
         }
       });
     }
@@ -383,7 +427,9 @@ app.whenReady().then(async () => {
     for (const [from, to, label] of measures) {
       try {
         performance.measure(label, `hydra:startup:${from}`, `hydra:startup:${to}`);
-      } catch { /* mark may not exist yet (e.g. ready-to-show fires async) */ }
+      } catch (measureErr) {
+        console.warn(`[electron] startup timing measure skipped (${label}): ${measureErr.message}`);
+      }
     }
     const totalEntry = performance.getEntriesByName('Hydra startup: total', 'measure')[0];
     if (totalEntry) {
@@ -393,7 +439,7 @@ app.whenReady().then(async () => {
     console.error('[electron] Failed to start Hydra:', e);
     const sp = getSplashWindow();
     if (sp && !sp.isDestroyed()) sp.close();
-    // Replaces the legacy dialog.showErrorBox — the user now gets
+    // Replaces the legacy one-button error box — the user now gets
     // "Open Logs Folder" + "Copy Details" buttons before Quit.
     await showStartupErrorDialog({
       message: e?.message || String(e),
@@ -421,12 +467,21 @@ app.on('activate', () => {
   if (w && !w.isDestroyed()) { showAndFocusMainWindow(); return; }
   const url = getWindowURL();
   if (url) {
-    const newWin = createMainWindow({ show: true, preloadPath: PRELOAD_PATH });
+    const newWin = createMainWindow({ show: false, preloadPath: PRELOAD_PATH });
     setMainWindow(newWin);
-    newWin.loadURL(url).catch(async loadErr => {
+    let activateShown = false;
+    const showActivatedWindow = () => {
+      if (activateShown || newWin.isDestroyed()) return;
+      activateShown = true;
+      newWin.show();
+      newWin.focus();
+    };
+    newWin.once('ready-to-show', showActivatedWindow);
+    newWin.loadURL(url).then(showActivatedWindow).catch(async loadErr => {
       console.error('[electron] Activate loadURL failed:', loadErr.message);
       const mw = getMainWindow();
       if (mw && !mw.isDestroyed()) {
+        mw.close();
         // Same actionable buttons as the startup-failure case so the
         // user can grab logs/copy details before having to restart.
         await showStartupErrorDialog({
@@ -454,7 +509,11 @@ app.on('before-quit', (event) => {
 process.on('uncaughtException', async (err) => {
   console.error('[electron] uncaughtException:', err);
   // Best-effort telemetry — no-op if user hasn't opted in.
-  try { captureError(err, { phase: 'uncaughtException' }); } catch { /* ignore */ }
+  try {
+    captureError(err, { phase: 'uncaughtException' });
+  } catch (captureErr) {
+    console.warn('[electron] uncaughtException telemetry capture failed:', captureErr?.message ?? captureErr);
+  }
   setShuttingDown(true);
   await shutdownEverything({
     reason: 'uncaughtException',

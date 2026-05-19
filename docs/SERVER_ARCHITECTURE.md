@@ -6,7 +6,7 @@ The Express middleware chain is configured in `/server/index.js` in this order:
 
 1. **Inline gzip** - Compresses eligible non-API static responses when the client advertises gzip support.
 2. **JSON Parser** - Parses incoming `application/json` bodies.
-3. **CORS** - Allows same-origin/no-origin requests, loopback HTTP origins, and explicit `HYDRA_CORS_ORIGINS`; rejects non-loopback browser origins by default.
+3. **CORS** - Allows no-origin requests, exact same-origin app requests, the configured Vite dev origin, and explicit `HYDRA_CORS_ORIGINS`; rejects arbitrary loopback browser origins by default.
 4. **CSP (Electron embedded mode)** - Adds a local-only renderer policy for the packaged app.
 5. **Rate Limiting** - Applied selectively per route (see below).
 6. **Authentication** - `requireUnlocked` middleware validates Bearer token JWT.
@@ -83,7 +83,7 @@ All protected routes must use `requireUnlocked` middleware unless explicitly not
 
 `bootstrap()` binds to `127.0.0.1` by default. Set `HYDRA_LAN=1` to bind `0.0.0.0`, or set `HYDRA_LISTEN_HOST` to an explicit host. This keeps the standalone server local unless the operator intentionally exposes it.
 
-CORS is not wildcard-open. Browser origins are accepted only when they are loopback HTTP origins or explicitly listed in `HYDRA_CORS_ORIGINS`. Requests without an `Origin` header, such as same-origin app traffic and curl, are accepted.
+CORS is not wildcard-open and does not trust every loopback port. Browser origins are accepted only when they match the current server origin, match the configured Vite dev port (`HYDRA_VITE_PORT`, default `5173`) outside production, or are explicitly listed in `HYDRA_CORS_ORIGINS`. Requests without an `Origin` header, such as curl and Electron file-less calls, are accepted.
 
 ## Rate Limiters
 

@@ -189,7 +189,11 @@ async function _runSessionProbe() {
     try {
       // ── Decode session ID from stored JWT (stable Clerk identifier) ──────
       let rawJwt = '';
-      try { rawJwt = decrypt(account.sessionToken) || ''; } catch { /* no-op */ }
+      try {
+        rawJwt = decrypt(account.sessionToken) || '';
+      } catch (err) {
+        logger.warn(`[SESSION_PROBE] Stored session token decrypt failed for account=${account.id}: ${err.message}`);
+      }
       const currentSid = rawJwt ? _jwtSid(rawJwt) : null;
 
       // ── Detect session rotation (re-login since last probe) ──────────────
@@ -220,7 +224,8 @@ async function _runSessionProbe() {
         try {
           const result = await refreshSession(cookieStack, rawJwt);
           status = result ? 'active' : 'expired';
-        } catch {
+        } catch (err) {
+          logger.warn(`[SESSION_PROBE] Live refresh probe failed for account=${account.id}: ${err.message}`);
           status = 'error';
         }
       }

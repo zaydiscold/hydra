@@ -1,15 +1,22 @@
+import { useState } from 'react';
+
 /**
  * When API fetch fails in dev, show copyable npm command (browser cannot start Node).
  */
 export default function DevBackendHint({ message, copyCommand }) {
+  const [copyState, setCopyState] = useState('idle');
   if (!message && !copyCommand) return null;
 
   async function copy() {
     if (!copyCommand) return;
     try {
       await navigator.clipboard.writeText(copyCommand);
-    } catch {
-      /* ignore */
+      setCopyState('copied');
+      setTimeout(() => setCopyState('idle'), 2000);
+    } catch (err) {
+      console.warn('[DEV-BACKEND-HINT] Clipboard copy failed:', err.message);
+      setCopyState('failed');
+      setTimeout(() => setCopyState('idle'), 3000);
     }
   }
 
@@ -44,7 +51,7 @@ export default function DevBackendHint({ message, copyCommand }) {
             onClick={() => void copy()}
             data-testid="copy-dev-command"
           >
-            Copy command
+            {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy command'}
           </button>
         </div>
       ) : null}

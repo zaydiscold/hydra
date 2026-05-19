@@ -1,7 +1,7 @@
 /**
  * Account Generator Service
  *
- * NOTE (2026-04-24): OpenRouter's Clerk instance now requires CAPTCHA for
+ * NOTE: OpenRouter's Clerk instance now requires CAPTCHA for
  * /client/sign_ups. New account signup therefore cannot be pure HTTP.
  * Hydra still uses direct Clerk FAPI calls for existing-account email OTP and
  * session materialization, and falls back to Playwright for CAPTCHA-gated signup.
@@ -89,15 +89,22 @@ async function closeGeneratorResources(task) {
   // HTTP path never sets page/context/browser on task.resources.
   // Playwright fallback does. Null-safe destructure handles both.
   const { page, context, browser } = task.resources ?? {};
+  const taskId = task?.taskId || 'unknown';
 
   if (page) {
-    await page.close().catch(() => {});
+    await page.close().catch((err) => {
+      logger.warn(`[Account Generator] Page cleanup failed for ${taskId}: ${err.message}`);
+    });
   }
   if (context) {
-    await context.close().catch(() => {});
+    await context.close().catch((err) => {
+      logger.warn(`[Account Generator] Context cleanup failed for ${taskId}: ${err.message}`);
+    });
   }
   if (browser) {
-    await browser.close().catch(() => {});
+    await browser.close().catch((err) => {
+      logger.warn(`[Account Generator] Browser cleanup failed for ${taskId}: ${err.message}`);
+    });
   }
 }
 
@@ -233,7 +240,11 @@ async function launchSignupFlowPlaywright(task) {
       // cleanup, but if `attachResources` itself threw or the supervisor's
       // cleanup hook is missing, the browser would orphan and balloon to many
       // GB of memory waiting for nothing. Belt + suspenders.
-      try { await closeGeneratorResources(task); } catch { /* already gone */ }
+      try {
+        await closeGeneratorResources(task);
+      } catch (cleanupErr) {
+        logger.warn(`[Account Generator] Launch-failure cleanup failed for ${task.taskId}: ${cleanupErr.message}`);
+      }
       await taskSupervisor.fail(task.taskId, err);
     }
   })();
@@ -264,7 +275,11 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
         if (await pwdInput.count() > 0 && await pwdInput.first().isVisible()) {
           taskSupervisor.updateTask(task.taskId, { status: 'setting_password' });
           await pwdInput.first().fill(task.metadata.password);
-          await page.click('button[type="submit"], button:has-text("Continue")').catch(() => {});
+          try {
+            await page.click('button[type="submit"], button:has-text("Continue")');
+          } catch (clickErr) {
+            console.warn(`[Account Generator] Password submit click failed for ${task.taskId}: ${clickErr.message}`);
+          }
           await page.waitForURL(/.*(settings|chat|dashboard).*/, { timeout: 15000 });
           return;
         }

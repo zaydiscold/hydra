@@ -6,11 +6,12 @@
  * State is persisted to data/proxy-gate.json so it survives restarts.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { EventEmitter } from 'node:events';
 
 import { logger } from './logger.js';
-import { getDataDir } from '../lib/data-dir.js';
+import { ensureDataDirSync, getDataDir } from '../lib/data-dir.js';
 
 const DATA_DIR = getDataDir();
 const STATE_FILE = join(DATA_DIR, 'proxy-gate.json');
@@ -20,7 +21,12 @@ function loadPersistedState() {
     const raw = readFileSync(STATE_FILE, 'utf8');
     const parsed = JSON.parse(raw);
     if (typeof parsed.enabled === 'boolean') return parsed.enabled;
-  } catch { /* file missing or corrupt — use default */ }
+    logger.warn(`[proxy-gate] Ignoring invalid persisted state shape at ${STATE_FILE}; defaulting enabled=true`);
+  } catch (err) {
+    if (err?.code !== 'ENOENT') {
+      logger.warn(`[proxy-gate] Could not read persisted state at ${STATE_FILE}; defaulting enabled=true: ${err.message}`);
+    }
+  }
   return true; // default: enabled
 }
 
@@ -31,13 +37,13 @@ function persistState(enabled) {
   // We retain in-memory state regardless, but escalate persistence failures so
   // an operator notices that their "off" intent will not survive a restart.
   try {
-    mkdirSync(DATA_DIR, { recursive: true });
+    ensureDataDirSync();
     writeFileSync(STATE_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
     return true;
   } catch (err) {
     // First attempt failed — try once more before escalating.
     try {
-      mkdirSync(DATA_DIR, { recursive: true });
+      ensureDataDirSync();
       writeFileSync(STATE_FILE, JSON.stringify({ enabled, updatedAt: new Date().toISOString() }, null, 2));
       logger.warn(`[proxy-gate] Persisted state on retry after initial failure: ${err.message}`);
       return true;
@@ -53,10 +59,25 @@ function persistState(enabled) {
 }
 
 let _enabled = loadPersistedState();
+const events = new EventEmitter();
+
+function setEnabled(val) {
+  const next = !!val;
+  const changed = next !== _enabled;
+  _enabled = next;
+  persistState(_enabled);
+  if (changed) {
+    events.emit('change', { enabled: _enabled });
+  }
+}
 
 export const proxyGate = {
   get enabled() { return _enabled; },
-  enable()  { _enabled = true;  persistState(true); },
-  disable() { _enabled = false; persistState(false); },
-  set(val)  { _enabled = !!val; persistState(_enabled); },
+  enable()  { setEnabled(true); },
+  disable() { setEnabled(false); },
+  set(val)  { setEnabled(val); },
+  onChange(listener) {
+    events.on('change', listener);
+    return () => events.off('change', listener);
+  },
 };

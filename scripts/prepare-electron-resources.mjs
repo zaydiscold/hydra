@@ -3,11 +3,12 @@
  *
  * Outputs:
  *   - build/electron/data/empty-hydra.db
- *   - build/electron/chromium/<platform-specific Playwright Chromium payload>
+ *   - build/electron/chromium.zip containing the platform-specific Playwright
+ *     Chromium payload. Runtime extracts it under HYDRA_DATA_DIR/chromium.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { arch as osArch, homedir, platform } from 'node:os';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
@@ -16,6 +17,7 @@ const ROOT = resolve(__dirname, '..');
 const BUILD_RESOURCES = resolve(ROOT, 'build/electron');
 const DATA_OUT = resolve(BUILD_RESOURCES, 'data');
 const CHROMIUM_OUT = resolve(BUILD_RESOURCES, 'chromium');
+const CHROMIUM_ZIP_OUT = resolve(BUILD_RESOURCES, 'chromium.zip');
 const EMPTY_DB_SRC = resolve(ROOT, 'data/empty-hydra.db');
 const EMPTY_DB_OUT = resolve(DATA_OUT, 'empty-hydra.db');
 const BROWSERS_JSON = resolve(ROOT, 'node_modules/playwright-core/browsers.json');
@@ -54,6 +56,50 @@ function findChromiumSource(revision) {
   return null;
 }
 
+function walkTree(root, visitor) {
+  const stack = [root];
+  while (stack.length) {
+    const current = stack.pop();
+    const stat = lstatSync(current);
+    visitor(current, stat);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
+    for (const entry of readdirSync(current)) {
+      stack.push(resolve(current, entry));
+    }
+  }
+}
+
+function rewriteChromiumSymlinks(outRoot, sourceRoot) {
+  let rewritten = 0;
+  const badLinks = [];
+  walkTree(outRoot, (entry, stat) => {
+    if (!stat.isSymbolicLink()) return;
+    const target = readlinkSync(entry);
+    if (!isAbsolute(target)) return;
+
+    if (!target.startsWith(sourceRoot)) {
+      badLinks.push(`${entry} -> ${target}`);
+      return;
+    }
+
+    const selfContainedTarget = resolve(outRoot, relative(sourceRoot, target));
+    const relTarget = relative(dirname(entry), selfContainedTarget) || '.';
+    rmSync(entry, { force: true });
+    symlinkSync(relTarget, entry);
+    rewritten += 1;
+  });
+
+  if (badLinks.length > 0) {
+    throw new Error(
+      `[prepare-electron-resources] Chromium copy contains absolute symlinks outside its source cache:\n` +
+      badLinks.map((line) => `  ${line}`).join('\n')
+    );
+  }
+  if (rewritten > 0) {
+    console.log(`[prepare-electron-resources] rewrote ${rewritten} absolute Chromium symlinks to bundle-relative targets`);
+  }
+}
+
 mkdirSync(DATA_OUT, { recursive: true });
 execFileSync(process.execPath, [resolve(ROOT, 'scripts/build-empty-db.mjs')], {
   cwd: ROOT,
@@ -77,6 +123,7 @@ if (!chromiumSrc) {
 }
 
 rmSync(CHROMIUM_OUT, { recursive: true, force: true });
+rmSync(CHROMIUM_ZIP_OUT, { force: true });
 mkdirSync(CHROMIUM_OUT, { recursive: true });
 
 // Pick ONLY the Chromium subdir matching the build target's platform+arch.
@@ -85,41 +132,63 @@ mkdirSync(CHROMIUM_OUT, { recursive: true });
 //
 // Override with HYDRA_BUILD_TARGET (e.g. "darwin-arm64", "linux-x64", "win32-x64")
 // when cross-building; defaults to the host platform/arch.
-function resolveChromiumChild() {
+function resolveChromiumChildren() {
   const target = process.env.HYDRA_BUILD_TARGET || `${platform()}-${osArch()}`;
   switch (target) {
     case 'darwin-arm64':
-      return 'chrome-mac-arm64';
+      return ['chrome-mac-arm64'];
     case 'darwin-x64':
-      return 'chrome-mac';
+      return ['chrome-mac-x64', 'chrome-mac'];
     case 'linux-x64':
     case 'linux-arm64':
-      return 'chrome-linux';
+      return ['chrome-linux'];
     case 'win32-x64':
     case 'win32-ia32':
     case 'win32-arm64':
-      return 'chrome-win';
+      return ['chrome-win'];
     default:
       throw new Error(`[prepare-electron-resources] unsupported build target: ${target}`);
   }
 }
-const wantedChild = resolveChromiumChild();
+function chromiumCacheGuidance(target, wantedChildren) {
+  const host = `${platform()}-${osArch()}`;
+  const checked = wantedChildren.join(', ');
+  const targetHint = target === host
+    ? `Install Playwright Chromium for this machine with \`npx playwright install chromium\`, then rerun the build.`
+    : `This host is ${host}, but HYDRA_BUILD_TARGET=${target} needs ${checked}. Build on the target runner/machine or provide a PLAYWRIGHT_BROWSERS_PATH cache that already contains that target payload.`;
+  const runnerHint = [
+    'Known release runners:',
+    '  darwin-arm64 -> Apple Silicon macOS runner or local Apple Silicon Mac',
+    '  darwin-x64   -> Intel Mac or macos-15-intel GitHub runner',
+    '  win32-x64    -> Windows x64 GitHub runner or Windows machine',
+    '  linux-x64    -> Linux x64 GitHub runner or Linux machine',
+  ].join('\n');
+  return `${targetHint}\n${runnerHint}`;
+}
+const wantedChildren = resolveChromiumChildren();
+const buildTarget = process.env.HYDRA_BUILD_TARGET || `${platform()}-${osArch()}`;
+const wantedChild = wantedChildren.find((child) => existsSync(resolve(chromiumSrc, child))) ?? wantedChildren[0];
 const wantedSrc = resolve(chromiumSrc, wantedChild);
 if (!existsSync(wantedSrc)) {
   throw new Error(
-    `[prepare-electron-resources] expected Chromium subdir ${wantedChild} not found at ${wantedSrc}.\n` +
-    `Run \`npx playwright install chromium\` on this platform first, or set HYDRA_BUILD_TARGET to match an installed cache.`
+    `[prepare-electron-resources] expected Chromium subdir not found under ${chromiumSrc}.\n` +
+    `Checked: ${wantedChildren.join(', ')}\n` +
+    chromiumCacheGuidance(buildTarget, wantedChildren)
   );
 }
-cpSync(wantedSrc, resolve(CHROMIUM_OUT, wantedChild), { recursive: true, dereference: true });
+const wantedOut = resolve(CHROMIUM_OUT, wantedChild);
+cpSync(wantedSrc, wantedOut, { recursive: true });
+rewriteChromiumSymlinks(wantedOut, wantedSrc);
 console.log(`[prepare-electron-resources] copied ${basename(chromiumSrc)}/${wantedChild} to ${CHROMIUM_OUT}`);
 
 // ── Chromium validation: verify copied directory contains expected executables ──
 const chromiumBinCandidates = [
   resolve(CHROMIUM_OUT, 'chrome'),
   resolve(CHROMIUM_OUT, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+  resolve(CHROMIUM_OUT, 'chrome-mac-x64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
   resolve(CHROMIUM_OUT, 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
   resolve(CHROMIUM_OUT, 'chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+  resolve(CHROMIUM_OUT, 'chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
   resolve(CHROMIUM_OUT, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
   resolve(CHROMIUM_OUT, 'chrome-linux', 'chrome'),
   resolve(CHROMIUM_OUT, 'chrome-win', 'chrome.exe'),
@@ -134,3 +203,10 @@ if (foundBin) {
     `Checked:\n  ${chromiumBinCandidates.join('\n  ')}`
   );
 }
+
+execFileSync('zip', ['-qry', CHROMIUM_ZIP_OUT, wantedChild], {
+  cwd: CHROMIUM_OUT,
+  stdio: 'inherit',
+});
+rmSync(CHROMIUM_OUT, { recursive: true, force: true });
+console.log(`[prepare-electron-resources] archived Chromium to ${CHROMIUM_ZIP_OUT}`);

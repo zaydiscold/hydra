@@ -46,11 +46,14 @@ export async function getSetupStatus() {
       prisma.user.count(),
       prisma.account.count(),
     ]);
+    const hasUser = userCount > 0;
+    const hasAccounts = accountCount > 0;
     return {
-      setup: userCount > 0 && accountCount > 0,
-      hasUser: userCount > 0,
-      hasAccounts: accountCount > 0,
-      bootstrapRequired: userCount > 0 && accountCount === 0,
+      setup: hasUser,
+      hasUser,
+      hasAccounts,
+      needsFirstAccount: hasUser && !hasAccounts,
+      bootstrapRequired: false,
     };
   } catch (err) {
     logger.error(`[AUTH] Failed to check setup status: ${err.message}`);

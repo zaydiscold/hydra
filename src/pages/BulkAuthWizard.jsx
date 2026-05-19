@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useBulkAuth } from '../hooks/useBulkAuth';
+import AnimeText from '../components/AnimeText';
 import EmailLinkTab from '../components/EmailLinkTab';
 import OtpTab from '../components/OtpTab';
 
@@ -16,7 +17,7 @@ export default function BulkAuthWizard({ addToast }) {
     <div className="page-container" style={{ maxWidth: 740 }}>
       <header className="page-header page-header--intro" style={{ marginBottom: 'var(--space-lg)' }}>
         <div>
-          <h2 style={{ margin: 0 }}>Bulk Account Import</h2>
+          <AnimeText as="h2" mode="lines" variant="scanline" delay={36} style={{ margin: 0 }}>Bulk Account Import</AnimeText>
           <p className="page-header__lede">
             Import OpenRouter accounts into Hydra. Choose <strong>Email Link</strong> for a one-click sign-in (no
             code needed), or <strong>OTP</strong> to enter a 6-digit code per account.

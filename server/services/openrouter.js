@@ -1,9 +1,12 @@
+import { logger } from './logger.js';
+
 const BASE_URL = 'https://openrouter.ai/api/v1';
 
 const RETRY_DELAYS = [500, 1000, 2000];
+const DEFAULT_TIMEOUT_MS = 30000;
 
 async function apiRequest(path, managementKey, options = {}) {
-  const { method = 'GET', body, retries = 2 } = options;
+  const { method = 'GET', body, retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -18,6 +21,8 @@ async function apiRequest(path, managementKey, options = {}) {
       if (body && method !== 'GET') {
         fetchOptions.body = JSON.stringify(body);
       }
+
+      fetchOptions.signal = AbortSignal.timeout(timeoutMs);
 
       const response = await fetch(`${BASE_URL}${path}`, fetchOptions);
 
@@ -43,9 +48,12 @@ async function apiRequest(path, managementKey, options = {}) {
 
       return await response.json();
     } catch (err) {
-      if (attempt < retries && err.code === 'ECONNRESET') {
+      if (attempt < retries && (err.code === 'ECONNRESET' || err.name === 'TimeoutError')) {
         await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt] || 1000));
         continue;
+      }
+      if (err.name === 'TimeoutError') {
+        throw new Error(`OpenRouter API request timed out after ${timeoutMs}ms: ${path}`);
       }
       throw err;
     }
@@ -107,8 +115,14 @@ export async function deleteKey(managementKey, hash) {
 // Full account snapshot (balance + keys)
 export async function getAccountSnapshot(managementKey) {
   const [credits, keys] = await Promise.all([
-    getCredits(managementKey).catch(() => ({ total: 0, used: 0, remaining: 0 })),
-    listKeys(managementKey).catch(() => []),
+    getCredits(managementKey).catch((err) => {
+      logger.warn(`[OpenRouter] Account snapshot credits lookup failed: ${err?.message || err}`);
+      return { total: 0, used: 0, remaining: 0 };
+    }),
+    listKeys(managementKey).catch((err) => {
+      logger.warn(`[OpenRouter] Account snapshot key list lookup failed: ${err?.message || err}`);
+      return [];
+    }),
   ]);
 
   const safeKeys = keys || [];

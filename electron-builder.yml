@@ -59,8 +59,13 @@ directories:
 extraResources:
   - from: build/electron/data
     to: data
-  - from: build/electron/chromium
-    to: chromium
+  # Keep Playwright Chromium archived inside Hydra.app. On macOS the Chromium
+  # payload contains nested .app bundles; shipping those unpacked under
+  # Contents/Resources makes LaunchServices recursively scan/register them and
+  # can make Hydra.app fail to open with kLSNoExecutableErr. Runtime extracts
+  # this archive into userData/chromium before launching browser automation.
+  - from: build/electron/chromium.zip
+    to: chromium.zip
   - from: prisma/schema.prisma
     to: prisma/schema.prisma
   - from: prisma/migrations
@@ -68,7 +73,7 @@ extraResources:
 
 mac:
   target:
-    - target: dmg
+    - target: zip
       arch:
         - arm64
   icon: desktop/icons/icon.icns
@@ -92,7 +97,6 @@ win:
         - x64
         - arm64
   icon: desktop/icons/icon.ico
-  publisherName: Hydra
   legalTrademarks: Hydra
   # Code signing — uncomment and set these env vars to avoid SmartScreen warnings:
   #   CSC_LINK            = path/to/certificate.pfx
@@ -121,8 +125,10 @@ linux:
   synopsis: OpenRouter Fleet Manager
   description: Manage multiple OpenRouter accounts from a single dashboard.
   desktop:
-    Name: Hydra
-    Comment: OpenRouter Fleet Manager
+    entry: |
+      [Desktop Entry]
+      Name=Hydra
+      Comment=OpenRouter Fleet Manager
 
 nsis:
   oneClick: false

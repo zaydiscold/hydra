@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { recordWebhookEvent } from '../services/webhook-idempotency.js';
 import { logger } from '../services/logger.js';
+import { revokeSessionsByClerkSessionId } from '../services/store.js';
 
 const router = Router();
 
@@ -22,11 +23,19 @@ router.post('/clerk', async (req, res) => {
       });
     }
 
+    let action = { type: 'none', revoked: 0, matched: 0 };
+    if (eventType === 'session.ended' || eventType === 'session.revoked') {
+      const sessionId = payload?.data?.id || payload?.data?.session_id || payload?.data?.sessionId || null;
+      const result = await revokeSessionsByClerkSessionId(sessionId, eventType);
+      action = { type: 'session_revoke', ...result };
+    }
+
     logger.info(`[WEBHOOK] Clerk event accepted: ${eventType} (${normalizedId})`);
     return res.status(200).json({
       success: true,
       duplicate: false,
       eventId: normalizedId,
+      action,
       message: 'Webhook accepted',
     });
   } catch (err) {

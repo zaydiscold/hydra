@@ -1,0 +1,93 @@
+name: Release Desktop Apps
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64 zip
+            os: macos-14
+            build_target: darwin-arm64
+            target: --mac zip --arm64
+            artifact: release/Hydra-*.zip
+            release_glob: release/Hydra-*-mac-arm64.zip
+          - name: macOS Intel x64 zip
+            os: macos-15-intel
+            build_target: darwin-x64
+            target: --mac zip --x64
+            artifact: release/Hydra-*.zip
+            release_glob: release/Hydra-*-mac-x64.zip
+          - name: Windows x64 NSIS
+            os: windows-2022
+            build_target: win32-x64
+            target: --win nsis --x64
+            artifact: |
+              release/Hydra-*-win-x64.exe
+              release/*.blockmap
+            release_glob: "release/Hydra-*-win-x64.exe release/*.blockmap"
+          - name: Linux x64 AppImage
+            os: ubuntu-22.04
+            build_target: linux-x64
+            target: --linux AppImage --x64
+            artifact: release/Hydra-*.AppImage
+            release_glob: release/Hydra-*-linux-x64.AppImage
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run gate
+      - run: npm run build
+      - run: npm run electron:prepare
+        env:
+          HYDRA_BUILD_TARGET: ${{ matrix.build_target }}
+      - run: npx electron-builder ${{ matrix.target }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HYDRA_SKIP_NOTARIZE: '1'
+      - run: npm run electron:smoke
+        env:
+          HYDRA_BUILD_TARGET: ${{ matrix.build_target }}
+      - name: Upload verified artifacts to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_GLOB: ${{ matrix.release_glob }}
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes ""
+          shopt -s nullglob
+          files=()
+          for pattern in $RELEASE_GLOB; do
+            matches=( $pattern )
+            files+=( "${matches[@]}" )
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No release artifacts matched: $RELEASE_GLOB" >&2
+            exit 1
+          fi
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: warn

@@ -62,7 +62,9 @@ export async function stopRequestLogRetention() {
   if (timer) clearInterval(timer);
   timer = null;
   if (prunePromise) {
-    await prunePromise.catch(() => {});
+    await prunePromise.catch((err) => {
+      logger.warn(`[RETENTION] Stop waited on failed prune: ${err.message}`);
+    });
     prunePromise = null;
   }
 }

@@ -30,6 +30,7 @@ import { taskSupervisor } from './services/task-supervisor.js';
 import { enforceLegacyStorageReset } from './services/legacy-storage.js';
 import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
 import { startSessionRefresher, stopSessionRefresher } from './services/session-refresher.js';
+import { startMagicLinkCleanup, stopMagicLinkCleanup } from './services/magic-link-manager.js';
 import { proxyGate } from './services/proxy-gate.js';
 import { rotationManager } from './services/rotation-manager.js';
 // NOTE: disconnectPrisma is dynamically imported in gracefulShutdown to avoid
@@ -122,25 +123,43 @@ const configuredCorsOrigins = (process.env.HYDRA_CORS_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
-app.use(cors({
-  origin(origin, callback) {
-    // Same-origin, curl, and Electron file-less requests have no Origin.
-    if (!origin) return callback(null, true);
-    if (configuredCorsOrigins.includes(origin)) return callback(null, true);
-    try {
-      const parsed = new URL(origin);
-      // #21: Harmonize IPv6 loopback — ::1 must be allowed alongside
-      // localhost/127.0.0.1 to match the LOCAL_UI_HOSTS navigation guard.
-      const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
-      if (parsed.protocol === 'http:' && isLoopback) {
-        return callback(null, true);
-      }
-      return callback(new Error(`CORS denied for origin: ${origin}`));
-    } catch (parseErr) {
-      return callback(new Error(`CORS denied for unparseable origin: ${origin} (${parseErr.message})`));
-    }
-  },
-  credentials: true,
+const viteDevPort = String(process.env.HYDRA_VITE_PORT || '5173');
+
+function normalizeHost(host = '') {
+  return String(host).replace(/^\[(.*)\]$/, '$1').toLowerCase();
+}
+
+function isLoopbackCorsHost(hostname) {
+  const normalized = normalizeHost(hostname);
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
+}
+
+function isAllowedCorsOrigin(req, origin) {
+  // Same-origin, curl, and Electron file-less requests have no Origin.
+  if (!origin) return true;
+  if (configuredCorsOrigins.includes(origin)) return true;
+
+  const parsed = new URL(origin);
+  if (parsed.protocol !== 'http:') return false;
+  if (!isLoopbackCorsHost(parsed.hostname)) return false;
+
+  const requestHost = normalizeHost(req.headers.host || '');
+  if (normalizeHost(parsed.host) === requestHost) return true;
+
+  const devCorsAllowed = process.env.NODE_ENV !== 'production' && parsed.port === viteDevPort;
+  return devCorsAllowed;
+}
+
+app.use(cors((req, callback) => {
+  const origin = req.headers.origin;
+  try {
+    callback(null, {
+      origin: isAllowedCorsOrigin(req, origin),
+      credentials: true,
+    });
+  } catch (parseErr) {
+    callback(new Error(`CORS denied for unparseable origin: ${origin} (${parseErr.message})`));
+  }
 }));
 
 // CSP middleware for Electron embedded mode — restrict to self
@@ -273,6 +292,7 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
   logger.info(`[SHUTDOWN] Starting graceful shutdown (${source})`);
   stopPinger();
   await stopRequestLogRetention();
+  stopMagicLinkCleanup();
   rotationManager.cancelReload();
   await stopSessionRefresher();
 
@@ -376,6 +396,7 @@ async function bootstrap({ port, silent } = {}) {
   taskSupervisor.start();
   startPinger();
   startRequestLogRetention();
+  startMagicLinkCleanup();
   startSessionRefresher(); // P13 — auto-refresh sessions approaching expiry
 
   // Eagerly load the rotation pool so it's ready before first proxy request
