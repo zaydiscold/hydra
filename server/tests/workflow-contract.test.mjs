@@ -9,6 +9,23 @@ function read(relPath) {
   return readFileSync(join(ROOT, relPath), 'utf-8');
 }
 
+test('CI and Docker workflows run on the supported Node 24 action runtime', () => {
+  const ci = read('.github/workflows/ci.yml');
+  const docker = read('.github/workflows/docker.yml');
+
+  assert.match(ci, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:\s*"true"/, 'CI must opt GitHub actions into the Node 24 runtime');
+  assert.match(ci, /node-version:\s*24/, 'CI must install supported Node 24 for repo commands');
+  assert.match(ci, /npm ci/, 'CI must install from lockfile');
+  assert.match(ci, /npm run lint/, 'CI must run lint');
+  assert.match(ci, /npm run build[\s\S]*npm test[\s\S]*npm run gate[\s\S]*npm run build/, 'CI must build before tests, then run tests, gate, and final build');
+
+  assert.match(docker, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:\s*"true"/, 'Docker publish workflow must opt GitHub actions into the Node 24 runtime');
+  assert.match(docker, /platforms:\s*linux\/amd64,linux\/arm64/, 'Docker publish workflow must build amd64 and arm64 images');
+  assert.match(docker, /push:\s*true/, 'Docker publish workflow must push images');
+  assert.match(docker, /cache-from:\s*type=registry/, 'Docker publish workflow must reuse registry cache');
+  assert.match(docker, /cache-to:\s*type=registry/, 'Docker publish workflow must refresh registry cache');
+});
+
 test('electron package smoke workflow covers macOS, Windows, and Linux packages', () => {
   const workflow = read('.github/workflows/electron-smoke.yml');
 
