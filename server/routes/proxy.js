@@ -17,9 +17,12 @@ import { prisma } from '../services/db.js';
 import { logger } from '../services/logger.js';
 import { rotationManager } from '../services/rotation-manager.js';
 import { getMasterProxyKey, getGenericProxyKey } from '../services/store.js';
+import { enqueueRequestLog, getRequestLogBufferSnapshot } from '../services/request-log-buffer.js';
 
 const router = Router();
 const MAX_RETRIES = 3;
+const MAX_IN_FLIGHT = Number(process.env.HYDRA_PROXY_MAX_IN_FLIGHT || 128);
+let inFlightProxyRequests = 0;
 
 // Minimal static fallback model list if pool is empty AND DB cache is empty
 const STATIC_MODELS = [
@@ -124,39 +127,13 @@ async function validateMasterKey(authHeader) {
 
 /** Asynchronously log proxy requests to the DB */
 function logRequest(keyHash, model, status, latencyMs, tokens = {}, clientHint = null) {
-  prisma.requestLog.create({
-    data: {
-      keyHash: keyHash ?? null,
-      model,
-      status,
-      latencyMs,
-      promptTokens: tokens.prompt_tokens || null,
-      completionTokens: tokens.completion_tokens || null,
-      clientHint,
-    },
-  }).catch(async (err) => {
-    if (keyHash) {
-      try {
-        await prisma.requestLog.create({
-          data: {
-            keyHash: null,
-            model,
-            status,
-            latencyMs,
-            promptTokens: tokens.prompt_tokens || null,
-            completionTokens: tokens.completion_tokens || null,
-            clientHint,
-          },
-        });
-        return;
-      } catch (fallbackErr) {
-        const { formatPrismaError } = await import('../lib/prisma-error.js');
-        logger.error(`[PROXY] ${formatPrismaError(fallbackErr, 'write RequestLog without keyHash')}`);
-      }
-    }
-
-    const { formatPrismaError } = await import('../lib/prisma-error.js');
-    logger.error(`[PROXY] ${formatPrismaError(err, 'write RequestLog')}`);
+  enqueueRequestLog({
+    keyHash,
+    model,
+    status,
+    latencyMs,
+    tokens,
+    clientHint,
   });
 }
 
@@ -212,6 +189,29 @@ function updateRequestLog(logId, model, latencyMs, tokens = {}) {
 // ─── Main proxy handler ───────────────────────────────────────────────────────
 
 router.use(async (req, res) => {
+  if (inFlightProxyRequests >= MAX_IN_FLIGHT) {
+    const buffer = getRequestLogBufferSnapshot();
+    res.setHeader('X-Hydra-Proxy-In-Flight', String(inFlightProxyRequests));
+    res.setHeader('X-Hydra-Request-Log-Queued', String(buffer.queued));
+    return sendHydraError(
+      res,
+      503,
+      'Hydra proxy is at its configured concurrency limit. Retry shortly.',
+      'hydra_proxy_busy',
+      'proxy-busy'
+    );
+  }
+
+  inFlightProxyRequests += 1;
+  let released = false;
+  const releaseProxySlot = () => {
+    if (released) return;
+    released = true;
+    inFlightProxyRequests = Math.max(0, inFlightProxyRequests - 1);
+  };
+  res.once('finish', releaseProxySlot);
+  res.once('close', releaseProxySlot);
+
   const path = req.path; // e.g. /chat/completions, /models
   const startTime = Date.now();
   const isFreeRoute = path.startsWith('/free');
@@ -418,7 +418,7 @@ router.use(async (req, res) => {
 
       // ── Success — forward the response ──
       rotationManager.recordSuccess(keyEntry.hash); // Reset failure count
-      logger.info(`[PROXY] ${req.method} ${path} → ${upstreamRes.status} (key: ${keyEntry.hash.slice(0, 8)}…, account: ${keyEntry.account?.alias ?? '?'})`);
+      logger.debug(`[PROXY] ${req.method} ${path} → ${upstreamRes.status} (key: ${keyEntry.hash.slice(0, 8)}…, account: ${keyEntry.account?.alias ?? '?'})`);
 
       upstreamRes.headers.forEach((value, header) => {
         if (!BLOCKED_RESPONSE_HEADERS.has(header.toLowerCase())) {

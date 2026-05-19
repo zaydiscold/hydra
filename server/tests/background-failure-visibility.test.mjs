@@ -179,6 +179,7 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   const telemetry = readRepoFile('electron/app/telemetry.js');
   const userPrefs = readRepoFile('electron/app/userPrefs.js');
   const proxy = readRepoFile('server/routes/proxy.js');
+  const requestLogBuffer = readRepoFile('server/services/request-log-buffer.js');
   const openrouter = readRepoFile('server/services/openrouter.js');
 
   assert.match(cliServices, /service shutdown cleanup failed: \$\{err\?\.\message \|\| err\}/);
@@ -203,11 +204,19 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   assert.match(proxy, /Failed to read OpenRouter 429 response body: \$\{err\?\.\message \|\| err\}/);
   assert.match(proxy, /Live model list fetch returned HTTP \$\{result\.status\}; serving static model fallback/);
   assert.match(proxy, /Model list fallback used because live\/cache lookup failed: \$\{err\?\.message \|\| err\}/);
-  assert.match(proxy, /formatPrismaError\(fallbackErr, 'write RequestLog without keyHash'\)/);
   assert.match(proxy, /formatPrismaError\(fallbackErr, 'create RequestLog placeholder without keyHash'\)/);
+  assert.match(proxy, /enqueueRequestLog/, 'non-stream proxy request logs must use the bounded request-log buffer');
+  assert.match(proxy, /MAX_IN_FLIGHT/, 'proxy must have an explicit in-flight guard for sustained router load');
+  assert.match(proxy, /logger\.debug\(`\[PROXY\] \$\{req\.method\}/, 'proxy success logging must stay off info level on the hot path');
   assert.doesNotMatch(proxy, /upstreamRes\.text\(\); \} catch \{ \/\* ignore \*\/ \}/);
   assert.doesNotMatch(proxy, /catch \{\s*\/\/ fall through/);
   assert.doesNotMatch(proxy, /handleModelList[\s\S]*catch \{\s*res\.setHeader\('X-Hydra-Models-Source', 'static'\)/);
+
+  assert.match(requestLogBuffer, /MAX_QUEUE/, 'request log buffering must be bounded');
+  assert.match(requestLogBuffer, /Queue full; dropped \$\{dropped\} request log row/, 'request log overflow must leave throttled evidence');
+  assert.match(requestLogBuffer, /formatPrismaError\(fallbackErr, 'write buffered RequestLog without keyHash'\)/);
+  assert.match(requestLogBuffer, /export async function stopRequestLogBuffer/, 'request log buffer must drain on shutdown');
+  assert.doesNotMatch(requestLogBuffer, /queue\.push[\s\S]*without bound/);
 
   assert.match(openrouter, /Account snapshot credits lookup failed: \$\{err\?\.message \|\| err\}/);
   assert.match(openrouter, /Account snapshot key list lookup failed: \$\{err\?\.message \|\| err\}/);

@@ -59,6 +59,11 @@ mem-watch-*.log
 scratch/
 .scratch/
 
+# Local agent/docs context
+/AGENTS.md
+/CLAUDE.md
+/docs/
+
 # Cursor hook runtime state (local; changes every session)
 .cursor/hooks/state/
 

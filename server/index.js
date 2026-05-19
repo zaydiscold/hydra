@@ -26,6 +26,7 @@ import debugRoutes from './routes/debug.js';
 
 import { startPinger, stopPinger } from './services/health-pinger.js';
 import { startRequestLogRetention, stopRequestLogRetention } from './services/request-log-retention.js';
+import { stopRequestLogBuffer } from './services/request-log-buffer.js';
 import { taskSupervisor } from './services/task-supervisor.js';
 import { enforceLegacyStorageReset } from './services/legacy-storage.js';
 import { getMasterProxyKey, getGenericProxyKey } from './services/store.js';
@@ -291,6 +292,7 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
 
   logger.info(`[SHUTDOWN] Starting graceful shutdown (${source})`);
   stopPinger();
+  await stopRequestLogBuffer();
   await stopRequestLogRetention();
   stopMagicLinkCleanup();
   rotationManager.cancelReload();
