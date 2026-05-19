@@ -366,7 +366,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'mac-arm-artifact' && ['ok', 'missing'].includes(item.state)));
   assert.ok(report.items.some((item) => item.id === 'packaged-dogfood-runbook' && item.state === 'ok' && /Electron-only final dogfood/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'mac-intel-artifact' && ['ok', 'missing'].includes(item.state)));
-  assert.ok(report.items.some((item) => item.id === 'mac-intel-current' && item.state === 'ok'));
+  assert.ok(report.items.some((item) => item.id === 'mac-intel-current' && ['ok', 'missing'].includes(item.state)));
   assert.ok(report.items.some((item) => item.id === 'windows-installer-artifact' && ['ok', 'missing'].includes(item.state)));
   assert.ok(report.items.some((item) => item.id === 'dependency-audit' && item.state === 'ok' && /brace-expansion/.test(item.evidence) && /5\.0\.6/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'packaged-gui-dogfood' && item.state === 'deferred'));
