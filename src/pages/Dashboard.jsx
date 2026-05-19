@@ -324,12 +324,22 @@ function getFleetHealth(accounts, liveStatuses = {}) {
 }
 
 function getLastSyncLabel(accounts) {
-  const latest = accounts
-    .map((account) => Date.parse(account.lastSyncAt || account.updatedAt || account.lastLoginAt || ''))
-    .filter(Number.isFinite)
-    .sort((a, b) => b - a)[0];
+  let latest = null;
+  for (const account of accounts) {
+    const ts = getSyncTimestamp(account);
+    if (ts != null && (latest == null || ts > latest)) latest = ts;
+  }
   if (!latest) return 'no sync';
-  const diffMinutes = Math.max(0, Math.floor((Date.now() - latest) / 60000));
+  return formatRelativeSyncLabel(latest);
+}
+
+function getSyncTimestamp(account) {
+  const timestamp = Date.parse(account.lastSyncAt || account.updatedAt || account.lastLoginAt || '');
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function formatRelativeSyncLabel(timestamp) {
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
   if (diffMinutes < 1) return 'now';
   if (diffMinutes < 60) return `${diffMinutes}m`;
   return `${Math.floor(diffMinutes / 60)}h`;
@@ -353,19 +363,20 @@ function getDashboardActivity(accounts, liveStatuses = {}, cooldownMap = {}) {
     const remaining = account.credits?.remaining ?? 0;
     const total = account.credits?.total ?? 0;
     const pct = total > 0 ? (remaining / total) * 100 : 0;
+    const syncLabel = formatRelativeSyncLabel(getSyncTimestamp(account) ?? now);
 
     if (account.status === 'error' || account.sessionDecryptFailed) {
-      events.push({ tone: 'error', title: 'account needs repair', detail: alias, time: getLastSyncLabel([account]) });
+      events.push({ tone: 'error', title: 'account needs repair', detail: alias, time: syncLabel });
     } else if (!account.hasManagementKey) {
-      events.push({ tone: 'error', title: 'control key missing', detail: alias, time: getLastSyncLabel([account]) });
+      events.push({ tone: 'error', title: 'control key missing', detail: alias, time: syncLabel });
     } else if (sessionStatus === 'expired' || sessionStatus === 'none') {
-      events.push({ tone: 'warning', title: 'session needs sign-in', detail: alias, time: getLastSyncLabel([account]) });
+      events.push({ tone: 'warning', title: 'session needs sign-in', detail: alias, time: syncLabel });
     } else if (lockedKeys.length > 0) {
       events.push({ tone: 'warning', title: `${lockedKeys.length} key cooldown`, detail: alias, time: 'now' });
     } else if (total > 0 && pct < 20) {
-      events.push({ tone: 'warning', title: 'low balance', detail: `${alias} · ${formatCurrency(remaining)}`, time: getLastSyncLabel([account]) });
+      events.push({ tone: 'warning', title: 'low balance', detail: `${alias} · ${formatCurrency(remaining)}`, time: syncLabel });
     } else {
-      events.push({ tone: 'success', title: 'account synced', detail: alias, time: getLastSyncLabel([account]) });
+      events.push({ tone: 'success', title: 'account synced', detail: alias, time: syncLabel });
     }
   }
 
