@@ -40,18 +40,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # NOTE: release_glob lists each artifact AND the auto-update metadata
+          # files electron-updater needs. Without latest-*.yml on the GitHub
+          # release the running app's autoUpdater.checkForUpdates() will 404
+          # on the metadata URL — exact failure mode hit on v1.0.7. The arm64
+          # job is the canonical macOS latest-mac.yml publisher because Apple
+          # Silicon is the dominant user arch; x64 users still get the .zip but
+          # not auto-update (acceptable trade until multi-arch merge is wired).
           - name: macOS arm64 zip
             os: macos-14
             build_target: darwin-arm64
             target: --mac zip --arm64
             artifact: release/Hydra-*.zip
-            release_glob: release/Hydra-*-mac-arm64.zip
+            release_glob: "release/Hydra-*-mac-arm64.zip release/Hydra-*-mac-arm64.zip.blockmap release/latest-mac.yml"
           - name: macOS Intel x64 zip
             os: macos-15-intel
             build_target: darwin-x64
             target: --mac zip --x64
             artifact: release/Hydra-*.zip
-            release_glob: release/Hydra-*-mac-x64.zip
+            release_glob: "release/Hydra-*-mac-x64.zip release/Hydra-*-mac-x64.zip.blockmap"
           - name: Windows x64 NSIS
             os: windows-2022
             build_target: win32-x64
@@ -59,13 +66,13 @@ jobs:
             artifact: |
               release/Hydra-*-win-x64.exe
               release/*.blockmap
-            release_glob: "release/Hydra-*-win-x64.exe release/*.blockmap"
+            release_glob: "release/Hydra-*-win-x64.exe release/*.blockmap release/latest.yml"
           - name: Linux x64 AppImage
             os: ubuntu-22.04
             build_target: linux-x64
             target: --linux AppImage --x64
             artifact: release/Hydra-*.AppImage
-            release_glob: release/Hydra-*-linux-x64.AppImage
+            release_glob: "release/Hydra-*-linux-x64.AppImage release/latest-linux.yml"
 
     steps:
       - uses: actions/checkout@v4

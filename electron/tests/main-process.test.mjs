@@ -100,13 +100,17 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(surface.includes('loadURL'), 'must call loadURL on the window');
   });
 
-  it('keeps standard native macOS traffic lights and titlebar drag affordance on the main window', () => {
+  it('uses Electron hiddenInset titlebar on macOS to drop the grey chrome strip while keeping traffic lights', () => {
     const windows = readFileSync(resolve(APP_DIR, 'windows.js'), 'utf-8');
 
-    assert.match(windows, /const useNativeMacChrome = process\.platform === 'darwin'/);
-    assert.match(windows, /frame: useNativeMacChrome/);
-    assert.doesNotMatch(windows, /titleBarStyle:/);
-    assert.doesNotMatch(windows, /trafficLightPosition:/);
+    // We hide the OS title bar but keep native traffic lights inset at a
+    // pixel position that matches src/index.css `.app-chrome--mac` left pad.
+    // Renderer draws its own slim drag strip (see src/App.jsx AppChrome
+    // mac branch). Non-mac platforms keep the native frame.
+    assert.match(windows, /const isMac = process\.platform === 'darwin'/);
+    assert.match(windows, /titleBarStyle: 'hiddenInset'/);
+    assert.match(windows, /trafficLightPosition: \{ x: 14, y: 12 \}/);
+    assert.match(windows, /: \{ frame: true \}/);
   });
 
   it('loads Vite URL in dev and a localhost URL in prod', () => {

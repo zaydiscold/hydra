@@ -493,6 +493,16 @@ select:-webkit-autofill {
   user-select: none;
 }
 
+/* macOS uses Electron titleBarStyle: 'hiddenInset' (electron/app/windows.js)
+ * which places native traffic lights at (14, 12). The left padding here
+ * reserves clearance so the H brand mark and Hydra name don't sit under
+ * the lights. Variant intentionally omits the custom window controls on
+ * the right — the OS controls live on the left. */
+.app-chrome--mac {
+  padding-left: 82px;
+  justify-content: flex-start;
+}
+
 .app-chrome__brand {
   display: inline-flex;
   align-items: center;

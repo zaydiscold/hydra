@@ -721,14 +721,22 @@ export function createSplashWindow() {
 
 // ─── Main Window ─────────────────────────────────────────────────────────────
 export function createMainWindow({ show = false } = {}) {
-  const useNativeMacChrome = process.platform === 'darwin';
+  const isMac = process.platform === 'darwin';
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 640,
     title: 'Hydra',
-    frame: useNativeMacChrome,
+    // macOS: hide the grey OS title bar but keep traffic-light buttons,
+    // inset so they sit inside our own renderer-drawn chrome strip. The
+    // renderer's `.app-chrome--mac` reserves the left padding so the
+    // lights don't overlap the brand mark. Without the renderer chrome
+    // and the matching CSS class the window would have no visible drag
+    // region — see src/App.jsx AppChrome.
+    ...(isMac
+      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 12 } }
+      : { frame: true }),
     icon: ICON_PATH,
     backgroundColor: '#0a0014',
     webPreferences: {

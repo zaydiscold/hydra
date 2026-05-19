@@ -535,7 +535,23 @@ function isMacUserAgent() {
 function AppChrome() {
   if (!isElectron()) return null;
 
-  if (isMacUserAgent()) return null;
+  // macOS uses Electron titleBarStyle: 'hiddenInset' — the grey OS chrome
+  // is gone, but native traffic-light buttons remain inset at (14, 12).
+  // We still render our own slim chrome strip to provide the drag region
+  // (without it the window would be unmovable) and brand mark on the right.
+  // The .app-chrome--mac variant left-pads enough room for the lights.
+  if (isMacUserAgent()) {
+    return (
+      <div className="app-chrome app-chrome--mac" role="banner" aria-hidden="true">
+        <div className="app-chrome__brand">
+          <div className="app-chrome__mark">H</div>
+          <div className="app-chrome__titles">
+            <span className="app-chrome__name">Hydra</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleMinimize = () => void tryNative(nativeBridge.minimizeWindow);
   const handleMaximize = () => void tryNative(nativeBridge.toggleMaximizeWindow);
@@ -575,7 +591,10 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const electronMode = isElectron();
-  const rendererChrome = electronMode && !isMacUserAgent();
+  // Renderer chrome is now drawn on every Electron platform (mac uses
+  // titleBarStyle: 'hiddenInset' so the OS bar is gone — see
+  // electron/app/windows.js). The layout pad accounts for our own 38px strip.
+  const rendererChrome = electronMode;
 
   // #70: Keep Electron/Finder window titles aligned with the current route.
   useEffect(() => {

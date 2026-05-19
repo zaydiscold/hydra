@@ -28,24 +28,34 @@ function listFiles(dir, predicate) {
   return files.sort();
 }
 
-test('Electron app chrome defers to standard native macOS titlebar controls', () => {
+test('Electron app chrome draws its own drag strip on macOS with traffic-light clearance', () => {
   const app = readRepoFile('src/App.jsx');
   const css = readRepoFile('src/index.css');
+  const windowsJs = readRepoFile('electron/app/windows.js');
   const chromeStart = app.indexOf('function AppChrome()');
   assert.notEqual(chromeStart, -1);
   const chromeEnd = app.indexOf('export default function App()', chromeStart);
   const appChrome = app.slice(chromeStart, chromeEnd);
 
+  // macOS: hiddenInset titlebar in Electron + bespoke renderer drag strip,
+  // with traffic lights inset at (14, 12) — matches the CSS left padding.
+  assert.match(windowsJs, /titleBarStyle: 'hiddenInset'/);
+  assert.match(windowsJs, /trafficLightPosition: \{ x: 14, y: 12 \}/);
+
+  // AppChrome now renders on every Electron platform; mac variant is the
+  // slim drag strip with no custom window controls (OS traffic lights handle that).
   assert.match(app, /function isMacUserAgent\(\)/);
-  assert.match(appChrome, /if \(isMacUserAgent\(\)\) return null;/);
-  assert.match(app, /const rendererChrome = electronMode && !isMacUserAgent\(\);/);
-  assert.doesNotMatch(appChrome, /app-chrome--mac-native/);
+  assert.match(appChrome, /app-chrome app-chrome--mac/);
   assert.match(appChrome, /className="app-chrome__name">Hydra/);
-  assert.doesNotMatch(appChrome, /app-chrome__section/);
+  assert.match(app, /const rendererChrome = electronMode;/);
   assert.doesNotMatch(appChrome, /\{title\}/);
   assert.doesNotMatch(app, /<AppChrome\s+title=/);
+
+  // Base chrome stays draggable, controls stay no-drag (for non-mac), and the
+  // mac variant left-pads enough room for traffic lights.
   assert.match(css, /\.app-chrome\s*\{[\s\S]*?-webkit-app-region:\s*drag;/);
   assert.match(css, /\.app-chrome__controls\s*\{[\s\S]*?-webkit-app-region:\s*no-drag;/);
+  assert.match(css, /\.app-chrome--mac\s*\{[\s\S]*?padding-left:\s*82px;/);
 });
 
 test('global form controls cannot fall back to white native browser styling', () => {
