@@ -1,55 +1,71 @@
-# Hydra | OpenRouter Fleet Manager
+# Hydra
 
-Hydra is a local Electron desktop app for managing OpenRouter account fleets. It ships an embedded Express server, encrypted local storage, a React dashboard, and an OpenAI-compatible local proxy in one packaged app.
+<p align="center">
+  <img src="public/hydra_dragon.png" alt="Hydra" width="112" />
+</p>
 
-## What It Does
+<p align="center">
+  <strong>Local-first OpenRouter fleet manager, desktop control plane, and OpenAI-compatible API router.</strong>
+</p>
 
-Hydra is built for operators who manage multiple OpenRouter identities and keys. It consolidates account status, balances, key management, code redemption, and proxy routing into one native desktop window.
+<p align="center">
+  <a href="https://github.com/zaydiscold/hydra/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/zaydiscold/hydra/ci.yml?branch=master&label=CI&style=flat-square"></a>
+  <a href="https://github.com/zaydiscold/hydra/actions/workflows/release.yml"><img alt="Release" src="https://img.shields.io/github/actions/workflow/status/zaydiscold/hydra/release.yml?branch=master&label=release&style=flat-square"></a>
+  <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D22.12-339933?style=flat-square&logo=node.js&logoColor=white">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-42-47848F?style=flat-square&logo=electron&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111">
+  <img alt="Prisma" src="https://img.shields.io/badge/Prisma-SQLite-2D3748?style=flat-square&logo=prisma&logoColor=white">
+  <a href="openapi/hydra-api.openapi.json"><img alt="OpenAPI" src="https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=flat-square&logo=openapiinitiative&logoColor=white"></a>
+</p>
 
-## Features
+Hydra is a packaged Electron app for running an OpenRouter account fleet from one local machine. It combines encrypted local storage, account/session management, key provisioning, promo-code workflows, live traffic visibility, a scriptable CLI, and an OpenAI-compatible `/v1` proxy that can stay running as an API router.
 
-- **Multi-Account Dashboard** — Real-time aggregate balances and account status visualization.
-- **Fleet Key Management** — Generate, store, and rotate API keys for accounts in your pool.
-- **Bulk Code Redemption** — Distribute promo codes to your entire fleet in a single pass.
-- **Local-First Storage** — Sensitive account/session/key material is encrypted at rest.
-- **Embedded Proxy** — Hydra exposes an OpenAI-compatible local `/v1` proxy on a loopback port surfaced in the app.
-- **Desktop Packaging** — Buildable Electron packages for macOS, Windows, and Linux.
+It is designed for operators who want a native control plane without shipping account secrets to a hosted service.
+
+## Screenshots
+
+<p align="center">
+  <img src="videos/assets/dashboard.png" alt="Hydra dashboard" width="48%" />
+  <img src="videos/assets/pool.png" alt="Hydra proxy pool" width="48%" />
+</p>
+
+<p align="center">
+  <img src="videos/assets/traffic.png" alt="Hydra traffic view" width="48%" />
+  <img src="videos/assets/vault.png" alt="Hydra vault setup" width="48%" />
+</p>
+
+## Highlights
+
+- **Native desktop control plane**: Electron shell with an embedded Express API, tray/menu lifecycle, platform-native user data paths, and packaged runtime resources.
+- **OpenAI-compatible local router**: `/v1/models` and `/v1/chat/completions` proxy traffic through the managed OpenRouter key pool.
+- **Long-running API behavior**: bounded proxy concurrency, buffered request-log writes, log rotation, request-log retention, upstream health checks, and graceful shutdown paths.
+- **Fleet account operations**: add accounts, track session health, provision management keys, sync balances, and inspect account readiness.
+- **Key pool management**: rotate across pooled keys, cool down rate-limited keys, disable unhealthy keys, and expose a single local Hydra proxy key.
+- **Promo-code workflows**: preflight readiness, redeem against selected accounts, and keep redemption history.
+- **Local-first security**: local vault password, encrypted secrets, owner-only data directories, redacted CLI output, and loopback-first network binding.
+- **Scriptable operator CLI**: JSON-friendly commands for automation, diagnostics, imports/exports, fleet scans, and router lifecycle control.
+- **Release-oriented quality gates**: linting, Electron packaging checks, API integration tests, UI static contracts, OpenAPI coverage, Docker smoke checks, and Windows path compatibility checks.
+
+## Install
+
+Use the packaged release artifact for your platform:
+
+| Platform | Artifact | Notes |
+| --- | --- | --- |
+| macOS | `Hydra.app` / zip | Boots the embedded server and native desktop window. |
+| Windows | `Hydra Setup.exe` | Uses `%APPDATA%\\Hydra\\` for app data. |
+| Linux | `Hydra.AppImage` | Uses `~/.config/Hydra/` for app data. |
+
+On first launch, Hydra creates an encrypted local vault and an empty SQLite database in the platform user-data directory. Closing the app window does not have to kill the router; quit from the tray/menu when you want the server fully stopped.
 
 ## Quick Start
 
-Hydra is a native desktop app — no terminal required for end users.
-
-### Run the packaged app
-
-| Launcher | What it does |
-| --- | --- |
-| `Hydra.app` (macOS) / `Hydra Setup.exe` (Windows) / `Hydra.AppImage` (Linux) | The packaged Electron app. Boots the embedded server, opens the native window, and stays running in the system tray / menu bar. Closing the window keeps the proxy alive; "Quit Hydra" from the tray fully shuts down. |
-
-The first launch creates an empty SQLite database in your platform-native `userData` directory:
-
-- macOS: `~/Library/Application Support/Hydra/`
-- Windows: `%APPDATA%\Hydra\`
-- Linux: `~/.config/Hydra/`
-
-There is no "browser opening to localhost" step in the desktop flow — the window is the app.
-
-## Development
-
-Install dependencies and run Hydra in Electron development mode:
-
 ```bash
+git clone https://github.com/zaydiscold/hydra.git
+cd hydra
 cp .env.example .env
 npm install
 npm run dev:electron
-```
-
-Common checks:
-
-```bash
-npm run lint
-npm test
-npm run build
-npm run gate
 ```
 
 Build a desktop artifact:
@@ -58,25 +74,109 @@ Build a desktop artifact:
 npm run electron:build
 ```
 
-## CLI
-
-Hydra includes a local CLI for operator scripts:
+Run the quality gate:
 
 ```bash
-node bin/hydra.mjs help
-node bin/hydra.mjs doctor --json
-node bin/hydra.mjs openrouter models --json
-node bin/hydra.mjs codes preflight <code> --json
+npm run lint
+npm test
+npm run gate
 ```
 
-## Security Model
+## CLI
 
-Hydra is local-first by design. Account sessions, API keys, and app secrets live
-on the user's machine, and the desktop proxy binds to loopback by default. Do
-not commit `.env`, local databases, release artifacts, or exported account data.
+Hydra ships a local `hydra` binary for operator scripts. Link it during development:
 
-## Documentation
+```bash
+npm link
+hydra help
+```
 
-- [Packaging](docs/PACKAGING.md) covers desktop artifact builds and smoke checks.
-- [Docker Runtime](docs/DOCKER.md) covers the optional server-style deployment.
-- [API Reference](docs/API_REFERENCE.md) covers supported local app contracts.
+Common commands:
+
+```bash
+hydra status
+hydra accounts --json
+hydra account <id-prefix>
+hydra balance
+hydra keys --account <id-prefix>
+hydra scan --json
+hydra proxy status
+hydra codes preflight <code> --all
+hydra openrouter models --json
+hydra ai chat "hello" --route proxy
+hydra doctor --json
+hydra logs --lines 100
+hydra serve --port 3001
+hydra unlock --stdin --token-only
+HYDRA_TOKEN=<token> hydra stop --port 3001
+```
+
+The CLI defaults to redacted human output and supports `--json` on the commands meant for automation. Secret-bearing flows require explicit flags such as `--yes`, `--stdin`, or an environment token so shell scripts do not accidentally burn codes, rotate proxy keys, or expose credentials.
+
+## Local API Router
+
+Hydra exposes OpenAI-compatible endpoints on the local server:
+
+```bash
+curl http://127.0.0.1:3001/v1/models \
+  -H "Authorization: Bearer sk-hydra-..."
+
+curl http://127.0.0.1:3001/v1/chat/completions \
+  -H "Authorization: Bearer sk-hydra-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openai/gpt-4o-mini",
+    "messages": [{ "role": "user", "content": "ping" }]
+  }'
+```
+
+The tracked API contract lives at [`openapi/hydra-api.openapi.json`](openapi/hydra-api.openapi.json).
+
+## Runtime Hardening
+
+Hydra is meant to sit open and take repeated local requests. The server includes guardrails for unattended use:
+
+- Bounded `/v1` in-flight request cap via `HYDRA_PROXY_MAX_IN_FLIGHT`.
+- Buffered request-log writes via `HYDRA_REQUEST_LOG_QUEUE_MAX`, `HYDRA_REQUEST_LOG_FLUSH_MS`, and `HYDRA_REQUEST_LOG_FLUSH_BATCH`.
+- Bounded shutdown drain via `HYDRA_REQUEST_LOG_SHUTDOWN_DRAIN_MS`.
+- Request-log retention via `HYDRA_REQUEST_LOG_KEEP_DAYS` and `HYDRA_REQUEST_LOG_KEEP_COUNT`.
+- Rotating file logs via `HYDRA_LOG_MAX_SIZE` and `HYDRA_LOG_MAX_FILES`.
+- Background health, retention, refresher, and task timers that do not pin idle Node processes.
+- Loopback-first server binding and authenticated shutdown.
+
+## Development Scripts
+
+```bash
+npm run dev:electron        # Electron development loop
+npm run server              # Standalone Express server
+npm run build               # Vite renderer build
+npm run electron:prepare    # Prepare packaged server/runtime resources
+npm run electron:smoke      # Smoke-test packaged Electron artifact
+npm run docker:smoke        # Docker runtime contract check
+npm run openapi:hydra       # Regenerate tracked OpenAPI map
+```
+
+## Star History
+
+<a href="https://www.star-history.com/#zaydiscold/hydra&Date">
+  <img alt="Hydra star history" src="https://api.star-history.com/svg?repos=zaydiscold/hydra&type=Date" />
+</a>
+
+## Screenshot Plan
+
+The README uses tracked media under `videos/assets/`. The release-quality capture pass should refresh these from the packaged Electron app, not from a browser target:
+
+1. **Vault setup**: first-run password/vault screen with no real secrets visible.
+2. **Dashboard**: account fleet overview with balances, health, and status cards redacted or seeded.
+3. **Pool**: proxy key pool and router status view showing local base URL and pooled-key health.
+4. **Traffic**: request-log/traffic panel showing bounded router activity and latency/status rows.
+5. **CLI**: terminal capture for `hydra status`, `hydra doctor --json`, and `hydra proxy status`.
+
+## Remotion Plan
+
+The repo already has a Remotion showreel path under `videos/`. Keep it short and product-facing:
+
+1. Use the refreshed Electron screenshots as Remotion image assets.
+2. Create a 20-30 second composition: vault setup, dashboard, proxy pool, traffic, CLI automation, local API router.
+3. Render one still frame first with `npx remotion still <composition-id> --scale=0.25 --frame=30`.
+4. Render the final MP4/GIF preview and reference it from this README once the artifact size is GitHub-friendly.
