@@ -4,7 +4,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
+const PRISMA_CLI = fileURLToPath(new URL('../../node_modules/prisma/build/index.js', import.meta.url));
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const tempDir = mkdtempSync(join(tmpdir(), 'hydra-webhook-revoke-'));
@@ -15,8 +17,7 @@ process.env.HYDRA_DATA_DIR = tempDir;
 process.env.JWT_SECRET = 'test-webhook-secret-32-chars-long';
 process.env.NODE_ENV = 'test';
 
-execFileSync('npx', [
-  'prisma',
+execFileSync(process.execPath, [PRISMA_CLI,
   'db',
   'push',
   '--skip-generate',

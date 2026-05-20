@@ -7,8 +7,10 @@ import { appendFileSync, existsSync, mkdtempSync, statSync, writeFileSync } from
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+const PRISMA_CLI = fileURLToPath(new URL('../../node_modules/prisma/build/index.js', import.meta.url));
 
-const ROOT = new URL('../..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const CLI = join(ROOT, 'bin/hydra.mjs');
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
 
@@ -99,7 +101,7 @@ function prepareAuthDb(password) {
     JWT_SECRET: 'test-cli-unlock-secret-32-chars-long',
   };
 
-  execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
+  execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
     cwd: ROOT,
     env,
     stdio: 'ignore',
@@ -132,7 +134,7 @@ function prepareSessionDb() {
     JWT_SECRET: 'test-cli-session-secret-32-chars-long',
   };
 
-  execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
+  execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
     cwd: ROOT,
     env,
     stdio: 'ignore',
@@ -174,7 +176,7 @@ function prepareModelsDb() {
     JWT_SECRET: 'test-cli-models-secret-32-chars-long',
   };
 
-  execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
+  execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
     cwd: ROOT,
     env,
     stdio: 'ignore',
@@ -211,7 +213,7 @@ function prepareImportDb() {
     JWT_SECRET: 'test-cli-import-secret-32-chars-long',
   };
 
-  execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
+  execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
     cwd: ROOT,
     env,
     stdio: 'ignore',
@@ -249,7 +251,7 @@ function prepareAccountsPurgeDb() {
     JWT_SECRET: 'test-cli-accounts-purge-secret-32-chars-long',
   };
 
-  execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
+  execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
     cwd: ROOT,
     env,
     stdio: 'ignore',
@@ -292,7 +294,7 @@ function prepareKeysProvisionDb() {
     JWT_SECRET: 'test-cli-keys-provision-secret-32-chars-long',
   };
 
-  execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
+  execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
     cwd: ROOT,
     env,
     stdio: 'ignore',

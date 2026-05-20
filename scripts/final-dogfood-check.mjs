@@ -2,8 +2,9 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const manualChecks = [
   ['Packaged GUI launch', 'Open the packaged app with npm run electron:open:mac-arm64 or Finder and confirm Hydra appears as a running app.'],

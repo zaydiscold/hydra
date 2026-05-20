@@ -6,10 +6,11 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const DB_SPEC = new URL('../services/db.js', import.meta.url).href;
 const CODEC_SPEC = new URL('../services/storage-codec.js', import.meta.url).href;
-const ROOT = new URL('../..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 const rows = [];
 

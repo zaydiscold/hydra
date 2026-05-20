@@ -7,9 +7,10 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { c, json, status, table } from '../lib/output.js';
 
-const ROOT = new URL('../..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 function hasFlag(argv, flag) {
   return argv.includes(flag);

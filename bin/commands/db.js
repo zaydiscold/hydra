@@ -6,7 +6,7 @@
  * from a fresh database while the old files remain recoverable.
  */
 import { existsSync, mkdirSync, renameSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { c, json, status } from '../lib/output.js';
 
@@ -54,7 +54,7 @@ function timestamp() {
 function filesForReset(dbPath) {
   return [dbPath, `${dbPath}-wal`, `${dbPath}-shm`].map((path) => ({
     path,
-    name: path.split('/').pop(),
+    name: basename(path),
     exists: existsSync(path),
     bytes: existsSync(path) ? statSync(path).size : 0,
   }));

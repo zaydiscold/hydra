@@ -12,6 +12,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+const PRISMA_CLI = fileURLToPath(new URL('../../node_modules/prisma/build/index.js', import.meta.url));
 
 const dataDir = mkdtempSync(join(tmpdir(), 'hydra-api-integration-'));
 const dbPath = join(dataDir, 'hydra.db');
@@ -25,8 +27,8 @@ delete process.env.LOCAL_STORAGE_KEY;
 delete process.env.VAULT_KEY;
 delete process.env.HYDRA_PROXY_SECRET;
 
-execFileSync('npx', ['prisma', 'db', 'push', '--skip-generate'], {
-  cwd: join(new URL('../..', import.meta.url).pathname),
+execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
+  cwd: fileURLToPath(new URL('../..', import.meta.url)),
   env: process.env,
   stdio: 'pipe',
 });

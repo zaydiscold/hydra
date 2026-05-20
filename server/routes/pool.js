@@ -1,4 +1,4 @@
-import BaseController from "../controllers/BaseController.js";
+import BaseController from '../controllers/BaseController.js';
 import { Router } from 'express';
 import { requireUnlocked } from '../middleware/auth.js';
 import PoolController from '../controllers/PoolController.js';

@@ -9,8 +9,9 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('../..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const HYDRA_BIN = join(ROOT, 'bin/hydra.mjs');
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 

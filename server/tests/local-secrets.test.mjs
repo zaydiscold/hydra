@@ -5,10 +5,11 @@ import { promises as fsp } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const ROOT = path.resolve(new URL('../..', import.meta.url).pathname);
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const VALID_SECRET = 'a'.repeat(64);
 
 async function importLocalSecretsWith(dataDir) {

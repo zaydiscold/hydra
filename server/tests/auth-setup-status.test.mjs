@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const PRISMA_CLI = fileURLToPath(new URL('../../node_modules/prisma/build/index.js', import.meta.url));
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const tempDir = mkdtempSync(join(tmpdir(), 'hydra-auth-status-'));
@@ -13,8 +15,7 @@ process.env.DATABASE_URL = `file:${dbPath}`;
 process.env.JWT_SECRET = 'test-auth-status-secret-32-chars-long';
 process.env.NODE_ENV = 'test';
 
-execFileSync('npx', [
-  'prisma',
+execFileSync(process.execPath, [PRISMA_CLI,
   'db',
   'push',
   '--skip-generate',

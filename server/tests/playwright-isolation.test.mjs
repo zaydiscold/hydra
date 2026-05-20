@@ -13,7 +13,7 @@ import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import {
@@ -111,7 +111,7 @@ describe('browser isolation — knob 2: ephemeral userDataDir', () => {
   it('userDataDir uses the hydra-pw-profile- prefix (so leftover dirs are findable)', () => {
     const opts = resolveChromiumLaunchOptions();
     cleanupDirs.push(opts.userDataDir);
-    const base = opts.userDataDir.split('/').pop();
+    const base = basename(opts.userDataDir);
     assert.ok(base.startsWith('hydra-pw-profile-'),
       `expected prefix hydra-pw-profile-; got ${base}`);
   });
@@ -201,7 +201,7 @@ describe('browser isolation — overall sanity', () => {
       'every launch has a userDataDir set (either ephemeral or caller-supplied)');
   });
 
-  it('packaged mode extracts archived Chromium into userData before launch', () => {
+  it('packaged mode extracts archived Chromium into userData before launch', { skip: process.platform === 'win32' ? 'fixture builds chrome-linux via the zip CLI; not available on Windows runners' : false }, () => {
     const root = join(tmpdir(), `hydra-chromium-archive-test-${process.pid}`);
     const resources = join(root, 'resources');
     const archiveSrc = join(root, 'archive-src');
