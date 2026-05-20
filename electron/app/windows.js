@@ -507,7 +507,19 @@ export function createSplashWindow() {
     //   ANG_AIR 0.995  — rotation barely damps in air
     //   ANG_REST 0.92  — rotation slowly damps in pile (not zero)
     //   REST_THR 30
-    + 'const G=2200,RES=0.32,FRIC=0.7,AIR_DAMP=0.992,ANG_AIR=0.995,ANG_REST=0.92,REST_THR=30,FLOOR_PAD=18,WALL_PAD=14;'
+    // PICA-INSPIRED SHATTER: words fall as ONE rigid body, then on hard
+    // floor contact fragment into per-letter bodies that inherit the parent
+    // velocity + a per-letter angular kick proportional to lateral offset
+    // from the word's center (longer torque arm = more spin — physical).
+    // SHATTER_VY is the impact-velocity threshold; landings softer than that
+    // (e.g. a word piling onto already-settled letters) STAY whole, which
+    // gives a nice mix of intact words and shattered ones in the final pile.
+    // MAX_BODIES caps total body count so n² collision stays under ~1M
+    // ops/frame even after many words shatter into ~8 letters each.
+    // G dropped 2200 → 1100 so the user has time to READ each word as it
+    // falls (Pica's vibe is languid, not frantic — fast gravity made our
+    // word labels blur past).
+    + 'const G=1100,RES=0.32,FRIC=0.7,AIR_DAMP=0.992,ANG_AIR=0.995,ANG_REST=0.92,REST_THR=30,FLOOR_PAD=18,WALL_PAD=14,SHATTER_VY=520,MAX_BODIES=900;'
     // DENSITY: scale body count to viewport. ~1 body per 24,000 px²
     // works out to ~50–75 on common displays (1440×900 = 54, 1920×1200
     // = 96, capped at 100). Repeats are fine — Pica fills the frame
@@ -522,7 +534,10 @@ export function createSplashWindow() {
     // user wants to see. We rely on AABB padding + tight density to keep
     // edge-to-edge stacking clean.
     + 'function shuffle(a){return a.slice().sort(()=>Math.random()-0.5);}'
-    + 'const TARGET=Math.min(180,Math.max(90,Math.floor(W()*H()/9000)));'
+    // TARGET halved from 90-180 to 50-100 because each word can spawn 6-12
+    // child letters on shatter — staying around 100 words keeps the eventual
+    // pile under MAX_BODIES.
+    + 'const TARGET=Math.min(100,Math.max(50,Math.floor(W()*H()/18000)));'
     + 'function repeatToFill(arr,n){const out=[];while(out.length<n)for(const it of shuffle(arr))out.push(it);return out.slice(0,n);}'
     + 'const queue=repeatToFill(items,TARGET);'
     // SINGLE TYPEFACE — Pica uses one display font (ABC Gravity Compressed)
@@ -532,7 +547,13 @@ export function createSplashWindow() {
     // ALL falling words use this; brand identity is preserved by COLOR
     // (every word colored, no white) + WEIGHT variation (brands 700,
     // models 400) + occasional italic.
-    + 'const SOLO_FONT="Helvetica Neue,Helvetica,Arial,sans-serif";'
+    // SF Pro Display is the macOS native display font (auto-picked by
+    // -apple-system at large sizes). It has more character than Helvetica
+    // Neue at the heavy weights used for brand words. Inter is the modern
+    // fallback for non-mac platforms. The stack ensures every platform gets
+    // a real display-grade typeface, matching Pica's "single characterful
+    // typeface" principle (see ~/Desktop/pica-teardown/05-falling-letters-animation.md).
+    + 'const SOLO_FONT="-apple-system,SF Pro Display,Inter,Helvetica Neue,Arial,sans-serif";'
     // COLOR PALETTE — every word gets a color, none stay white. Bonds
     // the falling-letters mood with the brand-blocks. Models without an
     // explicit color get one picked deterministically by their text hash
@@ -561,7 +582,10 @@ export function createSplashWindow() {
     // model words. User: "different sized fonts, like between words,
     // since we\'re gonna have so many, some big, some small."
     + 'const fontSize=isB?(28+Math.floor(Math.random()*22)):(18+Math.floor(Math.random()*14));'
-    + 'const weight=isB?700:400;'
+    // Brand words bumped 700 → 800 so they read as heavy display sans —
+    // closer to Pica's ABC Gravity Compressed presence. Model words stay
+    // 400 to keep visual contrast between the two tiers.
+    + 'const weight=isB?800:400;'
     // Single typeface (see SOLO_FONT). Italic chosen deterministically
     // by hash so the same word always lands the same italic state.
     + 'const wordHash=hashStr(it.text);'
@@ -592,8 +616,44 @@ export function createSplashWindow() {
     // airborne. Floor-contact snaps rot=0 so the pile is still flat.
     // Was ±0.45 / ±2.2 → was barely perceptible against high gravity.
     + 'rot:(Math.random()-0.5)*1.4,vRot:(Math.random()-0.5)*4.5,'
-    + 'spawnAt,alive:false,resting:false,onFloor:false};}'
+    + 'spawnAt,alive:false,resting:false,onFloor:false,shattered:false};}'
     + 'const bodies=queue.map(makeBody);'
+    // ─── shatterWord: word body → per-letter bodies on hard impact ──────────
+    // Inherits parent velocity (so the pile direction stays coherent), adds
+    // per-letter angular velocity proportional to (lxLocal / halfWidth) ×
+    // impactVel — letters at the ends of the word get the most spin, exactly
+    // like a rigid bar fragmenting in mid-air. Letters get a small upward
+    // kick (parent.vy*0.55 - 40) and a randomized horizontal scatter so
+    // they don't stack atop each other after shatter.
+    + 'function shatterWord(parent,bodies,impactVel){'
+    +   'parent.shattered=true;parent.alive=false;'
+    +   'ctx.font=parent.italic+parent.weight+" "+parent.fontSize+"px "+parent.family;'
+    +   'const chars=Array.from(parent.text);'
+    +   'let cursor=-parent.w/2+3;'
+    +   'const cos=Math.cos(parent.rot),sin=Math.sin(parent.rot);'
+    +   'const halfW=Math.max(1,parent.w/2);'
+    +   'for(const ch of chars){'
+    +     'if(ch===" "){cursor+=parent.fontSize*0.32;continue;}'
+    +     'const lw=ctx.measureText(ch).width+2;'
+    +     'const lh=parent.fontSize*1.05;'
+    +     'const lxLocal=cursor+lw/2;'
+    +     'cursor+=lw;'
+    +     'const wx=parent.x+lxLocal*cos;'
+    +     'const wy=parent.y+lxLocal*sin;'
+    +     'const torqueArm=lxLocal/halfW;'
+    +     'bodies.push({text:ch,color:parent.color,weight:parent.weight,'
+    +       'fontSize:parent.fontSize,family:parent.family,italic:parent.italic,'
+    +       'w:lw,h:lh,'
+    +       'mass:Math.max(0.15,(lw*lh)/2200+0.2),'
+    +       'I:(lw*lw+lh*lh)/12,'
+    +       'x:wx,y:wy,'
+    +       'vx:parent.vx+(Math.random()-0.5)*40,'
+    +       'vy:parent.vy*0.55-40-Math.random()*60,'
+    +       'rot:parent.rot,'
+    +       'vRot:parent.vRot+torqueArm*impactVel*0.018+(Math.random()-0.5)*2.5,'
+    +       'spawnAt:0,alive:true,resting:false,onFloor:false,shattered:true});'
+    +   '}'
+    + '}'
     + 'let last=performance.now();const t0=last;'
     + 'function frame(now){'
     + 'const dt=Math.min((now-last)/1000,1/30);last=now;'
@@ -623,7 +683,14 @@ export function createSplashWindow() {
     // after they\'ve already fallen.")
     + 'if(b.resting&&Math.abs(b.vx)<5&&Math.abs(b.vy)<5){b.vRot=0;}'
     + 'b.onFloor=false;'
-    + 'if(b.y+b.h/2>=floorY){b.y=floorY-b.h/2;b.onFloor=true;'
+    + 'if(b.y+b.h/2>=floorY){'
+    // Capture impact vy BEFORE bounce-reduction — that's the real landing
+    // velocity. If above SHATTER_VY and we haven't already shattered AND
+    // the global body cap isn't blown, fragment this word into letters.
+    // Children carry `shattered:true` so they can't re-shatter on their own
+    // landings — they just settle into the pile.
+    +   'const impactVy=b.vy;'
+    +   'b.y=floorY-b.h/2;b.onFloor=true;'
     // NO rot=0 snap on floor contact. Per-character bodies are roughly
     // square, so their rotated AABB matches visual footprint closely
     // enough that the multi-pass solver resolves overlap without forced
@@ -632,6 +699,9 @@ export function createSplashWindow() {
     + 'if(b.vy>0){b.vy=-b.vy*RES;if(Math.abs(b.vy)<REST_THR){b.vy=0;b.resting=true;}}'
     + 'b.vx*=FRIC;'
     + 'if(Math.abs(b.vx)<REST_THR/4)b.vx=0;'
+    + 'if(!b.shattered&&impactVy>SHATTER_VY&&bodies.length<MAX_BODIES&&b.text.length>1){'
+    +   'shatterWord(b,bodies,impactVy);'
+    + '}'
     + '}'
     // WALLS — restitution + small angular kick (top/bottom of wall hit imparts spin)
     + 'if(b.x-b.w/2<WALL_PAD){b.x=WALL_PAD+b.w/2;'
