@@ -294,7 +294,7 @@ app.whenReady().then(async () => {
 
     createTray();
     await bindTrayProxyState();
-    setupAutoUpdates({ isDev, getMainWindow });
+    setupAutoUpdates({ isDev, getMainWindow, getSplashWindow });
 
     // ─── STRICT SPLASH → MAIN SERIALIZATION ────────────────────────────────
     //

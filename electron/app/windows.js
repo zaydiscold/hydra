@@ -17,6 +17,7 @@ import {
 import { openExternalUrl } from './windowActions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SPLASH_PRELOAD_PATH = path.join(__dirname, '..', 'splashPreload.js');
 
 // ─── Splash Window — Pica-style fullscreen sprawl + small centered card ─────
 export function createSplashWindow() {
@@ -41,6 +42,7 @@ export function createSplashWindow() {
     focusable: false,  // can't steal focus from the user's other apps during splash
     icon: ICON_PATH,
     webPreferences: {
+      preload: SPLASH_PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -401,7 +403,10 @@ export function createSplashWindow() {
     // dismisses. Pure CSS, runs even if JS physics fails to start.
     + 'animation:fillbar 10s cubic-bezier(.22,.61,.36,1) forwards}'
     + '@keyframes fillbar{0%{transform:scaleX(0)}68%{transform:scaleX(.78)}100%{transform:scaleX(1)}}'
-    + '@media(prefers-reduced-motion:reduce){canvas#field,.hex,.vines{display:none}.bar::after{animation:none;transform:scaleX(1)}}'
+    + '.update-strip{width:220px;height:2px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:9px;opacity:0;transform:translateY(-2px);transition:opacity 180ms ease,transform 180ms ease}'
+    + '.update-strip.is-active{opacity:1;transform:translateY(0)}'
+    + '.update-strip__fill{display:block;width:100%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#67e8f9,#a855f7,#ec4899);box-shadow:0 0 12px rgba(103,232,249,.55);transform-origin:left center;transform:scaleX(0);transition:transform 180ms ease}'
+    + '@media(prefers-reduced-motion:reduce){canvas#field,.hex,.vines{display:none}.bar::after{animation:none;transform:scaleX(1)}.update-strip,.update-strip__fill{transition:none}}'
     + '</style></head><body>'
     + '<div class="outer">'
     + '<svg class="vines" viewBox="0 0 1280 860" preserveAspectRatio="none">'
@@ -456,6 +461,7 @@ export function createSplashWindow() {
         : '<h1>Hydra</h1>')
     + '<div class="sub" id="startup-phase">Starting local server</div>'
     + '<div class="bar"></div>'
+    + '<div class="update-strip" id="update-strip"><span class="update-strip__fill" id="update-strip-fill"></span></div>'
     + '</div>'
     + '<div class="deco-bot">'
     +   '<div class="deco-bot__ticks">'
@@ -472,8 +478,20 @@ export function createSplashWindow() {
     + '<script>(function(){'
     + 'const phases=["Starting local server","Checking database","Loading dashboard","Preparing vault"];'
     + 'const phaseEl=document.getElementById("startup-phase");'
-    + 'let phaseIndex=0;'
-    + 'if(phaseEl){setInterval(()=>{phaseIndex=(phaseIndex+1)%phases.length;phaseEl.textContent=phases[phaseIndex];},2200);}'
+    + 'const updateStrip=document.getElementById("update-strip");'
+    + 'const updateFill=document.getElementById("update-strip-fill");'
+    + 'let phaseIndex=0,updateActive=false;'
+    + 'if(phaseEl){setInterval(()=>{if(updateActive)return;phaseIndex=(phaseIndex+1)%phases.length;phaseEl.textContent=phases[phaseIndex];},2200);}'
+    + 'function updateSplashProgress(payload){'
+    + 'payload=payload||{};const pct=Math.max(0,Math.min(100,Number(payload.percent)||0));'
+    + 'if(payload.state==="downloading"||payload.state==="available"||payload.state==="downloaded"){'
+    + 'updateActive=true;if(updateStrip)updateStrip.classList.add("is-active");if(updateFill)updateFill.style.transform="scaleX("+(pct/100)+")";'
+    + 'if(phaseEl){const version=payload.version||"latest";phaseEl.textContent=payload.state==="downloaded"?"Installing v"+version:"Updating to v"+version;}'
+    + '}else if(payload.state==="error"){'
+    + 'updateActive=false;if(updateStrip)updateStrip.classList.remove("is-active");'
+    + '}'
+    + '}'
+    + 'if(window.hydraSplash&&window.hydraSplash.onUpdateProgress){window.hydraSplash.onUpdateProgress(updateSplashProgress);}'
     + 'const items=' + itemsJson + ';'
     + 'const cvs=document.getElementById("field");if(!cvs)return;'
     + 'const ctx=cvs.getContext("2d");'
