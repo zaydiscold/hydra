@@ -69,11 +69,28 @@ test('release workflow uploads desktop artifacts for every release target', () =
     'release workflow must run smoke before GitHub Release upload',
   );
   assert.match(workflow, /actions\/upload-artifact@v4/, 'release workflow must upload built artifacts');
+  assert.match(workflow, /mac-update-metadata:[\s\S]*needs:\s*build/, 'release workflow must merge macOS updater metadata after both mac packages build');
+  assert.match(workflow, /scripts\/merge-mac-update-yml\.mjs/, 'release workflow must use the checked-in mac updater metadata merge script');
+  assert.match(workflow, /artifacts\/mac-arm64\/latest-mac\.yml[\s\S]*artifacts\/mac-x64\/latest-mac\.yml/, 'release workflow must merge both macOS arch metadata files');
+  assert.match(workflow, /grep -q 'mac-arm64\.zip' release\/latest-mac\.yml[\s\S]*grep -q 'mac-x64\.zip' release\/latest-mac\.yml/, 'release workflow must assert merged metadata covers both macOS architectures');
+  assert.match(workflow, /gh release upload "\$GITHUB_REF_NAME" release\/latest-mac\.yml --clobber/, 'release workflow must replace latest-mac.yml with the merged file');
 
-  assert.match(workflow, /name:\s*macOS arm64 zip[\s\S]*artifact:\s*release\/Hydra-\*\.zip/, 'must upload macOS arm64 zip');
-  assert.match(workflow, /name:\s*macOS Intel x64 zip[\s\S]*artifact:\s*release\/Hydra-\*\.zip/, 'must upload macOS Intel zip');
+  assert.match(workflow, /name:\s*macOS arm64 zip[\s\S]*artifact:\s*\|[\s\S]*release\/Hydra-\*-mac-arm64\.zip[\s\S]*release\/latest-mac\.yml/, 'must upload macOS arm64 zip and update metadata');
+  assert.match(workflow, /name:\s*macOS Intel x64 zip[\s\S]*artifact:\s*\|[\s\S]*release\/Hydra-\*-mac-x64\.zip[\s\S]*release\/latest-mac\.yml/, 'must upload macOS Intel zip and update metadata');
   assert.match(workflow, /name:\s*Windows x64 NSIS[\s\S]*artifact:\s*\|\s*\n\s*release\/Hydra-\*-win-x64\.exe/, 'must upload Windows x64 installer');
   assert.match(workflow, /name:\s*Linux x64 AppImage[\s\S]*artifact:\s*release\/Hydra-\*\.AppImage/, 'must upload Linux AppImage');
+});
+
+test('mac updater metadata merge keeps both architectures', () => {
+  const pkg = JSON.parse(read('package.json'));
+  const script = read('scripts/merge-mac-update-yml.mjs');
+
+  assert.ok(pkg.devDependencies['js-yaml'], 'mac updater merge script must declare js-yaml directly');
+  assert.match(script, /yaml\.load/, 'merge script must parse electron-builder update YAML');
+  assert.match(script, /version mismatch/i, 'merge script must reject mismatched versions');
+  assert.match(script, /missing an arm64 zip entry/i, 'merge script must require arm64 update files');
+  assert.match(script, /missing an x64 zip entry/i, 'merge script must require x64 update files');
+  assert.match(script, /merged\.files\.sort/, 'merge script must write a stable files array');
 });
 
 test('dev port cleanup includes preview ports and preserves failed-kill evidence', () => {

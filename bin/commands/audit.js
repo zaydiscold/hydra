@@ -473,6 +473,12 @@ function buildAudit() {
         && releaseWorkflow.includes('windows-2022')
         && releaseWorkflow.includes('--publish never')
         && releaseWorkflow.includes('gh release upload "$GITHUB_REF_NAME"')
+        && releaseWorkflow.includes('mac-update-metadata')
+        && releaseWorkflow.includes('scripts/merge-mac-update-yml.mjs')
+        && releaseWorkflow.includes('artifacts/mac-arm64/latest-mac.yml')
+        && releaseWorkflow.includes('artifacts/mac-x64/latest-mac.yml')
+        && releaseWorkflow.includes("grep -q 'mac-arm64.zip' release/latest-mac.yml")
+        && releaseWorkflow.includes("grep -q 'mac-x64.zip' release/latest-mac.yml")
         && smokeWorkflow.includes('HYDRA_BUILD_TARGET: ${{ matrix.build_target }}')
         && releaseWorkflow.includes('HYDRA_BUILD_TARGET: ${{ matrix.build_target }}')
         && pkg.scripts?.['electron:open:mac-arm64'] === 'node scripts/open-packaged-app.mjs release/mac-arm64/Hydra.app'
@@ -505,7 +511,7 @@ function buildAudit() {
         && electronPrepare.includes('PLAYWRIGHT_BROWSERS_PATH cache')
         && workflowContract.includes('electron package smoke validates target-specific Chromium archives')
         && workflowContract.includes('electron package smoke validates distributable release artifacts'),
-      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
+      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, merged multi-arch latest-mac.yml auto-update metadata, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
     ),
     check(
       'docker-docs',
