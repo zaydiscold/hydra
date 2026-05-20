@@ -33,6 +33,7 @@ const MIGRATE_LEGACY_JS = resolve(ELECTRON_DIR, 'utils', 'migrateLegacyData.js')
 const STARTUP_ERROR_JS = resolve(APP_DIR, 'startupError.js');
 const WINDOW_ACTIONS_JS = resolve(APP_DIR, 'windowActions.js');
 const AUTO_UPDATE_JS = resolve(APP_DIR, 'autoUpdate.js');
+const SPLASH_PRELOAD_JS = resolve(ELECTRON_DIR, 'splashPreload.js');
 const AFTER_PACK_JS = resolve(ELECTRON_DIR, 'builders', 'afterPack.js');
 const ROOT = resolve(__dirname, '..', '..');
 
@@ -133,14 +134,25 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     const updater = readFileSync(AUTO_UPDATE_JS, 'utf-8');
     const builder = readFileSync(resolve(ROOT, 'electron-builder.yml'), 'utf-8');
     const pkg = readFileSync(resolve(ROOT, 'package.json'), 'utf-8');
+    const windows = readFileSync(resolve(APP_DIR, 'windows.js'), 'utf-8');
+    const splashPreload = readFileSync(SPLASH_PRELOAD_JS, 'utf-8');
 
-    assert.match(main, /setupAutoUpdates\(\{ isDev, getMainWindow \}\)/);
+    assert.match(main, /setupAutoUpdates\(\{ isDev, getMainWindow, getSplashWindow \}\)/);
     assert.match(updater, /from 'electron-updater'/);
     assert.match(updater, /function getAutoUpdater\(log\)/);
     assert.doesNotMatch(updater, /const \{ autoUpdater \} = electronUpdater;/);
     assert.match(updater, /if \(isDev \|\| !app\.isPackaged\) return false;/);
     assert.match(updater, /autoUpdater\.checkForUpdates\(\)/);
+    assert.match(updater, /UPDATE_CHECK_DELAY_MS = 500/);
+    assert.match(updater, /download-progress/);
+    assert.match(updater, /SPLASH_UPDATE_PROGRESS_EVENT = 'hydra-update-progress'/);
+    assert.match(updater, /sendSplashUpdateProgress\(getSplashWindow/);
     assert.match(updater, /autoUpdater\.quitAndInstall\(false, true\)/);
+    assert.match(windows, /SPLASH_PRELOAD_PATH/);
+    assert.match(windows, /update-strip/);
+    assert.match(windows, /hydraSplash\.onUpdateProgress/);
+    assert.match(splashPreload, /contextBridge\.exposeInMainWorld\('hydraSplash'/);
+    assert.match(splashPreload, /hydra-update-progress/);
     assert.match(builder, /publish:\s*\n\s*provider: github\s*\n\s*owner: zaydiscold\s*\n\s*repo: hydra/);
     assert.match(pkg, /"electron-updater":/);
   });
