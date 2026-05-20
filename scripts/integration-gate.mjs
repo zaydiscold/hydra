@@ -24,7 +24,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -86,13 +86,18 @@ async function run() {
   });
 
   // ── Dynamic import + ephemeral server boot ──
+  // Windows note: Node's ESM loader rejects raw absolute paths in dynamic
+  // import — `D:\\…\\config.js` parses with `d:` as the protocol. pathToFileURL
+  // converts the OS path to a valid `file://` URL on every platform; on
+  // macOS/Linux it's a no-op rewrite. Without this the gate fails K and L
+  // only on Windows runners (electron-smoke `windows-latest --win nsis --x64`).
   await checkAsync('K: server/config.js loads without throwing', async () => {
-    const config = await import(resolve(ROOT, 'server/config.js'));
+    const config = await import(pathToFileURL(resolve(ROOT, 'server/config.js')).href);
     if (!config || typeof config !== 'object') throw new Error('config module did not export an object');
   });
 
   await checkAsync('L: ephemeral server boots and closes cleanly', async () => {
-    const { bootstrap, gracefulShutdown } = await import(resolve(ROOT, 'server/index.js'));
+    const { bootstrap, gracefulShutdown } = await import(pathToFileURL(resolve(ROOT, 'server/index.js')).href);
     const server = await bootstrap({ port: 0, silent: true });
     if (!server || typeof server.close !== 'function') {
       throw new Error('bootstrap did not return a server instance');
