@@ -409,28 +409,18 @@ export function createSplashWindow() {
     + '@media(prefers-reduced-motion:reduce){canvas#field,.hex,.vines{display:none}.bar::after{animation:none;transform:scaleX(1)}.update-strip,.update-strip__fill{transition:none}}'
     + '</style></head><body>'
     + '<div class="outer">'
+    // VINES — runtime fractal generator (user feedback: 'tendrils that grow
+    // and spread, more elegant, more natural, more fractal-like, like ivy
+    // sprawling out rather than a couple of wires'). The previous 4-stem +
+    // 10-twig static SVG read as 'a couple of wires'. Now we generate ~70
+    // recursively-branched paths at script init: 6 primary stems from a
+    // center point, each with 2-3 child branches per node, 2-3 levels deep.
+    // Stroke width tapers per depth (1.8 → 0.5), animation delay scales
+    // with depth so the ivy crawls outward in waves. Random angles + lengths
+    // make it look different every launch. See the buildIvy() function below.
     + '<svg class="vines" viewBox="0 0 1280 860" preserveAspectRatio="none">'
     + '<defs><linearGradient id="vineA" x1="0" x2="1"><stop stop-color="#a855f7"/><stop offset=".48" stop-color="#ec4899"/><stop offset="1" stop-color="#67e8f9"/></linearGradient>'
     + '<linearGradient id="vineB" x1="1" x2="0"><stop stop-color="#60a5fa"/><stop offset=".55" stop-color="#a855f7"/><stop offset="1" stop-color="#34d399"/></linearGradient></defs>'
-    + '<path class="stem" d="M640 430 C586 398 530 354 474 300 C402 232 316 188 222 154 C164 132 114 116 64 84" stroke="url(#vineA)" stroke-width="1.7"/>'
-    + '<path class="stem" d="M640 430 C712 386 782 328 864 278 C962 218 1082 178 1228 88" stroke="url(#vineB)" stroke-width="1.55" style="animation-delay:.18s"/>'
-    + '<path class="stem" d="M640 430 C560 480 496 548 418 618 C330 696 214 746 54 808" stroke="rgba(103,232,249,.78)" stroke-width="1.45" style="animation-delay:.28s"/>'
-    + '<path class="stem" d="M640 430 C724 486 790 558 878 626 C976 704 1094 752 1226 814" stroke="rgba(236,72,153,.78)" stroke-width="1.5" style="animation-delay:.36s"/>'
-    + '<path class="twig" d="M474 300 C430 296 392 274 354 238" stroke="rgba(190,242,255,.52)" stroke-width=".9" style="animation-delay:1.8s"/>'
-    + '<path class="twig" d="M402 232 C366 202 340 166 322 122" stroke="rgba(168,85,247,.56)" stroke-width=".85" style="animation-delay:2.4s"/>'
-    + '<path class="twig" d="M222 154 C190 184 154 206 104 216" stroke="rgba(236,72,153,.48)" stroke-width=".85" style="animation-delay:3.1s"/>'
-    + '<path class="twig" d="M864 278 C908 270 954 244 1002 204" stroke="rgba(190,242,255,.52)" stroke-width=".9" style="animation-delay:1.9s"/>'
-    + '<path class="twig" d="M962 218 C996 180 1026 140 1048 92" stroke="rgba(96,165,250,.52)" stroke-width=".85" style="animation-delay:2.8s"/>'
-    + '<path class="twig" d="M1082 178 C1126 206 1164 222 1218 224" stroke="rgba(52,211,153,.42)" stroke-width=".85" style="animation-delay:3.4s"/>'
-    + '<path class="twig" d="M418 618 C374 596 332 574 286 534" stroke="rgba(96,165,250,.50)" stroke-width=".85" style="animation-delay:3.0s"/>'
-    + '<path class="twig" d="M330 696 C292 724 256 766 232 826" stroke="rgba(103,232,249,.46)" stroke-width=".85" style="animation-delay:4.2s"/>'
-    + '<path class="twig" d="M878 626 C930 606 980 576 1032 524" stroke="rgba(236,72,153,.50)" stroke-width=".9" style="animation-delay:3.2s"/>'
-    + '<path class="twig" d="M976 704 C1010 742 1046 782 1080 826" stroke="rgba(168,85,247,.48)" stroke-width=".85" style="animation-delay:4.35s"/>'
-    + '<circle class="bud" cx="354" cy="238" r="2.8" style="animation-delay:4.4s"/><circle class="bud" cx="322" cy="122" r="2.4" style="animation-delay:5.1s"/>'
-    + '<circle class="bud" cx="104" cy="216" r="2.2" style="animation-delay:5.6s"/><circle class="bud" cx="1002" cy="204" r="2.7" style="animation-delay:4.6s"/>'
-    + '<circle class="bud" cx="1048" cy="92" r="2.3" style="animation-delay:5.4s"/><circle class="bud" cx="1218" cy="224" r="2.2" style="animation-delay:6.0s"/>'
-    + '<circle class="bud" cx="286" cy="534" r="2.4" style="animation-delay:5.8s"/><circle class="bud" cx="232" cy="826" r="2.6" style="animation-delay:6.6s"/>'
-    + '<circle class="bud" cx="1032" cy="524" r="2.5" style="animation-delay:5.9s"/><circle class="bud" cx="1080" cy="826" r="2.5" style="animation-delay:6.8s"/>'
     + '</svg>'
     + '<div class="hex"><svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">'
     + '<defs><pattern id="hexGrid" x="0" y="0" width="56" height="48.5" patternUnits="userSpaceOnUse">'
@@ -476,6 +466,88 @@ export function createSplashWindow() {
     // is a word (rectangle) rendered with its brand color + Intel One
     // Mono. ~18 bodies, n² collision = 324 ops/frame.
     + '<script>(function(){'
+    // ─── Fractal ivy generator ──────────────────────────────────────────
+    // Recursive branching from a center point. Each stem grows along a
+    // Bezier path; at depth N we spawn 1-3 child branches that fork off the
+    // parent at random parametric positions (t = 0.4..0.85 along the
+    // parent's length). Stroke width tapers with depth so the trunk reads
+    // thicker than the leaves. Animation-delay scales with depth so the
+    // animation feels like ivy unfurling outward, not all paths drawing
+    // simultaneously. NS namespace required for SVG createElement.
+    + 'const NS="http://www.w3.org/2000/svg";'
+    + 'function buildIvy(){'
+    +   'const svg=document.querySelector(".vines");'
+    +   'if(!svg)return;'
+    // Center point in the SVG viewBox coords (1280×860).
+    +   'const cx=640,cy=430;'
+    // 6 primary stems radiating outward at randomized angles. Slight angle
+    // jitter from a regular hexagon so the result feels organic, not
+    // mechanically symmetric.
+    +   'const stems=6;'
+    +   'for(let i=0;i<stems;i++){'
+    +     'const baseAngle=(i/stems)*Math.PI*2+Math.PI*0.5;'
+    +     'const angle=baseAngle+(Math.random()-0.5)*0.45;'
+    +     'const length=320+Math.random()*220;'
+    +     'const grad=i%2===0?"url(#vineA)":"url(#vineB)";'
+    +     'growBranch(svg,cx,cy,angle,length,0,3,grad,i*0.08);'
+    +   '}'
+    + '}'
+    + 'function growBranch(svg,x,y,angle,length,depth,maxDepth,stroke,baseDelay){'
+    +   'if(depth>maxDepth)return;'
+    // Endpoint
+    +   'const ex=x+Math.cos(angle)*length;'
+    +   'const ey=y+Math.sin(angle)*length;'
+    // Curl: control points offset perpendicular to growth direction so the
+    // path curves like a real plant tendril, not a straight line.
+    +   'const perpX=-Math.sin(angle),perpY=Math.cos(angle);'
+    +   'const curl=(Math.random()-0.5)*length*0.4;'
+    +   'const cx1=x+Math.cos(angle)*length*0.35+perpX*curl;'
+    +   'const cy1=y+Math.sin(angle)*length*0.35+perpY*curl;'
+    +   'const cx2=x+Math.cos(angle)*length*0.7+perpX*curl*0.6;'
+    +   'const cy2=y+Math.sin(angle)*length*0.7+perpY*curl*0.6;'
+    // Stroke width tapers per depth — trunk thick, leaf branches hairline.
+    +   'const sw=Math.max(0.5,1.8-depth*0.55);'
+    // Stroke: primary stems use the vineA/vineB gradients; deeper twigs
+    // fade into a paler bud-colored stroke so the eye reads the hierarchy
+    // (trunk → twig → leaf).
+    +   'const useStroke=depth===0?stroke:"rgba(190,242,255,"+Math.max(0.32,0.62-depth*0.12)+")";'
+    +   'const path=document.createElementNS(NS,"path");'
+    +   'path.setAttribute("d","M"+x.toFixed(1)+" "+y.toFixed(1)+" C"+cx1.toFixed(1)+" "+cy1.toFixed(1)+" "+cx2.toFixed(1)+" "+cy2.toFixed(1)+" "+ex.toFixed(1)+" "+ey.toFixed(1));'
+    +   'path.setAttribute("stroke",useStroke);'
+    +   'path.setAttribute("stroke-width",sw.toFixed(2));'
+    +   'path.setAttribute("class",depth===0?"stem":"twig");'
+    +   'path.style.animationDelay=(baseDelay+depth*0.45).toFixed(2)+"s";'
+    +   'svg.appendChild(path);'
+    // Children: 1-3 child branches per node, at random positions along
+    // the parent. More children at shallow depths, taper down.
+    +   'if(depth<maxDepth){'
+    +     'const numChildren=Math.max(1,Math.floor(2.5-depth*0.5+Math.random()*1.2));'
+    +     'for(let j=0;j<numChildren;j++){'
+    +       'const t=0.45+Math.random()*0.42;'
+    +       'const childX=x+(ex-x)*t+perpX*curl*t*0.8;'
+    +       'const childY=y+(ey-y)*t+perpY*curl*t*0.8;'
+    // Children fork at ±25-60° from the parent direction, alternating
+    // sides so the ivy doesn't all bend the same way.
+    +       'const sign=j%2===0?1:-1;'
+    +       'const fork=(0.45+Math.random()*0.6)*sign;'
+    +       'const childLength=length*(0.42+Math.random()*0.28);'
+    +       'growBranch(svg,childX,childY,angle+fork,childLength,depth+1,maxDepth,stroke,baseDelay+0.35);'
+    +     '}'
+    +   '}'
+    // Bud at every terminal leaf — small circle that fades in after the
+    // branch finishes drawing. Adds the 'unfurled tip' impression Pica's
+    // OnboardingScene gives without us having to model leaves.
+    +   'if(depth===maxDepth){'
+    +     'const bud=document.createElementNS(NS,"circle");'
+    +     'bud.setAttribute("cx",ex.toFixed(1));'
+    +     'bud.setAttribute("cy",ey.toFixed(1));'
+    +     'bud.setAttribute("r",(2.0+Math.random()*1.0).toFixed(2));'
+    +     'bud.setAttribute("class","bud");'
+    +     'bud.style.animationDelay=(baseDelay+depth*0.45+1.2).toFixed(2)+"s";'
+    +     'svg.appendChild(bud);'
+    +   '}'
+    + '}'
+    + 'buildIvy();'
     + 'const phases=["Starting local server","Checking database","Loading dashboard","Preparing vault"];'
     + 'const phaseEl=document.getElementById("startup-phase");'
     + 'const updateStrip=document.getElementById("update-strip");'
@@ -537,7 +609,13 @@ export function createSplashWindow() {
     // G dropped 2200 → 1100 so the user has time to READ each word as it
     // falls (Pica's vibe is languid, not frantic — fast gravity made our
     // word labels blur past).
-    + 'const G=1100,RES=0.32,FRIC=0.7,AIR_DAMP=0.992,ANG_AIR=0.995,ANG_REST=0.92,REST_THR=30,FLOOR_PAD=18,WALL_PAD=14,SHATTER_VY=520,MAX_BODIES=900;'
+    // SHATTER_VY dropped 520 → 60 per user: "they should just fall as
+    // individual letters next to each other but as they interact with env[ironment]"
+    // — words now break on ANY meaningful contact, not just hard floor
+    // landings. SHATTER_RVN is the relative-velocity threshold for inter-word
+    // collisions (when two falling words touch each other with notable speed,
+    // both shatter — natural cascade like Pica's onboarding letters bumping).
+    + 'const G=1100,RES=0.32,FRIC=0.7,AIR_DAMP=0.992,ANG_AIR=0.995,ANG_REST=0.92,REST_THR=30,FLOOR_PAD=18,WALL_PAD=14,SHATTER_VY=60,SHATTER_RVN=80,MAX_BODIES=900;'
     // DENSITY: scale body count to viewport. ~1 body per 24,000 px²
     // works out to ~50–75 on common displays (1440×900 = 54, 1920×1200
     // = 96, capped at 100). Repeats are fine — Pica fills the frame
@@ -770,6 +848,15 @@ export function createSplashWindow() {
     + 'const Jx=J*nx,Jy=J*ny;'
     + 'a.vx-=Jx/a.mass;a.vy-=Jy/a.mass;'
     + 'c.vx+=Jx/c.mass;c.vy+=Jy/c.mass;'
+    // Inter-word shatter cascade: if two intact (text.length>1) word bodies
+    // collide with relative velocity above SHATTER_RVN, both shatter. This
+    // is what makes the pile feel alive — words don't just stack as rigid
+    // rectangles, they explode into letters on impact like a wall of marbles
+    // hitting each other.
+    + 'if(-vn>SHATTER_RVN&&bodies.length<MAX_BODIES-12){'
+    +   'if(!a.shattered&&a.text.length>1){shatterWord(a,bodies,-vn);}'
+    +   'if(!c.shattered&&c.text.length>1){shatterWord(c,bodies,-vn);}'
+    + '}'
     // Off-center torque ONLY if neither body is already resting.
     // Otherwise a fresh letter dropping on a settled pile would spin
     // the settled letters back up — root cause of "rotating after
