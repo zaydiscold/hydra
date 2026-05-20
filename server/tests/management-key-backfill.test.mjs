@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Regression: legacy config.managementKey should backfill into the canonical
  * managementKey table exactly once and then become a no-op on repeat reads.

@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Tests for prisma-error.js classifier — verifies that SQLite-level errors
  * (SQLITE_READONLY, SQLITE_BUSY, SQLITE_IOERR, etc.) are properly classified

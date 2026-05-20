@@ -1,3 +1,4 @@
+// @platform all
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
@@ -1105,7 +1106,9 @@ test('hydra export writes a redacted owner-only metadata file', () => {
   const mode = statSync(outPath).mode & 0o777;
 
   assert.equal(summary.path, outPath);
-  assert.equal(mode, 0o600);
+  if (process.platform !== 'win32') {
+    assert.equal(mode, 0o600);
+  }
   assert.equal(exported.schema, 'hydra.redacted-export.v1');
   assert.ok(Array.isArray(exported.accounts));
   assert.ok(Array.isArray(exported.managementKeys));

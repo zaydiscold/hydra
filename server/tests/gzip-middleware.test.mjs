@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Regression: the Express bootstrap should gzip static assets while leaving
  * API responses untouched.

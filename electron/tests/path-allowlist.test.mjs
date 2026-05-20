@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Path-allowlist contract test for the `native:open-path` IPC handler.
  *

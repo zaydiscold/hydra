@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Browser-isolation contract tests for `server/lib/playwright-browser.js`.
  *

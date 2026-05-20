@@ -1,6 +1,13 @@
 # Hydra
 
 <p align="center">
+  <a href="https://github.com/zaydiscold/hydra/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/zaydiscold/hydra/actions/workflows/ci.yml/badge.svg?branch=master"></a>
+  <a href="https://github.com/zaydiscold/hydra/actions/workflows/electron-smoke.yml"><img alt="Electron Smoke" src="https://github.com/zaydiscold/hydra/actions/workflows/electron-smoke.yml/badge.svg?branch=master"></a>
+  <a href="https://github.com/zaydiscold/hydra/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/zaydiscold/hydra"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/zaydiscold/hydra"></a>
+</p>
+
+<p align="center">
   <img src="public/hydra_dragon.png" alt="Hydra" width="112" />
 </p>
 
@@ -9,8 +16,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/zaydiscold/hydra/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/zaydiscold/hydra/ci.yml?branch=master&label=CI&style=flat-square"></a>
-  <a href="https://github.com/zaydiscold/hydra/actions/workflows/release.yml"><img alt="Release" src="https://img.shields.io/github/actions/workflow/status/zaydiscold/hydra/release.yml?branch=master&label=release&style=flat-square"></a>
   <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D22.12-339933?style=flat-square&logo=node.js&logoColor=white">
   <img alt="Electron" src="https://img.shields.io/badge/Electron-42-47848F?style=flat-square&logo=electron&logoColor=white">
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111">

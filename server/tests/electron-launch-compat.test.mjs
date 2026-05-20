@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Launch Compatibility Test
  * ==========================

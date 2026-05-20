@@ -1,3 +1,4 @@
+// @platform all
 /**
  * electron-prisma-asar.test.mjs
  *

@@ -1,3 +1,4 @@
+// @platform all
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
