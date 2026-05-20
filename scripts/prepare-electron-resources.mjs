@@ -242,18 +242,18 @@ function archiveChromiumPayload(child) {
     } catch (sevenZipErr) {
       console.warn(`[prepare-electron-resources] 7z failed (${sevenZipErr.message}); falling back to PowerShell Compress-Archive`);
     }
+    // Pass paths via env vars rather than $args; see listZipEntries comment.
     execFileSync('powershell.exe', [
       '-NoProfile',
       '-Command',
       [
         '$ErrorActionPreference = "Stop";',
-        'Compress-Archive -Path $args[0] -DestinationPath $args[1] -Force',
+        'Compress-Archive -Path $env:HYDRA_ZIP_SOURCE -DestinationPath $env:HYDRA_ZIP_OUT -Force',
       ].join(' '),
-      child,
-      CHROMIUM_ZIP_OUT,
     ], {
       cwd: CHROMIUM_OUT,
       stdio: 'inherit',
+      env: { ...process.env, HYDRA_ZIP_SOURCE: child, HYDRA_ZIP_OUT: CHROMIUM_ZIP_OUT },
     });
     return;
   }

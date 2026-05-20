@@ -251,16 +251,23 @@ function findPrismaEngine(resourcesDir) {
 
 function listZipEntries(archive) {
   if (process.platform === 'win32') {
+    // Use $env:HYDRA_SMOKE_ZIP instead of $args[0]; PowerShell does not
+    // reliably populate $args when invoked via `powershell.exe -Command
+    // "<script>" arg`, which silently yields $null and an empty listing.
     return execFileSync('powershell.exe', [
       '-NoProfile',
       '-Command',
       [
+        '$ErrorActionPreference = "Stop";',
         'Add-Type -AssemblyName System.IO.Compression.FileSystem;',
-        '$zip = [IO.Compression.ZipFile]::OpenRead($args[0]);',
+        '$zip = [IO.Compression.ZipFile]::OpenRead($env:HYDRA_SMOKE_ZIP);',
         'try { $zip.Entries | ForEach-Object { $_.FullName } } finally { $zip.Dispose() }',
       ].join(' '),
-      archive,
-    ], { encoding: 'utf8' });
+    ], {
+      encoding: 'utf8',
+      env: { ...process.env, HYDRA_SMOKE_ZIP: archive },
+      maxBuffer: 64 * 1024 * 1024,
+    });
   }
   return execFileSync('unzip', ['-l', archive], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
