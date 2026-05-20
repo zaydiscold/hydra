@@ -207,6 +207,8 @@ test('final dogfood preflight preserves manual release blockers', () => {
   assert.match(script, /Calculator\.app/, 'LaunchServices diagnostics must compare against a known Apple app');
   assert.match(script, /Hydra Finder AppleEvent handoff/, 'LaunchServices diagnostics must test the Finder AppleEvent path for Hydra');
   assert.match(script, /--docker-smoke/, 'final dogfood must expose Docker runtime smoke reruns');
+  assert.match(script, /timeout:\s*timeoutMs/, 'final dogfood subprocesses must be timeout-bounded');
+  assert.match(script, /result\.error\.message/, 'final dogfood subprocess timeout/errors must stay visible');
   assert.match(script, /Packaged GUI launch/, 'manual checklist must include packaged GUI launch');
   assert.match(script, /Touch ID/, 'manual checklist must include Touch ID validation');
   assert.match(script, /Live account flows/, 'manual checklist must include live account flows');

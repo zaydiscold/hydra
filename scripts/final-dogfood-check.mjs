@@ -36,23 +36,29 @@ function run(command, args, options = {}) {
   }
 }
 
-function runPassthrough(command, args, env = {}) {
+function runPassthrough(command, args, env = {}, timeoutMs = 120_000) {
   const result = spawnSync(command, args, {
     cwd: ROOT,
     env: { ...process.env, ...env },
     stdio: 'inherit',
+    timeout: timeoutMs,
   });
+  if (result.error) {
+    console.log(`[WAIT] ${command} ${args.join(' ')} failed - ${result.error.message}`);
+  }
   return result.status === 0;
 }
 
-function runLaunchDiagnostic(label, command, args) {
+function runLaunchDiagnostic(label, command, args, timeoutMs = 10_000) {
   const result = spawnSync(command, args, {
     cwd: ROOT,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: timeoutMs,
   });
   const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
-  printStatus(result.status === 0, label, output || `exit=${result.status ?? 'unknown'}`);
+  const detail = result.error ? result.error.message : output || `exit=${result.status ?? 'unknown'}`;
+  printStatus(result.status === 0, label, detail);
   return result.status === 0;
 }
 
