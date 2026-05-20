@@ -324,17 +324,24 @@ function hasBundledChromium(resourcesDir) {
   return candidates.some((candidate) => existsSync(candidate));
 }
 
+console.log(`[electron-smoke] start target=${process.env.HYDRA_BUILD_TARGET || '(host)'} platform=${process.platform} arch=${process.arch}`);
 const resourcesDir = findResourcesDir();
+console.log(`[electron-smoke] resourcesDir=${resourcesDir}`);
 if (!resourcesDir) {
   throw new Error('No unpacked Electron resources directory found under release/. Build with electron-builder first.');
 }
 
+console.log(`[electron-smoke] -> assertPackagedShell`);
 const packageShell = assertPackagedShell(resourcesDir);
+console.log(`[electron-smoke] -> assertReleaseArtifact`);
 const releaseArtifact = assertReleaseArtifact();
+console.log(`[electron-smoke] -> assert Prisma schema/migrations/empty-db`);
 assertExists(join(resourcesDir, 'prisma/schema.prisma'), 'Prisma schema resource');
 assertExists(join(resourcesDir, 'prisma/migrations'), 'Prisma migrations resource');
 assertExists(join(resourcesDir, 'data/empty-hydra.db'), 'Empty packaged DB');
+console.log(`[electron-smoke] -> findPrismaEngine`);
 const engine = findPrismaEngine(resourcesDir);
+console.log(`[electron-smoke] -> hasBundledChromium`);
 if (!hasBundledChromium(resourcesDir)) {
   throw new Error(`Bundled Chromium missing under ${join(resourcesDir, 'chromium')} or ${join(resourcesDir, 'chromium.zip')}`);
 }
