@@ -36,8 +36,10 @@ if (!existsSync(DATA_DIR)) {
 }
 
 console.log(`[build-empty-db] Generating empty SQLite database...`);
+console.log(`[build-empty-db] platform=${process.platform} arch=${process.arch} node=${process.version}`);
 console.log(`[build-empty-db] Schema: ${SCHEMA_PATH}`);
 console.log(`[build-empty-db] Output: ${EMPTY_DB_PATH}`);
+console.log(`[build-empty-db] PRISMA_CLI: ${PRISMA_CLI} (exists=${existsSync(PRISMA_CLI)})`);
 
 // Push the schema to a temporary database file, creating all tables (empty)
 const tempDb = resolve(PRISMA_DIR, '.hydra-empty-temp.db');

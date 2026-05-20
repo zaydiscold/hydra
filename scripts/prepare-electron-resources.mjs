@@ -100,11 +100,17 @@ function rewriteChromiumSymlinks(outRoot, sourceRoot) {
   }
 }
 
+console.log(`[prepare-electron-resources] start platform=${platform()} arch=${osArch()} target=${process.env.HYDRA_BUILD_TARGET || '(host)'}`);
+console.log(`[prepare-electron-resources] ROOT=${ROOT}`);
+console.log(`[prepare-electron-resources] BUILD_RESOURCES=${BUILD_RESOURCES}`);
+
 mkdirSync(DATA_OUT, { recursive: true });
+console.log(`[prepare-electron-resources] -> build-empty-db.mjs`);
 execFileSync(process.execPath, [resolve(ROOT, 'scripts/build-empty-db.mjs')], {
   cwd: ROOT,
   stdio: 'inherit',
 });
+console.log(`[prepare-electron-resources] build-empty-db.mjs OK`);
 cpSync(EMPTY_DB_SRC, EMPTY_DB_OUT);
 console.log(`[prepare-electron-resources] copied ${EMPTY_DB_OUT}`);
 
@@ -177,6 +183,8 @@ function chromiumCacheGuidance(target, wantedChildren) {
 }
 const wantedChildren = resolveChromiumChildren();
 const buildTarget = process.env.HYDRA_BUILD_TARGET || `${platform()}-${osArch()}`;
+console.log(`[prepare-electron-resources] wantedChildren=${wantedChildren.join(',')} for buildTarget=${buildTarget}`);
+console.log(`[prepare-electron-resources] chromiumSrc contains: ${readdirSync(chromiumSrc).join(', ')}`);
 const wantedChild = wantedChildren.find((child) => existsSync(resolve(chromiumSrc, child))) ?? wantedChildren[0];
 const wantedSrc = resolve(chromiumSrc, wantedChild);
 if (!existsSync(wantedSrc)) {
@@ -187,6 +195,7 @@ if (!existsSync(wantedSrc)) {
   );
 }
 const wantedOut = resolve(CHROMIUM_OUT, wantedChild);
+console.log(`[prepare-electron-resources] copying ${wantedSrc} -> ${wantedOut}`);
 cpSync(wantedSrc, wantedOut, { recursive: true });
 rewriteChromiumSymlinks(wantedOut, wantedSrc);
 console.log(`[prepare-electron-resources] copied ${basename(chromiumSrc)}/${wantedChild} to ${CHROMIUM_OUT}`);
@@ -218,7 +227,21 @@ if (foundBin) {
 }
 
 function archiveChromiumPayload(child) {
+  console.log(`[prepare-electron-resources] archiving ${child} -> ${CHROMIUM_ZIP_OUT}`);
   if (platform() === 'win32') {
+    // Compress-Archive can fail on Chromium's nested win32 paths (long-path
+    // limit, slow on many small files). Prefer 7z which ships with the GitHub
+    // windows-2022/windows-latest runners and produces a standard .zip; fall
+    // back to Compress-Archive only if 7z isn't on PATH.
+    try {
+      execFileSync('7z', ['a', '-tzip', '-mx=1', '-bsp0', '-bso0', CHROMIUM_ZIP_OUT, child], {
+        cwd: CHROMIUM_OUT,
+        stdio: 'inherit',
+      });
+      return;
+    } catch (sevenZipErr) {
+      console.warn(`[prepare-electron-resources] 7z failed (${sevenZipErr.message}); falling back to PowerShell Compress-Archive`);
+    }
     execFileSync('powershell.exe', [
       '-NoProfile',
       '-Command',

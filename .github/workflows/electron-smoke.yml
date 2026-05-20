@@ -5,7 +5,13 @@ on:
   workflow_dispatch:
 
 env:
+  # `npm test`'s pretest runs `prisma db push` / `prisma generate` which read
+  # DATABASE_URL from the schema's datasource. Without these set the test
+  # suite fails before any test runs.
+  DATABASE_URL: "file:./prisma/ci.db"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  HYDRA_DATA_DIR: ".hydra-ci-data"
+  JWT_SECRET: "ci-test-secret-32-characters-long"
 
 jobs:
   package-smoke:
