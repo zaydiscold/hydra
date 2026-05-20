@@ -1,3 +1,4 @@
+// @platform all
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,7 +19,7 @@ test('CI and Docker workflows run on the supported Node 24 action runtime', () =
   assert.match(ci, /node-version:\s*24/, 'CI must install supported Node 24 for repo commands');
   assert.match(ci, /npm ci/, 'CI must install from lockfile');
   assert.match(ci, /npm run lint/, 'CI must run lint');
-  assert.match(ci, /npm run build[\s\S]*npm test[\s\S]*npm run gate[\s\S]*npm run build/, 'CI must build before tests, then run tests, gate, and final build');
+  assert.match(ci, /npm run build[\s\S]*npm run test:ci[\s\S]*npm run gate[\s\S]*npm run build/, 'CI must build before tests, then run tests, gate, and final build');
 
   assert.match(docker, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:\s*"true"/, 'Docker publish workflow must opt GitHub actions into the Node 24 runtime');
   assert.match(docker, /platforms:\s*linux\/amd64,linux\/arm64/, 'Docker publish workflow must build amd64 and arm64 images');
@@ -35,7 +36,7 @@ test('electron package smoke workflow covers macOS, Windows, and Linux packages'
   assert.match(workflow, /node-version:\s*24/, 'package smoke must use supported Node 24');
   assert.match(workflow, /npm ci/, 'package smoke must install from lockfile');
   assert.match(workflow, /npm run lint/, 'package smoke must run lint');
-  assert.match(workflow, /npm test/, 'package smoke must run the full test suite');
+  assert.match(workflow, /npm run test:ci/, 'package smoke must run the CI test summary suite');
   assert.match(workflow, /npm run gate/, 'package smoke must run integration gate');
   assert.match(workflow, /npm run electron:prepare/, 'package smoke must prepare packaged resources');
   assert.match(workflow, /npm run electron:smoke/, 'package smoke must verify packaged resources');
@@ -58,7 +59,7 @@ test('release workflow uploads desktop artifacts for every release target', () =
   assert.match(workflow, /FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:\s*"true"/, 'release workflow must opt into the supported Actions Node 24 runtime');
   assert.match(workflow, /node-version:\s*24/, 'release workflow must use supported Node 24');
   assert.match(workflow, /verify:\s*\n\s*name:\s*lint, test, gate/, 'release workflow must run repository verification before packaging');
-  assert.match(workflow, /verify:[\s\S]*npm run lint[\s\S]*npm run build[\s\S]*npm test[\s\S]*npm run gate[\s\S]*npm run build/, 'release verification must build dist before tests that inspect dist assets');
+  assert.match(workflow, /verify:[\s\S]*npm run lint[\s\S]*npm run build[\s\S]*npm run test:ci[\s\S]*npm run gate[\s\S]*npm run build/, 'release verification must build dist before tests that inspect dist assets');
   assert.match(workflow, /build:[\s\S]*needs:\s*verify/, 'release packaging matrix must wait for verification');
   assert.match(workflow, /npx electron-builder \$\{\{ matrix\.target \}\} --publish never/, 'release workflow must build before publishing verified artifacts');
   assert.match(workflow, /npm run electron:smoke/, 'release workflow must smoke-check packaged resources before upload');

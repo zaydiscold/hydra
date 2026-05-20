@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Integration-style test: ensureSession first branch with vault-shaped session
  * (__session JWT present, sessionExpiry null) backfills without refresh/validate network.

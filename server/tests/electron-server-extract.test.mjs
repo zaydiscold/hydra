@@ -1,3 +1,4 @@
+// @platform all
 /**
  * PRETEST — Phase 1 Server Refactor Verification
  *

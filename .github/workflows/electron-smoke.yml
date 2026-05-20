@@ -55,7 +55,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          npm test 2>&1 | tee test-output.log
+          npm run test:ci 2>&1 | tee test-output.log
       - name: Surface npm test failure
         if: steps.tests.outcome == 'failure'
         uses: actions/github-script@v7
@@ -70,7 +70,7 @@ jobs:
             } catch (e) {
               log = `(failed to read test-output.log: ${e.message})`;
             }
-            const body = `**npm test failed** on \`${{ matrix.os }}\` (\`${{ matrix.build_target }}\`)\n\n<details><summary>tail -200 test-output.log</summary>\n\n\`\`\`\n${log}\n\`\`\`\n</details>`;
+            const body = `**npm run test:ci failed** on \`${{ matrix.os }}\` (\`${{ matrix.build_target }}\`)\n\n<details><summary>tail -200 test-output.log</summary>\n\n\`\`\`\n${log}\n\`\`\`\n</details>`;
             if (context.payload.pull_request) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -79,7 +79,7 @@ jobs:
                 body,
               });
             }
-            core.setFailed('npm test failed; output posted as PR comment');
+            core.setFailed('npm run test:ci failed; output posted as PR comment');
       - run: npm run gate
       - run: npm run build
       - run: npm run electron:prepare

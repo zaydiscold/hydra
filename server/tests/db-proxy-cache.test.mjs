@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Regression: the Prisma proxy should bind each function once per client
  * instance, then rebuild the cache after disconnect.

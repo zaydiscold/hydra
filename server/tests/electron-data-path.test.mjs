@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Electron data path contract.
  *

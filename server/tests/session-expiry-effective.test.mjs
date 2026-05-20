@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Regression: vault rows with __session JWT but sessionExpiry null must not be treated as dead.
  * ensureSession / preflight use sessionExpiry || getJwtExpiry(sessionCookie) before isSessionValid.

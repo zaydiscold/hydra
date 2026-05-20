@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Phase 1 Backward Compatibility Validation Tests
  * These are static source validators — no mocks, no runtime imports needed.
@@ -6,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { basename as pathBasename } from 'node:path';
 import { URL } from 'node:url';
 
 const resolve = (rel) => new URL(rel, import.meta.url);
@@ -64,7 +66,7 @@ test('HYDRA_DATA_DIR: all 4 services respect env var', () => {
   ];
   for (const f of files) {
     const src = readSource(f);
-    const basename = f.split('/').pop();
+    const basename = pathBasename(f);
     assertPatternIn(basename, src, /getData(Path|Dir)/, 'must use shared data-dir helper');
   }
 });

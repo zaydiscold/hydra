@@ -1,3 +1,4 @@
+// @platform all
 // Test: ErrorBoundary #57 — correlation ID in production, full stack in dev
 import { describe, it } from 'node:test';
 import assert from 'node:assert';

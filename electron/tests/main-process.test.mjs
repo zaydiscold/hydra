@@ -1,3 +1,4 @@
+// @platform all
 /**
  * Tests for the Electron main-process surface.
  *

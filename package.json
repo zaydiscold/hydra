@@ -28,7 +28,7 @@
     "electron:open:mac-arm64": "node scripts/open-packaged-app.mjs release/mac-arm64/Hydra.app",
     "// ─── Testing ───────────────────────────────────────────────────────────": "",
     "pretest": "prisma db push --skip-generate && prisma generate",
-    "test": "npm run test:test-chain-completeness && npm run test:session-expiry && npm run test:ensure-session-backfill && npm run test:session-refresh-contract && npm run test:management-key-backfill && npm run test:config && npm run test:filesystem-permissions && npm run test:user-prefs && npm run test:local-secrets && npm run test:account-proxy-pool && npm run test:auth-status && npm run test:auth-cookie && npm run test:webhooks && npm run test:upstream-health && npm run test:health-pinger && npm run test:proxy-gate && npm run test:task-supervisor && npm run test:background-failure-visibility && npm run test:proxy-sse && npm run test:request-log-buffer && npm run test:db-proxy-cache && npm run test:schema-self-heal-backups && npm run test:electron-url-allowlist && npm run test:api-integration && npm run test:browser-isolation && npm run test:openapi-map && npm run test:mcp && npm run test:cli && npm run test:ui-static && npm run test:docker-smoke && npm run test:workflow-contract && npm run test:gzip-middleware && npm run test:error-boundary-sanitization && npm run test:prisma-error-classification && npm run test:phase1-backward-compat && npm run test:electron",
+    "test": "npm run test:test-chain-completeness && npm run test:cross-platform && npm run test:session-expiry && npm run test:ensure-session-backfill && npm run test:session-refresh-contract && npm run test:management-key-backfill && npm run test:config && npm run test:filesystem-permissions && npm run test:user-prefs && npm run test:local-secrets && npm run test:account-proxy-pool && npm run test:auth-status && npm run test:auth-cookie && npm run test:webhooks && npm run test:upstream-health && npm run test:health-pinger && npm run test:proxy-gate && npm run test:task-supervisor && npm run test:background-failure-visibility && npm run test:proxy-sse && npm run test:request-log-buffer && npm run test:db-proxy-cache && npm run test:schema-self-heal-backups && npm run test:electron-url-allowlist && npm run test:api-integration && npm run test:browser-isolation && npm run test:openapi-map && npm run test:mcp && npm run test:cli && npm run test:ui-static && npm run test:docker-smoke && npm run test:workflow-contract && npm run test:gzip-middleware && npm run test:error-boundary-sanitization && npm run test:prisma-error-classification && npm run test:phase1-backward-compat && npm run test:electron",
     "test:electron": "npm run test:electron-server-extract && npm run test:electron-launch-compat && npm run test:electron-data-path && npm run test:electron-ipc-contract && npm run test:electron-main-process && npm run test:electron-path-allowlist && npm run test:schema-hash && npm run test:electron-prisma-asar",
     "test:test-chain-completeness": "node --test server/tests/test-chain-completeness.test.mjs",
     "test:session-expiry": "node --test server/tests/session-expiry-effective.test.mjs",
@@ -95,7 +95,9 @@
     "setup": "npm install && prisma db push --skip-generate && prisma generate && npm run build",
     "link": "npm link",
     "check:clerk": "node scripts/recon/check-clerk-connectivity.mjs",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test:ci": "node scripts/run-ci-tests.mjs",
+    "test:cross-platform": "node --test server/tests/cross-platform-contract.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
