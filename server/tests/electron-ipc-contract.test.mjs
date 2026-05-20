@@ -26,6 +26,10 @@ function listRendererFiles(dir = resolve(ROOT, 'src'), rootCall = true) {
   return rootCall ? files.map((file) => file.slice(ROOT.length + 1)) : files;
 }
 
+function normalizePathForContract(file) {
+  return file.replaceAll('\\', '/');
+}
+
 function uniqueMatches(source, regex, group = 1) {
   return [...source.matchAll(regex)].map((m) => m[group]).filter(Boolean);
 }
@@ -77,7 +81,7 @@ test('every native IPC handler returns a Result envelope', () => {
 });
 
 test('renderer native bridge calls go through Result-unwrapping helpers', () => {
-  const sourceFiles = listRendererFiles().filter((file) => file !== 'src/lib/native.js');
+  const sourceFiles = listRendererFiles().filter((file) => normalizePathForContract(file) !== 'src/lib/native.js');
   const preloadSrc = read('electron/preload.js');
   const nativeSrc = read('src/lib/native.js');
 

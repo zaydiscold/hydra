@@ -60,3 +60,21 @@ test('test files declare their platform contract up front', () => {
   }
   assert.deepEqual(offenders, [], 'missing @platform comment: ' + offenders.join(', '));
 });
+
+
+test('test path comparisons normalize platform separators first', () => {
+  const offenders = [];
+  const testFiles = [...walk('server/tests'), ...walk('electron/tests')].filter(file => file.endsWith('.test.mjs'));
+  for (const file of testFiles) {
+    const lines = readFileSync(join(ROOT, file), 'utf8').split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!/\bfile\s*(?:={2,3}|!={1,2})\s*['"][^'"]*\//.test(line)) continue;
+      const nearby = lines.slice(Math.max(0, i - 4), Math.min(lines.length, i + 5)).join('\n');
+      if (!nearby.includes('normalizePath') && !nearby.includes('replaceAll(\\\\') && !nearby.includes('path.sep')) {
+        offenders.push(file + ':' + (i + 1));
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], 'path comparisons with slash literals must normalize separators: ' + offenders.join(', '));
+});
