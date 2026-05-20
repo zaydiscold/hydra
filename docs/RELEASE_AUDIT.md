@@ -17,13 +17,15 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Multi-arch macOS updater metadata | Release workflow includes `mac-update-metadata` and `scripts/merge-mac-update-yml.mjs`; workflow contract requires merged `latest-mac.yml` with arm64 and x64 files. | Source verified; next tag must produce real release metadata |
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
-| Release artifacts | Expected local files: macOS arm64 zip/blockmap, macOS x64 zip/blockmap, Windows x64 NSIS/blockmap. | Not Yet Verified in this source tarball |
+| Release artifacts | Current CI runner evidence from PR #7 covers macOS arm64 zip, macOS Intel zip, and Windows NSIS package smoke. Local arm64 build/smoke also passed; local Intel/Windows launch remains target-runner evidence only. | Verified for package-resource contract |
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Screenshot and Remotion plan | Must capture from packaged Electron only, redact secrets, render Remotion still before final media. | Not Yet Verified |
 | Docker runtime smoke | Requires reachable local Docker daemon. | Not Yet Verified |
 
 ## Current Verified Evidence
+
+- GitHub Actions run 26193855786 on PR #7 verified current packaged artifacts across target runners: macos-14 --mac zip --arm64 built Hydra-1.0.7-mac-arm64.zip with target=darwin-arm64 and packaged resource contract OK; macos-15-intel --mac zip --x64 copied chrome-mac-x64, built Hydra-1.0.7-mac-x64.zip with target=darwin-x64, verified libquery_engine-darwin.dylib.node, and ended electron:smoke with packaged resource contract OK; windows-latest --win nsis --x64 built Hydra-1.0.7-win-x64.exe with target=win32-x64 and packaged resource contract OK.
 
 - Fresh macOS arm64 package build on 2026-05-20 from current master succeeded in /private/tmp/hydra-master-audit-1779315452 after forcing Prisma caches into /private/tmp. Commands: HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:prepare, HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:build, HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke. Smoke verified packaged shell, release zip, Prisma engine, bundled Chromium, and 80 MB app size.
 - Packaged app LaunchServices dogfood attempt on 2026-05-20 did not prove GUI launch: scripts/open-packaged-app.mjs verified bundle executable, quarantine absence, and codesign valid-on-disk for release/mac-arm64/Hydra.app, then LaunchServices returned kLSNoExecutableErr. Baseline open of Calculator.app failed with the same LaunchServices error and Finder AppleEvent lookup also failed, so this is recorded as a shell/LaunchServices handoff blocker rather than a Hydra bundle crash.
@@ -37,7 +39,6 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 
 ## Not Yet Verified
 
-- Build and inspect current local packaged artifacts for macOS arm64, macOS x64, and Windows x64 outputs, or attach CI artifact evidence from a tagged release.
 - Launch packaged Electron via LaunchServices and dogfood splash, unlock, Dashboard, Settings Touch ID, proxy pool, traffic, CLI/router surfaces, and window/menu actions.
 - Run live account/login/OTP/code redemption/proxy rotation flows with safe test data.
 - Capture the required packaged Electron screenshots with no API keys, cookies, tokens, or personal account data visible.
