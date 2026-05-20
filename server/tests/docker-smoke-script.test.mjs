@@ -27,6 +27,15 @@ test('docker smoke runner uses bounded docker compose steps', () => {
   assert.match(src, /'compose', 'down', '--remove-orphans'/, 'must remove created containers after start smoke');
 });
 
+test('docker workflow runs a runtime smoke before publishing', () => {
+  const workflow = read('.github/workflows/docker.yml');
+
+  assert.match(workflow, /runtime-smoke:/, 'workflow must include a Docker runtime smoke job');
+  assert.match(workflow, /node-version:\s*24/, 'runtime smoke must use the supported Node runtime');
+  assert.match(workflow, /npm ci/, 'runtime smoke must install the project before invoking npm scripts');
+  assert.match(workflow, /npm run docker:smoke -- --start/, 'runtime smoke must start the container and hit the health endpoint');
+});
+
 test('package docker:smoke uses the bounded runner', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.equal(pkg.scripts['docker:smoke'], 'node scripts/docker-smoke.mjs');

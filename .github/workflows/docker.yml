@@ -14,6 +14,28 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/hydra
 
 jobs:
+  runtime-smoke:
+    name: Runtime Smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Docker runtime smoke
+        run: npm run docker:smoke -- --start
+
   build-and-push:
     name: Build & Push
     runs-on: ubuntu-latest
