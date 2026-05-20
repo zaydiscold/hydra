@@ -130,7 +130,7 @@ test('empty database generation is portable across release runners', () => {
 
   assert.match(script, /function prismaFileUrl/, 'empty DB generation must create portable Prisma SQLite URLs');
   assert.match(script, /const tempDb = resolve\(PRISMA_DIR, '\.hydra-empty-temp\.db'\)/, 'empty DB generation must use a schema-relative temporary SQLite file');
-  assert.match(script, /file:\$\{basename\(path\)\}/, 'empty DB generation must avoid absolute Windows SQLite URLs');
+  assert.match(script, /file:\.\/\$\{basename\(path\)\}/, 'empty DB generation must use the unambiguous file:./<name> relative URL that Windows Prisma accepts');
   assert.match(script, /PRISMA_CLI, 'generate'/, 'empty DB validation must generate Prisma Client before importing it on packaging runners');
   assert.match(script, /new PrismaClient/, 'empty DB validation must use Prisma instead of a host sqlite3 binary');
   assert.match(script, /\$queryRawUnsafe\([\s\S]*sqlite_master/, 'empty DB validation must still inspect generated SQLite tables');
