@@ -201,7 +201,7 @@ describe('browser isolation — overall sanity', () => {
       'every launch has a userDataDir set (either ephemeral or caller-supplied)');
   });
 
-  it('packaged mode extracts archived Chromium into userData before launch', () => {
+  it('packaged mode extracts archived Chromium into userData before launch', { skip: process.platform === 'win32' ? 'fixture builds chrome-linux via the zip CLI; not available on Windows runners' : false }, () => {
     const root = join(tmpdir(), `hydra-chromium-archive-test-${process.pid}`);
     const resources = join(root, 'resources');
     const archiveSrc = join(root, 'archive-src');
