@@ -27,6 +27,13 @@ test('docker smoke runner uses bounded docker compose steps', () => {
   assert.match(src, /'compose', 'down', '--remove-orphans'/, 'must remove created containers after start smoke');
 });
 
+test('docker compose publishes a reachable server listener', () => {
+  const compose = read('docker-compose.yml');
+
+  assert.match(compose, /3001:3001/, 'compose must publish the Hydra HTTP port');
+  assert.match(compose, /HYDRA_LISTEN_HOST=0\.0\.0\.0/, 'container server must bind beyond loopback for published ports');
+});
+
 test('docker workflow runs a runtime smoke before publishing', () => {
   const workflow = read('.github/workflows/docker.yml');
 

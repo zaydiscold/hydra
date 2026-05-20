@@ -22,6 +22,8 @@ services:
       - DATABASE_URL=file:/app/data/hydra.db
       - HYDRA_PLAYWRIGHT_NO_SANDBOX=1
       - HYDRA_DOCKERIZED=1
+      # Bind inside the container to all interfaces so Docker port publishing can reach Hydra.
+      - HYDRA_LISTEN_HOST=0.0.0.0
       # WARNING: Setting these to 1 on a persistent container will fill /tmp
       # with Playwright traces and network logs. Use 0 in production. (Gotcha #7)
       - HYDRA_PROVISION_NETWORK_LOG=0
