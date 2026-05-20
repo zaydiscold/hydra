@@ -7,8 +7,9 @@ import { appendFileSync, existsSync, mkdtempSync, statSync, writeFileSync } from
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('../..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const CLI = join(ROOT, 'bin/hydra.mjs');
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
 

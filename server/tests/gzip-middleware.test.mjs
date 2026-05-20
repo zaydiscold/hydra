@@ -8,8 +8,9 @@ import http from 'node:http';
 import { Router } from 'express';
 import { readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(new URL('../../', import.meta.url).pathname);
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const DIST_ASSETS = resolve(ROOT, 'dist', 'assets');
 
 function makeRouterWithStatus() {

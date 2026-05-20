@@ -4,10 +4,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pull-requests: write
-
 env:
   # `npm test`'s pretest runs `prisma db push` / `prisma generate` which read
   # DATABASE_URL from the schema's datasource. Without these set the test
@@ -49,37 +45,7 @@ jobs:
       # `npm test` includes test:gzip-middleware which reads dist/assets, so
       # the renderer build has to land before tests — matches CI and release.yml.
       - run: npm run build
-      - name: npm test
-        id: tests
-        shell: bash
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          npm test 2>&1 | tee test-output.log
-      - name: Surface npm test failure
-        if: steps.tests.outcome == 'failure'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            let log = '(no test-output.log)';
-            try {
-              log = fs.readFileSync('test-output.log', 'utf-8');
-              const lines = log.split('\n');
-              if (lines.length > 200) log = lines.slice(-200).join('\n');
-            } catch (e) {
-              log = `(failed to read test-output.log: ${e.message})`;
-            }
-            const body = `**npm test failed** on \`${{ matrix.os }}\` (\`${{ matrix.build_target }}\`)\n\n<details><summary>tail -200 test-output.log</summary>\n\n\`\`\`\n${log}\n\`\`\`\n</details>`;
-            if (context.payload.pull_request) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                body,
-              });
-            }
-            core.setFailed('npm test failed; output posted as PR comment');
+      - run: npm test
       - run: npm run gate
       - run: npm run build
       - run: npm run electron:prepare
