@@ -71,7 +71,12 @@ test('stores proxy pool encrypted and returns masked public state', () => {
   assert.equal(loaded.proxies[0].username, 'u**r');
 
   const file = join(dataDir, 'account-proxies.json.enc');
-  assert.equal(statSync(file).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') {
+    // Windows uses ACLs rather than POSIX mode bits; chmod(0o600) is a no-op
+    // there and the file reports 0o666. Owner-only enforcement is asserted
+    // on POSIX hosts where chmod is effective.
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+  }
   const picked = pickAccountProxy();
   assert.equal(picked.host, '10.0.0.1');
   assert.equal(picked.password, 'secret');
