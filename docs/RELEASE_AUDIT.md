@@ -25,6 +25,11 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 
 ## Current Verified Evidence
 
+- Fresh macOS arm64 package build on 2026-05-20 from current master succeeded in /private/tmp/hydra-master-audit-1779315452 after forcing Prisma caches into /private/tmp. Commands: HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:prepare, HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:build, HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke. Smoke verified packaged shell, release zip, Prisma engine, bundled Chromium, and 80 MB app size.
+- Packaged app LaunchServices dogfood attempt on 2026-05-20 did not prove GUI launch: scripts/open-packaged-app.mjs verified bundle executable, quarantine absence, and codesign valid-on-disk for release/mac-arm64/Hydra.app, then LaunchServices returned kLSNoExecutableErr. Baseline open of Calculator.app failed with the same LaunchServices error and Finder AppleEvent lookup also failed, so this is recorded as a shell/LaunchServices handoff blocker rather than a Hydra bundle crash.
+- Docker runtime check on 2026-05-20 remained blocked because docker info could not connect to unix:///Users/zaydk/.docker/run/docker.sock; Docker daemon was not reachable.
+- macOS Intel package build was not attempted as local release evidence on Apple Silicon after prepare-electron-resources correctly refused HYDRA_BUILD_TARGET=darwin-x64 without a chrome-mac-x64/chrome-mac Playwright cache. CI artifact inspection downloaded the green PR #5 macOS Intel zip/blockmap and Windows NSIS/blockmap, but the extracted Intel app was unsigned in the downloaded artifact context, so mac-intel-current remains unverified locally.
+
 - PR #4 `Show splash auto-update progress` merged on 2026-05-20 with CI and Electron package smoke green on macOS arm64, macOS Intel, Windows NSIS, and Linux AppImage.
 - PR #5 `Harden cross-platform CI tests and badges` merged on 2026-05-20 with CI, Electron package smoke, and release packaging verification green across the same target matrix.
 - Fresh master audit command run on 2026-05-20 from `/private/tmp/hydra-master-audit-1779314773` returned `complete: false` because release artifacts, packaged GUI dogfood, live MVP dogfood, screenshot audit, Docker runtime, and previously missing docs were not all verified.
