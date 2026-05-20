@@ -251,16 +251,23 @@ function findPrismaEngine(resourcesDir) {
 
 function listZipEntries(archive) {
   if (process.platform === 'win32') {
+    // Use $env:HYDRA_SMOKE_ZIP instead of $args[0]; PowerShell does not
+    // reliably populate $args when invoked via `powershell.exe -Command
+    // "<script>" arg`, which silently yields $null and an empty listing.
     return execFileSync('powershell.exe', [
       '-NoProfile',
       '-Command',
       [
+        '$ErrorActionPreference = "Stop";',
         'Add-Type -AssemblyName System.IO.Compression.FileSystem;',
-        '$zip = [IO.Compression.ZipFile]::OpenRead($args[0]);',
+        '$zip = [IO.Compression.ZipFile]::OpenRead($env:HYDRA_SMOKE_ZIP);',
         'try { $zip.Entries | ForEach-Object { $_.FullName } } finally { $zip.Dispose() }',
       ].join(' '),
-      archive,
-    ], { encoding: 'utf8' });
+    ], {
+      encoding: 'utf8',
+      env: { ...process.env, HYDRA_SMOKE_ZIP: archive },
+      maxBuffer: 64 * 1024 * 1024,
+    });
   }
   return execFileSync('unzip', ['-l', archive], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
@@ -324,17 +331,24 @@ function hasBundledChromium(resourcesDir) {
   return candidates.some((candidate) => existsSync(candidate));
 }
 
+console.log(`[electron-smoke] start target=${process.env.HYDRA_BUILD_TARGET || '(host)'} platform=${process.platform} arch=${process.arch}`);
 const resourcesDir = findResourcesDir();
+console.log(`[electron-smoke] resourcesDir=${resourcesDir}`);
 if (!resourcesDir) {
   throw new Error('No unpacked Electron resources directory found under release/. Build with electron-builder first.');
 }
 
+console.log(`[electron-smoke] -> assertPackagedShell`);
 const packageShell = assertPackagedShell(resourcesDir);
+console.log(`[electron-smoke] -> assertReleaseArtifact`);
 const releaseArtifact = assertReleaseArtifact();
+console.log(`[electron-smoke] -> assert Prisma schema/migrations/empty-db`);
 assertExists(join(resourcesDir, 'prisma/schema.prisma'), 'Prisma schema resource');
 assertExists(join(resourcesDir, 'prisma/migrations'), 'Prisma migrations resource');
 assertExists(join(resourcesDir, 'data/empty-hydra.db'), 'Empty packaged DB');
+console.log(`[electron-smoke] -> findPrismaEngine`);
 const engine = findPrismaEngine(resourcesDir);
+console.log(`[electron-smoke] -> hasBundledChromium`);
 if (!hasBundledChromium(resourcesDir)) {
   throw new Error(`Bundled Chromium missing under ${join(resourcesDir, 'chromium')} or ${join(resourcesDir, 'chromium.zip')}`);
 }

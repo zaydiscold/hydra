@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - 'scripts/prepare-electron-resources.mjs'
+      - 'scripts/build-empty-db.mjs'
+      - 'scripts/smoke-electron-package.mjs'
+      - 'electron-builder.yml'
+      - 'electron/builders/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'prisma/schema.prisma'
   workflow_dispatch:
 
 permissions:
@@ -80,7 +91,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Diagnostics
+        shell: bash
+        run: |
+          echo "runner: ${{ matrix.os }} target: ${{ matrix.build_target }}"
+          node --version
+          npm --version
       - run: npm ci
+      # Explicit Prisma client generate. electron-builder's afterPack hook
+      # ships .prisma/client and asserts the platform engine is present;
+      # making generate explicit here means a failure is attributed to this
+      # step rather than getting buried inside electron:prepare or afterPack.
+      - run: npx prisma generate
       - run: npm run build
       - run: npm run electron:prepare
         env:

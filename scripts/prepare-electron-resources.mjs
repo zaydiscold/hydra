@@ -100,27 +100,43 @@ function rewriteChromiumSymlinks(outRoot, sourceRoot) {
   }
 }
 
+console.log(`[prepare-electron-resources] start platform=${platform()} arch=${osArch()} target=${process.env.HYDRA_BUILD_TARGET || '(host)'}`);
+console.log(`[prepare-electron-resources] ROOT=${ROOT}`);
+console.log(`[prepare-electron-resources] BUILD_RESOURCES=${BUILD_RESOURCES}`);
+
 mkdirSync(DATA_OUT, { recursive: true });
+console.log(`[prepare-electron-resources] -> build-empty-db.mjs`);
 execFileSync(process.execPath, [resolve(ROOT, 'scripts/build-empty-db.mjs')], {
   cwd: ROOT,
   stdio: 'inherit',
 });
+console.log(`[prepare-electron-resources] build-empty-db.mjs OK`);
 cpSync(EMPTY_DB_SRC, EMPTY_DB_OUT);
 console.log(`[prepare-electron-resources] copied ${EMPTY_DB_OUT}`);
 
 const revision = chromiumRevision();
 let chromiumSrc = findChromiumSource(revision);
 if (!chromiumSrc) {
-  console.log(`[prepare-electron-resources] Chromium ${revision} not found; installing with Playwright`);
-  execFileSync(process.execPath, [resolve(ROOT, 'node_modules/playwright/cli.js'), 'install', 'chromium'], {
+  // `playwright` is in optionalDependencies; if it failed to install (or was
+  // skipped), fall back to playwright-core's CLI which is always present.
+  const playwrightCli = resolve(ROOT, 'node_modules/playwright/cli.js');
+  const playwrightCoreCli = resolve(ROOT, 'node_modules/playwright-core/cli.js');
+  const cli = existsSync(playwrightCli) ? playwrightCli : playwrightCoreCli;
+  console.log(`[prepare-electron-resources] Chromium ${revision} not found in cache: ${browserCacheRoots().join(', ')}`);
+  console.log(`[prepare-electron-resources] installing via ${cli}`);
+  execFileSync(process.execPath, [cli, 'install', 'chromium'], {
     cwd: ROOT,
     stdio: 'inherit',
   });
   chromiumSrc = findChromiumSource(revision);
 }
 if (!chromiumSrc) {
-  throw new Error(`Playwright Chromium ${revision} was not found after install`);
+  throw new Error(
+    `Playwright Chromium ${revision} was not found after install. ` +
+    `Cache roots checked: ${browserCacheRoots().join(', ') || '(none)'}`
+  );
 }
+console.log(`[prepare-electron-resources] Chromium source: ${chromiumSrc}`);
 
 rmSync(CHROMIUM_OUT, { recursive: true, force: true });
 rmSync(CHROMIUM_ZIP_OUT, { force: true });
@@ -167,6 +183,8 @@ function chromiumCacheGuidance(target, wantedChildren) {
 }
 const wantedChildren = resolveChromiumChildren();
 const buildTarget = process.env.HYDRA_BUILD_TARGET || `${platform()}-${osArch()}`;
+console.log(`[prepare-electron-resources] wantedChildren=${wantedChildren.join(',')} for buildTarget=${buildTarget}`);
+console.log(`[prepare-electron-resources] chromiumSrc contains: ${readdirSync(chromiumSrc).join(', ')}`);
 const wantedChild = wantedChildren.find((child) => existsSync(resolve(chromiumSrc, child))) ?? wantedChildren[0];
 const wantedSrc = resolve(chromiumSrc, wantedChild);
 if (!existsSync(wantedSrc)) {
@@ -177,6 +195,7 @@ if (!existsSync(wantedSrc)) {
   );
 }
 const wantedOut = resolve(CHROMIUM_OUT, wantedChild);
+console.log(`[prepare-electron-resources] copying ${wantedSrc} -> ${wantedOut}`);
 cpSync(wantedSrc, wantedOut, { recursive: true });
 rewriteChromiumSymlinks(wantedOut, wantedSrc);
 console.log(`[prepare-electron-resources] copied ${basename(chromiumSrc)}/${wantedChild} to ${CHROMIUM_OUT}`);
@@ -208,19 +227,33 @@ if (foundBin) {
 }
 
 function archiveChromiumPayload(child) {
+  console.log(`[prepare-electron-resources] archiving ${child} -> ${CHROMIUM_ZIP_OUT}`);
   if (platform() === 'win32') {
+    // Compress-Archive can fail on Chromium's nested win32 paths (long-path
+    // limit, slow on many small files). Prefer 7z which ships with the GitHub
+    // windows-2022/windows-latest runners and produces a standard .zip; fall
+    // back to Compress-Archive only if 7z isn't on PATH.
+    try {
+      execFileSync('7z', ['a', '-tzip', '-mx=1', '-bsp0', '-bso0', CHROMIUM_ZIP_OUT, child], {
+        cwd: CHROMIUM_OUT,
+        stdio: 'inherit',
+      });
+      return;
+    } catch (sevenZipErr) {
+      console.warn(`[prepare-electron-resources] 7z failed (${sevenZipErr.message}); falling back to PowerShell Compress-Archive`);
+    }
+    // Pass paths via env vars rather than $args; see listZipEntries comment.
     execFileSync('powershell.exe', [
       '-NoProfile',
       '-Command',
       [
         '$ErrorActionPreference = "Stop";',
-        'Compress-Archive -Path $args[0] -DestinationPath $args[1] -Force',
+        'Compress-Archive -Path $env:HYDRA_ZIP_SOURCE -DestinationPath $env:HYDRA_ZIP_OUT -Force',
       ].join(' '),
-      child,
-      CHROMIUM_ZIP_OUT,
     ], {
       cwd: CHROMIUM_OUT,
       stdio: 'inherit',
+      env: { ...process.env, HYDRA_ZIP_SOURCE: child, HYDRA_ZIP_OUT: CHROMIUM_ZIP_OUT },
     });
     return;
   }
