@@ -1,7 +1,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -35,9 +35,10 @@ test('backupDatabase copies db plus WAL/SHM sidecars and returns the root backup
   const names = listNames(userDataDir);
 
   assert.match(backupPath, /hydra\.db\.backup-/);
-  assert.ok(names.includes(backupPath.split('/').at(-1)));
-  assert.ok(names.includes(`${backupPath.split('/').at(-1)}-wal`));
-  assert.ok(names.includes(`${backupPath.split('/').at(-1)}-shm`));
+  const backupName = basename(backupPath);
+  assert.ok(names.includes(backupName));
+  assert.ok(names.includes(`${backupName}-wal`));
+  assert.ok(names.includes(`${backupName}-shm`));
 });
 
 test('pruneOldBackups keeps the newest five backup roots and their sidecars only', () => {
