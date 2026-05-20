@@ -220,17 +220,17 @@ function buildAudit() {
     deferred(
       'packaged-gui-dogfood',
       'Packaged Electron GUI dogfood',
-      'deferred from active Codex scope; manual packaged Electron GUI dogfood is user-owned until explicitly reopened',
+      'not release-complete evidence; packaged Electron GUI launch/window/navigation dogfood still requires app-control or user-run evidence',
     ),
     deferred(
       'live-mvp-dogfood',
       'Live MVP feature dogfood',
-      'deferred from active Codex scope; live OTP/redemption/real-key rotation require manual/live credentials',
+      'not release-complete evidence; live OTP, redemption, proxy rotation, and real-key flows still require live credentials/accounts/codes',
     ),
     deferred(
       'packaged-screenshot-audit',
       'Packaged Electron screenshot audit',
-      'deferred from active Codex scope; screenshot auditing must be packaged Electron only if reopened',
+      'not release-complete evidence; screenshot auditing must be captured from packaged Electron with secrets redacted',
     ),
     check(
       'package-scripts',
@@ -517,7 +517,7 @@ function buildAudit() {
     deferred(
       'docker-runtime',
       'Docker runtime smoke',
-      'runtime smoke is environment-gated; code-level docker smoke script and docs remain covered',
+      'not release-complete evidence; runtime container-start smoke still requires a reachable local Docker daemon',
     ),
     check(
       'windows-aux-cleanup',

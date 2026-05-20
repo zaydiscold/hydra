@@ -375,6 +375,9 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'deferred'));
+  for (const item of report.items.filter((entry) => entry.state === 'deferred')) {
+    assert.match(item.evidence, /not release-complete evidence/);
+  }
   assert.ok(report.items.some((item) => item.id === 'workflow-contract' && item.state === 'ok' && /CI\/Docker\/package\/release Node 24 runtime coverage/.test(item.evidence) && /publish-after-smoke/.test(item.evidence) && /LaunchServices/.test(item.evidence) && /bundle preflight/.test(item.evidence) && /package diagnostics/.test(item.evidence) && /target-specific resource selection/.test(item.evidence) && /target-specific Chromium/.test(item.evidence) && /hiddenInset titlebar/.test(item.evidence) && /app-shell/.test(item.evidence) && /distributable artifact/.test(item.evidence) && /target-specific Prisma engine/.test(item.evidence) && /Windows installer blockmap/.test(item.evidence) && /target-cache miss guidance/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'cli-runtime-diagnostics' && item.state === 'ok'));
   assert.ok(report.items.some((item) => item.id === 'ui-contract' && /first-run setup/.test(item.evidence)));
