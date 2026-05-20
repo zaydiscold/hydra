@@ -55,8 +55,15 @@ function resolveLogLevel() {
  * When HYDRA_DATA_DIR is set, also writes to a file transport at HYDRA_DATA_DIR/hydra.log.
  * Override log level anytime via LOG_LEVEL env var (e.g. LOG_LEVEL=debug).
  */
+// stderrLevels: route ALL logger output to stderr. CLI commands stream
+// machine-readable data (e.g. `hydra audit --json`) to stdout, and a
+// stray logger.info/warn mixed into that stream breaks JSON.parse for any
+// consumer. Sending diagnostics to stderr is the standard CLI contract
+// and keeps stdout clean across linux/macOS/windows.
 const transports = [
-  new winston.transports.Console(),
+  new winston.transports.Console({
+    stderrLevels: ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'],
+  }),
 ];
 
 if (process.env.HYDRA_DATA_DIR) {
