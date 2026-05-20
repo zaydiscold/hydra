@@ -59,7 +59,7 @@ test('schema sync fallback errors are logged before forcing sync', async (t) => 
   const warnings = [];
   mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
   mock.method(fsp, 'stat', async function (target, ...args) {
-    if (String(target).endsWith('prisma/schema.prisma')) {
+    if (String(target).replaceAll('\\', '/').endsWith('prisma/schema.prisma')) {
       throw new Error('schema stat unavailable');
     }
     return originalStat.call(this, target, ...args);
