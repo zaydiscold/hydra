@@ -111,16 +111,26 @@ console.log(`[prepare-electron-resources] copied ${EMPTY_DB_OUT}`);
 const revision = chromiumRevision();
 let chromiumSrc = findChromiumSource(revision);
 if (!chromiumSrc) {
-  console.log(`[prepare-electron-resources] Chromium ${revision} not found; installing with Playwright`);
-  execFileSync(process.execPath, [resolve(ROOT, 'node_modules/playwright/cli.js'), 'install', 'chromium'], {
+  // `playwright` is in optionalDependencies; if it failed to install (or was
+  // skipped), fall back to playwright-core's CLI which is always present.
+  const playwrightCli = resolve(ROOT, 'node_modules/playwright/cli.js');
+  const playwrightCoreCli = resolve(ROOT, 'node_modules/playwright-core/cli.js');
+  const cli = existsSync(playwrightCli) ? playwrightCli : playwrightCoreCli;
+  console.log(`[prepare-electron-resources] Chromium ${revision} not found in cache: ${browserCacheRoots().join(', ')}`);
+  console.log(`[prepare-electron-resources] installing via ${cli}`);
+  execFileSync(process.execPath, [cli, 'install', 'chromium'], {
     cwd: ROOT,
     stdio: 'inherit',
   });
   chromiumSrc = findChromiumSource(revision);
 }
 if (!chromiumSrc) {
-  throw new Error(`Playwright Chromium ${revision} was not found after install`);
+  throw new Error(
+    `Playwright Chromium ${revision} was not found after install. ` +
+    `Cache roots checked: ${browserCacheRoots().join(', ') || '(none)'}`
+  );
 }
+console.log(`[prepare-electron-resources] Chromium source: ${chromiumSrc}`);
 
 rmSync(CHROMIUM_OUT, { recursive: true, force: true });
 rmSync(CHROMIUM_ZIP_OUT, { force: true });

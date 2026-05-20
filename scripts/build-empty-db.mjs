@@ -158,15 +158,24 @@ CREATE INDEX "ManagementKey_createdAt_idx" ON "ManagementKey"("createdAt");
 PRAGMA foreign_keys=ON;
 `;
 
+// Prisma's URL parser treats a bare `file:foo.db` as an unauthority URL and on
+// some Windows builds rejects it before reaching the SQLite engine. The `./`
+// prefix forces unambiguous relative resolution against the schema directory,
+// which is portable across darwin/linux/win32. The temp DB always lives next to
+// schema.prisma (PRISMA_DIR), so basename() is the path we need.
 function prismaFileUrl(path) {
-  return `file:${basename(path)}`;
+  return `file:./${basename(path)}`;
 }
 
 async function listSqliteTables(dbPath) {
+  // stdio: 'inherit' here (and below) so a Prisma generate failure surfaces in
+  // CI logs instead of being swallowed by the parent's try/catch. Without this
+  // a Windows runner just emits "Process completed with exit code 1" with no
+  // diagnosis.
   execFileSync(process.execPath, [PRISMA_CLI, 'generate', `--schema=${SCHEMA_PATH}`], {
     cwd: PROJECT_ROOT,
-    stdio: 'pipe',
-    timeout: 60_000,
+    stdio: 'inherit',
+    timeout: 120_000,
   });
 
   const { PrismaClient } = await import('@prisma/client');
@@ -194,6 +203,8 @@ try {
   rmSync(`${tempDb}-wal`, { force: true });
   rmSync(`${tempDb}-shm`, { force: true });
 
+  const dbUrl = prismaFileUrl(tempDb);
+  console.log(`[build-empty-db] DATABASE_URL=${dbUrl} (cwd=${PROJECT_ROOT})`);
   try {
     execFileSync(
       process.execPath,
@@ -202,23 +213,36 @@ try {
         cwd: PROJECT_ROOT,
         env: {
           ...process.env,
-          DATABASE_URL: prismaFileUrl(tempDb),
+          DATABASE_URL: dbUrl,
         },
-        stdio: 'pipe',
-        timeout: 60_000,
+        stdio: 'inherit',
+        timeout: 120_000,
       },
     );
   } catch (err) {
-    console.warn(`[build-empty-db] Prisma db push failed; falling back to sqlite3 bootstrap (${err.stderr || err.message})`);
+    // sqlite3 binary is not pre-installed on Windows GitHub runners, so the
+    // fallback below is mac/linux only. Surface the original Prisma failure
+    // clearly when sqlite3 also isn't available, instead of dying with a
+    // generic ENOENT later.
+    console.warn(`[build-empty-db] Prisma db push failed (${err.message}); attempting sqlite3 bootstrap`);
     console.warn('[build-empty-db] WARNING: using fallback SQL; schema.prisma changes must be reflected here.');
     console.warn('[build-empty-db] Make sure bootstrapSql in this file matches the current prisma/schema.prisma.');
     writeFileSync(tempSql, bootstrapSql);
-    execFileSync('sqlite3', [tempDb], {
-      input: readFileSync(tempSql, 'utf-8'),
-      cwd: PROJECT_ROOT,
-      stdio: 'pipe',
-      timeout: 30_000,
-    });
+    try {
+      execFileSync('sqlite3', [tempDb], {
+        input: readFileSync(tempSql, 'utf-8'),
+        cwd: PROJECT_ROOT,
+        stdio: 'inherit',
+        timeout: 30_000,
+      });
+    } catch (sqliteErr) {
+      throw new Error(
+        `[build-empty-db] Prisma db push failed and sqlite3 fallback also failed.\n` +
+        `  prisma error: ${err.message}\n` +
+        `  sqlite3 error: ${sqliteErr.message}\n` +
+        `  (sqlite3 is not pre-installed on Windows runners; the Prisma path must succeed there.)`
+      );
+    }
   }
 
   const generatedTables = new Set(await listSqliteTables(tempDb));
