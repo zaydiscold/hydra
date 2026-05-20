@@ -376,6 +376,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence)));
+  assert.ok(report.items.some((item) => item.id === 'session-probe-redaction' && item.state === 'ok' && /masking account aliases/.test(item.evidence)));
   for (const item of report.items.filter((entry) => entry.state === 'deferred')) {
     assert.match(item.evidence, /not release-complete evidence/);
   }

@@ -134,6 +134,7 @@ function buildAudit() {
   const store = safeRead('server/services/store.js');
   const legacyStorage = safeRead('server/services/legacy-storage.js');
   const backgroundFailureTest = safeRead('server/tests/background-failure-visibility.test.mjs');
+  const sessionRefresher = safeRead('server/services/session-refresher.js');
   const schemaHash = safeRead('electron/app/schemaHash.js');
   const schemaHashTest = safeRead('server/tests/schema-hash.test.mjs');
   const importCommand = safeRead('bin/commands/import.js');
@@ -453,6 +454,20 @@ function buildAudit() {
         && backgroundFailureTest.includes('key decrypt fallbacks keep key-scoped evidence')
         && backgroundFailureTest.includes('legacy storage reset probes keep unreadable-field evidence'),
       'background-failure and schema-hash contracts cover redemption fallback logging, store and legacy-storage fallback logging, proxy model-list and rotation fallback logging, and schema-sync fallback warnings',
+    ),
+    check(
+      'session-probe-redaction',
+      'Session probe logs redact account aliases and Clerk session IDs',
+      sessionRefresher.includes('function _redactAlias(alias)')
+        && sessionRefresher.includes('function _redactSid(sid)')
+        && sessionRefresher.includes('alias="${_redactAlias(account.alias)}" sid=${_redactSid(sid)}')
+        && sessionRefresher.includes('old_sid=${_redactSid(trackedSid)}')
+        && sessionRefresher.includes('new_sid=${_redactSid(currentSid)}')
+        && !sessionRefresher.includes('alias="${account.alias}" sid=${sid}')
+        && !sessionRefresher.includes("old_sid=${trackedSid ?? 'none'}")
+        && backgroundFailureTest.includes('function _redactAlias\\(alias\\)')
+        && backgroundFailureTest.includes('function _redactSid\\(sid\\)'),
+      'SESSION_PROBE runtime logs keep account-level evidence while masking account aliases and Clerk session IDs',
     ),
     check(
       'redacted-import',

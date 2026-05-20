@@ -294,6 +294,12 @@ test('session lifetime probe failures keep account-level evidence', () => {
 
   assert.match(source, /Stored session token decrypt failed for account=\$\{account\.id\}: \$\{err\.message\}/);
   assert.match(source, /Live refresh probe failed for account=\$\{account\.id\}: \$\{err\.message\}/);
+  assert.match(source, /function _redactAlias\(alias\)/);
+  assert.match(source, /function _redactSid\(sid\)/);
+  assert.match(source, /alias="\$\{_redactAlias\(account\.alias\)\}" sid=\$\{_redactSid\(sid\)\}/);
+  assert.match(source, /old_sid=\$\{_redactSid\(trackedSid\)\}.*new_sid=\$\{_redactSid\(currentSid\)\}/s);
+  assert.doesNotMatch(source, /alias="\$\{account\.alias\}" sid=\$\{sid\}/);
+  assert.doesNotMatch(source, /old_sid=\$\{trackedSid \?\? 'none'\}.*new_sid=\$\{currentSid\}/s);
   assert.doesNotMatch(source, /try \{ rawJwt = decrypt\(account\.sessionToken\) \|\| ''; \} catch \{ \/\* no-op \*\/ \}/);
   assert.doesNotMatch(source, /catch \{\s*status = 'error';\s*\}/);
   assert.match(store, /Live refresh probe failed for account=\$\{accountId \|\| 'unknown'\}: \$\{err\.message\}/);

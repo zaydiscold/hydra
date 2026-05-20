@@ -167,6 +167,26 @@ function _jwtSid(token) {
   }
 }
 
+function _redactAlias(alias) {
+  if (!alias || typeof alias !== 'string') return 'unknown';
+  const [head = 'account', ...rest] = alias.split('@');
+  if (rest.length > 0) {
+    const domain = rest.join('@');
+    const domainParts = domain.split('.');
+    const root = domainParts[0] || 'domain';
+    const tld = domainParts.length > 1 ? `.${domainParts.at(-1)}` : '';
+    return `${head.slice(0, 2)}…@${root.slice(0, 2)}…${tld}`;
+  }
+  return `${head.slice(0, 6)}…`;
+}
+
+function _redactSid(sid) {
+  if (!sid || sid === '(no-sid)') return '(no-sid)';
+  const value = String(sid);
+  if (value.length <= 10) return `${value.slice(0, 3)}…`;
+  return `${value.slice(0, 8)}…${value.slice(-4)}`;
+}
+
 async function _runSessionProbe() {
   const accounts = await prisma.account.findMany({});
   const probeAccounts = [];
@@ -204,8 +224,8 @@ async function _runSessionProbe() {
         // Session rotated (or first time seen) — persist the new sid
         const verb = trackedSid ? 'rotated' : 'first seen';
         logger.info(
-          `[SESSION_PROBE] 🔄 session ${verb} for alias="${account.alias}" ` +
-          `old_sid=${trackedSid ?? 'none'} → new_sid=${currentSid} ` +
+          `[SESSION_PROBE] 🔄 session ${verb} for alias="${_redactAlias(account.alias)}" ` +
+          `old_sid=${_redactSid(trackedSid)} → new_sid=${_redactSid(currentSid)} ` +
           `login_at=${config.lastLoginAt}`
         );
         const updatedConfig = { ...config, _probeSid: currentSid, _probeSidSince: new Date().toISOString() };
@@ -233,22 +253,22 @@ async function _runSessionProbe() {
       // ── Log result ───────────────────────────────────────────────────────
       if (status === 'active') {
         logger.info(
-          `[SESSION_PROBE] ✅ active | alias="${account.alias}" sid=${sid} ` +
+          `[SESSION_PROBE] ✅ active | alias="${_redactAlias(account.alias)}" sid=${_redactSid(sid)} ` +
           `elapsed=${elapsedHours}h since_login=${trackedSince}`
         );
       } else if (status === 'expired') {
         logger.warn(
-          `[SESSION_PROBE] 🔴 DEAD | alias="${account.alias}" sid=${sid} ` +
+          `[SESSION_PROBE] 🔴 DEAD | alias="${_redactAlias(account.alias)}" sid=${_redactSid(sid)} ` +
           `elapsed=${elapsedHours}h — session expired after ${elapsedHours} hours`
         );
       } else {
         logger.warn(
-          `[SESSION_PROBE] ⚠️ ${status} | alias="${account.alias}" sid=${sid} ` +
+          `[SESSION_PROBE] ⚠️ ${status} | alias="${_redactAlias(account.alias)}" sid=${_redactSid(sid)} ` +
           `elapsed=${elapsedHours}h since_login=${trackedSince}`
         );
       }
     } catch (err) {
-      logger.warn(`[SESSION_PROBE] Failed for account=${account.id} alias="${account.alias}": ${err.message}`);
+      logger.warn(`[SESSION_PROBE] Failed for account=${account.id} alias="${_redactAlias(account.alias)}": ${err.message}`);
     }
   }
 }
