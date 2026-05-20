@@ -62,6 +62,25 @@ function fetchOptionsWithAccountProxy(options = {}, proxy = null) {
   return dispatcher ? { ...options, dispatcher } : options;
 }
 
+function formatDashboardLogExtra(extra) {
+  if (extra === undefined) return '';
+  if (extra instanceof Error) return ` ${extra.stack || extra.message}`;
+  if (typeof extra === 'string') return ` ${extra}`;
+  try {
+    return ` ${JSON.stringify(extra)}`;
+  } catch {
+    return ` ${String(extra)}`;
+  }
+}
+
+function dashboardWarn(message, extra) {
+  logger.warn(`${message}${formatDashboardLogExtra(extra)}`);
+}
+
+function dashboardError(message, extra) {
+  logger.error(`${message}${formatDashboardLogExtra(extra)}`);
+}
+
 /** Management key material in tRPC JSON or page text (OpenRouter prefix).
  * NOTE: OpenRouter management keys use 'sk-or-v1-' prefix, NOT 'sk-or-mgmt-'
  */
@@ -129,7 +148,7 @@ async function discoverServerActionHashes(pageUrl, accountProxy = null) {
           signal: AbortSignal.timeout(10000),
         }, accountProxy));
         if (!jsRes.ok) {
-          console.warn(`[dashboard-api] Hash auto-discovery bundle fetch returned HTTP ${jsRes.status}: ${url}`);
+          dashboardWarn(`[dashboard-api] Hash auto-discovery bundle fetch returned HTTP ${jsRes.status}: ${url}`);
           return;
         }
         const js = await jsRes.text();
@@ -148,13 +167,13 @@ async function discoverServerActionHashes(pageUrl, accountProxy = null) {
           }
         }
       } catch (err) {
-        console.warn(`[dashboard-api] Hash auto-discovery bundle fetch failed for ${url}: ${err?.message || err}`);
+        dashboardWarn(`[dashboard-api] Hash auto-discovery bundle fetch failed for ${url}: ${err?.message || err}`);
       }
     });
     await Promise.allSettled(fetches);
     return [...candidates];
   } catch (err) {
-    console.warn(`[dashboard-api] Hash auto-discovery page fetch failed: ${err.message}`);
+    dashboardWarn(`[dashboard-api] Hash auto-discovery page fetch failed: ${err.message}`);
     return [];
   }
 }
@@ -172,7 +191,7 @@ async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = nul
     ? `${OR_BASE}/redeem`
     : `${OR_BASE}/settings/management-keys`;
 
-  console.warn(`[dashboard-api] ⚡ Self-healing ${kind} hash — scanning ${pageUrl} JS bundles…`);
+  dashboardWarn(`[dashboard-api] ⚡ Self-healing ${kind} hash — scanning ${pageUrl} JS bundles…`);
   const candidates = await discoverServerActionHashes(pageUrl, accountProxy);
 
   for (const candidate of candidates) {
@@ -187,7 +206,7 @@ async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = nul
       // Non-404 means the hash was accepted (even if the action returns an
       // application-level error like "invalid code", it confirms the route).
       if (probeRes.status !== 404) {
-        console.warn(`[dashboard-api] ✅ Self-healed ${kind} hash → ${candidate}`);
+        dashboardWarn(`[dashboard-api] ✅ Self-healed ${kind} hash → ${candidate}`);
         if (kind === 'redeem') {
           REDEEM_ACTION_HASH = candidate;
         } else {
@@ -196,11 +215,11 @@ async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = nul
         return candidate;
       }
     } catch (err) {
-      console.warn(`[dashboard-api] Self-heal ${kind} hash probe failed for candidate ${candidate}: ${err?.message || err}`);
+      dashboardWarn(`[dashboard-api] Self-heal ${kind} hash probe failed for candidate ${candidate}: ${err?.message || err}`);
     }
   }
 
-  console.warn(`[dashboard-api] ❌ Self-healing ${kind} hash failed — no valid candidate found among ${candidates.length} candidates`);
+  dashboardWarn(`[dashboard-api] ❌ Self-healing ${kind} hash failed — no valid candidate found among ${candidates.length} candidates`);
   return null;
 }
 
@@ -293,9 +312,9 @@ async function writeProvisionNetworkLog(accountId, lines) {
     const file = join(dir, `provision-network-${accountId}-${Date.now()}.log`);
     const header = `# Hydra provision network log — ${new Date().toISOString()} — accountId=${accountId}\n# POST URL, status, postData only (no response bodies — avoids double-consuming response streams in the browser listener).\n\n`;
     await appendFile(file, header + lines.join('\n'), 'utf8');
-    console.error(`[dashboard-api] Provision network log written: ${file}`);
+    dashboardError(`[dashboard-api] Provision network log written: ${file}`);
   } catch (err) {
-    console.error('[dashboard-api] Could not write provision network log:', err.message);
+    dashboardError('[dashboard-api] Could not write provision network log:', err.message);
   }
 }
 
@@ -309,8 +328,8 @@ function provisionStepLogEnabled() {
 
 function provisionStepLog(accountId, message, extra = undefined) {
   if (!provisionStepLogEnabled()) return;
-  if (extra !== undefined) console.error(`[dashboard-api] provision[${accountId}] ${message}`, extra);
-  else console.error(`[dashboard-api] provision[${accountId}] ${message}`);
+  if (extra !== undefined) dashboardError(`[dashboard-api] provision[${accountId}] ${message}`, extra);
+  else dashboardError(`[dashboard-api] provision[${accountId}] ${message}`);
 }
 
 /** Decode JWT payload (no signature verify) — for OR_BASE vs session sanity checks only. */
@@ -321,12 +340,12 @@ function logProvisionOpenRouterBase(accountId, sessionCookie) {
   try {
     const u = new URL(OR_BASE);
     if (u.hostname !== 'openrouter.ai' && u.hostname !== 'www.openrouter.ai') {
-      console.warn(
+      dashboardWarn(
         `[dashboard-api] OR_BASE hostname is "${u.hostname}" — production OpenRouter is openrouter.ai; wrong OR_BASE breaks cookies and tRPC.`,
       );
     }
   } catch {
-    console.warn('[dashboard-api] OR_BASE is not a valid URL — check .env');
+    dashboardWarn('[dashboard-api] OR_BASE is not a valid URL — check .env');
   }
   if (!provisionStepLogEnabled()) return;
   const p = decodeJwtPayloadUnsafe(sessionCookie);
@@ -409,14 +428,14 @@ function summarizeTrpcFailure(err) {
  * @returns {Promise<string|null>} - The created key or null
  */
 async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName) {
-  console.error('[dashboard-api] Attempting Server Action replay for management key creation');
+  dashboardError('[dashboard-api] Attempting Server Action replay for management key creation');
 
   // Get fresh JWT before making the call - OTP sessions have short-lived JWTs (60s)
   const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
   const jwtToUse = freshJwt || sessionCookie;
 
   if (provisionStepLogEnabled()) {
-    console.error(`[tryManagementKeyServerActionReplay] Using ${freshJwt ? 'fresh' : 'original'} JWT`);
+    dashboardError(`[tryManagementKeyServerActionReplay] Using ${freshJwt ? 'fresh' : 'original'} JWT`);
   }
 
   // Build cookie header
@@ -465,7 +484,7 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
     for (const body of attempt.payloads) {
       try {
         if (provisionStepLogEnabled()) {
-          console.error(`[tryManagementKeyServerActionReplay] POST ${url} with content-type=${attempt.contentType}, body=${body.slice(0, 100)}`);
+          dashboardError(`[tryManagementKeyServerActionReplay] POST ${url} with content-type=${attempt.contentType}, body=${body.slice(0, 100)}`);
         }
 
         const res = await fetch(url, {
@@ -478,19 +497,19 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
 
         // Log response status for debugging
         if (provisionStepLogEnabled()) {
-          console.error(`[tryManagementKeyServerActionReplay] Response: ${res.status} ${res.statusText}, content-type=${contentType}`);
+          dashboardError(`[tryManagementKeyServerActionReplay] Response: ${res.status} ${res.statusText}, content-type=${contentType}`);
         }
 
         // Check for auth failures
         if (res.status === 401 || res.status === 403) {
-          console.warn(`[dashboard-api] Server Action replay: auth failed (${res.status})`);
+          dashboardWarn(`[dashboard-api] Server Action replay: auth failed (${res.status})`);
           continue;
         }
 
         // Server Actions often return 200 even on errors (error encoded in RSC payload)
         // A 404 specifically means the Next-Action hash is stale — try self-healing once
         if (res.status === 404) {
-          console.warn('[dashboard-api] Mgmt-key Server Action returned 404 — hash may be stale, attempting self-heal…');
+          dashboardWarn('[dashboard-api] Mgmt-key Server Action returned 404 — hash may be stale, attempting self-heal…');
           const newHash = await selfHealHash('mgmt-key', url, headers, body);
           if (newHash) {
             // Retry with the discovered hash
@@ -504,7 +523,7 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
               if (!retryReadErr) {
                 const key = extractManagementKeyFromResponseBody(retryText);
                 if (key) {
-                  console.error('[dashboard-api] Self-healed mgmt-key Server Action — captured management key');
+                  dashboardError('[dashboard-api] Self-healed mgmt-key Server Action — captured management key');
                   return key;
                 }
               }
@@ -520,7 +539,7 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
         const { text: responseText, error: readError } = await safeResponseText(res, 50000);
 
         if (readError) {
-          console.warn(`[dashboard-api] Server Action replay: failed to read response: ${readError}`);
+          dashboardWarn(`[dashboard-api] Server Action replay: failed to read response: ${readError}`);
           continue;
         }
 
@@ -530,27 +549,27 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
         const key = extractManagementKeyFromResponseBody(responseText);
 
         if (key) {
-          console.error(`[dashboard-api] Server Action replay: captured management key`);
+          dashboardError(`[dashboard-api] Server Action replay: captured management key`);
           return key;
         }
 
         // Check if this looks like an error response
         if (responseText.includes('error') || responseText.includes('Error')) {
           if (provisionStepLogEnabled()) {
-            console.error(`[tryManagementKeyServerActionReplay] Response may contain error: ${responseText.slice(0, 500)}`);
+            dashboardError(`[tryManagementKeyServerActionReplay] Response may contain error: ${responseText.slice(0, 500)}`);
           }
         }
 
       } catch (err) {
-        console.warn(`[dashboard-api] Server Action replay attempt failed: ${err.message}`);
+        dashboardWarn(`[dashboard-api] Server Action replay attempt failed: ${err.message}`);
         if (provisionStepLogEnabled()) {
-          console.error(`[tryManagementKeyServerActionReplay] Error details:`, err);
+          dashboardError(`[tryManagementKeyServerActionReplay] Error details:`, err);
         }
       }
     }
   }
 
-  console.warn('[dashboard-api] Server Action replay: all attempts failed to capture key');
+  dashboardWarn('[dashboard-api] Server Action replay: all attempts failed to capture key');
   return null;
 }
 
@@ -584,7 +603,7 @@ async function captureProvisionDebugArtifacts(page, accountId) {
   } catch {
     void 0;
   }
-  console.error('[dashboard-api] provision browser-ui failure context', {
+  dashboardError('[dashboard-api] provision browser-ui failure context', {
     accountId,
     url,
     title,
@@ -599,9 +618,9 @@ async function captureProvisionDebugArtifacts(page, accountId) {
     const stamp = Date.now();
     const file = join(dir, `provision-fail-${accountId}-${stamp}.png`);
     await page.screenshot({ path: file, fullPage: true });
-    console.error(`[dashboard-api] Provision debug screenshot: ${file}`);
+    dashboardError(`[dashboard-api] Provision debug screenshot: ${file}`);
   } catch (err) {
-    console.error('[dashboard-api] Could not write provision debug screenshot:', err.message);
+    dashboardError('[dashboard-api] Could not write provision debug screenshot:', err.message);
   }
 }
 
@@ -638,7 +657,7 @@ export async function getFreshJwt(sessionCookie, clientCookie) {
     });
     
     if (!res.ok) {
-      console.error(`[getFreshJwt] /client returned ${res.status}`);
+      dashboardError(`[getFreshJwt] /client returned ${res.status}`);
       return null;
     }
     
@@ -652,10 +671,10 @@ export async function getFreshJwt(sessionCookie, clientCookie) {
       return jwt;
     }
 
-    console.error('[getFreshJwt] No JWT in /client response');
+    dashboardError('[getFreshJwt] No JWT in /client response');
     return null;
   } catch (err) {
-    console.error(`[getFreshJwt] Error: ${err.message}`);
+    dashboardError(`[getFreshJwt] Error: ${err.message}`);
     return null;
   }
 }
@@ -667,7 +686,7 @@ function dashboardHeaders(sessionCookie, clientCookie, extra = {}) {
   // Debug logging: show which cookies are being sent (redacted for security)
   if (provisionStepLogEnabled()) {
     const cookieNames = cookieHeader.split(';').map(c => c.split('=')[0].trim()).join(', ');
-    console.error(`[dashboard-api] tRPC cookies sent: ${cookieNames}`);
+    dashboardError(`[dashboard-api] tRPC cookies sent: ${cookieNames}`);
   }
 
   return {
@@ -915,14 +934,14 @@ async function migrateAccountForCloudflareCookies(userId, accountId, sessionCook
 
   migrationAttempted.add(accountId);
 
-  console.error(`[dashboard-api] Cloudflare cookie migration triggered for account ${accountId}`);
+  dashboardError(`[dashboard-api] Cloudflare cookie migration triggered for account ${accountId}`);
 
   // Get account credentials
   const account = await store.getAccountWithKey(userId, accountId);
 
   // Only password accounts can auto-migrate without user interaction
   if (!account.email || !account.password || account.authMethod !== 'password') {
-    console.error(`[dashboard-api] Cannot auto-migrate account ${accountId}: no password credentials available`);
+    dashboardError(`[dashboard-api] Cannot auto-migrate account ${accountId}: no password credentials available`);
     return {
       sessionCookie,
       clientCookie,
@@ -932,17 +951,17 @@ async function migrateAccountForCloudflareCookies(userId, accountId, sessionCook
   }
 
   try {
-    console.error(`[dashboard-api] Re-authenticating account ${accountId} to capture Cloudflare cookies...`);
+    dashboardError(`[dashboard-api] Re-authenticating account ${accountId} to capture Cloudflare cookies...`);
 
     // Force re-login - this will capture fresh cookies including Cloudflare ones
     const fresh = await signInWithPassword(account.email, account.password);
 
     // Validate that we now have Cloudflare cookies
     if (!hasCloudflareCookies(fresh.clientCookie)) {
-      console.warn(`[dashboard-api] Re-login completed but Cloudflare cookies still not present for ${accountId}`);
+      dashboardWarn(`[dashboard-api] Re-login completed but Cloudflare cookies still not present for ${accountId}`);
       // Still use the fresh session - it might work even without explicit CF cookies
     } else {
-      console.error(`[dashboard-api] Successfully captured Cloudflare cookies for account ${accountId}`);
+      dashboardError(`[dashboard-api] Successfully captured Cloudflare cookies for account ${accountId}`);
     }
 
     // Update stored session with fresh cookies
@@ -960,7 +979,7 @@ async function migrateAccountForCloudflareCookies(userId, accountId, sessionCook
       migrated: true,
     };
   } catch (err) {
-    console.error(`[dashboard-api] Migration failed for account ${accountId}: ${err.message}`);
+    dashboardError(`[dashboard-api] Migration failed for account ${accountId}: ${err.message}`);
 
     if (err instanceof NeedSecondFactorError) {
       return {
@@ -1165,7 +1184,7 @@ export async function trpcCall(route, input, sessionCookie, clientCookie, header
   const jwtToUse = freshJwt || sessionCookie; // Fallback to original if refresh failed
   
   if (provisionStepLogEnabled()) {
-    console.error(`[trpcCall] Using ${freshJwt ? 'fresh' : 'original'} JWT for route ${route}`);
+    dashboardError(`[trpcCall] Using ${freshJwt ? 'fresh' : 'original'} JWT for route ${route}`);
   }
   
   const url = `${OR_BASE}/api/trpc/${route}?batch=1`;
@@ -1210,7 +1229,7 @@ export async function trpcCall(route, input, sessionCookie, clientCookie, header
 
     // Log detailed info for debugging (but only in debug mode to avoid log spam)
     if (provisionStepLogEnabled()) {
-      console.error(`[dashboard-api] trpcCall HTML response details:`, {
+      dashboardError(`[dashboard-api] trpcCall HTML response details:`, {
         route,
         status: res.status,
         contentType,
@@ -1237,7 +1256,7 @@ export async function trpcCall(route, input, sessionCookie, clientCookie, header
   }
 
   if (truncated) {
-    console.warn(`[dashboard-api] tRPC route ${route} response was truncated (exceeded size limit)`);
+    dashboardWarn(`[dashboard-api] tRPC route ${route} response was truncated (exceeded size limit)`);
   }
 
   // Hardened: Use safe JSON parsing with context
@@ -1310,15 +1329,15 @@ async function trpcCallWithMigration(route, input, sessionCookie, clientCookie, 
     if (err.isHtml && !hasCloudflareCookies(clientCookie)) {
       const { userId, accountId } = context;
       if (userId && accountId) {
-        console.error(`[dashboard-api] HTML response without CF cookies - attempting migration for ${accountId}`);
+        dashboardError(`[dashboard-api] HTML response without CF cookies - attempting migration for ${accountId}`);
         const migration = await migrateAccountForCloudflareCookies(userId, accountId, sessionCookie, clientCookie);
 
         if (migration.migrated) {
-          console.error(`[dashboard-api] Migration succeeded, retrying tRPC with fresh cookies`);
+          dashboardError(`[dashboard-api] Migration succeeded, retrying tRPC with fresh cookies`);
           // Retry with fresh cookies from migration
           return await trpcCall(route, input, migration.sessionCookie, migration.clientCookie, headerOverrides, { accountProxy: context.accountProxy });
         } else {
-          console.error(`[dashboard-api] Migration not possible: ${migration.message || 'unknown reason'}`);
+          dashboardError(`[dashboard-api] Migration not possible: ${migration.message || 'unknown reason'}`);
         }
       }
     }
@@ -1489,7 +1508,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
     
     for (const endpoint of endpoints) {
       try {
-        console.error(`[tryRestApiCreateKey] Trying ${endpoint.method} ${endpoint.url}`);
+        dashboardError(`[tryRestApiCreateKey] Trying ${endpoint.method} ${endpoint.url}`);
         
         const res = await fetch(endpoint.url, {
           method: endpoint.method,
@@ -1504,13 +1523,13 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
         });
         
         if (!res.ok) {
-          console.error(`[tryRestApiCreateKey] ${endpoint.url} returned ${res.status}`);
+          dashboardError(`[tryRestApiCreateKey] ${endpoint.url} returned ${res.status}`);
           continue;
         }
         
         const contentType = res.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
-          console.error(`[tryRestApiCreateKey] ${endpoint.url} returned non-JSON: ${contentType}`);
+          dashboardError(`[tryRestApiCreateKey] ${endpoint.url} returned non-JSON: ${contentType}`);
           continue;
         }
         
@@ -1527,11 +1546,11 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
           data?.data?.managementKey;
         
         if (key && key.startsWith('sk-or-v1-')) {
-          console.error(`[tryRestApiCreateKey] Success with ${endpoint.url}`);
+          dashboardError(`[tryRestApiCreateKey] Success with ${endpoint.url}`);
           return { key };
         }
       } catch (err) {
-        console.error(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
+        dashboardError(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
       }
     }
     
@@ -1548,7 +1567,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
 
     for (const endpoint of expandedEndpoints) {
       try {
-        console.error(`[tryRestApiCreateKey] Trying expanded ${endpoint.method} ${endpoint.url}`);
+        dashboardError(`[tryRestApiCreateKey] Trying expanded ${endpoint.method} ${endpoint.url}`);
         const res = await fetch(endpoint.url, {
           method: endpoint.method,
           headers: {
@@ -1562,13 +1581,13 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
         });
 
         // Log EVERY response status — even 404s tell us what doesn't exist
-        console.error(`[tryRestApiCreateKey] ${endpoint.url} → HTTP ${res.status} ${res.statusText}`);
+        dashboardError(`[tryRestApiCreateKey] ${endpoint.url} → HTTP ${res.status} ${res.statusText}`);
 
         if (!res.ok) continue;
 
         const contentType = res.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
-          console.error(`[tryRestApiCreateKey] ${endpoint.url} returned non-JSON: ${contentType}`);
+          dashboardError(`[tryRestApiCreateKey] ${endpoint.url} returned non-JSON: ${contentType}`);
           continue;
         }
 
@@ -1583,17 +1602,17 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
           data?.data?.managementKey;
 
         if (key && key.startsWith('sk-or-v1-')) {
-          console.error(`[tryRestApiCreateKey] Success with expanded ${endpoint.url}`);
+          dashboardError(`[tryRestApiCreateKey] Success with expanded ${endpoint.url}`);
           return { key };
         }
       } catch (err) {
-        console.error(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
+        dashboardError(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
       }
     }
 
     return { error: 'All REST endpoints failed' };
   } catch (err) {
-    console.error(`[tryRestApiCreateKey] Fatal error: ${err.message}`);
+    dashboardError(`[tryRestApiCreateKey] Fatal error: ${err.message}`);
     return { error: err.message };
   }
 }
@@ -1643,7 +1662,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
 
     for (const endpoint of endpoints) {
       try {
-        console.error(`[tryRestApiRedeemCode] Trying ${endpoint.method} ${endpoint.url} body=${JSON.stringify(endpoint.body)}`);
+        dashboardError(`[tryRestApiRedeemCode] Trying ${endpoint.method} ${endpoint.url} body=${JSON.stringify(endpoint.body)}`);
 
         const res = await fetch(endpoint.url, fetchOptionsWithAccountProxy({
           method: endpoint.method,
@@ -1678,7 +1697,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
         probedEndpoints.push(probeResult);
 
         // Log EVERY response — 404s tell us what doesn't exist
-        console.error(`[tryRestApiRedeemCode] ${endpoint.url} → HTTP ${res.status} ${res.statusText} body=${probeResult.bodyPreview.slice(0, 200)}`);
+        dashboardError(`[tryRestApiRedeemCode] ${endpoint.url} → HTTP ${res.status} ${res.statusText} body=${probeResult.bodyPreview.slice(0, 200)}`);
 
         if (res.ok) {
           const contentType = res.headers.get('content-type') || '';
@@ -1697,7 +1716,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
             (typeof data?.message === 'string' && /success|redeemed|applied|credit/i.test(data.message));
 
           if (success || res.status === 200 || res.status === 201) {
-            console.error(`[tryRestApiRedeemCode] Redemption may have succeeded at ${endpoint.url}`);
+            dashboardError(`[tryRestApiRedeemCode] Redemption may have succeeded at ${endpoint.url}`);
             return {
               success: true,
               result: data || { raw: bodyText.slice(0, 500) },
@@ -1715,15 +1734,15 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
           error: err.message,
         };
         probedEndpoints.push(probeResult);
-        console.error(`[tryRestApiRedeemCode] ${endpoint.url} error: ${err.message}`);
+        dashboardError(`[tryRestApiRedeemCode] ${endpoint.url} error: ${err.message}`);
       }
     }
 
     // All endpoints probed, none succeeded — return full log
-    console.error(`[tryRestApiRedeemCode] All REST redemption endpoints failed (${probedEndpoints.length} probed)`);
+    dashboardError(`[tryRestApiRedeemCode] All REST redemption endpoints failed (${probedEndpoints.length} probed)`);
     return { success: false, error: 'All REST redemption endpoints failed', source: 'rest-api', probedEndpoints };
   } catch (err) {
-    console.error(`[tryRestApiRedeemCode] Fatal error: ${err.message}`);
+    dashboardError(`[tryRestApiRedeemCode] Fatal error: ${err.message}`);
     return { success: false, error: err.message, source: 'rest-api', probedEndpoints };
   }
 }
@@ -1741,7 +1760,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     return { key: fromSa, source: 'server-action' };
   }
 
-  console.error('[dashboard-api] Server Action failed, falling back to tRPC discovery and Playwright');
+  dashboardError('[dashboard-api] Server Action failed, falling back to tRPC discovery and Playwright');
   const endpoints = await store.getDiscoveredEndpoints();
   const endpoint = endpoints.createManagementKey;
 
@@ -1781,7 +1800,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
         if (shouldAbortProvisioning(err)) {
           return { success: false, message: err.message, source: 'trpc-cached' };
         }
-        console.warn(`[dashboard-api] Cached tRPC failed: ${err.message}, trying discovery`);
+        dashboardWarn(`[dashboard-api] Cached tRPC failed: ${err.message}, trying discovery`);
       }
     }
   }
@@ -1805,9 +1824,9 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     lastTrpcRouteAttempted = route;
     for (const input of mgmtKeyPayloads) {
       try {
-        console.error(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
+        dashboardError(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
         const result = await trpcCallWithMigration(route, input, sessionCookie, clientCookie, {}, migrationContext);
-        console.error(`[dashboard-api] tRPC route ${route} result:`, { hasResult: !!result, keys: Object.keys(result || {}) });
+        dashboardError(`[dashboard-api] tRPC route ${route} result:`, { hasResult: !!result, keys: Object.keys(result || {}) });
         const key =
           result?.key ??
           result?.managementKey ??
@@ -1817,16 +1836,16 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
           result?.management_key ??
           result?.api_key;
         if (key && key.startsWith('sk-or-v1-')) {
-          console.error(`[dashboard-api] Success via tRPC route: ${route}`);
+          dashboardError(`[dashboard-api] Success via tRPC route: ${route}`);
           await store.saveDiscoveredEndpoints({ createManagementKey: { route, discoveredAt: new Date().toISOString() } });
           await persistProvisionedManagementKey(userId, accountId, key, `trpc-${route}`);
           return { key, source: `trpc-${route}` };
         }
         // No key returned - route exists but wrong payload or unexpected response shape
-        console.error(`[dashboard-api] tRPC route ${route} returned result but no management key`);
+        dashboardError(`[dashboard-api] tRPC route ${route} returned result but no management key`);
       } catch (err) {
         lastTrpcError = err;
-        console.error(`[dashboard-api] tRPC route ${route} failed: ${err.message} (httpStatus: ${err.httpStatus}, trpcCode: ${err.trpcCode})`);
+        dashboardError(`[dashboard-api] tRPC route ${route} failed: ${err.message} (httpStatus: ${err.httpStatus}, trpcCode: ${err.trpcCode})`);
         if (shouldAbortProvisioning(err)) {
           return { success: false, message: err.message, source: `trpc-${route}` };
         }
@@ -1835,19 +1854,19 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     }
   }
 
-  console.error(
+  dashboardError(
     `[dashboard-api] All tRPC routes exhausted, trying REST API fallback. Last error: ${lastTrpcError?.message || 'none'}`,
   );
 
   // Try REST API with session JWT as Bearer token
   const restResult = await tryRestApiCreateKey(sessionCookie, clientCookie, keyName);
   if (restResult?.key) {
-    console.error(`[dashboard-api] Success via REST API`);
+    dashboardError(`[dashboard-api] Success via REST API`);
     await persistProvisionedManagementKey(userId, accountId, restResult.key, 'rest-api');
     return { key: restResult.key, source: 'rest-api' };
   }
 
-  console.error(
+  dashboardError(
     `[dashboard-api] REST API failed, falling back to browser UI automation (Chromium).`,
   );
 
@@ -1864,7 +1883,7 @@ async function playwrightCookiesForOpenRouter(sessionCookie, clientCookie) {
   const jwtToUse = freshJwt || sessionCookie;
   
   if (freshJwt && provisionStepLogEnabled()) {
-    console.error(`[playwrightCookiesForOpenRouter] Using fresh JWT for session`);
+    dashboardError(`[playwrightCookiesForOpenRouter] Using fresh JWT for session`);
   }
   
   const base = openRouterPlaywrightDeviceCookies(clientCookie).map((c) => ({
@@ -2247,7 +2266,7 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
     try {
       await saveBtn.click();
     } catch (err) {
-      console.warn(`[dashboard-api] Management key Save click failed for account=${accountId}; retrying with force: ${err?.message || err}`);
+      dashboardWarn(`[dashboard-api] Management key Save click failed for account=${accountId}; retrying with force: ${err?.message || err}`);
       await saveBtn.click({ force: true });
     }
     return;
@@ -2264,7 +2283,7 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   try {
     await submit.first().click();
   } catch (err) {
-    console.warn(`[dashboard-api] Management key fallback submit click failed for account=${accountId}; retrying with force: ${err?.message || err}`);
+    dashboardWarn(`[dashboard-api] Management key fallback submit click failed for account=${accountId}; retrying with force: ${err?.message || err}`);
     await submit.first().click({ force: true });
   }
 }
@@ -2311,7 +2330,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
   let traceStarted = false;
   const accountProxy = cdpUrl ? null : pickAccountProxy();
   if (accountProxy) {
-    console.warn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for management-key provision account=${accountId}`);
+    dashboardWarn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for management-key provision account=${accountId}`);
   }
 
   try {
@@ -2441,14 +2460,14 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
             if (provisionDebugArtifactsEnabled()) {
               if (isTrpc) {
                 if (!key && trpcPathLooksLikeManagementKeyCreate(rawPath)) {
-                  console.error('[dashboard-api] provision tRPC mutation without extractable key', {
+                  dashboardError('[dashboard-api] provision tRPC mutation without extractable key', {
                     accountId,
                     status: response.status(),
                     path: rawPath,
                     preview: redactSensitiveForProvisionLog(body, 450),
                   });
                 } else if (key) {
-                  console.error('[dashboard-api] provision tRPC response contains management key', {
+                  dashboardError('[dashboard-api] provision tRPC response contains management key', {
                     accountId,
                     status: response.status(),
                     path: rawPath,
@@ -2457,14 +2476,14 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
               } else {
                 const looksRelevant = /settings|management|key|action|next/i.test(pathname);
                 if (!key && looksRelevant) {
-                  console.error('[dashboard-api] provision non-tRPC POST without extractable key', {
+                  dashboardError('[dashboard-api] provision non-tRPC POST without extractable key', {
                     accountId,
                     status: response.status(),
                     path: pathname,
                     preview: redactSensitiveForProvisionLog(body, 450),
                   });
                 } else if (key) {
-                  console.error('[dashboard-api] provision non-tRPC response contains management key', {
+                  dashboardError('[dashboard-api] provision non-tRPC response contains management key', {
                     accountId,
                     path: pathname,
                   });
@@ -2487,7 +2506,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
 
     const clicked = await clickFirstVisibleCreateControl(page);
     if (!clicked) {
-      console.warn('[dashboard-api] No create/add control matched on management-keys; continuing');
+      dashboardWarn('[dashboard-api] No create/add control matched on management-keys; continuing');
     }
     provisionStepLog(accountId, 'after create/add control click attempt', { clicked });
     await page.waitForTimeout(1200);
@@ -2616,7 +2635,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
         const potentialKey = match[0];
         // Reject if it looks like a masked preview (contains ... in the middle)
         if (potentialKey.includes('...') || potentialKey.length < 30) {
-          console.error(`[dashboard-api] Rejecting masked/preview key from page text: ${potentialKey.slice(0, 20)}... (length: ${potentialKey.length})`);
+          dashboardError(`[dashboard-api] Rejecting masked/preview key from page text: ${potentialKey.slice(0, 20)}... (length: ${potentialKey.length})`);
         } else {
           capturedKey = potentialKey;
           provisionStepLog(accountId, 'Found key in page textContent');
@@ -2727,14 +2746,14 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           }
           return result;
         }).catch(() => []);
-        console.error('[dashboard-api] provision: key not found — all input values in DOM', { accountId, inputs: allInputValues });
+        dashboardError('[dashboard-api] provision: key not found — all input values in DOM', { accountId, inputs: allInputValues });
         const fullPageInner = await page
           .evaluate(() => {
             /* eslint-disable no-undef -- Playwright page.evaluate runs in browser context */
             return document.body?.innerText?.slice(0, 3000) || '';
           })
           .catch(() => '');
-        console.error('[dashboard-api] provision: page innerText preview', { accountId, preview: redactSensitiveForProvisionLog(fullPageInner, 2000) });
+        dashboardError('[dashboard-api] provision: page innerText preview', { accountId, preview: redactSensitiveForProvisionLog(fullPageInner, 2000) });
       }
       const extra =
         lastProvisionTrpcBusinessError?.message != null
@@ -2779,7 +2798,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       try {
         await context.tracing.stop();
       } catch (err) {
-        console.error('[dashboard-api] Could not stop provision tracing after success:', err.message);
+        dashboardError('[dashboard-api] Could not stop provision tracing after success:', err.message);
       }
       traceStarted = false;
     }
@@ -2793,9 +2812,9 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
         await mkdir(dir, { recursive: true });
         const zip = join(dir, `provision-trace-${accountId}-${Date.now()}.zip`);
         await context.tracing.stop({ path: zip });
-        console.error('[dashboard-api] Provision browser-ui trace saved', { accountId, path: zip });
+        dashboardError('[dashboard-api] Provision browser-ui trace saved', { accountId, path: zip });
       } catch (te) {
-        console.error('[dashboard-api] Could not save provision trace:', te.message);
+        dashboardError('[dashboard-api] Could not save provision trace:', te.message);
       }
       traceStarted = false;
     }
@@ -2809,7 +2828,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       try {
         await captureProvisionDebugArtifacts(page, accountId);
       } catch (debugErr) {
-        console.error('[dashboard-api] Could not capture provision debug artifacts:', debugErr.message);
+        dashboardError('[dashboard-api] Could not capture provision debug artifacts:', debugErr.message);
       }
     }
     throw err;
@@ -2817,7 +2836,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     try {
       await browser.close();
     } catch (closeErr) {
-      console.error('[dashboard-api] Provision browser close failed:', closeErr.message);
+      dashboardError('[dashboard-api] Provision browser close failed:', closeErr.message);
     }
   }
 }
@@ -2950,7 +2969,7 @@ async function pollCreditsAfterRedeem(managementKey, beforeTotal, attempts = 4, 
       const after = await getCredits(managementKey);
       if (Number(after.total) > Number(beforeTotal)) return after;
     } catch (err) {
-      console.warn(`[dashboard-api] Redeem credit poll failed (attempt ${i + 1}/${attempts}): ${err?.message || err}`);
+      dashboardWarn(`[dashboard-api] Redeem credit poll failed (attempt ${i + 1}/${attempts}): ${err?.message || err}`);
     }
   }
   return null;
@@ -2965,7 +2984,7 @@ async function persistRedeemTrpcRouteFromResponse(response, code) {
     const route = decodeURIComponent(rawPath.split(',')[0] || rawPath);
     await store.saveDiscoveredEndpoints({ redeemCode: { route, discoveredAt: new Date().toISOString() } });
   } catch (err) {
-    console.warn(`[dashboard-api] Redeem tRPC route persistence failed: ${err?.message || err}`);
+    dashboardWarn(`[dashboard-api] Redeem tRPC route persistence failed: ${err?.message || err}`);
   }
 }
 
@@ -3101,7 +3120,7 @@ export async function redeemCode(userId, accountId, code) {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
   const accountProxy = pickAccountProxy();
   if (accountProxy) {
-    console.warn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for code redemption account=${accountId}`);
+    dashboardWarn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for code redemption account=${accountId}`);
   }
 
   // Context for Cloudflare cookie migration
@@ -3114,11 +3133,11 @@ export async function redeemCode(userId, accountId, code) {
   } catch (err) {
     const stale = err.message?.includes('stale');
     if (stale) {
-      console.warn('[dashboard-api] Redeem Server Action hash stale — falling back to tRPC/Playwright');
+      dashboardWarn('[dashboard-api] Redeem Server Action hash stale — falling back to tRPC/Playwright');
     } else if (isPermanentError(err) || err.redeemErrorKind === 'ERR') {
       return redeemFailurePayload('server-action', err);
     } else {
-      console.warn(`[dashboard-api] Redeem Server Action failed: ${err.message} — falling back`);
+      dashboardWarn(`[dashboard-api] Redeem Server Action failed: ${err.message} — falling back`);
     }
   }
 
@@ -3134,7 +3153,7 @@ export async function redeemCode(userId, accountId, code) {
       if (isPermanentError(err)) {
         return redeemFailurePayload('trpc-cached', err);
       }
-      console.warn(`[dashboard-api] Cached redeem tRPC failed: ${err.message}`);
+      dashboardWarn(`[dashboard-api] Cached redeem tRPC failed: ${err.message}`);
     }
   }
 
@@ -3188,22 +3207,22 @@ export async function redeemCode(userId, accountId, code) {
 
   // ── EXPLOIT #12: REST API fallback probe for credit redemption ──
   // Try REST endpoints with session JWT as Bearer token before Playwright
-  console.error('[dashboard-api] All tRPC redeem routes exhausted, trying REST API fallback');
+  dashboardError('[dashboard-api] All tRPC redeem routes exhausted, trying REST API fallback');
   const restRedeemResult = await tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountProxy);
   if (restRedeemResult?.success) {
-    console.error(`[dashboard-api] Redemption succeeded via REST API at ${restRedeemResult.probedUrl || 'unknown endpoint'}`);
+    dashboardError(`[dashboard-api] Redemption succeeded via REST API at ${restRedeemResult.probedUrl || 'unknown endpoint'}`);
     return restRedeemResult;
   }
 
   // Log all probed endpoints for reconnaissance even on failure
   if (restRedeemResult?.probedEndpoints?.length) {
-    console.error(`[dashboard-api] REST redeem probe summary (${restRedeemResult.probedEndpoints.length} endpoints):`);
+    dashboardError(`[dashboard-api] REST redeem probe summary (${restRedeemResult.probedEndpoints.length} endpoints):`);
     for (const p of restRedeemResult.probedEndpoints) {
-      console.error(`  ${p.method} ${p.url} → ${p.status} ${p.statusText || ''} ${p.error || ''}`);
+      dashboardError(`  ${p.method} ${p.url} → ${p.status} ${p.statusText || ''} ${p.error || ''}`);
     }
   }
 
-  console.error('[dashboard-api] REST API redemption failed, falling back to Playwright browser automation');
+  dashboardError('[dashboard-api] REST API redemption failed, falling back to Playwright browser automation');
 
   return await redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, accountProxy);
 }
@@ -3238,7 +3257,7 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
         return fail;
       }
     } catch (err) {
-      console.warn(`[dashboard-api] Redeem tRPC outcome parse failed; falling through to UI/credits: ${err?.message || err}`);
+      dashboardWarn(`[dashboard-api] Redeem tRPC outcome parse failed; falling through to UI/credits: ${err?.message || err}`);
     }
   }
 
@@ -3315,12 +3334,12 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
       try {
         creditsSnapshot = await getCredits(managementKey);
       } catch (err) {
-        console.warn(`[dashboard-api] Redeem credits preflight failed for account=${accountId}: ${err?.message || err}`);
+        dashboardWarn(`[dashboard-api] Redeem credits preflight failed for account=${accountId}: ${err?.message || err}`);
         creditsSnapshot = null;
       }
     }
   } catch (err) {
-    console.warn(`[dashboard-api] Redeem account lookup failed for account=${accountId}; skipping credits verification: ${err?.message || err}`);
+    dashboardWarn(`[dashboard-api] Redeem account lookup failed for account=${accountId}; skipping credits verification: ${err?.message || err}`);
   }
 
   try {
@@ -3373,7 +3392,7 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
         try {
           await openModalBtn.first().click();
         } catch (err) {
-          console.warn(`[dashboard-api] Redeem modal open click failed: ${err.message}`);
+          dashboardWarn(`[dashboard-api] Redeem modal open click failed: ${err.message}`);
         }
         await page.waitForTimeout(500);
       }
@@ -3422,7 +3441,7 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
     try {
       await browser.close();
     } catch (closeErr) {
-      console.error('[dashboard-api] Redeem browser close failed:', closeErr.message);
+      dashboardError('[dashboard-api] Redeem browser close failed:', closeErr.message);
     }
   }
   return result;
@@ -3435,7 +3454,7 @@ export async function bulkRedeemCode(userId, accountIds, code) {
       const result = await redeemCode(userId, id, code);
       return { accountId: id, alias: account.alias, ...result };
     } catch (err) {
-      console.error('[DASHBOARD] Fetch failed:', err.message);
+      dashboardError('[DASHBOARD] Fetch failed:', err.message);
       const { errorCode, message } = classifyRedeemFailure(err.message, err);
       return { accountId: id, success: false, message, error: message, errorCode };
     }
@@ -3453,7 +3472,7 @@ export async function getUserProfile(sessionCookie, clientCookie) {
       // HTML response when expecting JSON - auth likely failed
       const { text: htmlBody } = await safeResponseText(res, 5000);
       const htmlInfo = extractHtmlErrorInfo(htmlBody);
-      console.error('[dashboard-api] getUserProfile received HTML response:', {
+      dashboardError('[dashboard-api] getUserProfile received HTML response:', {
         status: res.status,
         contentType: ct,
         title: htmlInfo.title,
@@ -3466,7 +3485,7 @@ export async function getUserProfile(sessionCookie, clientCookie) {
         const { text } = await safeResponseText(res, 50000);
         return safeJsonParse(text, { route: 'api/auth/me', status: res.status });
       } catch (parseErr) {
-        console.error('[dashboard-api] getUserProfile JSON parse error:', parseErr.message);
+        dashboardError('[dashboard-api] getUserProfile JSON parse error:', parseErr.message);
         // Fall through to tRPC fallback
       }
     }
@@ -3475,7 +3494,7 @@ export async function getUserProfile(sessionCookie, clientCookie) {
   try {
     return await trpcCall('user.me', null, sessionCookie, clientCookie);
   } catch (err) {
-    console.warn(`[dashboard-api] getUserProfile tRPC fallback failed: ${err?.message || err}`);
+    dashboardWarn(`[dashboard-api] getUserProfile tRPC fallback failed: ${err?.message || err}`);
     return null;
   }
 }
@@ -3522,7 +3541,7 @@ export async function syncApiKeys(userId, accountId) {
         source: 'trpc',
       }));
     } catch (err) {
-      console.warn(`[dashboard-api] syncApiKeys tRPC candidate ${route} failed for account=${accountId}: ${err?.message || err}`);
+      dashboardWarn(`[dashboard-api] syncApiKeys tRPC candidate ${route} failed for account=${accountId}: ${err?.message || err}`);
     }
   }
 
@@ -3563,7 +3582,7 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
         await btn.click({ timeout: 3000 });
         await page.waitForTimeout(600);
       } catch (err) {
-        console.warn(`[syncApiKeys] Reveal button click failed: ${err.message}`);
+        dashboardWarn(`[syncApiKeys] Reveal button click failed: ${err.message}`);
       }
     }
 
@@ -3577,13 +3596,13 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
     await context.close();
     return revealed;
   } catch (err) {
-    console.error('[syncApiKeys] Playwright scrape failed:', err.message);
+    dashboardError('[syncApiKeys] Playwright scrape failed:', err.message);
     return [];
   } finally {
     try {
       await browser.close();
     } catch (closeErr) {
-      console.error('[syncApiKeys] Browser close failed:', closeErr.message);
+      dashboardError('[syncApiKeys] Browser close failed:', closeErr.message);
     }
   }
 }
