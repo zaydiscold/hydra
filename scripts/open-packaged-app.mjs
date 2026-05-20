@@ -93,6 +93,25 @@ function runProcessDiagnostics(bundle) {
   runDiagnostic('running process lookup', 'pgrep', ['-fl', pattern], { allowFailure: true });
 }
 
+function runLaunchFailureBaselines(appPath) {
+  console.log('[open-packaged-app] LaunchServices baseline diagnostics after failed Hydra handoff');
+  runDiagnostic('baseline open Calculator.app', 'open', ['-n', '/System/Applications/Calculator.app'], {
+    allowFailure: true,
+  });
+  runDiagnostic(
+    'baseline Finder AppleEvent Calculator.app',
+    'osascript',
+    ['-e', 'tell application "Finder" to open POSIX file "/System/Applications/Calculator.app"'],
+    { allowFailure: true },
+  );
+  runDiagnostic(
+    'Finder AppleEvent Hydra.app',
+    'osascript',
+    ['-e', `tell application "Finder" to open POSIX file "${appPath}"`],
+    { allowFailure: true },
+  );
+}
+
 function usage() {
   console.log(`Hydra packaged app launcher
 
@@ -164,6 +183,7 @@ child.on('exit', (code, signal) => {
   }
   const reason = signal ? `signal ${signal}` : `exit ${code}`;
   console.error(`[open-packaged-app] LaunchServices open failed with ${reason}`);
-  console.error('[open-packaged-app] launch failed after bundle preflight; compare with a known system app from the same shell before treating this as app-bundle evidence');
+  runLaunchFailureBaselines(appPath);
+  console.error('[open-packaged-app] launch failed after bundle preflight; the baseline diagnostics above distinguish shell/LaunchServices failures from Hydra bundle failures');
   process.exit(code || 1);
 });
