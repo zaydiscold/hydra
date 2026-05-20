@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,7 +22,7 @@ function listRendererFiles(dir = resolve(ROOT, 'src'), rootCall = true) {
       files.push(fullPath);
     }
   }
-  return rootCall ? files.map((file) => file.slice(ROOT.length + 1)) : files;
+  return rootCall ? files.map((file) => file.slice(ROOT.length + 1).split(sep).join('/')) : files;
 }
 
 function uniqueMatches(source, regex, group = 1) {
