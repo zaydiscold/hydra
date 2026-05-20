@@ -26,8 +26,6 @@ import { shutdownEverything } from './app/shutdown.js';
 import { showStartupErrorDialog } from './app/startupError.js';
 import { initTelemetry, captureError } from './app/telemetry.js';
 import { setupAutoUpdates } from './app/autoUpdate.js';
-import { canPromptBiometric, describeBiometricSupport } from './app/biometric.js';
-import { isPrefExplicitlySet, setPref } from './app/userPrefs.js';
 import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -185,18 +183,10 @@ app.whenReady().then(async () => {
     console.warn('[electron] telemetry init failed:', e?.message || e);
   });
 
-  // Biometric auto-enable was REMOVED 2026-05-06 PM. Reason: with auto-on,
-  // every launch fires a Touch ID prompt before the auth-token releases →
-  // if the user dismisses (or doesn't see the system dialog), the renderer
-  // gets `null` and force-routes to the login screen. Result: "session not
-  // persisting" reports even though the JWT TTL is 30 days. Biometric is
-  // now a deliberate opt-in via Settings → Touch ID Unlock.
-  // (Code preserved for one-shot probe in describeBiometricSupport so the
-  // Settings UI can still detect availability.)
-  void describeBiometricSupport;
-  void isPrefExplicitlySet;
-  void setPref;
-  void canPromptBiometric;
+  // Biometric auto-enable was removed 2026-05-06: auto-prompts on every
+  // launch were racing the auth-token release and force-routing users to
+  // login. Biometric is now opt-in via Settings → Touch ID Unlock. The
+  // Settings UI probes availability through electron/app/ipc.js, not here.
 
   try {
     // createSplashWindow already calls setSplashWindow(win) internally, so we
