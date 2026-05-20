@@ -97,6 +97,11 @@ function buildAudit() {
   const readme = safeRead('README.md');
   const ciWorkflow = safeRead('.github/workflows/ci.yml');
   const dockerWorkflow = safeRead('.github/workflows/docker.yml');
+  const dockerRuntimeCiRecorded = releaseAudit.includes('GitHub Actions run 26196262336')
+    && releaseAudit.includes('Runtime Smoke')
+    && releaseAudit.includes('npm run docker:smoke -- --start')
+    && releaseAudit.includes('health endpoint response')
+    && releaseAudit.includes('Build & Push');
   const smokeWorkflow = safeRead('.github/workflows/electron-smoke.yml');
   const releaseWorkflow = safeRead('.github/workflows/release.yml');
   const uiStatic = safeRead('server/tests/ui-static-contract.test.mjs');
@@ -541,10 +546,11 @@ function buildAudit() {
         && dockerDoc.includes('HYDRA_DOCKER_BUILD_TIMEOUT_MS'),
       'docs/DOCKER.md documents bounded smoke timeouts and failed-start cleanup',
     ),
-    deferred(
+    check(
       'docker-runtime',
       'Docker runtime smoke',
-      'not release-complete evidence; runtime container-start smoke still requires a reachable local Docker daemon',
+      dockerRuntimeCiRecorded,
+      'GitHub Actions run 26196262336 Runtime Smoke ran npm run docker:smoke -- --start, started the Docker container, received a local health endpoint response, cleaned up compose resources, and Build & Push also passed',
     ),
     check(
       'windows-aux-cleanup',

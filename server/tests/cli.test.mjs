@@ -365,7 +365,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.equal(typeof report.complete, 'boolean');
   assert.equal(typeof report.summary.missing, 'number');
   assert.equal(typeof report.summary.blockers, 'number');
-  assert.ok(report.summary.deferred >= 4);
+  assert.ok(report.summary.deferred >= 3);
   assert.ok(report.items.some((item) => item.id === 'mac-arm-artifact' && ['ok', 'missing'].includes(item.state)));
   assert.ok(report.items.some((item) => item.id === 'packaged-dogfood-runbook' && item.state === 'ok' && /Electron-only final dogfood/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'mac-intel-artifact' && ['ok', 'missing'].includes(item.state)));
@@ -375,7 +375,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'packaged-gui-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
-  assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'deferred'));
+  assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence)));
   for (const item of report.items.filter((entry) => entry.state === 'deferred')) {
     assert.match(item.evidence, /not release-complete evidence/);
   }

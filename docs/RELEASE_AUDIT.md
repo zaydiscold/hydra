@@ -21,7 +21,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Screenshot and Remotion plan | Must capture from packaged Electron only, redact secrets, render Remotion still before final media. | Not Yet Verified |
-| Docker runtime smoke | Requires reachable local Docker daemon. | Not Yet Verified |
+| Docker runtime smoke | GitHub Actions run 26196262336 `Runtime Smoke` ran `npm run docker:smoke -- --start` on Ubuntu, built the compose image, started the container, received a local health endpoint response, cleaned up compose resources, and the sibling `Build & Push` job passed. | Verified by CI runtime smoke |
 
 ## Current Verified Evidence
 
@@ -30,7 +30,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 - Fresh macOS arm64 package build on 2026-05-20 from current master succeeded in /private/tmp/hydra-master-audit-1779315452 after forcing Prisma caches into /private/tmp. Commands: HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:prepare, HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:build, HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke. Smoke verified packaged shell, release zip, Prisma engine, bundled Chromium, and 80 MB app size.
 - Packaged app LaunchServices dogfood attempt on 2026-05-20 did not prove GUI launch: scripts/open-packaged-app.mjs verified bundle executable, quarantine absence, and codesign valid-on-disk for release/mac-arm64/Hydra.app, then LaunchServices returned kLSNoExecutableErr. Baseline open of Calculator.app failed with the same LaunchServices error and Finder AppleEvent lookup also failed, so this is recorded as a shell/LaunchServices handoff blocker rather than a Hydra bundle crash.
 - Direct executable retry on 2026-05-20 reproduced the user's native abort before Hydra JS logging: release/mac-arm64/Hydra.app/Contents/MacOS/Hydra exited 134 with signal 6 in HIServices/_RegisterApplication, and stock Electron runtime probes also failed before printing --version on Electron 42.1.0, 42.2.0, and 40.10.1. That keeps packaged GUI dogfood deferred until a working Aqua/LaunchServices session or user-run app-control evidence is available; it is not yet proof of a renderer, server, updater, or app-code crash.
-- Docker runtime check on 2026-05-20 remained blocked because docker info could not connect to unix:///Users/zaydk/.docker/run/docker.sock; Docker daemon was not reachable.
+- Docker runtime check on 2026-05-20 remained blocked locally because docker info could not connect to unix:///Users/zaydk/.docker/run/docker.sock; Docker daemon was not reachable on this Mac shell. GitHub Actions run 26196262336 then closed target-runner runtime evidence: Runtime Smoke ran npm run docker:smoke -- --start, built and started the compose service with HYDRA_LISTEN_HOST=0.0.0.0, received the local health endpoint response, cleaned up compose resources, and Build & Push passed.
 - macOS Intel package build was not attempted as local release evidence on Apple Silicon after prepare-electron-resources correctly refused HYDRA_BUILD_TARGET=darwin-x64 without a chrome-mac-x64/chrome-mac Playwright cache. CI artifact inspection downloaded the green PR #5 macOS Intel zip/blockmap and Windows NSIS/blockmap, but the extracted Intel app was unsigned in the downloaded artifact context, so mac-intel-current remains unverified locally.
 
 - PR #4 `Show splash auto-update progress` merged on 2026-05-20 with CI and Electron package smoke green on macOS arm64, macOS Intel, Windows NSIS, and Linux AppImage.
@@ -44,11 +44,9 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 - Run live account/login/OTP/code redemption/proxy rotation flows with safe test data.
 - Capture the required packaged Electron screenshots with no API keys, cookies, tokens, or personal account data visible.
 - Render the Remotion still and only then a GitHub-friendly final preview artifact.
-- Run Docker runtime smoke when Docker is reachable.
 
 ## Blockers
 
 - Packaged GUI dogfood needs app-control or user-run evidence.
 - Live MVP flows need credentials/accounts/codes.
-- Docker runtime smoke needs a reachable local Docker daemon.
 - Screenshot/Remotion evidence must wait until packaged Electron dogfood and redaction checks are ready.
