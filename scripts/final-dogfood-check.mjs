@@ -61,7 +61,15 @@ function runLaunchDiagnostic(label, command, args, timeoutMs = 10_000) {
   const fallbackDetail = result.signal ? `signal=${result.signal}` : `exit=${result.status ?? 'unknown'}`;
   const detail = result.error ? result.error.message : output || fallbackDetail;
   printStatus(result.status === 0, label, detail);
-  return result.status === 0;
+  return {
+    label,
+    command,
+    args,
+    ok: result.status === 0,
+    status: result.status,
+    signal: result.signal,
+    detail: detail.slice(0, 4000),
+  };
 }
 
 function runElectronRuntimeDiagnostic(timeoutMs = 10_000) {
@@ -170,11 +178,13 @@ if (flags.has('--open-app')) {
 if (flags.has('--launch-diagnostics')) {
   console.log('');
   console.log('LaunchServices diagnostics');
-  runElectronRuntimeDiagnostic();
-  runLaunchDiagnostic('Baseline LaunchServices handoff for Calculator.app', 'open', ['-n', '/System/Applications/Calculator.app']);
-  runLaunchDiagnostic('Baseline Finder AppleEvent handoff for Calculator.app', 'osascript', ['-e', 'tell application "Finder" to open POSIX file "/System/Applications/Calculator.app"']);
-  runLaunchDiagnostic('Hydra LaunchServices handoff', 'open', ['-n', join(ROOT, 'release/mac-arm64/Hydra.app')]);
-  runLaunchDiagnostic('Hydra Finder AppleEvent handoff', 'osascript', ['-e', `tell application "Finder" to open POSIX file "${join(ROOT, 'release/mac-arm64/Hydra.app')}"`]);
+  evidence.checks.launchDiagnostics = [
+    runElectronRuntimeDiagnostic(),
+    runLaunchDiagnostic('Baseline LaunchServices handoff for Calculator.app', 'open', ['-n', '/System/Applications/Calculator.app']),
+    runLaunchDiagnostic('Baseline Finder AppleEvent handoff for Calculator.app', 'osascript', ['-e', 'tell application "Finder" to open POSIX file "/System/Applications/Calculator.app"']),
+    runLaunchDiagnostic('Hydra LaunchServices handoff', 'open', ['-n', join(ROOT, 'release/mac-arm64/Hydra.app')]),
+    runLaunchDiagnostic('Hydra Finder AppleEvent handoff', 'osascript', ['-e', `tell application "Finder" to open POSIX file "${join(ROOT, 'release/mac-arm64/Hydra.app')}"`]),
+  ];
 }
 
 if (flags.has('--docker-smoke')) {

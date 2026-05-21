@@ -5,7 +5,9 @@ The final Hydra dogfood pass needs packaged Electron and live-account evidence t
 Run from the repo root after building the packaged app:
 
 ```bash
-npm run dogfood:final -- --write-evidence \
+npm run dogfood:final -- \
+  --write-evidence=docs/DOGFOOD_EVIDENCE.json \
+  --launch-diagnostics \
   --manual=packaged-gui-launch \
   --manual=window-controls \
   --manual=splash-unlock-dashboard \
@@ -19,7 +21,9 @@ Add the other manual flags only after you actually perform those checks:
 - `--manual=screenshots-redacted`
 - `--manual=windows-launch`
 
-The default output is `docs/DOGFOOD_EVIDENCE.json`. It records checklist status, artifact presence, `hydra audit` summary, Docker reachability, and optional app-open status. It does not read the local database, cookies, screenshots, API keys, Clerk session IDs, local secrets, or account email contents.
+The default output is `docs/DOGFOOD_EVIDENCE.json` when `--write-evidence` is passed without a path. The example above uses an explicit path so the evidence location is unambiguous.
+
+The evidence records checklist status, artifact presence, `hydra audit` summary, Docker reachability, optional app-open status, and optional `--launch-diagnostics` results for the Electron runtime, LaunchServices, Finder AppleEvents, and Hydra's packaged app handoff. It does not read the local database, cookies, screenshots, API keys, Clerk session IDs, local secrets, or account email contents.
 
 Do not paste API keys, cookies, tokens, real account data, or private screenshots into this file. It is a status artifact, not a log dump.
 
