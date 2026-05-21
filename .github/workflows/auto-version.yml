@@ -7,10 +7,11 @@ name: Auto-version
 #   4. Write the new version to package.json + package-lock.json
 #   5. Commit with `[skip-bump]` tag so this workflow doesn't recurse
 #   6. Push the commit + push the matching `vX.Y.Z` tag
+#   7. Dispatch release.yml on that tag ref
 #
-# The tag push triggers .github/workflows/release.yml which builds and
-# publishes the actual installer artifacts (mac zip, win nsis, linux
-# AppImage, plus latest-*.yml auto-update metadata).
+# The explicit workflow dispatch is intentional. Tags pushed by the default
+# GITHUB_TOKEN do not reliably trigger another workflow run, so auto-version
+# calls release.yml directly on the tag ref after pushing it.
 #
 # Escape hatch: include `[skip-bump]` in any commit message to skip
 # auto-versioning. The bump commit itself always carries this tag so
@@ -23,6 +24,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: auto-version-master
@@ -88,9 +90,12 @@ jobs:
           git push origin master
 
       - name: Tag and push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           NEW="v${{ steps.nextver.outputs.next }}"
           git tag -a "$NEW" -m "Release $NEW"
           git push origin "$NEW"
-          echo "Pushed tag $NEW — release.yml will now fire."
+          gh workflow run release.yml --ref "$NEW"
+          echo "Pushed tag $NEW and dispatched release.yml on $NEW."
