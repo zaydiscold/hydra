@@ -41,7 +41,7 @@ It is designed for operators who want a native control plane without shipping ac
 - [Local API Router](#local-api-router)
 - [Operator Hardening](#operator-hardening)
 - [Development And Release Gates](#development-and-release-gates)
-- [Screenshots And Remotion](#screenshots-and-remotion)
+- [Screenshots](#screenshots)
 
 ## Highlights
 
