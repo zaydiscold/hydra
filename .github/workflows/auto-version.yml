@@ -1,0 +1,96 @@
+name: Auto-version
+
+# Every push to master that's NOT itself a release-bump commit:
+#   1. Read package.json version
+#   2. Check if a tag for that version already exists on origin
+#   3. If yes (someone already shipped this version), bump patch
+#   4. Write the new version to package.json + package-lock.json
+#   5. Commit with `[skip-bump]` tag so this workflow doesn't recurse
+#   6. Push the commit + push the matching `vX.Y.Z` tag
+#
+# The tag push triggers .github/workflows/release.yml which builds and
+# publishes the actual installer artifacts (mac zip, win nsis, linux
+# AppImage, plus latest-*.yml auto-update metadata).
+#
+# Escape hatch: include `[skip-bump]` in any commit message to skip
+# auto-versioning. The bump commit itself always carries this tag so
+# it doesn't trigger another bump.
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-version-master
+  cancel-in-progress: false
+
+jobs:
+  bump-and-tag:
+    runs-on: ubuntu-22.04
+    # Skip when the commit that triggered this run is already a bump
+    # commit (carries [skip-bump]) or a Merge-of-a-bump-PR.
+    if: |
+      !contains(github.event.head_commit.message, '[skip-bump]') &&
+      !contains(github.event.head_commit.message, 'chore(release):')
+    steps:
+      - name: Checkout master with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Determine next version
+        id: nextver
+        run: |
+          set -euo pipefail
+          current=$(node -p "require('./package.json').version")
+          echo "current=$current"
+
+          # If a tag for the CURRENT package.json version doesn't exist,
+          # ship that one as-is (catches the case where someone manually
+          # bumped package.json but skipped the tag — exactly v1.0.8's
+          # original failure mode).
+          if ! git rev-parse "v$current" >/dev/null 2>&1 \
+             && ! git ls-remote --tags origin "v$current" | grep -q "v$current"; then
+            echo "next=$current" >> "$GITHUB_OUTPUT"
+            echo "needs_bump=false" >> "$GITHUB_OUTPUT"
+            echo "Catching up: package.json is at $current but no tag exists. Tagging current."
+            exit 0
+          fi
+
+          # Otherwise bump patch (1.0.7 -> 1.0.8).
+          IFS=. read -r major minor patch <<< "$current"
+          patch=$((patch + 1))
+          next="${major}.${minor}.${patch}"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "needs_bump=true" >> "$GITHUB_OUTPUT"
+          echo "Bumping $current -> $next"
+
+      - name: Write new version into package.json
+        if: steps.nextver.outputs.needs_bump == 'true'
+        run: |
+          npm version "${{ steps.nextver.outputs.next }}" \
+            --no-git-tag-version \
+            --allow-same-version
+          git config user.name 'hydra-bot'
+          git config user.email 'hydra-bot@users.noreply.github.com'
+          git add package.json package-lock.json
+          git commit -m "chore(release): v${{ steps.nextver.outputs.next }} [skip-bump]"
+          git push origin master
+
+      - name: Tag and push
+        run: |
+          set -euo pipefail
+          NEW="v${{ steps.nextver.outputs.next }}"
+          git tag -a "$NEW" -m "Release $NEW"
+          git push origin "$NEW"
+          echo "Pushed tag $NEW — release.yml will now fire."
