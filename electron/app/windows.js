@@ -7,6 +7,7 @@
 import { app, BrowserWindow, dialog, screen } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
+import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { isDev, ICON_PATH, isAllowedLocalUiUrl } from './env.js';
@@ -18,6 +19,16 @@ import { openExternalUrl } from './windowActions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SPLASH_PRELOAD_PATH = path.join(__dirname, '..', 'splashPreload.js');
+
+// ─── Vendored matter-js (~83 KB minified) ─────────────────────────────────
+// Loaded once at module init so every splash invocation reuses the same
+// string. Inlined into the splash data: URL so the splash window stays
+// fully self-contained (no file:// fetches once the BrowserWindow opens).
+// `</script>` substrings (if any) are escaped so they cannot prematurely
+// close the inline <script> tag in the HTML parser.
+const MATTER_JS_SRC = fs
+  .readFileSync(path.join(__dirname, '..', 'vendor', 'matter.min.js'), 'utf8')
+  .replace(/<\/(script)/gi, '<\\/$1');
 
 // ─── Splash Window — Pica-style fullscreen sprawl + small centered card ─────
 export function createSplashWindow() {
@@ -241,8 +252,13 @@ export function createSplashWindow() {
     // Reference: Apple HIG "Liquid Glass" + WWDC25 session 219
     // ("Designing with Liquid Glass") + the glass implementation in
     // iOS 26 Lock Screen widgets.
-    + '.outer{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);'
-    + 'width:min(92vw,1280px);height:min(86vh,860px);border-radius:28px;'
+    // FULL-WINDOW JAR (Pica-style: physics fills the splash window, walls
+    // sit at the actual viewport edges — letters cannot escape because
+    // there is no clipping mismatch between visual container and physics
+    // walls. The decorative glass treatment (gradients, shadows, vines)
+    // simply stretches to cover the whole splash.)
+    + '.outer{position:fixed;left:0;top:0;transform:none;'
+    + 'width:100vw;height:100vh;border-radius:0;'
     // 4% white surface luminance — barely there but ESSENTIAL for the
     // glass to read against busy desktops (verified by screenshotting
     // mid-splash on a wallpaper covered in Finder icons; without this
@@ -321,9 +337,13 @@ export function createSplashWindow() {
     + '@keyframes grow{0%{stroke-dasharray:0 1400;opacity:.02}12%{opacity:.55}100%{stroke-dasharray:1400 0;opacity:.86}}'
     + '@keyframes growTwig{0%,18%{stroke-dasharray:0 360;opacity:0}100%{stroke-dasharray:360 0;opacity:.68}}'
     + '@keyframes bud{0%,42%{opacity:0;transform:scale(.25)}70%{opacity:.75;transform:scale(1.08)}100%{opacity:.58;transform:scale(1)}}'
-    // Canvas is clipped by the outer stage, making that stage the physics world.
-    + 'canvas#field{position:absolute;inset:0;width:100%;height:100%;'
-    + 'pointer-events:none;z-index:2;display:block}'
+    // Canvas pinned to the viewport, NOT to .outer. matter.js owns the
+    // physics world; its walls are placed at viewport edges to match
+    // exactly what the user sees. z-index sits above background chrome
+    // (.outer, vines, hex, decos) and below the brand card (z-index:4),
+    // so the brand reveal materializes on top of the falling letters.
+    + 'canvas#field{position:fixed;inset:0;width:100vw;height:100vh;'
+    + 'pointer-events:none;z-index:3;display:block}'
     // Inner card stays the same size, centered inside the outer-card.
     // (Was position:fixed against viewport — now position:absolute against
     // .outer so they always stay co-centered if the user resizes.)
@@ -430,7 +450,6 @@ export function createSplashWindow() {
     + '</pattern></defs>'
     + '<rect width="100%" height="100%" fill="url(#hexGrid)"/>'
     + '</svg></div>'
-    + '<canvas id="field"></canvas>'
     + '<div class="card">'
     // Corner brackets — single SVG, ONE compositor layer. The four pairs
     // of L-shaped strokes draw the cyberpunk terminal accent at each corner.
@@ -463,11 +482,21 @@ export function createSplashWindow() {
     + '</div>'
     + '</div>' // /.card
     + '</div>' // /.outer
-    // ─── PHYSICS SIMULATION (Pica-style) ──────────────────────────────────
-    // SpriteKit-equivalent in browser canvas: gravity → AABB floor +
-    // walls → AABB inter-letter separation → angular damping. Each body
-    // is a word (rectangle) rendered with its brand color + Intel One
-    // Mono. ~18 bodies, n² collision = 324 ops/frame.
+    // Canvas is a SIBLING of .outer — pinned to the viewport, stacking above
+    // .outer (z-index:3) but below the brand .card (z-index:4 inside .outer
+    // stacking context). Letters fall in front of background atmosphere
+    // and behind the brand reveal that materializes at t≈5.5 s.
+    + '<canvas id="field"></canvas>'
+    // ─── PHYSICS SIMULATION — matter-js (Pica-equivalent) ────────────────
+    // Vendored matter-js drives the world. Words enter as compound bodies
+    // at the top edge, shatter into per-letter bodies on first contact
+    // with anything (walls, floor, or another body), then keep colliding
+    // like SpaghettiOs until gravity flips upward at t=8s and the pile
+    // whooshes out the top. Hard static walls extend 400 px outside the
+    // viewport so even fast-moving bodies cannot tunnel through.
+    //
+    // Reference: ~/Desktop/pica-teardown/05-falling-letters-animation.md
+    + '<script>' + MATTER_JS_SRC + '</script>'
     + '<script>(function(){'
     // ─── Fractal ivy generator ──────────────────────────────────────────
     // Recursive branching from a center point. Each stem grows along a
@@ -570,319 +599,147 @@ export function createSplashWindow() {
     + 'const items=' + itemsJson + ';'
     + 'const cvs=document.getElementById("field");if(!cvs)return;'
     + 'const ctx=cvs.getContext("2d");'
-    // Canvas now lives inside the outer-card, NOT at viewport. Read the
-    // CSS-pixel content size from clientWidth/Height — that\'s the jar
-    // the physics simulation operates inside. Resize observer keeps the
-    // backing store crisp if the BrowserWindow is resized.
+    // Canvas covers the full splash window (position:fixed/inset:0). Backing
+    // store sized to devicePixelRatio so glyphs stay crisp on Retina.
     + 'function size(){const dpr=Math.min(devicePixelRatio||1,2);'
-    + 'const w=cvs.clientWidth||1,h=cvs.clientHeight||1;'
-    + 'cvs.width=w*dpr;cvs.height=h*dpr;'
-    + 'ctx.setTransform(dpr,0,0,dpr,0,0);}size();'
-    + 'const ro=new ResizeObserver(size);ro.observe(cvs);'
-    // Helpers so the physics loop never reaches outside the canvas
-    + 'function W(){return cvs.clientWidth||1}function H(){return cvs.clientHeight||1}'
-    // PICA-PURE PHYSICS — per-character bodies, organic pile angles.
-    // Mirrors the SpriteKit setup from Pica\'s OnboardingScene
-    // (~/Desktop/pica-teardown/05-falling-letters-animation.md):
-    //   restitution 0.35   — one cushioned bounce
-    //   friction 0.6       — surface drag
-    //   angularDamping 0.4 — moderate rot decay (NOT a hard snap)
-    //   linearDamping 0.1  — light air drag
-    //   mass 0.3           — light bodies
-    //
-    // CSS-canvas equivalent below. Critical: NO floor-contact rot=0
-    // snap → pile keeps organic angles like Pica\'s screenshots
-    // (letters lean against each other instead of all flat).
-    //   G 2200       — slow gravity, falls last long enough to read
-    //   RES 0.32     — close to Pica\'s 0.35
-    //   FRIC 0.7
-    //   AIR_DAMP 0.992
-    //   ANG_AIR 0.995  — rotation barely damps in air
-    //   ANG_REST 0.92  — rotation slowly damps in pile (not zero)
-    //   REST_THR 30
-    // PICA-INSPIRED SHATTER: words fall as ONE rigid body, then on hard
-    // floor contact fragment into per-letter bodies that inherit the parent
-    // velocity + a per-letter angular kick proportional to lateral offset
-    // from the word's center (longer torque arm = more spin — physical).
-    // SHATTER_VY is the impact-velocity threshold; landings softer than that
-    // (e.g. a word piling onto already-settled letters) STAY whole, which
-    // gives a nice mix of intact words and shattered ones in the final pile.
-    // MAX_BODIES caps total body count so n² collision stays under ~1M
-    // ops/frame even after many words shatter into ~8 letters each.
-    // G dropped 2200 → 1100 so the user has time to READ each word as it
-    // falls (Pica's vibe is languid, not frantic — fast gravity made our
-    // word labels blur past).
-    // SHATTER_VY dropped 520 → 60 per user: "they should just fall as
-    // individual letters next to each other but as they interact with env[ironment]"
-    // — words now break on ANY meaningful contact, not just hard floor
-    // landings. SHATTER_RVN is the relative-velocity threshold for inter-word
-    // collisions (when two falling words touch each other with notable speed,
-    // both shatter — natural cascade like Pica's onboarding letters bumping).
-    + 'const G=1100,RES=0.32,FRIC=0.7,AIR_DAMP=0.992,ANG_AIR=0.995,ANG_REST=0.92,REST_THR=30,FLOOR_PAD=18,WALL_PAD=14,SHATTER_VY=60,SHATTER_RVN=80,MAX_BODIES=900;'
-    // DENSITY: scale body count to viewport. ~1 body per 24,000 px²
-    // works out to ~50–75 on common displays (1440×900 = 54, 1920×1200
-    // = 96, capped at 100). Repeats are fine — Pica fills the frame
-    // by reusing characters of the user\'s name; we mirror that by
-    // duplicating the brand+model list as needed.
-    // Density relative to OUTER-CARD area, not the screen. With
-    // 78vw × 78vh on a 1440×900 monitor the jar is ~1123×702 ≈ 788k px²
-    // → ~33 bodies; cap at 80. Slightly lower density per area than
-    // before (was 24k px²/body) so big fonts have room to fall + stack.
-    // WHOLE-WORD BODIES — back to one rigid body per brand/model name.
-    // Per-character was the wrong call: it loses the word identity the
-    // user wants to see. We rely on AABB padding + tight density to keep
-    // edge-to-edge stacking clean.
-    + 'function shuffle(a){return a.slice().sort(()=>Math.random()-0.5);}'
-    // TARGET halved from 90-180 to 50-100 because each word can spawn 6-12
-    // child letters on shatter — staying around 100 words keeps the eventual
-    // pile under MAX_BODIES.
-    + 'const TARGET=Math.min(100,Math.max(50,Math.floor(W()*H()/18000)));'
-    + 'function repeatToFill(arr,n){const out=[];while(out.length<n)for(const it of shuffle(arr))out.push(it);return out.slice(0,n);}'
-    + 'const queue=repeatToFill(items,TARGET);'
-    // SINGLE TYPEFACE — Pica uses one display font (ABC Gravity Compressed)
-    // for all letters. Single-typeface = visually cohesive, the brand the
-    // app stands for. We don\'t ship ABC Gravity, so use Helvetica Neue
-    // — the cleanest airy display sans available system-wide on macOS.
-    // ALL falling words use this; brand identity is preserved by COLOR
-    // (every word colored, no white) + WEIGHT variation (brands 700,
-    // models 400) + occasional italic.
-    // SF Pro Display is the macOS native display font (auto-picked by
-    // -apple-system at large sizes). It has more character than Helvetica
-    // Neue at the heavy weights used for brand words. Inter is the modern
-    // fallback for non-mac platforms. The stack ensures every platform gets
-    // a real display-grade typeface, matching Pica's "single characterful
-    // typeface" principle (see ~/Desktop/pica-teardown/05-falling-letters-animation.md).
-    + 'const SOLO_FONT="-apple-system,SF Pro Display,Inter,Helvetica Neue,Arial,sans-serif";'
-    // COLOR PALETTE — every word gets a color, none stay white. Bonds
-    // the falling-letters mood with the brand-blocks. Models without an
-    // explicit color get one picked deterministically by their text hash
-    // so the same word always lands the same color across launches.
-    + 'const PALETTE=['
-    +   '"#ec4899",'  // pink
-    +   '"#22d3ee",'  // cyan
-    +   '"#fbbf24",'  // yellow
-    +   '"#a3e635",'  // lime
-    +   '"#fb923c",'  // orange
-    +   '"#d946ef",'  // magenta
-    +   '"#38bdf8",'  // sky
-    +   '"#f87171",'  // coral
-    +   '"#a78bfa",'  // soft purple
-    +   '"#34d399",'  // mint
-    +   '"#fde047",'  // light yellow
-    +   '"#fb7185",'  // rose
-    +   '"#67e8f9",'  // light cyan
-    +   '"#c084fc",'  // lavender
-    +   '"#fdba74"'   // peach
-    + '];'
+    +   'const w=window.innerWidth||1,h=window.innerHeight||1;'
+    +   'cvs.style.width=w+"px";cvs.style.height=h+"px";'
+    +   'cvs.width=Math.round(w*dpr);cvs.height=Math.round(h*dpr);'
+    +   'ctx.setTransform(dpr,0,0,dpr,0,0);}'
+    + 'size();window.addEventListener("resize",size);'
+    + 'function W(){return window.innerWidth||1;}function H(){return window.innerHeight||1;}'
+    // ─── matter.js handles + engine ──────────────────────────────────────
+    + 'const M=Matter,Eng=M.Engine,Wld=M.World,Bod=M.Bodies,Body=M.Body,Comp=M.Composite,Evt=M.Events,Run=M.Runner;'
+    + 'const engine=Eng.create({enableSleeping:true,positionIterations:8,velocityIterations:6});'
+    // intro gravity. matter.js gravity is dimensionless × scale. scale=0.0012
+    // gives ~1.0 g a fall feel comparable to Pica\'s introGravity.
+    + 'engine.world.gravity.x=0;engine.world.gravity.y=1.0;engine.world.gravity.scale=0.0012;'
+    // ─── HARD WALLS at the viewport edges ────────────────────────────────
+    // Each wall is 400 px thick and extends 3× the viewport dimension along
+    // its length, so even a body integrated past the visible edge during
+    // one frame is still inside a wall and gets resolved correctly. This
+    // is the root cure for the user-reported "letters escape the box" bug:
+    // visual container and physics container are now the same surface.
+    + 'const WT=400;'
+    + 'function buildWalls(){const w=W(),h=H(),lx=Math.max(w,1200)*3,ly=Math.max(h,900)*3;return['
+    +   'Bod.rectangle(w/2,h+WT/2,lx,WT,{isStatic:true,label:"hwall"}),'   // floor
+    +   'Bod.rectangle(w/2,-WT/2,lx,WT,{isStatic:true,label:"hwall"}),'    // ceiling
+    +   'Bod.rectangle(-WT/2,h/2,WT,ly,{isStatic:true,label:"hwall"}),'    // left
+    +   'Bod.rectangle(w+WT/2,h/2,WT,ly,{isStatic:true,label:"hwall"})'   // right
+    + '];}'
+    + 'let walls=buildWalls();Wld.add(engine.world,walls);'
+    + 'window.addEventListener("resize",function(){Wld.remove(engine.world,walls);walls=buildWalls();Wld.add(engine.world,walls);});'
+    // ─── Color palette + helpers (single typeface, per-text deterministic color)
+    + 'const PALETTE=["#ec4899","#22d3ee","#fbbf24","#a3e635","#fb923c","#d946ef","#38bdf8","#f87171","#a78bfa","#34d399","#fde047","#fb7185","#67e8f9","#c084fc","#fdba74"];'
     + 'function hashStr(s){let h=0;for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}return Math.abs(h);}'
-    + 'function makeBody(it,i){'
-    + 'const isB=it.tag==="brand";'
-    // Varied font sizes — bigger BRAND words contrast with smaller
-    // model words. User: "different sized fonts, like between words,
-    // since we\'re gonna have so many, some big, some small."
-    + 'const fontSize=isB?(28+Math.floor(Math.random()*22)):(18+Math.floor(Math.random()*14));'
-    // Brand words bumped 700 → 800 so they read as heavy display sans —
-    // closer to Pica's ABC Gravity Compressed presence. Model words stay
-    // 400 to keep visual contrast between the two tiers.
-    + 'const weight=isB?800:400;'
-    // Single typeface (see SOLO_FONT). Italic chosen deterministically
-    // by hash so the same word always lands the same italic state.
-    + 'const wordHash=hashStr(it.text);'
-    + 'const family=SOLO_FONT;'
-    + 'const italic=(wordHash%10)<3?"italic ":"";'
-    + 'ctx.font=italic+weight+" "+fontSize+"px "+family;'
-    + 'const w=ctx.measureText(it.text).width+6,h=fontSize*1.05;'
-    + 'const x=w/2+24+Math.random()*Math.max(40,W()-w-48);'
-    + 'const spawnAt=Math.floor((i/TARGET)*4500+Math.random()*250);'
-    // EVERY word gets a color — no more white text. Models without an
-    // explicit color use a deterministic palette pick by text hash.
-    + 'const color=it.color||PALETTE[hashStr(it.text)%PALETTE.length];'
-    + 'return{text:it.text,color,'
-    + 'weight,fontSize,w,h,x,family,italic,'
-    // MASS = AABB area / 2200 + 0.4. Bigger words are HEAVIER → push
-    // smaller ones around in collisions. Pica\'s SKPhysicsBody uses
-    // body.mass = 0.3; we scale by glyph footprint so brand titles
-    // feel weighty against shorter model names.
-    + 'mass:Math.max(0.3,(w*h)/2200+0.4),'
-    // moment-of-inertia approximation for a rectangle — used by the
-    // angular-impulse solver below. Real formula is m*(w²+h²)/12.
-    + 'I:(w*w+h*h)/12,'
-    // Spawn ABOVE the outer-card top edge so words enter as if pouring
-    // into a jar. Negative y = outside canvas top.
-    + 'y:-h-Math.random()*H()*0.45,'
-    + 'vx:(Math.random()-0.5)*140,vy:0,'
-    // Bigger initial rotation + spin so tumbling is VISIBLE while
-    // airborne. Floor-contact snaps rot=0 so the pile is still flat.
-    // Was ±0.45 / ±2.2 → was barely perceptible against high gravity.
-    + 'rot:(Math.random()-0.5)*1.4,vRot:(Math.random()-0.5)*4.5,'
-    + 'spawnAt,alive:false,resting:false,onFloor:false,shattered:false};}'
-    + 'const bodies=queue.map(makeBody);'
-    // ─── shatterWord: word body → per-letter bodies on hard impact ──────────
-    // Inherits parent velocity (so the pile direction stays coherent), adds
-    // per-letter angular velocity proportional to (lxLocal / halfWidth) ×
-    // impactVel — letters at the ends of the word get the most spin, exactly
-    // like a rigid bar fragmenting in mid-air. Letters get a small upward
-    // kick (parent.vy*0.55 - 40) and a randomized horizontal scatter so
-    // they don't stack atop each other after shatter.
-    + 'function shatterWord(parent,bodies,impactVel){'
-    +   'parent.shattered=true;parent.alive=false;'
-    +   'ctx.font=parent.italic+parent.weight+" "+parent.fontSize+"px "+parent.family;'
-    +   'const chars=Array.from(parent.text);'
-    +   'let cursor=-parent.w/2+3;'
-    +   'const cos=Math.cos(parent.rot),sin=Math.sin(parent.rot);'
-    +   'const halfW=Math.max(1,parent.w/2);'
-    +   'for(const ch of chars){'
-    +     'if(ch===" "){cursor+=parent.fontSize*0.32;continue;}'
-    +     'const lw=ctx.measureText(ch).width+2;'
-    +     'const lh=parent.fontSize*1.05;'
-    +     'const lxLocal=cursor+lw/2;'
-    +     'cursor+=lw;'
-    +     'const wx=parent.x+lxLocal*cos;'
-    +     'const wy=parent.y+lxLocal*sin;'
-    +     'const torqueArm=lxLocal/halfW;'
-    +     'bodies.push({text:ch,color:parent.color,weight:parent.weight,'
-    +       'fontSize:parent.fontSize,family:parent.family,italic:parent.italic,'
-    +       'w:lw,h:lh,'
-    +       'mass:Math.max(0.15,(lw*lh)/2200+0.2),'
-    +       'I:(lw*lw+lh*lh)/12,'
-    +       'x:wx,y:wy,'
-    +       'vx:parent.vx+(Math.random()-0.5)*40,'
-    +       'vy:parent.vy*0.55-40-Math.random()*60,'
-    +       'rot:parent.rot,'
-    +       'vRot:parent.vRot+torqueArm*impactVel*0.018+(Math.random()-0.5)*2.5,'
-    +       'spawnAt:0,alive:true,resting:false,onFloor:false,shattered:true});'
+    + 'const FAMILY="-apple-system,SF Pro Display,Inter,Helvetica Neue,Arial,sans-serif";'
+    + 'function fontFor(size,weight){return weight+" "+size+"px "+FAMILY;}'
+    // ─── spawnWord — a single rectangular body the size of the rendered word
+    + 'function spawnWord(text,color,fontSize,weight){'
+    +   'ctx.font=fontFor(fontSize,weight);'
+    +   'const bw=ctx.measureText(text).width+8,bh=fontSize*1.18;'
+    +   'const minX=bw/2+28,maxX=Math.max(minX+1,W()-bw/2-28);'
+    +   'const x=minX+Math.random()*(maxX-minX);'
+    +   'const body=Bod.rectangle(x,-bh*0.6,bw,bh,{'
+    +     'restitution:0.16,friction:0.62,frictionAir:0.012,density:0.0014,chamfer:{radius:5},'
+    +     'label:"hword",'
+    +     'plugin:{hydra:{kind:"word",text:text,color:color,fontSize:fontSize,weight:weight}}'
+    +   '});'
+    +   'Body.setAngularVelocity(body,(Math.random()-0.5)*0.08);'
+    +   'Body.setVelocity(body,{x:(Math.random()-0.5)*1.5,y:0});'
+    +   'Wld.add(engine.world,body);'
+    + '}'
+    // ─── shatter — replace the word body with one rectangle body per glyph.
+    // Each letter INHERITS the parent\'s linear and angular velocity AS-IS:
+    // no upward kick, no random scatter. Letters continue from where the
+    // word was, now as individuals colliding like SpaghettiOs.
+    + 'function shatter(wb){'
+    +   'const m=wb.plugin&&wb.plugin.hydra;'
+    +   'if(!m||m.kind!=="word")return;'
+    +   'const text=m.text,color=m.color,fontSize=m.fontSize,weight=m.weight;'
+    +   'const pv=wb.velocity,pav=wb.angularVelocity,pa=wb.angle;'
+    +   'const cos=Math.cos(pa),sin=Math.sin(pa);'
+    +   'const px=wb.position.x,py=wb.position.y;'
+    +   'Wld.remove(engine.world,wb);'
+    +   'ctx.font=fontFor(fontSize,weight);'
+    +   'const totalW=ctx.measureText(text).width;'
+    +   'let cursor=-totalW/2;'
+    +   'for(let i=0;i<text.length;i++){'
+    +     'const ch=text[i];'
+    +     'if(ch===" "){cursor+=fontSize*0.32;continue;}'
+    +     'const cw=ctx.measureText(ch).width+2;'
+    +     'const lxLocal=cursor+cw/2;'
+    +     'cursor+=cw;'
+    +     'const wx=px+lxLocal*cos;const wy=py+lxLocal*sin;'
+    +     'const letter=Bod.rectangle(wx,wy,cw,fontSize*1.08,{'
+    +       'restitution:0.18,friction:0.74,frictionAir:0.015,density:0.0011,chamfer:{radius:3},'
+    +       'angle:pa,label:"hletter",'
+    +       'plugin:{hydra:{kind:"letter",text:ch,color:color,fontSize:fontSize,weight:weight}}'
+    +     '});'
+    +     'Body.setVelocity(letter,{x:pv.x,y:pv.y});'
+    +     'Body.setAngularVelocity(letter,pav+(Math.random()-0.5)*0.05);'
+    +     'Wld.add(engine.world,letter);'
     +   '}'
     + '}'
-    + 'let last=performance.now();const t0=last;'
-    + 'function frame(now){'
-    + 'const dt=Math.min((now-last)/1000,1/30);last=now;'
-    + 'const t=now-t0;'
-    // ─── TWO GRAVITY REGIMES (Pica) ────────────────────────────────────
-    // Pica\'s OnboardingScene defines `introGravity` and `exitGravity`.
-    // First half: gravity DOWN — letters fall + pile. Last 2 s: gravity
-    // FLIPS UPWARD with extra magnitude — letters whoosh out the top
-    // edge as the splash dismisses.
-    + 'const cw=W(),ch=H();ctx.clearRect(0,0,cw,ch);'
-    // Activate bodies as their spawn time arrives
-    + 'for(const b of bodies){if(!b.alive&&t>=b.spawnAt)b.alive=true;}'
-    // Integrate against the OUTER-CARD bounds. Floor + walls are now the
-    // glass jar\'s interior, not the screen. Words fall in from the top
-    // (y < 0) and pile up against floor.
-    + 'const floorY=ch-FLOOR_PAD;'
-    + 'for(const b of bodies){if(!b.alive)continue;'
-    + 'b.vy+=G*dt;'
-    + 'b.vx*=AIR_DAMP;b.vy*=AIR_DAMP;'
-    + 'b.x+=b.vx*dt;b.y+=b.vy*dt;'
-    + 'b.rot+=b.vRot*dt;'
-    + 'b.vRot*=(b.onFloor||b.resting?ANG_REST:ANG_AIR);'
-    // Hard freeze: if a body has been resting for at least one frame
-    // AND its translational speed is near zero, lock rotation entirely.
-    // Without this, fresh collisions on the pile keep spinning settled
-    // letters via the torque impulse. (User reported: "things rotating
-    // after they\'ve already fallen.")
-    + 'if(b.resting&&Math.abs(b.vx)<5&&Math.abs(b.vy)<5){b.vRot=0;}'
-    + 'b.onFloor=false;'
-    + 'if(b.y+b.h/2>=floorY){'
-    // Capture impact vy BEFORE bounce-reduction — that's the real landing
-    // velocity. If above SHATTER_VY and we haven't already shattered AND
-    // the global body cap isn't blown, fragment this word into letters.
-    // Children carry `shattered:true` so they can't re-shatter on their own
-    // landings — they just settle into the pile.
-    +   'const impactVy=b.vy;'
-    +   'b.y=floorY-b.h/2;b.onFloor=true;'
-    // NO rot=0 snap on floor contact. Per-character bodies are roughly
-    // square, so their rotated AABB matches visual footprint closely
-    // enough that the multi-pass solver resolves overlap without forced
-    // alignment. Letting rotation persist gives the pile organic
-    // leaning angles like Pica\'s onboarding scene.
-    + 'if(b.vy>0){b.vy=-b.vy*RES;if(Math.abs(b.vy)<REST_THR){b.vy=0;b.resting=true;}}'
-    + 'b.vx*=FRIC;'
-    + 'if(Math.abs(b.vx)<REST_THR/4)b.vx=0;'
-    + 'if(!b.shattered&&impactVy>SHATTER_VY&&bodies.length<MAX_BODIES&&b.text.length>1){'
-    +   'shatterWord(b,bodies,impactVy);'
+    // ─── Shatter trigger: ANY collision involving a word body. Words burst
+    // on first contact — wall, floor, ceiling, or another body — exactly
+    // the "SpaghettiOs" behavior the user asked for.
+    + 'Evt.on(engine,"collisionStart",function(evt){'
+    +   'for(let i=0;i<evt.pairs.length;i++){'
+    +     'const A=evt.pairs[i].bodyA,B=evt.pairs[i].bodyB;'
+    +     'if(A.plugin&&A.plugin.hydra&&A.plugin.hydra.kind==="word")shatter(A);'
+    +     'if(B.plugin&&B.plugin.hydra&&B.plugin.hydra.kind==="word")shatter(B);'
+    +   '}'
+    + '});'
+    // ─── Spawn queue — shuffle items + repeat to fill the trickle window.
+    + 'function shuffle(a){return a.slice().sort(function(){return Math.random()-0.5;});}'
+    + 'function buildQueue(n){const out=[];while(out.length<n){const s=shuffle(items);for(let k=0;k<s.length&&out.length<n;k++)out.push(s[k]);}return out;}'
+    // 80 words over ~8 s = 10/sec — Pica\'s languid trickle, not a burst.
+    + 'const TARGET=80;'
+    + 'const queue=buildQueue(TARGET);'
+    + 'let spawnIdx=0;'
+    + 'const spawnTimer=setInterval(function(){'
+    +   'if(spawnIdx>=queue.length){clearInterval(spawnTimer);return;}'
+    +   'const it=queue[spawnIdx++];'
+    +   'const isBrand=it.tag==="brand";'
+    +   'const fontSize=isBrand?(30+Math.floor(Math.random()*10)):(20+Math.floor(Math.random()*8));'
+    +   'const weight=isBrand?"800":"600";'
+    +   'const color=it.color||PALETTE[hashStr(it.text)%PALETTE.length];'
+    +   'spawnWord(it.text,color,fontSize,weight);'
+    + '},100);'
+    // ─── Two gravity regimes — flip up at t=8s. Apply an upward velocity
+    // impulse to every dynamic body so the settled pile launches together
+    // rather than waiting for the new gravity field to accelerate them.
+    + 'setTimeout(function(){'
+    +   'engine.world.gravity.y=-1.45;'
+    +   'const all=Comp.allBodies(engine.world);'
+    +   'for(let i=0;i<all.length;i++){const b=all[i];'
+    +     'if(b.isStatic)continue;'
+    +     'Body.setVelocity(b,{x:b.velocity.x+(Math.random()-0.5)*2.5,y:-3.5-Math.random()*1.5});'
+    +     'Body.setAngularVelocity(b,b.angularVelocity+(Math.random()-0.5)*0.08);'
+    +   '}'
+    + '},8000);'
+    // Start the physics runner.
+    + 'Run.run(Run.create(),engine);'
+    // ─── Render — draw each body as a rotated glyph at its world transform.
+    + 'function render(){'
+    +   'ctx.clearRect(0,0,W(),H());'
+    +   'const all=Comp.allBodies(engine.world);'
+    +   'for(let i=0;i<all.length;i++){const b=all[i];'
+    +     'if(b.isStatic||!b.plugin||!b.plugin.hydra)continue;'
+    +     'const m=b.plugin.hydra;'
+    +     'ctx.save();'
+    +     'ctx.translate(b.position.x,b.position.y);'
+    +     'ctx.rotate(b.angle);'
+    +     'ctx.fillStyle=m.color;'
+    +     'ctx.font=fontFor(m.fontSize,m.weight);'
+    +     'ctx.textAlign="center";ctx.textBaseline="middle";'
+    +     'ctx.fillText(m.text,0,0);'
+    +     'ctx.restore();'
+    +   '}'
+    +   'requestAnimationFrame(render);'
     + '}'
-    + '}'
-    // WALLS — restitution + small angular kick (top/bottom of wall hit imparts spin)
-    + 'if(b.x-b.w/2<WALL_PAD){b.x=WALL_PAD+b.w/2;'
-    +   'if(b.vx<0)b.vx=-b.vx*RES;b.vRot+=b.vy*0.001;}'
-    + 'else if(b.x+b.w/2>cw-WALL_PAD){b.x=cw-WALL_PAD-b.w/2;'
-    +   'if(b.vx>0)b.vx=-b.vx*RES;b.vRot-=b.vy*0.001;}'
-    + '}'
-    // ─── INTER-BODY COLLISION — multi-pass solver ─────────────────────────
-    // 3 iterations per frame. Single-pass leaves residual overlaps when
-    // bodies are wedged into a dense pile (the visible "glitching/
-    // overlapping" the user reported). Each iteration resolves any
-    // remaining penetration. Impulse-exchange (the "click") happens only
-    // on iteration 0 — later passes are pure positional cleanup.
-    //
-    // After every separation we IMMEDIATELY re-clamp to floor so the
-    // mass-proportional push can\'t shove a body below floorY for a
-    // frame (was the source of the "cut off at the bottom" bug).
-    // Pad collision AABB by 4 px so detection triggers BEFORE visual
-    // letterforms touch — gives a thin "Tetris cell gap" between
-    // adjacent words and prevents the deck-of-cards layered look.
-    + 'const PAD=4;'
-    + 'for(let pass=0;pass<3;pass++){'
-    + 'for(let i=0;i<bodies.length;i++){const a=bodies[i];if(!a.alive)continue;'
-    + 'for(let j=i+1;j<bodies.length;j++){const c=bodies[j];if(!c.alive)continue;'
-    + 'const dx=c.x-a.x,dy=c.y-a.y;'
-    + 'const halfW=(a.w+c.w)/2+PAD,halfH=(a.h+c.h)/2+PAD;'
-    + 'if(Math.abs(dx)>=halfW||Math.abs(dy)>=halfH)continue;'
-    + 'const ox=halfW-Math.abs(dx),oy=halfH-Math.abs(dy);'
-    + 'let nx,ny,overlap;'
-    + 'if(ox<oy){nx=dx<0?-1:1;ny=0;overlap=ox;}'
-    + 'else{nx=0;ny=dy<0?-1:1;overlap=oy;}'
-    + 'const mt=a.mass+c.mass,sa=c.mass/mt,sc=a.mass/mt;'
-    + 'a.x-=nx*overlap*sa;a.y-=ny*overlap*sa;'
-    + 'c.x+=nx*overlap*sc;c.y+=ny*overlap*sc;'
-    // Re-clamp BOTH bodies to floor immediately
-    + 'if(a.y+a.h/2>floorY){a.y=floorY-a.h/2;if(a.vy>0)a.vy=0;}'
-    + 'if(c.y+c.h/2>floorY){c.y=floorY-c.h/2;if(c.vy>0)c.vy=0;}'
-    // Re-clamp to walls too — same separation can push past a wall
-    + 'if(a.x-a.w/2<WALL_PAD)a.x=WALL_PAD+a.w/2;'
-    + 'else if(a.x+a.w/2>cw-WALL_PAD)a.x=cw-WALL_PAD-a.w/2;'
-    + 'if(c.x-c.w/2<WALL_PAD)c.x=WALL_PAD+c.w/2;'
-    + 'else if(c.x+c.w/2>cw-WALL_PAD)c.x=cw-WALL_PAD-c.w/2;'
-    // Impulse exchange + torque only on pass 0
-    + 'if(pass===0){'
-    + 'const rvx=c.vx-a.vx,rvy=c.vy-a.vy,vn=rvx*nx+rvy*ny;'
-    + 'if(vn<0){'
-    + 'const J=-(1+RES)*vn/(1/a.mass+1/c.mass);'
-    + 'const Jx=J*nx,Jy=J*ny;'
-    + 'a.vx-=Jx/a.mass;a.vy-=Jy/a.mass;'
-    + 'c.vx+=Jx/c.mass;c.vy+=Jy/c.mass;'
-    // Inter-word shatter cascade: if two intact (text.length>1) word bodies
-    // collide with relative velocity above SHATTER_RVN, both shatter. This
-    // is what makes the pile feel alive — words don't just stack as rigid
-    // rectangles, they explode into letters on impact like a wall of marbles
-    // hitting each other.
-    + 'if(-vn>SHATTER_RVN&&bodies.length<MAX_BODIES-12){'
-    +   'if(!a.shattered&&a.text.length>1){shatterWord(a,bodies,-vn);}'
-    +   'if(!c.shattered&&c.text.length>1){shatterWord(c,bodies,-vn);}'
-    + '}'
-    // Off-center torque ONLY if neither body is already resting.
-    // Otherwise a fresh letter dropping on a settled pile would spin
-    // the settled letters back up — root cause of "rotating after
-    // they\'ve already fallen."
-    + 'if(!a.resting&&!c.resting){'
-    +   'const tA=(nx===0?dx:dy)*0.0008;'
-    +   'a.vRot-=tA*J/a.I;c.vRot+=tA*J/c.I;'
-    + '}'
-    // No rot snap on landing — per-character bodies are square enough
-    // that the AABB-vs-visual mismatch is small. Pile keeps organic
-    // angles (Pica-style).
-    + 'if(ny>0){a.resting=true;a.onFloor=true;}'
-    + 'if(ny<0){c.resting=true;c.onFloor=true;}'
-    + '}}}}}'
-    // Render
-    + 'for(const b of bodies){if(!b.alive)continue;'
-    + 'ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.rot);'
-    + 'ctx.fillStyle=b.color;'
-    + 'ctx.font=b.italic+b.weight+" "+b.fontSize+"px "+b.family;'
-    + 'ctx.textAlign="center";ctx.textBaseline="middle";'
-    + 'ctx.fillText(b.text,0,0);ctx.restore();}'
-    + 'requestAnimationFrame(frame);}'
-    + 'requestAnimationFrame(frame);'
+    + 'requestAnimationFrame(render);'
     + '})();</script>'
     + '</body></html>';
 
