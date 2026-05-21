@@ -11,7 +11,7 @@ export function useMetrics({ addToast }) {
   const [refreshing, setRefreshing] = useState(false);
   const [provisioningIds, setProvisioningIds] = useState(new Set());
   const [liveStatuses, setLiveStatuses] = useState({}); // accountId → display status (cached/cheap)
-  const [actionSessionTruth, setActionSessionTruth] = useState({}); // accountId → action status (live probe)
+  const [actionSessionTruth, setActionSessionTruth] = useState({}); // accountId → action status (live probe, on demand)
   const [cooldownMap, setCooldownMap] = useState({});   // { [hash]: expiresAtMs }
   const warnedExpiryRef = useRef(false);
   const didInitialLoadRef = useRef(false);
@@ -97,55 +97,6 @@ export function useMetrics({ addToast }) {
     probeAll();
     return () => { cancelled = true; };
   }, [data?.accounts, data?.displaySessionStatuses, data?.liveStatuses]);
-
-  useEffect(() => {
-    const accounts = data?.accounts;
-    if (!accounts?.length) return;
-
-    const candidates = accounts.filter((acct) => acct.hasCredentials);
-
-    if (candidates.length === 0) {
-      setActionSessionTruth({});
-      return;
-    }
-
-    let cancelled = false;
-
-    async function probeProvisionTruth() {
-      const CONCURRENCY = 3;
-      let active = 0;
-      let idx = 0;
-      const results = {};
-
-      await new Promise((resolve) => {
-        function next() {
-          while (active < CONCURRENCY && idx < candidates.length) {
-            const acct = candidates[idx++];
-            active++;
-            api.checkSessionLive(acct.id)
-              .then((res) => {
-                if (!cancelled) results[acct.id] = res?.data?.status ?? 'unknown';
-              })
-              .catch(() => {
-                if (!cancelled) results[acct.id] = 'error';
-              })
-              .finally(() => {
-                active--;
-                if (idx < candidates.length) next();
-                else if (active === 0) resolve();
-              });
-          }
-          if (idx >= candidates.length && active === 0) resolve();
-        }
-        next();
-      });
-
-      if (!cancelled) setActionSessionTruth(results);
-    }
-
-    probeProvisionTruth();
-    return () => { cancelled = true; };
-  }, [data?.accounts]);
 
   // Session expiry warning
   useEffect(() => {

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { logger } from './logger.js';
 
 const TASK_HISTORY_LIMIT = 25;
-const TASK_SWEEP_INTERVAL_MS = 5 * 1000;
+const TASK_SWEEP_INTERVAL_MS = 30 * 1000;
 const SHUTDOWN_TIMEOUT_MS = 5 * 1000;
 const DEFAULT_GENERATOR_TTL_MS = 2 * 60 * 1000;
 const DEFAULT_BATCH_TTL_MS = 30 * 60 * 1000;

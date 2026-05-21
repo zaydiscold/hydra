@@ -299,8 +299,6 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         fetchSnapshot();
         // Also fetch stored management keys (new)
         fetchManagementKeys();
-        // Live Clerk probe — overrides stale heuristic
-        probeSession();
       })();
       initialFetchDone.current = true;
     }

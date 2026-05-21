@@ -64,14 +64,15 @@ class DashboardController extends BaseController {
         (await store.getAccounts(req.user.id)).map((a) => [a.id, a]),
       );
 
-      // Refresh expired/expiring sessions in parallel (no stagger)
+      // Refresh expiring sessions in the background path only when the stored
+      // expiry says they are close to death. Unknown/expired sessions are
+      // handled by explicit user actions; probing them on every dashboard open
+      // creates noisy Clerk/network fan-out while the app is otherwise idle.
       let refreshedSessions = false;
       await Promise.all(
         accounts.map(async (account) => {
           const meta = metaById.get(account.id);
-          // 'unknown' = JWT stale but __client may be alive — try refresh proactively.
-          // 'expiring' = JWT about to die — refresh before it does.
-          const needsRefresh = meta?.sessionStatus === 'expiring' || meta?.sessionStatus === 'expired' || meta?.sessionStatus === 'unknown';
+          const needsRefresh = meta?.sessionStatus === 'expiring';
           if (!needsRefresh) return;
           
           // Exploit #14: Cookie stacking — try all stacked cookies newest-first

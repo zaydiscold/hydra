@@ -466,7 +466,9 @@ test('clipboard actions await write failures instead of failing silently', () =>
   assert.match(devBackendHint, /Copy failed/);
   assert.match(devBackendHint, /Clipboard copy failed/);
   assert.match(vault, /session status probe\(s\) failed/);
-  assert.match(vault, /provisioning readiness check\(s\) failed/);
+  assert.match(vault, /\[VAULT\] Live session check before provisioning failed:/);
+  assert.match(vault, /Live session check required before provisioning/);
+  assert.doesNotMatch(vault, /provisioning readiness check\(s\) failed/);
   assert.match(accountDetail, /\[ACCOUNT_DETAIL\] Live session probe failed for/);
   assert.match(accountDetail, /Live session check failed\. Showing cached session state\./);
   assert.match(metrics, /\[METRICS\] Pool sync status unavailable:/);

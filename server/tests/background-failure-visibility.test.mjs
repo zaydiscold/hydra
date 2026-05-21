@@ -139,6 +139,31 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.match(refresher, /_intervalHandle\.unref\?\.\(\)/);
   assert.match(supervisor, /this\.timer\.unref\?\.\(\)/);
   assert.match(retention, /timer\.unref\?\.\(\)/);
+  assert.match(retention, /startupTimer\.unref\?\.\(\)/);
+});
+
+test('idle desktop startup avoids expensive live session probe fan-out', () => {
+  const refresher = readRepoFile('server/services/session-refresher.js');
+  const retention = readRepoFile('server/services/request-log-retention.js');
+  const supervisor = readRepoFile('server/services/task-supervisor.js');
+  const dashboard = readRepoFile('server/controllers/DashboardController.js');
+  const metrics = readRepoFile('src/hooks/useMetrics.js');
+  const vault = readRepoFile('src/pages/Vault.jsx');
+  const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
+
+  assert.match(refresher, /HYDRA_SESSION_REFRESH_STARTUP_DELAY_MS/);
+  assert.match(refresher, /5 \* 60 \* 1000/);
+  assert.match(refresher, /HYDRA_SESSION_LIFETIME_PROBE === '1'/);
+  assert.match(refresher, /SESSION_PROBE_ENABLED && Date\.now\(\) - _lastSessionProbeAt >= SESSION_PROBE_INTERVAL_MS/);
+  assert.match(retention, /HYDRA_REQUEST_LOG_RETENTION_STARTUP_DELAY_MS/);
+  assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*prunePromise = pruneRequestLogs\(\);[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
+  assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\n\s*prunePromise = pruneRequestLogs\(\);/);
+  assert.match(supervisor, /const TASK_SWEEP_INTERVAL_MS = 30 \* 1000/);
+  assert.match(dashboard, /const needsRefresh = meta\?\.sessionStatus === 'expiring'/);
+  assert.doesNotMatch(dashboard, /meta\?\.sessionStatus === 'expired' \|\| meta\?\.sessionStatus === 'unknown'/);
+  assert.doesNotMatch(metrics, /function probeProvisionTruth|async function probeProvisionTruth/);
+  assert.doesNotMatch(vault, /Provision readiness probe failed|probeProvisionTruth/);
+  assert.doesNotMatch(accountDetail, /probeSession\(\);\s*\}\)\(\);/);
 });
 
 test('file logging is rotated for unattended API-router runs', () => {

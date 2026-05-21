@@ -1,7 +1,7 @@
 /**
  * session-refresher.js — P13
  * Proactively refreshes Clerk sessions before they expire.
- * Runs 10s after startup then every 6 hours.
+ * Runs after a quiet startup delay, then every 6 hours.
  * Silently skips OTP-only accounts (no clientCookie = can't refresh).
  *
  * Exploit #14: Cookie stacking — iterates clientCookies newest-first,
@@ -16,9 +16,13 @@ import { decrypt, encryptConfig } from './storage-codec.js';
 
 const REFRESH_WINDOW_MS = 24 * 60 * 60 * 1000; // probe within 24h of expiry
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // run every 6h
+const STARTUP_DELAY_MS = Number(process.env.HYDRA_SESSION_REFRESH_STARTUP_DELAY_MS || 5 * 60 * 1000);
+const SESSION_PROBE_ENABLED = process.env.HYDRA_SESSION_LIFETIME_PROBE === '1';
+const SESSION_PROBE_INTERVAL_MS = Number(process.env.HYDRA_SESSION_LIFETIME_PROBE_INTERVAL_MS || 24 * 60 * 60 * 1000);
 let _sweepRunning = false;
 /** @type {Promise<void>|null} — tracks the current sweep so stop() can await it. */
 let _sweepPromise = null;
+let _lastSessionProbeAt = 0;
 
 async function getConfigForAccount(account) {
   try {
@@ -149,12 +153,14 @@ async function _sweepImpl() {
   }
 
   // ── Session lifetime probe pass ──────────────────────────────────────────
-  // Runs after the refresh sweep. For every account that has logged in at
-  // least once (lastLoginAt set), pings Clerk and logs elapsed time so we
-  // can empirically measure actual cookie lifetime. No extra files needed —
-  // just watch the server log for [SESSION_PROBE] lines.
-  _runSessionProbe().catch((err) =>
-    logger.warn(`[SESSION_PROBE] Probe pass failed: ${err.message}`));
+  // This is useful instrumentation, but it performs live Clerk refresh probes
+  // for every logged-in account. Keep it opt-in so an idle desktop app does not
+  // heat the machine just to collect observational lifetime data.
+  if (SESSION_PROBE_ENABLED && Date.now() - _lastSessionProbeAt >= SESSION_PROBE_INTERVAL_MS) {
+    _lastSessionProbeAt = Date.now();
+    _runSessionProbe().catch((err) =>
+      logger.warn(`[SESSION_PROBE] Probe pass failed: ${err.message}`));
+  }
 }
 
 /** Decode a JWT payload without verifying — only used to read stable Clerk sid claim. */
@@ -282,7 +288,7 @@ export function startSessionRefresher() {
   _startupTimeoutHandle = setTimeout(() => {
     _startupTimeoutHandle = null;
     sweepAndRefresh();
-  }, 10000);
+  }, STARTUP_DELAY_MS);
   _intervalHandle = setInterval(() => sweepAndRefresh(), INTERVAL_MS);
   _startupTimeoutHandle.unref?.();
   _intervalHandle.unref?.();

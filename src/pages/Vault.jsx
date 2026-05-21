@@ -116,44 +116,7 @@ export default function Vault({ addToast }) {
     }
   }, [addToast, probeStatuses]);
 
-  const probeProvisionTruth = useCallback(async (accts) => {
-    const candidates = (accts || []).filter(
-      (acct) => !acct.hasManagementKey && acct.hasCredentials
-    );
-
-    if (candidates.length === 0) {
-      setActionSessionTruth({});
-      return;
-    }
-
-    const results = {};
-    let failed = 0;
-    const queue = [...candidates];
-    const CONCURRENCY = 2;
-    const workers = Array.from({ length: CONCURRENCY }, async () => {
-      while (queue.length) {
-        const acct = queue.shift();
-        try {
-          const res = await api.checkSessionLive(acct.id);
-          results[acct.id] = res?.data?.status ?? 'unknown';
-        } catch (err) {
-          failed += 1;
-          console.warn('[VAULT] Provision readiness probe failed:', acct.id, err.message);
-          results[acct.id] = 'unknown';
-        }
-      }
-    });
-
-    await Promise.all(workers);
-    setActionSessionTruth(results);
-    if (failed > 0) addToast?.(`${failed} provisioning readiness check(s) failed; sign-in may be required.`, 'warning');
-  }, [addToast]);
-
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
-
-  useEffect(() => {
-    probeProvisionTruth(accounts);
-  }, [accounts, probeProvisionTruth]);
 
   // Auto-refresh every 10 minutes while page is visible
   useEffect(() => {
