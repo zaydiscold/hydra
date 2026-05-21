@@ -1,9 +1,9 @@
 import React from 'react';
-import { interpolate, useCurrentFrame, useVideoConfig, AbsoluteFill } from 'remotion';
+import { interpolate, random, useCurrentFrame, AbsoluteFill } from 'remotion';
 
 export const HUD: React.FC = () => {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
+  const flicker = random(`hud-flicker-${Math.floor(frame / 3)}`) > 0.95 ? 0.2 : 1;
 
   const opacity = interpolate(
     frame,
@@ -74,7 +74,7 @@ export const HUD: React.FC = () => {
         fontSize: 24,
         letterSpacing: 8,
         textShadow: '0 0 10px #ff00ff',
-        opacity: Math.random() > 0.95 ? 0.2 : 1, // Rapid flicker
+        opacity: flicker,
       }}>
         HYDRA // FLEET_COMMAND_ESTABLISHED
       </div>

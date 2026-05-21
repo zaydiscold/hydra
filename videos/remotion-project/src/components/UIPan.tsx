@@ -1,5 +1,5 @@
 import React from 'react';
-import { interpolate, useCurrentFrame, useVideoConfig, staticFile, AbsoluteFill, spring } from 'remotion';
+import { interpolate, useCurrentFrame, useVideoConfig, staticFile, AbsoluteFill, spring, Img } from 'remotion';
 
 interface UIPanProps {
   image: string;
@@ -59,7 +59,7 @@ export const UIPan: React.FC<UIPanProps> = ({ image, duration }) => {
         overflow: 'hidden',
         boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
       }}>
-        <img
+        <Img
           src={staticFile(image)}
           style={{
             maxWidth: '1600px',

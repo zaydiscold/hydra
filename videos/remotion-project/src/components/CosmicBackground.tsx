@@ -1,9 +1,9 @@
 import React from 'react';
-import { interpolate, useCurrentFrame, useVideoConfig, staticFile, AbsoluteFill } from 'remotion';
+import { interpolate, useCurrentFrame, useVideoConfig, staticFile, AbsoluteFill, Img } from 'remotion';
 
 export const CosmicBackground: React.FC = () => {
   const frame = useCurrentFrame();
-  const { width, height, durationInFrames } = useVideoConfig();
+  const { durationInFrames } = useVideoConfig();
 
   // Slow zoom in effect (Ken Burns)
   const scale = interpolate(
@@ -23,7 +23,7 @@ export const CosmicBackground: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000', overflow: 'hidden' }}>
-      <img
+      <Img
         src={staticFile('background.png')}
         style={{
           width: '100%',
