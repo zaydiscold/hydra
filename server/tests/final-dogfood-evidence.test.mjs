@@ -18,11 +18,16 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
 
   assert.match(source, /schema: 'hydra\.final-dogfood-evidence\.v1'/);
   assert.match(source, /--write-evidence/);
+  assert.match(source, /--version=/);
+  assert.match(source, /--artifact-dir=/);
+  assert.match(source, /--app=/);
   assert.match(source, /--manual=/);
   assert.match(source, /manualVerified\.has\(item\.id\)/);
   assert.match(source, /evidence\.checks\.launchDiagnostics = \[/);
   assert.match(source, /detail: detail\.slice\(0, 4000\)/);
   assert.match(source, /not API keys, cookies, account emails, Clerk session IDs, screenshots, or local database contents/);
+  assert.match(source, /packagedAppPath/);
+  assert.match(source, /artifactDir/);
   assert.match(source, /evidence\.complete = Boolean\(evidence\.checks\.audit\?\.complete && allManualVerified\)/);
   assert.ok(source.includes('isAbsolute(evidencePath) ? evidencePath : join(ROOT, evidencePath)'));
   assert.ok(source.includes('writeFileSync(outputPath'));
@@ -31,6 +36,9 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   assert.doesNotMatch(source, /Cookies-journal|local-secrets|jwt-secret/);
 
   assert.match(docs, /DOGFOOD_EVIDENCE\.json/);
+  assert.match(docs, /--version=<semver>/);
+  assert.match(docs, /--artifact-dir=<dir>/);
+  assert.match(docs, /--app=<path\/to\/Hydra\.app>/);
   assert.match(docs, /--launch-diagnostics/);
   assert.match(docs, /LaunchServices/);
   assert.match(docs, /--manual=packaged-gui-launch/);

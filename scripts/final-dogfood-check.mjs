@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -87,8 +87,8 @@ function runElectronRuntimeDiagnostic(timeoutMs = 10_000) {
   );
 }
 
-function artifact(path) {
-  const abs = join(ROOT, path);
+function artifact(path, baseDir = ROOT) {
+  const abs = join(baseDir, path);
   if (!existsSync(abs)) return { path, ok: false, detail: 'missing' };
   const mb = Math.round(statSync(abs).size / 1024 / 1024);
   return { path, ok: true, detail: `${mb} MB` };
@@ -111,19 +111,32 @@ const evidencePath = writeEvidenceArg
   : flags.has('--write-evidence')
     ? 'docs/DOGFOOD_EVIDENCE.json'
     : null;
-const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+const artifactDirArg = rawArgs.find((arg) => arg.startsWith('--artifact-dir='));
+const appPathArg = rawArgs.find((arg) => arg.startsWith('--app='));
+const versionArg = rawArgs.find((arg) => arg.startsWith('--version='));
+const artifactDir = artifactDirArg
+  ? resolve(artifactDirArg.slice('--artifact-dir='.length))
+  : join(ROOT, 'release');
+const packagedAppPath = appPathArg
+  ? resolve(appPathArg.slice('--app='.length))
+  : join(ROOT, 'release/mac-arm64/Hydra.app');
+const pkg = versionArg
+  ? versionArg.slice('--version='.length)
+  : JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
 
 console.log('Hydra final dogfood preflight');
 console.log(`version=${pkg}`);
+console.log(`artifactDir=${artifactDir}`);
+console.log(`packagedApp=${packagedAppPath}`);
 console.log('');
 
 const artifacts = [
-  artifact(`release/Hydra-${pkg}-mac-arm64.zip`),
-  artifact(`release/Hydra-${pkg}-mac-arm64.zip.blockmap`),
-  artifact(`release/Hydra-${pkg}-mac-x64.zip`),
-  artifact(`release/Hydra-${pkg}-mac-x64.zip.blockmap`),
-  artifact(`release/Hydra-${pkg}-win-x64.exe`),
-  artifact(`release/Hydra-${pkg}-win-x64.exe.blockmap`),
+  artifact(`Hydra-${pkg}-mac-arm64.zip`, artifactDir),
+  artifact(`Hydra-${pkg}-mac-arm64.zip.blockmap`, artifactDir),
+  artifact(`Hydra-${pkg}-mac-x64.zip`, artifactDir),
+  artifact(`Hydra-${pkg}-mac-x64.zip.blockmap`, artifactDir),
+  artifact(`Hydra-${pkg}-win-x64.exe`, artifactDir),
+  artifact(`Hydra-${pkg}-win-x64.exe.blockmap`, artifactDir),
 ];
 for (const item of artifacts) printStatus(item.ok, item.path, item.detail);
 
@@ -134,6 +147,8 @@ const evidence = {
   root: ROOT,
   checks: {
     artifacts,
+    artifactDir,
+    packagedAppPath,
   },
   manual: manualChecks.map((item) => ({
     ...item,
@@ -170,9 +185,9 @@ if (flags.has('--smoke')) {
 
 if (flags.has('--open-app')) {
   console.log('');
-  const ok = runPassthrough('npm', ['run', 'electron:open:mac-arm64']);
-  evidence.checks.openApp = { ok, method: 'npm run electron:open:mac-arm64' };
-  printStatus(ok, 'Launch packaged macOS app through LaunchServices');
+  const ok = runPassthrough('node', ['scripts/open-packaged-app.mjs', packagedAppPath]);
+  evidence.checks.openApp = { ok, method: 'node scripts/open-packaged-app.mjs', app: packagedAppPath };
+  printStatus(ok, 'Launch packaged macOS app through LaunchServices', packagedAppPath);
 }
 
 if (flags.has('--launch-diagnostics')) {
@@ -182,8 +197,8 @@ if (flags.has('--launch-diagnostics')) {
     runElectronRuntimeDiagnostic(),
     runLaunchDiagnostic('Baseline LaunchServices handoff for Calculator.app', 'open', ['-n', '/System/Applications/Calculator.app']),
     runLaunchDiagnostic('Baseline Finder AppleEvent handoff for Calculator.app', 'osascript', ['-e', 'tell application "Finder" to open POSIX file "/System/Applications/Calculator.app"']),
-    runLaunchDiagnostic('Hydra LaunchServices handoff', 'open', ['-n', join(ROOT, 'release/mac-arm64/Hydra.app')]),
-    runLaunchDiagnostic('Hydra Finder AppleEvent handoff', 'osascript', ['-e', `tell application "Finder" to open POSIX file "${join(ROOT, 'release/mac-arm64/Hydra.app')}"`]),
+    runLaunchDiagnostic('Hydra LaunchServices handoff', 'open', ['-n', packagedAppPath]),
+    runLaunchDiagnostic('Hydra Finder AppleEvent handoff', 'osascript', ['-e', `tell application "Finder" to open POSIX file "${packagedAppPath}"`]),
   ];
 }
 
