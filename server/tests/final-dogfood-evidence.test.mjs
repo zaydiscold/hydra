@@ -14,6 +14,7 @@ function readRepoFile(path) {
 test('final dogfood evidence capture is redacted and manually explicit', () => {
   const source = readRepoFile('scripts/final-dogfood-check.mjs');
   const docs = readRepoFile('docs/FINAL_DOGFOOD_EVIDENCE.md');
+  const runbook = readRepoFile('docs/PACKAGED_ELECTRON_DOGFOOD.md');
   const pkg = readRepoFile('package.json');
 
   assert.match(source, /schema: 'hydra\.final-dogfood-evidence\.v1'/);
@@ -44,5 +45,8 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   assert.match(docs, /--manual=packaged-gui-launch/);
   assert.match(docs, /Do not paste API keys/);
   assert.match(docs, /not release-complete/);
+  assert.match(runbook, /--version=1\.0\.10/);
+  assert.match(runbook, /--artifact-dir=\/path\/to\/downloaded\/v1\.0\.10-assets/);
+  assert.match(runbook, /--app=\/path\/to\/extracted\/Hydra\.app/);
   assert.match(pkg, /"dogfood:final": "node scripts\/final-dogfood-check\.mjs"/);
 });
