@@ -129,10 +129,20 @@ function assertMacCodeSigningContract(contentsDir) {
   if (process.platform !== 'darwin') return;
 
   const mainExecutable = join(contentsDir, 'MacOS', 'Hydra');
-  const entitlements = execFileSync('codesign', ['-d', '--entitlements', ':-', mainExecutable], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  let entitlements = '';
+  try {
+    entitlements = execFileSync('codesign', ['-d', '--entitlements', ':-', mainExecutable], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    const stderr = String(error.stderr || '');
+    if (stderr.includes('code object is not signed at all')) {
+      console.log('[electron-smoke] macOS package is unsigned in this runner; skipping signed-entitlements library-validation check');
+      return;
+    }
+    throw error;
+  }
 
   const hasSignedRuntimeEntitlements =
     entitlements.includes('com.apple.security.cs.allow-jit') ||
