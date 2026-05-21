@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-
 import './index.css';
 import * as api from './api';
 import { logger } from './lib/client-logger.js';
-import { isElectron, native as nativeBridge, tryNative } from './lib/native';
+import { isElectron, native as nativeBridge, tryNative, useNativeInfo } from './lib/native';
 import DevBackendHint from './components/DevBackendHint';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
@@ -532,6 +532,12 @@ function isMacUserAgent() {
   return typeof navigator !== 'undefined' && /\bMacintosh\b|\bMac OS X\b/.test(navigator.userAgent);
 }
 
+function AppVersionStamp() {
+  const { data } = useNativeInfo();
+  const version = data?.version || import.meta.env.VITE_APP_VERSION || 'dev';
+  return <div className="app-version-stamp" aria-label={`Hydra version ${version}`}>v{version}</div>;
+}
+
 function AppChrome() {
   if (!isElectron()) return null;
 
@@ -839,6 +845,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <AppChrome />
+        <AppVersionStamp />
         <div className={`center-container${rendererChrome ? ' center-container--with-chrome' : ''}`}>
           <HydraLoadFrame tone="error" status="SERVER OFFLINE" detail="You may now close this tab safely." />
         </div>
@@ -851,6 +858,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <AppChrome />
+        <AppVersionStamp />
         <div className={`center-container${rendererChrome ? ' center-container--with-chrome' : ''}`}>
           <HydraLoadFrame
             tone="warning"
@@ -867,6 +875,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <AppChrome />
+        <AppVersionStamp />
         <div className={`center-container${rendererChrome ? ' center-container--with-chrome' : ''}`}>
           <HydraLoadFrame tone="error" status="SERVER OFFLINE" detail={authError || 'Start the local Hydra server to continue.'} />
           <div style={{ marginTop: '1rem', color: 'var(--text-tertiary)', fontSize: '0.85rem', maxWidth: 520, textAlign: 'center', position: 'relative', zIndex: 2 }}>
@@ -883,6 +892,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AppChrome />
+      <AppVersionStamp />
       <GlobalLoadingBar />
       {/* Brutalist Space Background Assets (Now global) */}
       <div className="starfield" />
