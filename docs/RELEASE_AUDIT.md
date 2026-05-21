@@ -23,6 +23,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Screenshot and Remotion plan | Must capture from packaged Electron only, redact secrets, render Remotion still before final media. | Not Yet Verified |
 | Docker runtime smoke | GitHub Actions run 26196262336 `Runtime Smoke` ran `npm run docker:smoke -- --start` on Ubuntu, built the compose image, started the container, received a local health endpoint response, cleaned up compose resources, and the sibling `Build & Push` job passed. | Verified by CI runtime smoke |
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
+| Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 
 ## Current Verified Evidence
 
@@ -39,6 +40,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 - Fresh master audit command run on 2026-05-20 from `/private/tmp/hydra-master-audit-1779314773` returned `complete: false` because release artifacts, packaged GUI dogfood, live MVP dogfood, screenshot audit, Docker runtime, and previously missing docs were not all verified.
 - Targeted checks run on fresh master: `npm run test:cross-platform` passed, `npm run test:workflow-contract` passed, and `node bin/hydra.mjs audit --json` produced the blocker inventory above.
 
+- Final dogfood evidence capture hardening on 2026-05-20: `scripts/final-dogfood-check.mjs --write-evidence` writes a redacted JSON checklist, supports explicit `--manual=<id>` confirmations for packaged GUI/live/screenshot/Windows checks, handles absolute evidence paths correctly, and keeps `complete=false` unless both `hydra audit` and every manual item are complete.
 - Session probe log privacy hardening on 2026-05-20: local runtime log inspection found historical `[SESSION_PROBE]` entries containing account aliases and full Clerk `sid` values. The source now masks aliases and Clerk session IDs in active/expired/error/rotation probe logs, keeps account-id failure evidence for debugging, adds a background-failure visibility contract, and adds `session-probe-redaction` to `hydra audit`.
 
 ## Not Yet Verified

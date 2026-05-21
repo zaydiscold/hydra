@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const manualChecks = [
-  ['Packaged GUI launch', 'Open the packaged app with npm run electron:open:mac-arm64 or Finder and confirm Hydra appears as a running app.'],
-  ['Window controls', 'Verify traffic lights, close/minimize/zoom, titlebar drag, tray reopen, and quit behavior.'],
-  ['Splash/unlock/dashboard', 'Verify splash, vault unlock or first-run setup, and Dashboard landing with no blank window.'],
-  ['Navigation/dead buttons', 'Visit Dashboard, Vault, Pool, Traffic, Codes, Generator, Settings, Account Detail, and confirm visible actions give feedback.'],
-  ['Touch ID', 'On Touch ID hardware, enable, test, disable, and unlock with biometric gating.'],
-  ['Live account flows', 'Run at least one live OTP login, bulk OTP isolation pass, code redemption, and proxy/SSE request with real keys.'],
-  ['Screenshots', 'Only after functional dogfood, capture packaged Electron screenshots with secrets redacted.'],
-  ['Windows launch', 'Install and launch the current Windows NSIS artifact on a Windows host or runner.'],
+  { id: 'packaged-gui-launch', label: 'Packaged GUI launch', detail: 'Open the packaged app with npm run electron:open:mac-arm64 or Finder and confirm Hydra appears as a running app.' },
+  { id: 'window-controls', label: 'Window controls', detail: 'Verify traffic lights, close/minimize/zoom, titlebar drag, tray reopen, and quit behavior.' },
+  { id: 'splash-unlock-dashboard', label: 'Splash/unlock/dashboard', detail: 'Verify splash, vault unlock or first-run setup, and Dashboard landing with no blank window.' },
+  { id: 'navigation-dead-buttons', label: 'Navigation/dead buttons', detail: 'Visit Dashboard, Vault, Pool, Traffic, Codes, Generator, Settings, Account Detail, and confirm visible actions give feedback.' },
+  { id: 'touch-id', label: 'Touch ID', detail: 'On Touch ID hardware, enable, test, disable, and unlock with biometric gating.' },
+  { id: 'live-account-flows', label: 'Live account flows', detail: 'Run at least one live OTP login, bulk OTP isolation pass, code redemption, and proxy/SSE request with real keys.' },
+  { id: 'screenshots-redacted', label: 'Screenshots', detail: 'Only after functional dogfood, capture packaged Electron screenshots with secrets redacted.' },
+  { id: 'windows-launch', label: 'Windows launch', detail: 'Install and launch the current Windows NSIS artifact on a Windows host or runner.' },
 ];
 
 function run(command, args, options = {}) {
@@ -91,7 +91,18 @@ function printStatus(ok, label, detail) {
   console.log(`[${mark}] ${label}${detail ? ` - ${detail}` : ''}`);
 }
 
-const flags = new Set(process.argv.slice(2));
+const rawArgs = process.argv.slice(2);
+const flags = new Set(rawArgs.filter((arg) => !arg.includes('=')));
+const manualVerified = new Set(rawArgs
+  .filter((arg) => arg.startsWith('--manual='))
+  .map((arg) => arg.slice('--manual='.length))
+  .filter(Boolean));
+const writeEvidenceArg = rawArgs.find((arg) => arg.startsWith('--write-evidence='));
+const evidencePath = writeEvidenceArg
+  ? writeEvidenceArg.slice('--write-evidence='.length)
+  : flags.has('--write-evidence')
+    ? 'docs/DOGFOOD_EVIDENCE.json'
+    : null;
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
 
 console.log('Hydra final dogfood preflight');
@@ -108,18 +119,39 @@ const artifacts = [
 ];
 for (const item of artifacts) printStatus(item.ok, item.path, item.detail);
 
+const evidence = {
+  schema: 'hydra.final-dogfood-evidence.v1',
+  generatedAt: new Date().toISOString(),
+  version: pkg,
+  root: ROOT,
+  checks: {
+    artifacts,
+  },
+  manual: manualChecks.map((item) => ({
+    ...item,
+    verified: manualVerified.has(item.id),
+  })),
+  notes: [
+    'This artifact is intentionally redacted. It records checklist status only, not API keys, cookies, account emails, Clerk session IDs, screenshots, or local database contents.',
+    'A checked manual item means the operator explicitly passed --manual=<id> after doing that packaged-app step.',
+  ],
+};
+
 console.log('');
 const audit = run('node', ['bin/hydra.mjs', 'audit', '--json']);
 if (audit.ok) {
   const report = JSON.parse(audit.stdout);
+  evidence.checks.audit = { ok: true, summary: report.summary, complete: report.complete };
   printStatus(report.summary.missing === 0 && report.summary.blockers === 0, 'hydra audit missing/blocker evidence', `missing=${report.summary.missing}, blockers=${report.summary.blockers}`);
   printStatus(report.summary.deferred === 0, 'hydra audit deferred manual/live evidence', `deferred=${report.summary.deferred}, complete=${report.complete}`);
 } else {
+  evidence.checks.audit = { ok: false, detail: audit.stderr || audit.stdout };
   printStatus(false, 'hydra audit', audit.stderr || audit.stdout);
 }
 
 const docker = run('docker', ['info', '--format', '{{json .ServerVersion}}']);
-printStatus(docker.ok && docker.stdout && docker.stdout !== '""', 'Docker daemon reachable', docker.ok ? docker.stdout : docker.stderr);
+evidence.checks.docker = { ok: docker.ok && docker.stdout && docker.stdout !== '""', detail: docker.ok ? docker.stdout : docker.stderr };
+printStatus(evidence.checks.docker.ok, 'Docker daemon reachable', evidence.checks.docker.detail);
 
 if (flags.has('--smoke')) {
   console.log('');
@@ -130,7 +162,9 @@ if (flags.has('--smoke')) {
 
 if (flags.has('--open-app')) {
   console.log('');
-  printStatus(runPassthrough('npm', ['run', 'electron:open:mac-arm64']), 'Launch packaged macOS app through LaunchServices');
+  const ok = runPassthrough('npm', ['run', 'electron:open:mac-arm64']);
+  evidence.checks.openApp = { ok, method: 'npm run electron:open:mac-arm64' };
+  printStatus(ok, 'Launch packaged macOS app through LaunchServices');
 }
 
 if (flags.has('--launch-diagnostics')) {
@@ -150,9 +184,20 @@ if (flags.has('--docker-smoke')) {
 
 console.log('');
 console.log('Manual acceptance checklist');
-for (const [label, detail] of manualChecks) {
-  console.log(`- [ ] ${label}: ${detail}`);
+for (const item of evidence.manual) {
+  console.log(`- [${item.verified ? 'x' : ' '}] ${item.id}: ${item.label}: ${item.detail}`);
 }
 
 console.log('');
+const allManualVerified = evidence.manual.every((item) => item.verified);
+evidence.complete = Boolean(evidence.checks.audit?.complete && allManualVerified);
+
+if (evidencePath) {
+  const outputPath = isAbsolute(evidencePath) ? evidencePath : join(ROOT, evidencePath);
+  mkdirSync(dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
+  console.log('');
+  console.log(`Wrote redacted dogfood evidence to ${evidencePath}`);
+}
+
 console.log('Completion rule: this preflight is not a release-complete signal while any audit item is deferred or any manual checkbox is unchecked.');

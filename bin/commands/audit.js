@@ -93,6 +93,9 @@ function buildAudit() {
   const goalDoc = safeRead('docs/CODEX_GOAL.md');
   const releaseAudit = safeRead('docs/RELEASE_AUDIT.md');
   const dogfoodDoc = safeRead('docs/PACKAGED_ELECTRON_DOGFOOD.md');
+  const finalDogfoodDoc = safeRead('docs/FINAL_DOGFOOD_EVIDENCE.md');
+  const finalDogfoodScript = safeRead('scripts/final-dogfood-check.mjs');
+  const finalDogfoodTest = safeRead('server/tests/final-dogfood-evidence.test.mjs');
   const dockerDoc = safeRead('docs/DOCKER.md');
   const readme = safeRead('README.md');
   const ciWorkflow = safeRead('.github/workflows/ci.yml');
@@ -194,7 +197,7 @@ function buildAudit() {
     check(
       'packaged-dogfood-runbook',
       'Packaged Electron dogfood runbook exists',
-      (dogfoodDoc.includes('Packaged Electron Dogfood')
+      ((dogfoodDoc.includes('Packaged Electron Dogfood')
         && dogfoodDoc.includes('npm run electron:open:mac-arm64')
         && dogfoodDoc.includes('Chrome')
         && dogfoodDoc.includes('`vite preview`')
@@ -205,8 +208,15 @@ function buildAudit() {
         || (readme.includes('## Screenshot Plan')
           && readme.includes('packaged Electron app')
           && readme.includes('not from a browser target')
-          && readme.includes('## Remotion Plan')),
-      'README.md defines Electron-only final dogfood screenshot requirements and Remotion media plan',
+          && readme.includes('## Remotion Plan')))
+        && finalDogfoodDoc.includes('DOGFOOD_EVIDENCE.json')
+        && finalDogfoodDoc.includes('--manual=packaged-gui-launch')
+        && finalDogfoodScript.includes('hydra.final-dogfood-evidence.v1')
+        && finalDogfoodScript.includes('--write-evidence')
+        && finalDogfoodScript.includes('--manual=')
+        && finalDogfoodScript.includes('not API keys, cookies, account emails, Clerk session IDs')
+        && finalDogfoodTest.includes('final dogfood evidence capture is redacted and manually explicit'),
+      'README/docs define Electron-only final dogfood screenshot requirements, Remotion plan, and redacted user-run evidence capture',
     ),
     check(
       'mac-arm-artifact',
