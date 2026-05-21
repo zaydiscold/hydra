@@ -125,6 +125,20 @@ function assertMacPlistContract(infoPlist) {
   }
 }
 
+function assertMacCodeSigningContract(contentsDir) {
+  if (process.platform !== 'darwin') return;
+
+  const mainExecutable = join(contentsDir, 'MacOS', 'Hydra');
+  const entitlements = execFileSync('codesign', ['-d', '--entitlements', ':-', mainExecutable], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (!entitlements.includes('com.apple.security.cs.disable-library-validation')) {
+    throw new Error('[electron-smoke] macOS hardened runtime package must disable library validation so Electron Framework loads under ad-hoc/dev signing');
+  }
+}
+
 function assertPackagedMacChromeContract(resourcesDir) {
   const windowsSourcePath = join(resourcesDir, 'app/electron/app/windows.js');
   assertExists(windowsSourcePath, 'packaged Electron window source');
@@ -205,6 +219,7 @@ function assertPackagedShell(resourcesDir) {
 
     assertExists(infoPlist, 'macOS Info.plist');
     assertMacPlistContract(infoPlist);
+    assertMacCodeSigningContract(contentsDir);
     assertPackagedMacChromeContract(resourcesDir);
     assertExists(pkgInfo, 'macOS PkgInfo');
     assertExecutable(mainExecutable, 'macOS main executable');
