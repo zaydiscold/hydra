@@ -41,7 +41,7 @@ It is designed for operators who want a native control plane without shipping ac
 - [Local API Router](#local-api-router)
 - [Operator Hardening](#operator-hardening)
 - [Development And Release Gates](#development-and-release-gates)
-- [Screenshots](#screenshots)
+- [Gallery](#gallery)
 
 ## Highlights
 
@@ -181,9 +181,9 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
   <img alt="Hydra star history" src="https://api.star-history.com/svg?repos=zaydiscold/hydra&type=Date" />
 </a>
 
-## Screenshots And Remotion
+## Gallery
 
-Captured from the packaged Electron app. Account aliases, emails, UUIDs, session IDs, and API keys are deterministically redacted before capture so the screenshots reflect the real UI without exposing operator data.
+Captured from the packaged Electron app. Account aliases, emails, UUIDs, session IDs, and API keys are deterministically redacted before capture so the gallery reflects the real UI without exposing operator data.
 
 <table>
   <tr>
@@ -215,5 +215,3 @@ Captured from the packaged Electron app. Account aliases, emails, UUIDs, session
     </td>
   </tr>
 </table>
-
-The Remotion showreel lives under `videos/` and uses these packaged Electron screenshots as source assets. Refresh screenshots from the packaged app first, render a still frame to validate framing, then render the final MP4/GIF only when the artifact size is GitHub-friendly.
