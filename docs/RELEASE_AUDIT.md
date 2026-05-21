@@ -88,3 +88,4 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 - Packaged GUI dogfood needs app-control or user-run evidence.
 - Live MVP flows need credentials/accounts/codes.
 - Screenshot/Remotion evidence must wait until packaged Electron dogfood and redaction checks are ready.
+- GitHub issue #22 tracks the remaining v1.0.10 manual dogfood evidence checklist.
