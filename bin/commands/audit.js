@@ -330,7 +330,8 @@ function buildAudit() {
         && readme.includes('## Desktop App')
         && readme.includes('## Operator Hardening')
         && readme.includes('## Development And Release Gates')
-        && readme.includes('## Screenshots And Remotion')
+        && readme.includes('## Gallery')
+        && readme.includes('Captured from the packaged Electron app')
         && readme.includes('Account proxy pool')
         && readme.includes('ip:port:user:pass')
         && readme.includes('The README avoids embedding real account data, full API keys, or live secrets'),
