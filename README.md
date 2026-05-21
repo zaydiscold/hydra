@@ -27,6 +27,10 @@ Hydra is a packaged Electron app for running an OpenRouter account fleet from on
 
 It is designed for operators who want a native control plane without shipping account secrets to a hosted service.
 
+<p align="center">
+  <img src="videos/hydra_showreel.gif" alt="Hydra showreel — Vault, Command, One router, Every request, Terminal-native" width="720" />
+</p>
+
 ## Navigation
 
 - [Highlights](#highlights)
@@ -177,13 +181,43 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
   <img alt="Hydra star history" src="https://api.star-history.com/svg?repos=zaydiscold/hydra&type=Date" />
 </a>
 
+## Screenshots
+
+Captured from the packaged Electron app via Playwright at the live `127.0.0.1:<port>` renderer. Account aliases, emails, UUIDs, session IDs, and API keys are redacted with deterministic placeholders before capture so the screenshots reflect the real UI without exposing operator data.
+
+<p align="center">
+  <img src="videos/assets/vault.png" alt="Hydra Vault unlock screen" width="780" />
+</p>
+
+<p align="center"><em>Vault — local-first unlock. Nuclear reset is a hold-to-confirm.</em></p>
+
+<p align="center">
+  <img src="videos/assets/dashboard.png" alt="Hydra Command center dashboard" width="780" />
+</p>
+
+<p align="center"><em>Command — fleet balance, account health pills, and burn rate at a glance.</em></p>
+
+<p align="center">
+  <img src="videos/assets/pool.png" alt="Hydra Pool Manager" width="780" />
+</p>
+
+<p align="center"><em>Pool Manager — unified routing pool across accounts and pooled keys.</em></p>
+
+<p align="center">
+  <img src="videos/assets/traffic.png" alt="Hydra Traffic Console" width="780" />
+</p>
+
+<p align="center"><em>Traffic Console — live proxy observability, RPM, 24h volume, error rates.</em></p>
+
 ## Screenshots And Remotion
 
-Release media should be refreshed from the packaged Electron app. Browser-target screenshots are not release-quality evidence for the desktop UI.
+Release media is captured from the packaged Electron app via Playwright. The showreel GIF embedded near the top of this README is rendered from the Remotion composition under `videos/remotion-project/`. Source MP4 (1920×1080, 19s) lives at `videos/hydra_showreel.mp4`.
 
-## Screenshot Plan
+## Screenshot Plan — **PENDING**
 
-The old tracked dashboard screenshots are intentionally not embedded here because they predate the newer streamlined dashboard/pie-chart UI. The release-quality capture pass should refresh media from the packaged Electron app, not from a browser target, then embed the new assets near the top of this README:
+> Plan kept for reference. Current state: Vault, Dashboard (Command), Pool, and Traffic captured and embedded above. CLI capture deferred — the Remotion showreel includes a stylised CLI demo card in lieu of a terminal screenshot.
+
+The release-quality capture pass refreshes media from the packaged Electron app, not from a browser target, then embeds the new assets near the top of this README:
 
 1. **Vault setup**: first-run password/vault screen with no real secrets visible.
 2. **Dashboard**: account fleet overview with balances, health, and status cards redacted or seeded.
@@ -191,7 +225,9 @@ The old tracked dashboard screenshots are intentionally not embedded here becaus
 4. **Traffic**: request-log/traffic panel showing bounded router activity and latency/status rows.
 5. **CLI**: terminal capture for `hydra status`, `hydra doctor --json`, and `hydra proxy status`.
 
-## Remotion Plan
+## Remotion Plan — **PENDING**
+
+> Plan kept for reference. Current state: 7-frame Apple-style composition shipped (intro title → Vault → Command → One router → Every request → Terminal-native → outro title). 570 frames @ 30fps = 19s. MP4 rendered to `videos/hydra_showreel.mp4`; optimized GIF at `videos/hydra_showreel.gif` (640×360, 12fps, 9.5MB) embedded near the top of this README.
 
 The repo already has a Remotion showreel path under `videos/`. Keep it short and product-facing:
 
