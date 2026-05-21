@@ -82,6 +82,15 @@ test('release workflow uploads desktop artifacts for every release target', () =
   assert.match(workflow, /name:\s*Linux x64 AppImage[\s\S]*artifact:\s*release\/Hydra-\*\.AppImage/, 'must upload Linux AppImage');
 });
 
+test('auto-version dispatches the release workflow after creating tags', () => {
+  const workflow = read('.github/workflows/auto-version.yml');
+
+  assert.match(workflow, /permissions:\s*\n\s*contents:\s*write\s*\n\s*actions:\s*write/, 'auto-version must be allowed to dispatch workflows');
+  assert.match(workflow, /GH_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/, 'auto-version must authenticate gh workflow dispatch');
+  assert.match(workflow, /git push origin "\$NEW"[\s\S]*gh workflow run release\.yml --ref "\$NEW"/, 'auto-version must dispatch release.yml on the tag ref after pushing the tag');
+  assert.match(workflow, /Tags pushed by the default[\s\S]*GITHUB_TOKEN[\s\S]*do not reliably trigger another workflow run/, 'auto-version must document why explicit dispatch exists');
+});
+
 test('mac updater metadata merge keeps both architectures', () => {
   const pkg = JSON.parse(read('package.json'));
   const script = read('scripts/merge-mac-update-yml.mjs');
