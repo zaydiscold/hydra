@@ -1,0 +1,89 @@
+name: Stale branch cleanup
+
+# Runs weekly. Deletes remote branches that have outlived their use:
+#
+#   A) Branches FULLY MERGED into master, no open PR, and last commit
+#      >2 days old. (The auto-delete-on-merge setting handles merged
+#      PRs immediately, but a PR can be merged via the web UI without
+#      the auto-delete firing in some edge cases — this is the safety
+#      net.)
+#
+#   B) Branches with NO OPEN PR, NOT merged, last commit >14 days old.
+#      These are abandoned experiments. PR #3's branch (closed but
+#      not merged, sat for >24h) was the trigger for adding this
+#      cleanup. 14 days is intentionally generous — humans get plenty
+#      of time to either revive or merge before this fires.
+#
+# Always protected (never deleted regardless of age/state):
+#   - master, main, develop
+#   - anything starting with `release/` (long-lived release branches)
+#   - any branch that currently has an OPEN PR
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'  # Mondays at 14:00 UTC (7am Pacific)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sweep stale branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          PROTECTED='^(master|main|develop|release/.*)$'
+          NOW_TS=$(date +%s)
+          DAYS_2=$((2 * 86400))
+          DAYS_14=$((14 * 86400))
+
+          # All branches except protected.
+          gh api "repos/$REPO/branches" --paginate --jq '.[].name' \
+            | grep -Ev "$PROTECTED" \
+            | while IFS= read -r branch; do
+                # Skip if there's an open PR targeting this branch.
+                open=$(gh pr list --state open --head "$branch" --json number --jq 'length')
+                if [ "$open" -gt 0 ]; then
+                  echo "SKIP  $branch (open PR)"
+                  continue
+                fi
+
+                # Last commit timestamp on this branch.
+                ts=$(gh api "repos/$REPO/branches/$branch" \
+                       --jq '.commit.commit.committer.date' 2>/dev/null || echo "")
+                if [ -z "$ts" ]; then
+                  echo "SKIP  $branch (no timestamp)"
+                  continue
+                fi
+                age=$(( NOW_TS - $(date -u -d "$ts" +%s 2>/dev/null || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$ts" +%s) ))
+
+                # Is it merged into master?
+                if git merge-base --is-ancestor "origin/$branch" "origin/master" 2>/dev/null; then
+                  state="merged"
+                  threshold=$DAYS_2
+                else
+                  state="unmerged"
+                  threshold=$DAYS_14
+                fi
+
+                if [ "$age" -gt "$threshold" ]; then
+                  echo "DELETE  $branch ($state, age $((age / 86400))d > threshold $((threshold / 86400))d)"
+                  gh api -X DELETE "repos/$REPO/git/refs/heads/$branch" \
+                    && echo "  ✓ deleted" \
+                    || echo "  ✗ delete failed"
+                else
+                  echo "KEEP  $branch ($state, age $((age / 86400))d, under threshold)"
+                fi
+              done
+          echo "Sweep complete."
