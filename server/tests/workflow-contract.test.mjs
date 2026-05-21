@@ -174,6 +174,7 @@ test('electron package smoke validates the packaged app shell without launching 
   assert.match(script, /function assertPackagedShell/, 'smoke must validate the platform shell');
   assert.match(script, /function assertMacPlistContract/, 'smoke must validate macOS LaunchServices plist keys');
   assert.match(script, /function assertMacCodeSigningContract/, 'smoke must validate macOS hardened-runtime signing requirements');
+  assert.match(script, /skipping signed-entitlements library-validation check/, 'smoke must allow unsigned PR bundles while still checking signed packages');
   assert.match(script, /com\.apple\.security\.cs\.disable-library-validation/, 'smoke must reject macOS packages that can dyld-fail loading Electron Framework under ad-hoc/dev signing');
   assert.match(entitlements, /com\.apple\.security\.cs\.disable-library-validation[\s\S]*<true\/>/, 'macOS entitlements must disable library validation for Electron Framework under hardened runtime');
   assert.match(script, /function assertPackagedMacChromeContract/, 'smoke must validate packaged macOS titlebar source');
