@@ -7,7 +7,7 @@ Run from the repo root after building the packaged app:
 ```bash
 npm run dogfood:final -- \
   --write-evidence=docs/DOGFOOD_EVIDENCE.json \
-  --version=1.0.10 \
+  --version=1.0.11 \
   --artifact-dir=/path/to/downloaded/release-assets \
   --app=/path/to/Hydra.app \
   --launch-diagnostics \
