@@ -49,6 +49,13 @@ test('Electron app chrome draws its own drag strip on macOS with traffic-light c
   assert.match(app, /function isMacUserAgent\(\)/);
   assert.match(appChrome, /app-chrome app-chrome--mac/);
   assert.match(appChrome, /className="app-chrome__name">Hydra/);
+  assert.match(app, /function AppVersionStamp\(\)/);
+  assert.match(app, /className="app-version-stamp"/);
+  assert.match(app, /import\.meta\.env\.VITE_APP_VERSION/);
+  assert.match(windowsJs, /class="splash-version">v' \+ versionSafe \+ '<\/div>/);
+  assert.match(css, /\.app-version-stamp\s*\{[\s\S]*?position:\s*fixed;/);
+  assert.match(css, /\.app-version-stamp\s*\{[\s\S]*?right:\s*10px;/);
+  assert.match(css, /\.app-version-stamp\s*\{[\s\S]*?bottom:\s*8px;/);
   assert.match(app, /const rendererChrome = electronMode;/);
   assert.doesNotMatch(appChrome, /\{title\}/);
   assert.doesNotMatch(app, /<AppChrome\s+title=/);

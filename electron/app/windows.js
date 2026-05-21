@@ -181,6 +181,7 @@ export function createSplashWindow() {
   // single-quoted string in the data URL (newlines, single quotes,
   // backslashes). Defensive even though `id -F` only returns one name.
   const greetingSafe = String(userGreetingName).replace(/[\\'"\n\r]/g, '').slice(0, 80);
+  const versionSafe = String(app.getVersion() || 'dev').replace(/[^0-9A-Za-z._+-]/g, '').slice(0, 32) || 'dev';
 
   // PICA-STYLE PHYSICS SPLASH (canvas + real gravity / collision / piling).
   //
@@ -406,6 +407,7 @@ export function createSplashWindow() {
     + '.update-strip{width:220px;height:2px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:9px;opacity:0;transform:translateY(-2px);transition:opacity 180ms ease,transform 180ms ease}'
     + '.update-strip.is-active{opacity:1;transform:translateY(0)}'
     + '.update-strip__fill{display:block;width:100%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#67e8f9,#a855f7,#ec4899);box-shadow:0 0 12px rgba(103,232,249,.55);transform-origin:left center;transform:scaleX(0);transition:transform 180ms ease}'
+    + '.splash-version{position:absolute;right:18px;bottom:14px;z-index:5;font-size:10px;font-weight:700;letter-spacing:.08em;color:rgba(235,225,255,.46);text-transform:uppercase;text-shadow:0 1px 12px rgba(0,0,0,.55);pointer-events:none;user-select:none}'
     + '@media(prefers-reduced-motion:reduce){canvas#field,.hex,.vines{display:none}.bar::after{animation:none;transform:scaleX(1)}.update-strip,.update-strip__fill{transition:none}}'
     + '</style></head><body>'
     + '<div class="outer">'
@@ -453,6 +455,7 @@ export function createSplashWindow() {
     + '<div class="bar"></div>'
     + '<div class="update-strip" id="update-strip"><span class="update-strip__fill" id="update-strip-fill"></span></div>'
     + '</div>'
+    + '<div class="splash-version">v' + versionSafe + '</div>'
     + '<div class="deco-bot">'
     +   '<div class="deco-bot__ticks">'
     +     '<span></span><span></span><span></span><span></span><span></span><span></span><span></span>'

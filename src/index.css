@@ -584,6 +584,22 @@ select:-webkit-autofill {
   height: calc(100vh - 38px);
 }
 
+.app-version-stamp {
+  position: fixed;
+  right: 10px;
+  bottom: 8px;
+  z-index: 9998;
+  color: rgba(235, 225, 255, 0.38);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
+}
+
 .center-container--with-chrome {
   top: 38px;
   height: calc(100vh - 38px);
