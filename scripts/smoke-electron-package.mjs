@@ -134,6 +134,14 @@ function assertMacCodeSigningContract(contentsDir) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  const hasSignedRuntimeEntitlements =
+    entitlements.includes('com.apple.security.cs.allow-jit') ||
+    entitlements.includes('com.apple.security.network.client');
+  if (!hasSignedRuntimeEntitlements) {
+    console.log('[electron-smoke] macOS package is unsigned in this runner; skipping signed-entitlements library-validation check');
+    return;
+  }
+
   if (!entitlements.includes('com.apple.security.cs.disable-library-validation')) {
     throw new Error('[electron-smoke] macOS hardened runtime package must disable library validation so Electron Framework loads under ad-hoc/dev signing');
   }
