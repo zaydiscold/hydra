@@ -181,57 +181,39 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
   <img alt="Hydra star history" src="https://api.star-history.com/svg?repos=zaydiscold/hydra&type=Date" />
 </a>
 
-## Screenshots
-
-Captured from the packaged Electron app via Playwright at the live `127.0.0.1:<port>` renderer. Account aliases, emails, UUIDs, session IDs, and API keys are redacted with deterministic placeholders before capture so the screenshots reflect the real UI without exposing operator data.
-
-<p align="center">
-  <img src="videos/assets/vault.png" alt="Hydra Vault unlock screen" width="780" />
-</p>
-
-<p align="center"><em>Vault — local-first unlock. Nuclear reset is a hold-to-confirm.</em></p>
-
-<p align="center">
-  <img src="videos/assets/dashboard.png" alt="Hydra Command center dashboard" width="780" />
-</p>
-
-<p align="center"><em>Command — fleet balance, account health pills, and burn rate at a glance.</em></p>
-
-<p align="center">
-  <img src="videos/assets/pool.png" alt="Hydra Pool Manager" width="780" />
-</p>
-
-<p align="center"><em>Pool Manager — unified routing pool across accounts and pooled keys.</em></p>
-
-<p align="center">
-  <img src="videos/assets/traffic.png" alt="Hydra Traffic Console" width="780" />
-</p>
-
-<p align="center"><em>Traffic Console — live proxy observability, RPM, 24h volume, error rates.</em></p>
-
 ## Screenshots And Remotion
 
-Release media is captured from the packaged Electron app via Playwright. The showreel GIF embedded near the top of this README is rendered from the Remotion composition under `videos/remotion-project/`. Source MP4 (1920×1080, 19s) lives at `videos/hydra_showreel.mp4`.
+Captured from the packaged Electron app. Account aliases, emails, UUIDs, session IDs, and API keys are deterministically redacted before capture so the screenshots reflect the real UI without exposing operator data.
 
-## Screenshot Plan — **PENDING**
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="videos/assets/vault.png"><img src="videos/assets/vault.png" alt="Hydra Vault unlock screen" /></a>
+      <br/>
+      <strong>Vault</strong><br/>
+      <sub>Local-first unlock. Nuclear reset is a hold-to-confirm.</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="videos/assets/dashboard.png"><img src="videos/assets/dashboard.png" alt="Hydra Command center dashboard" /></a>
+      <br/>
+      <strong>Command</strong><br/>
+      <sub>Fleet balance, account health pills, and burn rate at a glance.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="videos/assets/pool.png"><img src="videos/assets/pool.png" alt="Hydra Pool Manager" /></a>
+      <br/>
+      <strong>Pool Manager</strong><br/>
+      <sub>Unified routing pool across accounts and pooled keys.</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="videos/assets/traffic.png"><img src="videos/assets/traffic.png" alt="Hydra Traffic Console" /></a>
+      <br/>
+      <strong>Traffic Console</strong><br/>
+      <sub>Live proxy observability — RPM, 24h volume, error rates.</sub>
+    </td>
+  </tr>
+</table>
 
-> Plan kept for reference. Current state: Vault, Dashboard (Command), Pool, and Traffic captured and embedded above. CLI capture deferred — the Remotion showreel includes a stylised CLI demo card in lieu of a terminal screenshot.
-
-The release-quality capture pass refreshes media from the packaged Electron app, not from a browser target, then embeds the new assets near the top of this README:
-
-1. **Vault setup**: first-run password/vault screen with no real secrets visible.
-2. **Dashboard**: account fleet overview with balances, health, and status cards redacted or seeded.
-3. **Pool**: proxy key pool and router status view showing local base URL and pooled-key health.
-4. **Traffic**: request-log/traffic panel showing bounded router activity and latency/status rows.
-5. **CLI**: terminal capture for `hydra status`, `hydra doctor --json`, and `hydra proxy status`.
-
-## Remotion Plan — **PENDING**
-
-> Plan kept for reference. Current state: 7-frame Apple-style composition shipped (intro title → Vault → Command → One router → Every request → Terminal-native → outro title). 570 frames @ 30fps = 19s. MP4 rendered to `videos/hydra_showreel.mp4`; optimized GIF at `videos/hydra_showreel.gif` (640×360, 12fps, 9.5MB) embedded near the top of this README.
-
-The repo already has a Remotion showreel path under `videos/`. Keep it short and product-facing:
-
-1. Use the refreshed Electron screenshots as Remotion image assets.
-2. Create a 20-30 second composition: vault setup, dashboard, proxy pool, traffic, CLI automation, local API router.
-3. Render one still frame first with `npx remotion still <composition-id> --scale=0.25 --frame=30`.
-4. Render the final MP4/GIF preview and reference it from this README once the artifact size is GitHub-friendly.
+The Remotion showreel lives under `videos/` and uses these packaged Electron screenshots as source assets. Refresh screenshots from the packaged app first, render a still frame to validate framing, then render the final MP4/GIF only when the artifact size is GitHub-friendly.
