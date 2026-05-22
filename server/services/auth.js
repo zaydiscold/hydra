@@ -18,16 +18,6 @@ let restartRequired = false;
 // If a refactor/migration changes the User table or re-creates the DB from scratch,
 // the hash won't match "1111" and the login screen will show "Invalid credentials"
 // with no way in (Nuclear Reset wipes all data — avoid it).
-//
-// Recovery without wiping data:
-//   node -e "
-//     const {PrismaClient}=require('./node_modules/.prisma/client');
-//     const b=require('./node_modules/bcryptjs');
-//     const p=new PrismaClient();
-//     b.hash('1111',12).then(h=>p.user.updateMany({data:{passwordHash:h}})).then(r=>{console.log('reset ok',r);p.\$disconnect()});
-//   "
-//
-// See also: CLAUDE.md "Password Recovery" section.
 
 function buildNukeTransaction() {
   return [
@@ -123,8 +113,7 @@ export async function login(password) {
 
 export async function changePassword(userId, currentPassword, newPassword) {
   // NOTE: Changing the password here updates the bcrypt hash in data/hydra.db.
-  // The dev default "1111" will no longer work after this. If you lose the new
-  // password, use the recovery command in CLAUDE.md (or the comment block above).
+  // The dev default "1111" will no longer work after this.
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error('User not found');
 
