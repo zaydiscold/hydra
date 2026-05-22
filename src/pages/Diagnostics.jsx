@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import * as api from '../api';
 import AnimeText from '../components/AnimeText';
-import { InfoIcon, NetworkIcon, RefreshIcon, CopyIcon } from '../components/Icons';
+import { InfoIcon, RefreshIcon, CopyIcon } from '../components/Icons';
 import { isElectron, native, tryNative } from '../lib/native';
 
 function formatUptime(seconds) {
