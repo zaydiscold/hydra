@@ -705,7 +705,12 @@ export default function App() {
     }
 
     let cancelled = false;
+    let timer = null;
+    let inFlight = false;
+
     const refreshHealth = async () => {
+      if (document.hidden || inFlight) return;
+      inFlight = true;
       try {
         const res = await api.getSystemHealth();
         if (cancelled) return;
@@ -714,14 +719,25 @@ export default function App() {
       } catch (err) {
         logger.warn('Upstream health refresh failed:', err.message);
         if (!cancelled) setUpstreamHealth(null);
+      } finally {
+        inFlight = false;
       }
     };
 
-    refreshHealth();
-    const interval = setInterval(refreshHealth, 30_000);
+    const scheduleHealthRefresh = () => {
+      if (cancelled) return;
+      timer = setTimeout(async () => {
+        timer = null;
+        await refreshHealth();
+        scheduleHealthRefresh();
+      }, 30_000);
+    };
+
+    void refreshHealth();
+    scheduleHealthRefresh();
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (timer) clearTimeout(timer);
     };
   }, [authState]);
 

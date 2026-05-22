@@ -6,8 +6,11 @@ export function useTraffic({ addToast }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const didInitialLoadRef = useRef(false);
+  const inFlightRef = useRef(false);
 
   const fetchTraffic = useCallback(async (silent = false) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     if (silent) setRefreshing(true);
     try {
       const res = await api.getTraffic();
@@ -15,6 +18,7 @@ export function useTraffic({ addToast }) {
     } catch (err) {
       if (addToast) addToast(err.message, 'error');
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -24,12 +28,25 @@ export function useTraffic({ addToast }) {
     if (didInitialLoadRef.current) return;
     didInitialLoadRef.current = true;
     fetchTraffic();
-    const interval = setInterval(() => {
-      if (!document.hidden) fetchTraffic(true);
-    }, 30000); // 30s auto-refresh; the /api/pool/traffic query is heavy
-               // (findMany take:100 + groupBy on RequestLog). 6×/min drove
-               // measurable CPU heat — 2×/min is plenty for an ops dashboard.
-    return () => clearInterval(interval);
+    let cancelled = false;
+    let timer = null;
+
+    const schedule = () => {
+      if (cancelled) return;
+      timer = setTimeout(async () => {
+        timer = null;
+        if (!document.hidden) await fetchTraffic(true);
+        schedule();
+      }, 30000); // 30s auto-refresh; the /api/pool/traffic query is heavy
+                 // (findMany take:100 + groupBy on RequestLog). 6×/min drove
+                 // measurable CPU heat — 2×/min is plenty for an ops dashboard.
+    };
+
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [fetchTraffic]);
 
   return {

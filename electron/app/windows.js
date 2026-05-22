@@ -585,7 +585,10 @@ export function createSplashWindow() {
     + 'const updateStrip=document.getElementById("update-strip");'
     + 'const updateFill=document.getElementById("update-strip-fill");'
     + 'let phaseIndex=0,updateActive=false;'
-    + 'if(phaseEl){setInterval(()=>{if(updateActive)return;phaseIndex=(phaseIndex+1)%phases.length;phaseEl.textContent=phases[phaseIndex];},2200);}'
+    + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0;'
+    + 'function hydraSplashSetTimeout(fn,ms){const id=setTimeout(function(){const i=hydraSplashTimers.indexOf(id);if(i>=0)hydraSplashTimers.splice(i,1);if(!hydraSplashDisposed)fn();},ms);hydraSplashTimers.push(id);return id;}'
+    + 'function hydraSplashSetInterval(fn,ms){const id=setInterval(function(){if(hydraSplashDisposed)return;fn();},ms);hydraSplashTimers.push(id);return id;}'
+    + 'if(phaseEl){hydraSplashSetInterval(()=>{if(updateActive)return;phaseIndex=(phaseIndex+1)%phases.length;phaseEl.textContent=phases[phaseIndex];},2200);}'
     + 'function updateSplashProgress(payload){'
     + 'payload=payload||{};const pct=Math.max(0,Math.min(100,Number(payload.percent)||0));'
     + 'if(payload.state==="downloading"||payload.state==="available"||payload.state==="downloaded"){'
@@ -628,7 +631,8 @@ export function createSplashWindow() {
     +   'Bod.rectangle(w+WT/2,h/2,WT,ly,{isStatic:true,label:"hwall"})'   // right
     + '];}'
     + 'let walls=buildWalls();Wld.add(engine.world,walls);'
-    + 'window.addEventListener("resize",function(){Wld.remove(engine.world,walls);walls=buildWalls();Wld.add(engine.world,walls);});'
+    + 'function rebuildWalls(){if(hydraSplashDisposed)return;Wld.remove(engine.world,walls);walls=buildWalls();Wld.add(engine.world,walls);}'
+    + 'window.addEventListener("resize",rebuildWalls);'
     // ─── Color palette + helpers (single typeface, per-text deterministic color)
     + 'const PALETTE=["#ec4899","#22d3ee","#fbbf24","#a3e635","#fb923c","#d946ef","#38bdf8","#f87171","#a78bfa","#34d399","#fde047","#fb7185","#67e8f9","#c084fc","#fdba74"];'
     + 'function hashStr(s){let h=0;for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}return Math.abs(h);}'
@@ -698,7 +702,7 @@ export function createSplashWindow() {
     + 'const TARGET=80;'
     + 'const queue=buildQueue(TARGET);'
     + 'let spawnIdx=0;'
-    + 'const spawnTimer=setInterval(function(){'
+    + 'const spawnTimer=hydraSplashSetInterval(function(){'
     +   'if(spawnIdx>=queue.length){clearInterval(spawnTimer);return;}'
     +   'const it=queue[spawnIdx++];'
     +   'const isBrand=it.tag==="brand";'
@@ -710,7 +714,7 @@ export function createSplashWindow() {
     // ─── Two gravity regimes — flip up at t=8s. Apply an upward velocity
     // impulse to every dynamic body so the settled pile launches together
     // rather than waiting for the new gravity field to accelerate them.
-    + 'setTimeout(function(){'
+    + 'hydraSplashSetTimeout(function(){'
     +   'engine.world.gravity.y=-1.45;'
     +   'const all=Comp.allBodies(engine.world);'
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
@@ -720,9 +724,24 @@ export function createSplashWindow() {
     +   '}'
     + '},8000);'
     // Start the physics runner.
-    + 'Run.run(Run.create(),engine);'
+    + 'const runner=Run.create({delta:1000/45});Run.run(runner,engine);'
+    + 'function disposeHydraSplash(){'
+    +   'if(hydraSplashDisposed)return;hydraSplashDisposed=true;'
+    +   'for(let i=0;i<hydraSplashTimers.length;i++){clearTimeout(hydraSplashTimers[i]);clearInterval(hydraSplashTimers[i]);}'
+    +   'hydraSplashTimers.length=0;'
+    +   'if(hydraSplashRaf)cancelAnimationFrame(hydraSplashRaf);hydraSplashRaf=0;'
+    +   'window.removeEventListener("resize",size);window.removeEventListener("resize",rebuildWalls);'
+    +   'try{Run.stop(runner);Eng.clear(engine);Wld.clear(engine.world,false);}catch(err){console.warn("[hydra-splash] dispose failed:",err&&err.message?err.message:err);}'
+    + '}'
+    + 'window.addEventListener("beforeunload",disposeHydraSplash,{once:true});'
+    + 'hydraSplashSetTimeout(disposeHydraSplash,12500);'
     // ─── Render — draw each body as a rotated glyph at its world transform.
-    + 'function render(){'
+    + 'const HYDRA_SPLASH_RENDER_FRAME_MS=1000/30;let hydraSplashLastRender=0;'
+    + 'function render(now){'
+    +   'if(hydraSplashDisposed)return;'
+    +   'hydraSplashRaf=requestAnimationFrame(render);'
+    +   'if(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS)return;'
+    +   'hydraSplashLastRender=now;'
     +   'ctx.clearRect(0,0,W(),H());'
     +   'const all=Comp.allBodies(engine.world);'
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
@@ -737,9 +756,8 @@ export function createSplashWindow() {
     +     'ctx.fillText(m.text,0,0);'
     +     'ctx.restore();'
     +   '}'
-    +   'requestAnimationFrame(render);'
     + '}'
-    + 'requestAnimationFrame(render);'
+    + 'hydraSplashRaf=requestAnimationFrame(render);'
     + '})();</script>'
     + '</body></html>';
 

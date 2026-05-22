@@ -22,7 +22,7 @@ import * as store from './store.js';
 import { logger } from './logger.js';
 import { getCredits } from './openrouter.js';
 import { runInBatches } from './batch-runner.js';
-import { resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
+import { cleanupEphemeralProfileDir, resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
 import { describeProxy, pickAccountProxy, toPlaywrightProxy } from './account-proxy-pool.js';
 
 import {
@@ -2309,6 +2309,17 @@ function playwrightProvisionLaunchOptions() {
   return resolveChromiumLaunchOptions({ headless, args });
 }
 
+async function launchManagedChromium(chromium, launchOptions) {
+  const profileDir = launchOptions?.userDataDir ?? null;
+  try {
+    const browser = await chromium.launch(launchOptions);
+    return { browser, profileDir };
+  } catch (err) {
+    cleanupEphemeralProfileDir(profileDir);
+    throw err;
+  }
+}
+
 async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, trpcPhaseSummary = {}) {
   // playwright-core: API-only package, no auto-downloaded browser bundle.
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
@@ -2316,13 +2327,19 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
   const { chromium } = await import('playwright-core');
   const cdpUrl = config.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim();
   let connectMode = 'launch';
+  let profileDir = null;
   const browser = cdpUrl
     ? await (async () => {
-        provisionStepLog(accountId, 'browser connectOverCDP', { endpoint: cdpUrl });
-        connectMode = 'cdp';
-        return chromium.connectOverCDP(cdpUrl);
-      })()
-    : await chromium.launch(playwrightProvisionLaunchOptions());
+      provisionStepLog(accountId, 'browser connectOverCDP', { endpoint: cdpUrl });
+      connectMode = 'cdp';
+      return chromium.connectOverCDP(cdpUrl);
+    })()
+    : await (async () => {
+      const launchOptions = playwrightProvisionLaunchOptions();
+      const launched = await launchManagedChromium(chromium, launchOptions);
+      profileDir = launched.profileDir;
+      return launched.browser;
+    })();
   let page;
   let context;
   let capturedKey = null;
@@ -2838,6 +2855,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     } catch (closeErr) {
       dashboardError('[dashboard-api] Provision browser close failed:', closeErr.message);
     }
+    cleanupEphemeralProfileDir(profileDir);
   }
 }
 
@@ -3316,7 +3334,8 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
   // The full `playwright` package is dev-only now (see package.json).
   const { chromium } = await import('playwright-core');
   const accountProxy = selectedAccountProxy;
-  const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED }));
+  const launchOptions = resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED });
+  const { browser, profileDir } = await launchManagedChromium(chromium, launchOptions);
   let result = {
     success: false,
     message: 'Unknown error',
@@ -3443,6 +3462,7 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
     } catch (closeErr) {
       dashboardError('[dashboard-api] Redeem browser close failed:', closeErr.message);
     }
+    cleanupEphemeralProfileDir(profileDir);
   }
   return result;
 }
@@ -3554,7 +3574,8 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
   // The full `playwright` package is dev-only now (see package.json).
   const { chromium } = await import('playwright-core');
-  const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED }));
+  const launchOptions = resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED });
+  const { browser, profileDir } = await launchManagedChromium(chromium, launchOptions);
   const results = [];
 
   try {
@@ -3604,5 +3625,6 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
     } catch (closeErr) {
       dashboardError('[syncApiKeys] Browser close failed:', closeErr.message);
     }
+    cleanupEphemeralProfileDir(profileDir);
   }
 }

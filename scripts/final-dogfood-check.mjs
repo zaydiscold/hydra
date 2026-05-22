@@ -94,6 +94,17 @@ function artifact(path, baseDir = ROOT) {
   return { path, ok: true, detail: `${mb} MB` };
 }
 
+function pathCheck(label, path) {
+  if (!existsSync(path)) return { label, path, ok: false, detail: 'missing' };
+  const stat = statSync(path);
+  return {
+    label,
+    path,
+    ok: true,
+    detail: stat.isDirectory() ? 'directory present' : `${Math.round(stat.size / 1024 / 1024)} MB`,
+  };
+}
+
 function printStatus(ok, label, detail) {
   const mark = ok ? 'OK' : 'WAIT';
   console.log(`[${mark}] ${label}${detail ? ` - ${detail}` : ''}`);
@@ -101,10 +112,12 @@ function printStatus(ok, label, detail) {
 
 const rawArgs = process.argv.slice(2);
 const flags = new Set(rawArgs.filter((arg) => !arg.includes('=')));
+const manualCheckIds = new Set(manualChecks.map((item) => item.id));
 const manualVerified = new Set(rawArgs
   .filter((arg) => arg.startsWith('--manual='))
   .map((arg) => arg.slice('--manual='.length))
   .filter(Boolean));
+const unknownManualIds = [...manualVerified].filter((id) => !manualCheckIds.has(id));
 const writeEvidenceArg = rawArgs.find((arg) => arg.startsWith('--write-evidence='));
 const evidencePath = writeEvidenceArg
   ? writeEvidenceArg.slice('--write-evidence='.length)
@@ -130,6 +143,10 @@ console.log(`artifactDir=${artifactDir}`);
 console.log(`packagedApp=${packagedAppPath}`);
 console.log('');
 
+if (unknownManualIds.length > 0) {
+  printStatus(false, 'Unknown manual check id(s)', unknownManualIds.join(', '));
+}
+
 const artifacts = [
   artifact(`Hydra-${pkg}-mac-arm64.zip`, artifactDir),
   artifact(`Hydra-${pkg}-mac-arm64.zip.blockmap`, artifactDir),
@@ -139,6 +156,8 @@ const artifacts = [
   artifact(`Hydra-${pkg}-win-x64.exe.blockmap`, artifactDir),
 ];
 for (const item of artifacts) printStatus(item.ok, item.path, item.detail);
+const packagedApp = pathCheck('Packaged macOS app path', packagedAppPath);
+printStatus(packagedApp.ok, packagedApp.label, packagedApp.detail);
 
 const evidence = {
   schema: 'hydra.final-dogfood-evidence.v1',
@@ -147,6 +166,8 @@ const evidence = {
   root: ROOT,
   checks: {
     artifacts,
+    packagedApp,
+    unknownManualIds,
     artifactDir,
     packagedAppPath,
   },
@@ -164,7 +185,12 @@ console.log('');
 const audit = run('node', ['bin/hydra.mjs', 'audit', '--json']);
 if (audit.ok) {
   const report = JSON.parse(audit.stdout);
-  evidence.checks.audit = { ok: true, summary: report.summary, complete: report.complete };
+  evidence.checks.audit = {
+    ok: true,
+    summary: report.summary,
+    complete: report.complete,
+    missingAndBlockersOk: report.summary.missing === 0 && report.summary.blockers === 0,
+  };
   printStatus(report.summary.missing === 0 && report.summary.blockers === 0, 'hydra audit missing/blocker evidence', `missing=${report.summary.missing}, blockers=${report.summary.blockers}`);
   printStatus(report.summary.deferred === 0, 'hydra audit deferred manual/live evidence', `deferred=${report.summary.deferred}, complete=${report.complete}`);
 } else {
@@ -215,7 +241,14 @@ for (const item of evidence.manual) {
 
 console.log('');
 const allManualVerified = evidence.manual.every((item) => item.verified);
-evidence.complete = Boolean(evidence.checks.audit?.complete && allManualVerified);
+const allArtifactsPresent = evidence.checks.artifacts.every((item) => item.ok);
+evidence.complete = Boolean(
+  evidence.checks.audit?.missingAndBlockersOk
+  && allArtifactsPresent
+  && evidence.checks.packagedApp?.ok
+  && evidence.checks.unknownManualIds.length === 0
+  && allManualVerified
+);
 
 if (evidencePath) {
   const outputPath = isAbsolute(evidencePath) ? evidencePath : join(ROOT, evidencePath);
@@ -225,4 +258,4 @@ if (evidencePath) {
   console.log(`Wrote redacted dogfood evidence to ${evidencePath}`);
 }
 
-console.log('Completion rule: this preflight is not a release-complete signal while any audit item is deferred or any manual checkbox is unchecked.');
+console.log('Completion rule: this preflight is not a release-complete signal while any release artifact is missing, the packaged app path is missing, audit has missing/blocker evidence, any manual checkbox is unchecked, or any unknown --manual id was passed.');

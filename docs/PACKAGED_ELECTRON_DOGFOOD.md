@@ -44,8 +44,8 @@ performed. Pass only the `--manual=<id>` flags that were truly verified:
 ```bash
 npm run dogfood:final -- \
   --write-evidence=/private/tmp/hydra-final-dogfood.json \
-  --version=1.0.10 \
-  --artifact-dir=/path/to/downloaded/v1.0.10-assets \
+  --version=<version> \
+  --artifact-dir=/path/to/downloaded/release-assets \
   --app=/path/to/extracted/Hydra.app \
   --manual=packaged-gui-launch \
   --manual=window-controls \

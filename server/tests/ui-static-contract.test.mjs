@@ -412,7 +412,9 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   assert.match(app, /const \[upstreamHealth, setUpstreamHealth\] = useState\(null\)/);
   assert.match(app, /if \(authState !== 'app'\)/);
   assert.match(app, /api\.getSystemHealth\(\)/);
-  assert.match(app, /setInterval\(refreshHealth, 30_000\)/);
+  assert.match(app, /timer = setTimeout\(async \(\) => \{/);
+  assert.match(app, /if \(document\.hidden \|\| inFlight\) return/);
+  assert.match(app, /clearTimeout\(timer\)/);
   assert.match(app, /<UpstreamStatusBanner upstream=\{upstreamHealth\} \/>/);
 
   assert.match(css, /\.upstream-banner\s*\{/);

@@ -24,7 +24,7 @@
  */
 
 /* global document */
-import { resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
+import { cleanupEphemeralProfileDir, resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
 import * as store from './store.js';
 import * as dashboardApi from './dashboard-api.js';
 import { logger } from './logger.js';
@@ -142,7 +142,12 @@ async function launchSignupFlowPlaywright(task) {
           metadata: { ...task.metadata, proxy: describeProxy(accountProxy) },
         });
       }
-      const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true, args: launchArgs }));
+      const launchOptions = resolveChromiumLaunchOptions({ headless: true, args: launchArgs });
+      const profileDir = launchOptions.userDataDir;
+      taskSupervisor.updateTask(task.taskId, {
+        cleanup: async () => cleanupEphemeralProfileDir(profileDir),
+      });
+      const browser = await chromium.launch(launchOptions);
       const context = await browser.newContext({
         userAgent: USER_AGENT,
         proxy: toPlaywrightProxy(accountProxy),

@@ -18,6 +18,7 @@ import { basename, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import {
+  cleanupEphemeralProfileDir,
   resolveChromiumLaunchOptions,
   makeEphemeralProfileDir,
 } from '../lib/playwright-browser.js';
@@ -122,6 +123,19 @@ describe('browser isolation — knob 2: ephemeral userDataDir', () => {
     cleanupDirs.push(dir);
     assert.ok(existsSync(dir), 'directory must exist after creation');
     assert.ok(statSync(dir).isDirectory(), 'must be a directory');
+  });
+
+  it('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs', () => {
+    const dir = makeEphemeralProfileDir();
+    assert.ok(existsSync(dir), 'directory must exist before cleanup');
+    cleanupEphemeralProfileDir(dir);
+    assert.equal(existsSync(dir), false, 'Hydra-owned ephemeral profile dir should be removed');
+
+    const foreign = join(tmpdir(), `not-hydra-profile-${process.pid}`);
+    mkdirSync(foreign, { recursive: true });
+    cleanupDirs.push(foreign);
+    cleanupEphemeralProfileDir(foreign);
+    assert.ok(existsSync(foreign), 'non-Hydra temp dirs must not be removed');
   });
 
   it('caller can opt out of ephemeral profile by passing userDataDir: null', () => {

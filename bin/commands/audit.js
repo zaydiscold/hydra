@@ -40,6 +40,14 @@ function safeRead(relPath) {
   }
 }
 
+function safeReadJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
 function sizeMb(relPath) {
   try {
     return Math.round(statSync(join(ROOT, relPath)).size / 1024 / 1024);
@@ -64,6 +72,54 @@ function deferred(id, label, evidence) {
     state: 'deferred',
     evidence,
   };
+}
+
+function dogfoodEvidencePath() {
+  return process.env.HYDRA_DOGFOOD_EVIDENCE
+    ? process.env.HYDRA_DOGFOOD_EVIDENCE
+    : join(ROOT, 'docs/DOGFOOD_EVIDENCE.json');
+}
+
+function inspectDogfoodEvidence(version) {
+  const path = dogfoodEvidencePath();
+  const evidence = safeReadJson(path);
+  if (!evidence) return { path, present: false };
+  const manual = new Map((Array.isArray(evidence.manual) ? evidence.manual : [])
+    .map((item) => [item.id, Boolean(item.verified)]));
+  const artifactsOk = Array.isArray(evidence.checks?.artifacts)
+    && evidence.checks.artifacts.length >= 6
+    && evidence.checks.artifacts.every((item) => item.ok === true);
+  const unknownManualIds = Array.isArray(evidence.checks?.unknownManualIds)
+    ? evidence.checks.unknownManualIds
+    : [];
+  return {
+    path,
+    present: true,
+    schemaOk: evidence.schema === 'hydra.final-dogfood-evidence.v1',
+    versionOk: evidence.version === version,
+    completeOk: evidence.complete === true,
+    artifactsOk,
+    packagedAppOk: evidence.checks?.packagedApp?.ok === true,
+    unknownManualIdsOk: unknownManualIds.length === 0,
+    manual,
+  };
+}
+
+function evidenceManualOk(evidence, ids) {
+  return Boolean(
+    evidence.present
+    && evidence.schemaOk
+    && evidence.versionOk
+    && evidence.completeOk
+    && evidence.artifactsOk
+    && evidence.packagedAppOk
+    && evidence.unknownManualIdsOk
+    && ids.every((id) => evidence.manual.get(id) === true),
+  );
+}
+
+function evidenceBackedCheck(id, label, ok, okEvidence, deferredEvidence) {
+  return ok ? check(id, label, true, okEvidence) : deferred(id, label, deferredEvidence);
 }
 
 function parseBlockers(auditDoc) {
@@ -114,10 +170,16 @@ function buildAudit() {
   const appMenu = safeRead('electron/menus/appMenu.js');
   const preload = safeRead('electron/preload.js');
   const rendererApp = safeRead('src/App.jsx');
+  const metricsHook = safeRead('src/hooks/useMetrics.js');
+  const trafficHook = safeRead('src/hooks/useTraffic.js');
+  const bulkAuthHook = safeRead('src/hooks/useBulkAuth.js');
+  const vaultPage = safeRead('src/pages/Vault.jsx');
+  const generatorPage = safeRead('src/pages/Generator.jsx');
   const nativeBridge = safeRead('src/lib/native.js');
   const electronIpcContract = safeRead('server/tests/electron-ipc-contract.test.mjs');
   const cleanupAuxProcesses = safeRead('electron/utils/cleanupAuxProcesses.js');
   const playwrightBrowser = safeRead('server/lib/playwright-browser.js');
+  const playwrightIsolationTest = safeRead('server/tests/playwright-isolation.test.mjs');
   const electronMainProcessTest = safeRead('electron/tests/main-process.test.mjs');
   const electronIpc = safeRead('electron/app/ipc.js');
   const electronEnv = safeRead('electron/app/env.js');
@@ -138,6 +200,7 @@ function buildAudit() {
   const legacyStorage = safeRead('server/services/legacy-storage.js');
   const backgroundFailureTest = safeRead('server/tests/background-failure-visibility.test.mjs');
   const sessionRefresher = safeRead('server/services/session-refresher.js');
+  const requestLogBuffer = safeRead('server/services/request-log-buffer.js');
   const schemaHash = safeRead('electron/app/schemaHash.js');
   const schemaHashTest = safeRead('server/tests/schema-hash.test.mjs');
   const importCommand = safeRead('bin/commands/import.js');
@@ -151,6 +214,17 @@ function buildAudit() {
   const packagedOpenScript = safeRead('scripts/open-packaged-app.mjs');
 
   const version = pkg.version;
+  const dogfoodEvidence = inspectDogfoodEvidence(version);
+  const packagedGuiManualOk = evidenceManualOk(dogfoodEvidence, [
+    'packaged-gui-launch',
+    'window-controls',
+    'splash-unlock-dashboard',
+    'navigation-dead-buttons',
+  ]);
+  const liveMvpManualOk = evidenceManualOk(dogfoodEvidence, ['live-account-flows']);
+  const screenshotManualOk = evidenceManualOk(dogfoodEvidence, ['screenshots-redacted']);
+  const touchIdManualOk = evidenceManualOk(dogfoodEvidence, ['touch-id']);
+  const windowsLaunchManualOk = evidenceManualOk(dogfoodEvidence, ['windows-launch']);
   const artifactPaths = {
     macArmZip: `release/Hydra-${version}-mac-arm64.zip`,
     macArmBlockmap: `release/Hydra-${version}-mac-arm64.zip.blockmap`,
@@ -254,20 +328,40 @@ function buildAudit() {
         ? 'GitHub Actions Windows NSIS electron:smoke artifact evidence recorded in docs/RELEASE_AUDIT.md'
         : artifactPaths.winX64Exe + ' (' + winX64Size + ' MB) + blockmap',
     ),
-    deferred(
+    evidenceBackedCheck(
       'packaged-gui-dogfood',
       'Packaged Electron GUI dogfood',
+      packagedGuiManualOk,
+      `redacted dogfood evidence at ${dogfoodEvidence.path} verifies packaged GUI launch, window controls, splash/unlock/dashboard, and navigation/dead-button pass for ${version}`,
       'not release-complete evidence; packaged Electron GUI launch/window/navigation dogfood still requires app-control or user-run evidence',
     ),
-    deferred(
+    evidenceBackedCheck(
       'live-mvp-dogfood',
       'Live MVP feature dogfood',
+      liveMvpManualOk,
+      `redacted dogfood evidence at ${dogfoodEvidence.path} verifies live OTP/redemption/proxy/SSE real-key flows for ${version}`,
       'not release-complete evidence; live OTP, redemption, proxy rotation, and real-key flows still require live credentials/accounts/codes',
     ),
-    deferred(
+    evidenceBackedCheck(
       'packaged-screenshot-audit',
       'Packaged Electron screenshot audit',
+      screenshotManualOk,
+      `redacted dogfood evidence at ${dogfoodEvidence.path} verifies packaged Electron screenshots were captured with secrets redacted for ${version}`,
       'not release-complete evidence; screenshot auditing must be captured from packaged Electron with secrets redacted',
+    ),
+    evidenceBackedCheck(
+      'touch-id-dogfood',
+      'Touch ID hardware dogfood',
+      touchIdManualOk,
+      `redacted dogfood evidence at ${dogfoodEvidence.path} verifies Touch ID enable, disable, and unlock behavior for ${version}`,
+      'not release-complete evidence; Touch ID enable/disable/unlock still requires packaged app hardware dogfood',
+    ),
+    evidenceBackedCheck(
+      'windows-launch-dogfood',
+      'Windows installer launch dogfood',
+      windowsLaunchManualOk,
+      `redacted dogfood evidence at ${dogfoodEvidence.path} verifies current Windows installer install/launch behavior for ${version}`,
+      'not release-complete evidence; Windows installer install/launch still requires Windows host or runner dogfood',
     ),
     check(
       'package-scripts',
@@ -344,6 +438,39 @@ function buildAudit() {
         && packageLock.includes('"version": "5.0.6"')
         && !packageLock.includes('"node_modules/@fastify/otel/node_modules/brace-expansion": {\n      "version": "5.0.5"'),
       'Sentry/@fastify/otel nested brace-expansion lockfile entry is patched to 5.0.6',
+    ),
+    check(
+      'performance-efficiency-pass',
+      'Performance and fan-pressure pass',
+      goalDoc.includes('Primary focus for the next 4-5 hours: performance and efficiency release')
+        && releaseAudit.includes('performance and efficiency pass')
+        && electronWindows.includes('Run.create({delta:1000/45})')
+        && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
+        && electronWindows.includes('disposeHydraSplash')
+        && electronMainProcessTest.includes('splash physics and animation loops have a finite cleanup path')
+        && accountGenerator.includes('cleanupEphemeralProfileDir(profileDir)')
+        && dashboardApi.includes('cleanupEphemeralProfileDir(profileDir)')
+        && requestLogBuffer.includes('timer = setTimeout')
+        && !requestLogBuffer.includes('timer = setInterval')
+        && rendererApp.includes('if (document.hidden || inFlight) return')
+        && metricsHook.includes('inFlightRef.current')
+        && trafficHook.includes('inFlightRef.current')
+        && vaultPage.includes('loadInFlightRef.current')
+        && generatorPage.includes('statusPollInFlightRef.current')
+        && generatorPage.includes('heartbeatInFlightRef.current')
+        && bulkAuthHook.includes('pollTimerRef.current')
+        && bulkAuthHook.includes('poll.inFlight')
+        && !bulkAuthHook.includes('pollRefs.current[email] = setInterval')
+        && cliMain.includes('inspectHydraPlaywrightProfiles')
+        && cliMain.includes('inspectHydraProcesses')
+        && cliMain.includes('--clean-stale-profiles')
+        && cliMain.includes('moveStaleHydraPlaywrightProfiles')
+        && cliMain.includes('deleted: 0')
+        && cliTest.includes('hydra doctor includes local performance diagnostics for fan-pressure reports')
+        && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
+        && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
+        && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
+      'Splash Matter/render loops are finite and throttled; Playwright launch profile dirs are removed after browser automation paths; request-log flushing, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',

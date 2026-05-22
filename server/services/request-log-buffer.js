@@ -30,7 +30,8 @@ function warnDropped() {
 
 function ensureTimer() {
   if (timer) return;
-  timer = setInterval(() => {
+  timer = setTimeout(() => {
+    timer = null;
     void flushRequestLogBuffer();
   }, FLUSH_INTERVAL_MS);
   timer.unref?.();
@@ -96,6 +97,7 @@ export async function flushRequestLogBuffer() {
     }
   } finally {
     flushing = false;
+    if (queue.length > 0) ensureTimer();
   }
 }
 

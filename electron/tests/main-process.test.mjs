@@ -266,6 +266,23 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(!windows.includes("catch { /* greeting is best-effort */ }"), 'greeting fallback failures must not be silent');
   });
 
+  it('splash physics and animation loops have a finite cleanup path', () => {
+    const windows = readFileSync(resolve(APP_DIR, 'windows.js'), 'utf-8');
+
+    assert.match(windows, /let hydraSplashDisposed=false/);
+    assert.match(windows, /function disposeHydraSplash\(\)/);
+    assert.match(windows, /Run\.create\(\{delta:1000\/45\}\)/);
+    assert.match(windows, /Run\.stop\(runner\)/);
+    assert.match(windows, /Eng\.clear\(engine\)/);
+    assert.match(windows, /cancelAnimationFrame\(hydraSplashRaf\)/);
+    assert.match(windows, /window\.removeEventListener\("resize",size\)/);
+    assert.match(windows, /window\.addEventListener\("beforeunload",disposeHydraSplash,\{once:true\}\)/);
+    assert.match(windows, /hydraSplashSetTimeout\(disposeHydraSplash,12500\)/);
+    assert.match(windows, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
+    assert.match(windows, /if\(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS\)return/);
+    assert.doesNotMatch(windows, /setInterval\(\(\)=>\{if\(updateActive\)return;/);
+  });
+
   it('Electron log tee write and close failures remain visible without recursion', () => {
     const surface = readFileSync(resolve(APP_DIR, 'env.js'), 'utf-8');
 

@@ -251,5 +251,5 @@ test('final dogfood preflight preserves manual release blockers', () => {
   assert.match(script, /Live account flows/, 'manual checklist must include live account flows');
   assert.match(script, /Screenshots/, 'manual checklist must include packaged screenshot capture');
   assert.match(script, /Windows launch/, 'manual checklist must include Windows launch validation');
-  assert.match(script, /not a release-complete signal while any audit item is deferred or any manual checkbox is unchecked/, 'final dogfood must not claim release completion while manual evidence is missing');
+  assert.match(script, /not a release-complete signal while any release artifact is missing, the packaged app path is missing, audit has missing\/blocker evidence, any manual checkbox is unchecked, or any unknown --manual id was passed/, 'final dogfood must not claim release completion while release artifacts, packaged app, audit, manual evidence, or manual IDs are invalid');
 });

@@ -13,9 +13,9 @@
  *   hydra help         → usage
  */
 import { spawn, execFileSync } from 'node:child_process';
-import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, statSync, readdirSync, watch } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { platform, arch, hostname, totalmem, cpus } from 'node:os';
+import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, readdirSync, watch } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { platform, arch, hostname, totalmem, cpus, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -215,6 +215,142 @@ function probePortSync(port) {
   }
 }
 
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return 'N/A';
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+  return `${bytes} B`;
+}
+
+function timestampForPath() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function hydraProfileTmpDir() {
+  return process.env.HYDRA_DOCTOR_PROFILE_TMPDIR
+    ? resolve(process.env.HYDRA_DOCTOR_PROFILE_TMPDIR)
+    : tmpdir();
+}
+
+function inspectHydraPlaywrightProfiles() {
+  const tmp = hydraProfileTmpDir();
+  const profiles = [];
+  let totalBytes = 0;
+  let error = null;
+
+  try {
+    for (const name of readdirSync(tmp)) {
+      if (!name.startsWith('hydra-pw-profile-')) continue;
+      const path = join(tmp, name);
+      let bytes = 0;
+      try {
+        const st = statSync(path);
+        if (!st.isDirectory()) continue;
+        bytes = dirSizeSync(path);
+      } catch (err) {
+        if (err?.code === 'ENOENT') continue;
+        profiles.push({ name, path, sizeBytes: null, size: 'unavailable', error: err.message });
+        continue;
+      }
+      totalBytes += bytes;
+      profiles.push({ name, path, sizeBytes: bytes, size: formatBytes(bytes) });
+    }
+  } catch (err) {
+    error = err.message;
+  }
+
+  profiles.sort((a, b) => (b.sizeBytes ?? -1) - (a.sizeBytes ?? -1) || a.name.localeCompare(b.name));
+  return {
+    ok: error == null,
+    tmpdir: tmp,
+    count: profiles.length,
+    totalBytes,
+    totalSize: formatBytes(totalBytes),
+    profiles,
+    error,
+  };
+}
+
+function moveStaleHydraPlaywrightProfiles() {
+  const current = inspectHydraPlaywrightProfiles();
+  const candidates = current.profiles.filter((profile) => profile.path && profile.sizeBytes != null);
+  const backupDir = join(hydraProfileTmpDir(), 'hydra-profile-cleanups', `cleanup-${timestampForPath()}`);
+  const moved = [];
+  const failed = [];
+
+  if (candidates.length > 0) mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+  for (const profile of candidates) {
+    const target = join(backupDir, basename(profile.path));
+    try {
+      renameSync(profile.path, target);
+      moved.push({ from: profile.path, to: target, bytes: profile.sizeBytes ?? 0, size: profile.size || formatBytes(profile.sizeBytes ?? 0) });
+    } catch (err) {
+      failed.push({ path: profile.path, error: err.message });
+    }
+  }
+
+  return {
+    ok: failed.length === 0,
+    backupDir: candidates.length > 0 ? backupDir : null,
+    moved,
+    failed,
+    deleted: 0,
+  };
+}
+
+function inspectHydraProcesses() {
+  if (process.platform === 'win32') {
+    return {
+      ok: false,
+      unavailable: true,
+      reason: 'process snapshot is not implemented for Windows in this CLI yet',
+      processes: [],
+    };
+  }
+
+  try {
+    const out = execFileSync('ps', ['-axo', 'pid,pcpu,pmem,rss,command'], {
+      timeout: 3000,
+      encoding: 'utf-8',
+    });
+    const rows = out.trim().split('\n').slice(1);
+    const processes = rows
+      .map((line) => {
+        const match = line.trim().match(/^(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+(.+)$/);
+        if (!match) return null;
+        const [, pid, cpu, mem, rssKb, command] = match;
+        if (!/(Hydra|hydra|chromium|Chromium|Google Chrome for Testing|playwright)/.test(command)) return null;
+        return {
+          pid: Number(pid),
+          cpuPercent: Number(cpu),
+          memoryPercent: Number(mem),
+          rssBytes: Number(rssKb) * 1024,
+          rss: formatBytes(Number(rssKb) * 1024),
+          command,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.cpuPercent - a.cpuPercent || b.rssBytes - a.rssBytes);
+    return {
+      ok: true,
+      unavailable: false,
+      count: processes.length,
+      totalCpuPercent: Number(processes.reduce((sum, proc) => sum + proc.cpuPercent, 0).toFixed(1)),
+      totalRssBytes: processes.reduce((sum, proc) => sum + proc.rssBytes, 0),
+      totalRss: formatBytes(processes.reduce((sum, proc) => sum + proc.rssBytes, 0)),
+      processes: processes.slice(0, 20),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      unavailable: true,
+      reason: err.message,
+      processes: [],
+    };
+  }
+}
+
 // ─── Subcommands ──────────────────────────────────────────────────────────────
 
 if (sub === 'help' || sub === '-h' || sub === '--help') {
@@ -251,7 +387,9 @@ if (sub === 'help' || sub === '-h' || sub === '--help') {
     hydra logs --tail         Follow appended log lines until interrupted
 
   System
-    hydra doctor              Print system info
+    hydra doctor              Print system info and performance diagnostics
+    hydra doctor --clean-stale-profiles
+                              Move stale Hydra Playwright profiles to a backup
     hydra data-dir            Print the resolved data directory path
     hydra version             Print version from package.json
     hydra help                Show this help
@@ -354,6 +492,7 @@ if (sub === 'start') {
   const chromiumPath = findBundledChromium(root);
   const port = Number(process.env.HYDRA_PORT || process.env.PORT || 3001);
   const portOpen = probePortSync(port);
+  const cleanStaleProfiles = cliArgs.includes('--clean-stale-profiles');
   let dataDirSize = 'N/A';
   let diskFree = 'N/A';
   try {
@@ -400,6 +539,13 @@ if (sub === 'start') {
     diskFree = 'unavailable (permissions or platform limitation)';
   }
 
+  const profileReport = inspectHydraPlaywrightProfiles();
+  const processReport = inspectHydraProcesses();
+  const profileCleanup = cleanStaleProfiles
+    ? moveStaleHydraPlaywrightProfiles()
+    : null;
+  const refreshedProfileReport = cleanStaleProfiles ? inspectHydraPlaywrightProfiles() : profileReport;
+
   const report = {
     version: getPkgVersion(),
     node: process.version,
@@ -416,6 +562,11 @@ if (sub === 'start') {
       secrets: { ok: pathExists(secretsPath), path: secretsPath },
       chromium: { ok: Boolean(chromiumPath), path: chromiumPath },
       port: { ok: portOpen, port, url: portOpen ? `http://127.0.0.1:${port}/v1` : null },
+    },
+    performance: {
+      hydraPlaywrightProfiles: refreshedProfileReport,
+      hydraProcesses: processReport,
+      cleanup: profileCleanup,
     },
   };
 
@@ -440,7 +591,12 @@ Checks
   DB:           ${report.checks.db.ok ? 'ok' : 'missing'} (${dbPath})
   Secrets:      ${report.checks.secrets.ok ? 'ok' : 'missing'} (${secretsPath})
   Chromium:     ${report.checks.chromium.ok ? 'ok' : 'missing'}
-  Port ${port}:     ${portOpen ? 'listening' : 'closed'}`);
+  Port ${port}:     ${portOpen ? 'listening' : 'closed'}
+
+Performance
+  Playwright profiles: ${report.performance.hydraPlaywrightProfiles.count} stale Hydra dir(s), ${report.performance.hydraPlaywrightProfiles.totalSize}
+  Profile cleanup:      ${profileCleanup ? `${profileCleanup.moved.length} moved, ${profileCleanup.failed.length} failed, backup ${profileCleanup.backupDir || 'none'}` : 'not requested'}
+  Hydra processes:     ${report.performance.hydraProcesses.unavailable ? `unavailable (${report.performance.hydraProcesses.reason})` : `${report.performance.hydraProcesses.count} match(es), CPU ${report.performance.hydraProcesses.totalCpuPercent}%, RSS ${report.performance.hydraProcesses.totalRss}`}`);
   process.exit(0);
 } else if (sub === 'logs') {
   const wantTail = cliArgs.includes('--tail') || cliArgs.includes('-f');

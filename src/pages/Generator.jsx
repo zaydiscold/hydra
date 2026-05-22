@@ -26,6 +26,8 @@ export default function Generator({ addToast }) {
 
   const activeTaskRef = useRef(null);
   const completedToastRef = useRef(false);
+  const statusPollInFlightRef = useRef(false);
+  const heartbeatInFlightRef = useRef(false);
 
   useEffect(() => {
     activeTaskRef.current = taskId && !isTerminalStatus(status) ? taskId : null;
@@ -55,19 +57,38 @@ export default function Generator({ addToast }) {
     if (!taskId || isTerminalStatus(status)) return undefined;
 
     const controller = new AbortController();
-    const interval = setInterval(async () => {
+    let timer = null;
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled || statusPollInFlightRef.current) return;
+      statusPollInFlightRef.current = true;
       try {
         const res = await api.getGeneratorJobStatus(taskId, controller.signal);
         applyTaskPayload(res?.data ?? res ?? {});
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error('[GENERATOR] Status check failed:', err.message);
+      } finally {
+        statusPollInFlightRef.current = false;
       }
-    }, POLL_INTERVAL_MS);
+    };
+
+    const schedule = () => {
+      if (cancelled) return;
+      timer = setTimeout(async () => {
+        timer = null;
+        await poll();
+        schedule();
+      }, POLL_INTERVAL_MS);
+    };
+
+    schedule();
 
     return () => {
+      cancelled = true;
       controller.abort();
-      clearInterval(interval);
+      if (timer) clearTimeout(timer);
     };
   }, [applyTaskPayload, status, taskId]);
 
@@ -75,18 +96,37 @@ export default function Generator({ addToast }) {
     if (!taskId || isTerminalStatus(status)) return undefined;
 
     const controller = new AbortController();
-    const interval = setInterval(async () => {
+    let timer = null;
+    let cancelled = false;
+
+    const heartbeat = async () => {
+      if (cancelled || heartbeatInFlightRef.current) return;
+      heartbeatInFlightRef.current = true;
       try {
         await api.heartbeatGeneratorJob(taskId, controller.signal);
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error('[GENERATOR] Heartbeat failed:', err.message);
+      } finally {
+        heartbeatInFlightRef.current = false;
       }
-    }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    const schedule = () => {
+      if (cancelled) return;
+      timer = setTimeout(async () => {
+        timer = null;
+        await heartbeat();
+        schedule();
+      }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    schedule();
 
     return () => {
+      cancelled = true;
       controller.abort();
-      clearInterval(interval);
+      if (timer) clearTimeout(timer);
     };
   }, [status, taskId]);
 

@@ -48,6 +48,7 @@ export default function Vault({ addToast }) {
   const [silentRefreshingId, setSilentRefreshingId] = useState(null);
   const [modalErrors, setModalErrors] = useState({});
   const warnedRef = useRef(false);
+  const loadInFlightRef = useRef(false);
 
   // ── Concurrency-limited session probe ──
   const probeStatuses = useCallback(async (accts) => {
@@ -78,6 +79,8 @@ export default function Vault({ addToast }) {
 
   // ── Load accounts from dashboard endpoint ──
   const loadAccounts = useCallback(async (silent = false) => {
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     if (!silent) setLoading(true);
     try {
       const res = await api.getDashboard();
@@ -112,18 +115,33 @@ export default function Vault({ addToast }) {
     } catch (err) {
       if (addToast) addToast(err.message || 'Failed to load vault', 'error');
     } finally {
+      loadInFlightRef.current = false;
       setLoading(false);
     }
   }, [addToast, probeStatuses]);
 
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
-  // Auto-refresh every 10 minutes while page is visible
+  // Auto-refresh every 10 minutes while page is visible. Use a one-shot timer
+  // so a slow dashboard request cannot overlap the next refresh.
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!document.hidden) loadAccounts(true);
-    }, 10 * 60 * 1000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    let timer = null;
+
+    const schedule = () => {
+      if (cancelled) return;
+      timer = setTimeout(async () => {
+        timer = null;
+        if (!document.hidden) await loadAccounts(true);
+        schedule();
+      }, 10 * 60 * 1000);
+    };
+
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [loadAccounts]);
 
   // ── Provision management key ──

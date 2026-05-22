@@ -25,6 +25,7 @@ test('generator resource cleanup failures are visible', () => {
   assert.match(source, /Page cleanup failed for \$\{taskId\}: \$\{err\.message\}/);
   assert.match(source, /Context cleanup failed for \$\{taskId\}: \$\{err\.message\}/);
   assert.match(source, /Browser cleanup failed for \$\{taskId\}: \$\{err\.message\}/);
+  assert.match(source, /cleanupEphemeralProfileDir\(profileDir\)/);
   assert.match(source, /Launch-failure cleanup failed for \$\{task\.taskId\}: \$\{cleanupErr\.message\}/);
   assert.match(source, /Password submit click failed for \$\{task\.taskId\}: \$\{clickErr\.message\}/);
   assert.doesNotMatch(source, /closeGeneratorResources\(task\); \} catch \{ \/\* already gone \*\/ \}/);
@@ -133,6 +134,7 @@ test('long-running background timers do not pin idle Node processes', () => {
   const refresher = readRepoFile('server/services/session-refresher.js');
   const supervisor = readRepoFile('server/services/task-supervisor.js');
   const retention = readRepoFile('server/services/request-log-retention.js');
+  const requestLogBuffer = readRepoFile('server/services/request-log-buffer.js');
 
   assert.match(pinger, /timer\.unref\?\.\(\)/);
   assert.match(refresher, /_startupTimeoutHandle\.unref\?\.\(\)/);
@@ -140,6 +142,9 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.match(supervisor, /this\.timer\.unref\?\.\(\)/);
   assert.match(retention, /timer\.unref\?\.\(\)/);
   assert.match(retention, /startupTimer\.unref\?\.\(\)/);
+  assert.match(requestLogBuffer, /timer\.unref\?\.\(\)/);
+  assert.match(requestLogBuffer, /timer = setTimeout/);
+  assert.doesNotMatch(requestLogBuffer, /timer = setInterval/);
 });
 
 test('idle desktop startup avoids expensive live session probe fan-out', () => {
@@ -148,8 +153,12 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   const supervisor = readRepoFile('server/services/task-supervisor.js');
   const dashboard = readRepoFile('server/controllers/DashboardController.js');
   const metrics = readRepoFile('src/hooks/useMetrics.js');
+  const traffic = readRepoFile('src/hooks/useTraffic.js');
   const vault = readRepoFile('src/pages/Vault.jsx');
   const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
+  const app = readRepoFile('src/App.jsx');
+  const generator = readRepoFile('src/pages/Generator.jsx');
+  const bulkAuth = readRepoFile('src/hooks/useBulkAuth.js');
 
   assert.match(refresher, /HYDRA_SESSION_REFRESH_STARTUP_DELAY_MS/);
   assert.match(refresher, /5 \* 60 \* 1000/);
@@ -164,6 +173,20 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.doesNotMatch(metrics, /function probeProvisionTruth|async function probeProvisionTruth/);
   assert.doesNotMatch(vault, /Provision readiness probe failed|probeProvisionTruth/);
   assert.doesNotMatch(accountDetail, /probeSession\(\);\s*\}\)\(\);/);
+  assert.match(app, /if \(document\.hidden \|\| inFlight\) return/);
+  assert.match(metrics, /inFlightRef\.current/);
+  assert.match(traffic, /inFlightRef\.current/);
+  assert.match(vault, /loadInFlightRef\.current/);
+  assert.match(generator, /statusPollInFlightRef\.current/);
+  assert.match(generator, /heartbeatInFlightRef\.current/);
+  assert.match(bulkAuth, /pollTimerRef\.current/);
+  assert.match(bulkAuth, /poll\.inFlight/);
+  assert.doesNotMatch(metrics, /setInterval\(\(\) => \{[\s\S]{0,80}fetchDashboard/);
+  assert.doesNotMatch(traffic, /setInterval\(\(\) => \{[\s\S]{0,80}fetchTraffic/);
+  assert.doesNotMatch(vault, /setInterval\(\(\) => \{[\s\S]{0,80}loadAccounts/);
+  assert.doesNotMatch(generator, /setInterval\(async \(\) => \{[\s\S]{0,120}getGeneratorJobStatus/);
+  assert.doesNotMatch(generator, /setInterval\(async \(\) => \{[\s\S]{0,120}heartbeatGeneratorJob/);
+  assert.doesNotMatch(bulkAuth, /pollRefs\.current\[email\] = setInterval/);
 });
 
 test('file logging is rotated for unattended API-router runs', () => {
@@ -215,6 +238,9 @@ test('dashboard Playwright automation soft failures are logged', () => {
   assert.match(source, /Provision browser close failed:/);
   assert.match(source, /Redeem modal open click failed:/);
   assert.match(source, /Redeem browser close failed:/);
+  assert.match(source, /async function launchManagedChromium/);
+  assert.match(source, /cleanupEphemeralProfileDir\(profileDir\);\n\s*throw err;/);
+  assert.match(source, /cleanupEphemeralProfileDir\(profileDir\)/);
   assert.match(source, /Reveal button click failed:/);
   assert.match(source, /Browser close failed:/);
   assert.match(source, /Hash auto-discovery bundle fetch returned HTTP \$\{jsRes\.status\}: \$\{url\}/);

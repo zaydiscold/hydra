@@ -28,6 +28,7 @@ export function useBulkAuth(addToast) {
   const [emailLinkRows, setEmailLinkRows] = useState([]);
   const [emailLinkLog, setEmailLinkLog] = useState([]);
   const pollRefs = useRef({});
+  const pollTimerRef = useRef(null);
   const unmountedRef = useRef(false);
 
   // OTP Tab State
@@ -62,43 +63,71 @@ export function useBulkAuth(addToast) {
     setEmailLinkRows((prev) => prev.map((r) => (r.email === email ? { ...r, ...patch } : r)));
   }, []);
 
-  const startMagicLinkPolling = useCallback((email, accountId, signInId) => {
-    if (unmountedRef.current) return;
-    if (pollRefs.current[email]) clearInterval(pollRefs.current[email]);
+  const stopMagicLinkPolling = useCallback((email) => {
+    delete pollRefs.current[email];
+    if (Object.keys(pollRefs.current).length === 0 && pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
 
-    let consecutiveFailures = 0;
+  const ensureMagicLinkPoller = useCallback(() => {
+    if (pollTimerRef.current) return;
 
-    pollRefs.current[email] = setInterval(async () => {
-      if (unmountedRef.current) { clearInterval(pollRefs.current[email]); return; }
-      try {
-        const res = await api.getMagicLinkStatus(accountId, signInId);
-        consecutiveFailures = 0;
-        const st = res?.data?.status ?? res?.status;
-        if (st === 'completed_or_expired') {
-          clearInterval(pollRefs.current[email]);
-          delete pollRefs.current[email];
-          const accs = await api.getAccounts();
-          const list = Array.isArray(accs?.data) ? accs.data : [];
-          const acc = list.find((a) => a.id === accountId);
-          if (acc && acc.sessionStatus === 'active') {
-            updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in' });
-            appendEmailLinkLog(`✓ magic link claimed → ${email}`);
-            addToast?.(`${email} signed in via magic link`, 'success');
-          } else {
-            updateEmailLinkRow(email, { status: 'sent', message: 'Waiting for click…' });
-          }
-        }
-      } catch (err) {
-        consecutiveFailures++;
-        if (consecutiveFailures >= 3) {
-          clearInterval(pollRefs.current[email]);
-          delete pollRefs.current[email];
-          updateEmailLinkRow(email, { status: 'error', message: 'Poll failed — check connection' });
-          appendEmailLinkLog(`✗ magic link poll failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
-        }
+    pollTimerRef.current = setInterval(() => {
+      if (unmountedRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+        return;
+      }
+
+      for (const [email, poll] of Object.entries(pollRefs.current)) {
+        if (poll.inFlight) continue;
+        poll.inFlight = true;
+
+        void api.getMagicLinkStatus(poll.accountId, poll.signInId)
+          .then(async (res) => {
+            poll.consecutiveFailures = 0;
+            const st = res?.data?.status ?? res?.status;
+            if (st !== 'completed_or_expired') return;
+
+            stopMagicLinkPolling(email);
+            const accs = await api.getAccounts();
+            const list = Array.isArray(accs?.data) ? accs.data : [];
+            const acc = list.find((a) => a.id === poll.accountId);
+            if (acc && acc.sessionStatus === 'active') {
+              updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in' });
+              appendEmailLinkLog(`✓ magic link claimed → ${email}`);
+              addToast?.(`${email} signed in via magic link`, 'success');
+            } else {
+              updateEmailLinkRow(email, { status: 'sent', message: 'Waiting for click…' });
+            }
+          })
+          .catch((err) => {
+            poll.consecutiveFailures += 1;
+            if (poll.consecutiveFailures >= 3) {
+              stopMagicLinkPolling(email);
+              updateEmailLinkRow(email, { status: 'error', message: 'Poll failed — check connection' });
+              appendEmailLinkLog(`✗ magic link poll failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
+            }
+          })
+          .finally(() => {
+            poll.inFlight = false;
+          });
       }
     }, POLL_INTERVAL);
-  }, [addToast, appendEmailLinkLog, updateEmailLinkRow]);
+  }, [addToast, appendEmailLinkLog, stopMagicLinkPolling, updateEmailLinkRow]);
+
+  const startMagicLinkPolling = useCallback((email, accountId, signInId) => {
+    if (unmountedRef.current) return;
+    pollRefs.current[email] = {
+      accountId,
+      signInId,
+      consecutiveFailures: 0,
+      inFlight: false,
+    };
+    ensureMagicLinkPoller();
+  }, [ensureMagicLinkPoller]);
 
   useEffect(() => {
     const activePolls = pollRefs.current;
@@ -107,8 +136,7 @@ export function useBulkAuth(addToast) {
       const { email, signInId: doneSignInId } = evt.data;
       if (!email) return;
       if (doneSignInId && activePolls[email]) {
-        clearInterval(activePolls[email]);
-        delete activePolls[email];
+        stopMagicLinkPolling(email);
       }
       updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in (instant)' });
       appendEmailLinkLog(`✓ postMessage received — magic link claimed → ${email}`);
@@ -118,9 +146,13 @@ export function useBulkAuth(addToast) {
     return () => {
       window.removeEventListener('message', onMessage);
       unmountedRef.current = true;
-      for (const t of Object.values(activePolls)) clearInterval(t);
+      for (const email of Object.keys(activePolls)) delete activePolls[email];
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
     };
-  }, [addToast, appendEmailLinkLog, updateEmailLinkRow]);
+  }, [addToast, appendEmailLinkLog, stopMagicLinkPolling, updateEmailLinkRow]);
 
   const handleSendMagicLinks = useCallback(async (emails) => {
     if (!emails.length) { setLocalError('Paste at least one email.'); return; }

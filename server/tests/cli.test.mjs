@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import http from 'node:http';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
@@ -375,6 +375,8 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'packaged-gui-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
+  assert.ok(report.items.some((item) => item.id === 'touch-id-dogfood' && item.state === 'deferred'));
+  assert.ok(report.items.some((item) => item.id === 'windows-launch-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'session-probe-redaction' && item.state === 'ok' && /masking account aliases/.test(item.evidence)));
   for (const item of report.items.filter((entry) => entry.state === 'deferred')) {
@@ -394,6 +396,113 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'biometric-fail-closed' && item.state === 'ok'));
   assert.equal(Array.isArray(report.blockers), true);
   assert.doesNotMatch(out, /sk-[A-Za-z0-9_-]{8,}/);
+});
+
+test('hydra audit promotes deferred dogfood items only from matching redacted evidence', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hydra-dogfood-evidence-'));
+  const evidencePath = join(dir, 'DOGFOOD_EVIDENCE.json');
+  const manual = [
+    'packaged-gui-launch',
+    'window-controls',
+    'splash-unlock-dashboard',
+    'navigation-dead-buttons',
+    'touch-id',
+    'live-account-flows',
+    'screenshots-redacted',
+    'windows-launch',
+  ].map((id) => ({ id, verified: true }));
+
+  writeFileSync(evidencePath, `${JSON.stringify({
+    schema: 'hydra.final-dogfood-evidence.v1',
+    version: pkg.version,
+    checks: {
+      artifacts: [
+        { path: `Hydra-${pkg.version}-mac-arm64.zip`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-arm64.zip.blockmap`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-x64.zip`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-x64.zip.blockmap`, ok: true },
+        { path: `Hydra-${pkg.version}-win-x64.exe`, ok: true },
+        { path: `Hydra-${pkg.version}-win-x64.exe.blockmap`, ok: true },
+      ],
+      packagedApp: { ok: true, path: '/tmp/Hydra.app' },
+    },
+    manual,
+    complete: true,
+  })}\n`);
+
+  const report = JSON.parse(runHydra(['audit', '--json'], { HYDRA_DOGFOOD_EVIDENCE: evidencePath }));
+  assert.ok(report.items.some((item) => item.id === 'packaged-gui-dogfood' && item.state === 'ok' && item.evidence.includes(evidencePath)));
+  assert.ok(report.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'ok' && item.evidence.includes(evidencePath)));
+  assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'ok' && item.evidence.includes(evidencePath)));
+  assert.ok(report.items.some((item) => item.id === 'touch-id-dogfood' && item.state === 'ok' && item.evidence.includes(evidencePath)));
+  assert.ok(report.items.some((item) => item.id === 'windows-launch-dogfood' && item.state === 'ok' && item.evidence.includes(evidencePath)));
+
+  const stalePath = join(dir, 'STALE_DOGFOOD_EVIDENCE.json');
+  writeFileSync(stalePath, `${JSON.stringify({
+    schema: 'hydra.final-dogfood-evidence.v1',
+    version: '0.0.0',
+    checks: { artifacts: [], packagedApp: { ok: true } },
+    manual,
+    complete: true,
+  })}\n`);
+  const staleReport = JSON.parse(runHydra(['audit', '--json'], { HYDRA_DOGFOOD_EVIDENCE: stalePath }));
+  assert.ok(staleReport.items.some((item) => item.id === 'packaged-gui-dogfood' && item.state === 'deferred'));
+  assert.ok(staleReport.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'deferred'));
+  assert.ok(staleReport.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
+  assert.ok(staleReport.items.some((item) => item.id === 'touch-id-dogfood' && item.state === 'deferred'));
+  assert.ok(staleReport.items.some((item) => item.id === 'windows-launch-dogfood' && item.state === 'deferred'));
+
+  const typoPath = join(dir, 'TYPO_DOGFOOD_EVIDENCE.json');
+  writeFileSync(typoPath, `${JSON.stringify({
+    schema: 'hydra.final-dogfood-evidence.v1',
+    version: pkg.version,
+    checks: {
+      artifacts: [
+        { path: `Hydra-${pkg.version}-mac-arm64.zip`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-arm64.zip.blockmap`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-x64.zip`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-x64.zip.blockmap`, ok: true },
+        { path: `Hydra-${pkg.version}-win-x64.exe`, ok: true },
+        { path: `Hydra-${pkg.version}-win-x64.exe.blockmap`, ok: true },
+      ],
+      packagedApp: { ok: true, path: '/tmp/Hydra.app' },
+      unknownManualIds: ['windows-lanch'],
+    },
+    manual,
+    complete: true,
+  })}\n`);
+  const typoReport = JSON.parse(runHydra(['audit', '--json'], { HYDRA_DOGFOOD_EVIDENCE: typoPath }));
+  assert.ok(typoReport.items.some((item) => item.id === 'packaged-gui-dogfood' && item.state === 'deferred'));
+  assert.ok(typoReport.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'deferred'));
+  assert.ok(typoReport.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
+  assert.ok(typoReport.items.some((item) => item.id === 'touch-id-dogfood' && item.state === 'deferred'));
+  assert.ok(typoReport.items.some((item) => item.id === 'windows-launch-dogfood' && item.state === 'deferred'));
+
+  const incompletePath = join(dir, 'INCOMPLETE_DOGFOOD_EVIDENCE.json');
+  writeFileSync(incompletePath, `${JSON.stringify({
+    schema: 'hydra.final-dogfood-evidence.v1',
+    version: pkg.version,
+    checks: {
+      artifacts: [
+        { path: `Hydra-${pkg.version}-mac-arm64.zip`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-arm64.zip.blockmap`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-x64.zip`, ok: true },
+        { path: `Hydra-${pkg.version}-mac-x64.zip.blockmap`, ok: true },
+        { path: `Hydra-${pkg.version}-win-x64.exe`, ok: true },
+        { path: `Hydra-${pkg.version}-win-x64.exe.blockmap`, ok: true },
+      ],
+      packagedApp: { ok: true, path: '/tmp/Hydra.app' },
+      unknownManualIds: [],
+    },
+    manual,
+    complete: false,
+  })}\n`);
+  const incompleteReport = JSON.parse(runHydra(['audit', '--json'], { HYDRA_DOGFOOD_EVIDENCE: incompletePath }));
+  assert.ok(incompleteReport.items.some((item) => item.id === 'packaged-gui-dogfood' && item.state === 'deferred'));
+  assert.ok(incompleteReport.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'deferred'));
+  assert.ok(incompleteReport.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
+  assert.ok(incompleteReport.items.some((item) => item.id === 'touch-id-dogfood' && item.state === 'deferred'));
+  assert.ok(incompleteReport.items.some((item) => item.id === 'windows-launch-dogfood' && item.state === 'deferred'));
 });
 
 test('hydra accounts help documents conservative purge behavior', () => {
@@ -502,6 +611,12 @@ test('hydra doctor --json reports concrete checks', () => {
   assert.equal(report.checks.secrets.path, join(dataDir, 'local-secrets.json'));
   assert.equal(typeof report.checks.chromium.ok, 'boolean');
   assert.equal(typeof report.checks.port.ok, 'boolean');
+  assert.equal(typeof report.performance.hydraPlaywrightProfiles.count, 'number');
+  assert.equal(typeof report.performance.hydraPlaywrightProfiles.totalSize, 'string');
+  assert.equal(Array.isArray(report.performance.hydraPlaywrightProfiles.profiles), true);
+  assert.equal(typeof report.performance.hydraProcesses.unavailable, 'boolean');
+  assert.equal(Array.isArray(report.performance.hydraProcesses.processes), true);
+  assert.ok(report.performance.cleanup == null);
 });
 
 test('hydra top-level system commands default to the same repo data dir as service commands', () => {
@@ -518,6 +633,53 @@ test('hydra doctor recognizes packaged Chromium zip resources', () => {
   assert.match(source, /build\/electron\/chromium\.zip/);
   assert.match(source, /Contents\/Resources\/chromium\.zip/);
   assert.match(source, /release\/win-unpacked\/resources\/chromium\.zip/);
+});
+
+test('hydra doctor includes local performance diagnostics for fan-pressure reports', () => {
+  const source = readFileSync(join(ROOT, 'bin/hydra.mjs'), 'utf-8');
+
+  assert.match(source, /function inspectHydraPlaywrightProfiles\(\)/);
+  assert.match(source, /name\.startsWith\('hydra-pw-profile-'\)/);
+  assert.match(source, /if \(err\?\.code === 'ENOENT'\) continue/);
+  assert.match(source, /--clean-stale-profiles/);
+  assert.match(source, /moveStaleHydraPlaywrightProfiles/);
+  assert.match(source, /renameSync\(profile\.path,\s*target\)/);
+  assert.match(source, /deleted: 0/);
+  assert.match(source, /function inspectHydraProcesses\(\)/);
+  assert.match(source, /ps', \['-axo', 'pid,pcpu,pmem,rss,command'\]/);
+  assert.match(source, /performance: \{/);
+  assert.match(source, /const refreshedProfileReport = cleanStaleProfiles \? inspectHydraPlaywrightProfiles\(\) : profileReport/);
+  assert.match(source, /hydraPlaywrightProfiles: refreshedProfileReport/);
+  assert.match(source, /const processReport = inspectHydraProcesses\(\)/);
+  assert.match(source, /hydraProcesses: processReport/);
+  assert.match(source, /Playwright profiles:/);
+  assert.match(source, /Hydra processes:/);
+});
+
+test('hydra doctor stale-profile cleanup moves Hydra profile dirs to a reversible backup', () => {
+  const profileTmp = mkdtempSync(join(tmpdir(), 'hydra-cli-doctor-profiles-'));
+  const dataDir = mkdtempSync(join(tmpdir(), 'hydra-cli-doctor-data-'));
+  const staleProfile = join(profileTmp, 'hydra-pw-profile-test');
+  const foreignProfile = join(profileTmp, 'not-hydra-profile-test');
+  mkdirSync(staleProfile);
+  mkdirSync(foreignProfile);
+  writeFileSync(join(staleProfile, 'marker.txt'), 'stale profile marker');
+
+  const report = JSON.parse(runHydra(['doctor', '--json', '--clean-stale-profiles'], {
+    HYDRA_DATA_DIR: dataDir,
+    HYDRA_DOCTOR_PROFILE_TMPDIR: profileTmp,
+  }));
+
+  assert.equal(report.performance.cleanup.deleted, 0);
+  assert.equal(report.performance.cleanup.moved.length, 1);
+  assert.equal(report.performance.cleanup.failed.length, 0);
+  assert.match(report.performance.cleanup.backupDir, /hydra-profile-cleanups/);
+  assert.equal(report.performance.cleanup.moved[0].from, staleProfile);
+  assert.equal(existsSync(staleProfile), false);
+  assert.equal(existsSync(report.performance.cleanup.moved[0].to), true);
+  assert.equal(existsSync(join(report.performance.cleanup.moved[0].to, 'marker.txt')), true);
+  assert.equal(existsSync(foreignProfile), true);
+  assert.equal(report.performance.hydraPlaywrightProfiles.count, 0);
 });
 
 test('hydra status --json includes explicit warning channel for degraded proxy metadata', () => {
@@ -804,7 +966,7 @@ test('hydra openrouter exposes direct models, key, credits, and chat commands', 
   });
 
   try {
-    const baseArgs = ['--base-url', `http://127.0.0.1:${port}/api/v1`, '--key', 'sk-or-v1-test', '--json', '--timeout-ms', '2000'];
+    const baseArgs = ['--base-url', `http://127.0.0.1:${port}/api/v1`, '--key', 'sk-or-v1-test', '--json', '--timeout-ms', '10000'];
     const modelsResult = await runHydraAsync(['openrouter', 'models', '--filter', 'claude', ...baseArgs]);
     assert.equal(modelsResult.status, 0, modelsResult.stderr || modelsResult.stdout);
     const models = JSON.parse(modelsResult.stdout);

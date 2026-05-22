@@ -6,6 +6,30 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
 
 ## Crunch List — User-Added Must Finish
 
+- **Primary focus for the next 4-5 hours: performance and efficiency release.**
+  Before the next version release, spend the main effort finding and fixing
+  avoidable CPU, RAM, fan, and smoothness problems instead of shipping another
+  feature batch. Treat the user's report as true: launching/running Hydra can
+  make the computer fans throb, so Hydra is likely keeping heavier work alive
+  than it needs to.
+  - Hunt for live Chrome/Chromium/Playwright instances, browser contexts,
+    background workers, orphan processes, timers, polling loops, SSE streams,
+    file watchers, database loops, and startup tasks that remain alive after
+    the UI no longer needs them.
+  - Make splash/graphics polished but finite: animations should stop, pause,
+    or be torn down after the splash/main transition; no runaway canvas,
+    Anime.js, requestAnimationFrame, interval, timeout, or Matter.js physics
+    tasks should survive past their visual purpose.
+  - Look broadly for CPU/RAM wins and smoother perceived performance in the
+    Electron main process, renderer, embedded API server, proxy/router,
+    account automation, request logging, health polling, and dashboard refresh
+    paths.
+  - Target at least a 20% reduction in avoidable idle CPU/RAM pressure where
+    measurable, or document the baseline, the fix, and why a 20% target is not
+    honestly measurable from the current environment.
+  - Ship the performance fixes together as one coherent version release, with
+    source contracts/tests and `docs/RELEASE_AUDIT.md` evidence updated before
+    dogfood/screenshots.
 - Keep local source, packaged app resources, and remote `master` aligned. If local HEAD is stale or stashed work leaves the packaged app behind, bring the working tree/build artifact back to the latest pushed source before dogfooding.
 - Fix the packaged Electron startup crash from `electron-updater` ESM import mismatch:
   `SyntaxError: The requested module 'electron-updater' does not provide an export named 'autoUpdater'`.

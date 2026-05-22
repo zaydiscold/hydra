@@ -15,11 +15,14 @@ export function useMetrics({ addToast }) {
   const [cooldownMap, setCooldownMap] = useState({});   // { [hash]: expiresAtMs }
   const warnedExpiryRef = useRef(false);
   const didInitialLoadRef = useRef(false);
+  const inFlightRef = useRef(false);
 
   const fetchDashboard = useCallback(async (silent = false) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     if (silent) setRefreshing(true);
     else setLoading(true);
-    
+
     try {
       const [res, syncRes] = await Promise.all([
         api.getDashboard(),
@@ -33,6 +36,7 @@ export function useMetrics({ addToast }) {
     } catch (err) {
       addToast(err.message, 'error');
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -111,12 +115,25 @@ export function useMetrics({ addToast }) {
     }
   }, [data?.accounts, liveStatuses, addToast]);
 
-  // Auto-refresh interval
+  // Auto-refresh: one-shot timer avoids overlapping dashboard + sync requests.
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!document.hidden) fetchDashboard(true);
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    let timer = null;
+
+    const schedule = () => {
+      if (cancelled) return;
+      timer = setTimeout(async () => {
+        timer = null;
+        if (!document.hidden) await fetchDashboard(true);
+        schedule();
+      }, 5 * 60 * 1000);
+    };
+
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [fetchDashboard]);
 
   const handleProvision = useCallback(async (accountId) => {
