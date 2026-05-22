@@ -166,7 +166,7 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(refresher, /SESSION_PROBE_ENABLED && Date\.now\(\) - _lastSessionProbeAt >= SESSION_PROBE_INTERVAL_MS/);
   assert.match(retention, /HYDRA_REQUEST_LOG_RETENTION_STARTUP_DELAY_MS/);
   assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*prunePromise = pruneRequestLogs\(\);[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
-  assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\n\s*prunePromise = pruneRequestLogs\(\);/);
+  assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\r?\n\s*prunePromise = pruneRequestLogs\(\);/);
   assert.match(supervisor, /const TASK_SWEEP_INTERVAL_MS = 30 \* 1000/);
   assert.match(dashboard, /const needsRefresh = meta\?\.sessionStatus === 'expiring'/);
   assert.doesNotMatch(dashboard, /meta\?\.sessionStatus === 'expired' \|\| meta\?\.sessionStatus === 'unknown'/);
@@ -239,7 +239,7 @@ test('dashboard Playwright automation soft failures are logged', () => {
   assert.match(source, /Redeem modal open click failed:/);
   assert.match(source, /Redeem browser close failed:/);
   assert.match(source, /async function launchManagedChromium/);
-  assert.match(source, /cleanupEphemeralProfileDir\(profileDir\);\n\s*throw err;/);
+  assert.match(source, /cleanupEphemeralProfileDir\(profileDir\);\r?\n\s*throw err;/);
   assert.match(source, /cleanupEphemeralProfileDir\(profileDir\)/);
   assert.match(source, /Reveal button click failed:/);
   assert.match(source, /Browser close failed:/);
