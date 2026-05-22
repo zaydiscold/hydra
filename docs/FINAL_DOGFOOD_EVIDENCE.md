@@ -1,15 +1,27 @@
 # Final Dogfood Evidence
 
-The final Hydra dogfood pass needs packaged Electron and live-account evidence that Codex cannot safely infer from source tests. Use the checked-in preflight to create a redacted evidence artifact after you run the real app.
+The final Hydra dogfood pass needs packaged Electron and live-account evidence
+that Codex cannot safely infer from source tests. Use the checked-in preflight
+to create a redacted evidence artifact after you run the real app.
 
-Run from the repo root after building the packaged app:
+The full operator checklist is in `docs/PACKAGED_ELECTRON_DOGFOOD.md`. For the
+current published release, use the v1.0.14 quick path:
+
+```bash
+DOGFOOD_DIR="$(mktemp -d /private/tmp/hydra-v1014-manual.XXXXXX)"
+gh release download v1.0.14 --repo zaydiscold/hydra --dir "$DOGFOOD_DIR"
+ditto -x -k "$DOGFOOD_DIR/Hydra-1.0.14-mac-arm64.zip" "$DOGFOOD_DIR/extracted-mac-arm64"
+open -n "$DOGFOOD_DIR/extracted-mac-arm64/Hydra.app"
+```
+
+Run from the repo root after the packaged app pass:
 
 ```bash
 npm run dogfood:final -- \
-  --write-evidence=docs/DOGFOOD_EVIDENCE.json \
-  --version=<version> \
-  --artifact-dir=/path/to/downloaded/release-assets \
-  --app=/path/to/Hydra.app \
+  --write-evidence=/private/tmp/hydra-final-dogfood-v1.0.14.json \
+  --version=1.0.14 \
+  --artifact-dir="$DOGFOOD_DIR" \
+  --app="$DOGFOOD_DIR/extracted-mac-arm64/Hydra.app" \
   --launch-diagnostics \
   --manual=packaged-gui-launch \
   --manual=window-controls \
@@ -23,6 +35,10 @@ Add the other manual flags only after you actually perform those checks:
 - `--manual=live-account-flows`
 - `--manual=screenshots-redacted`
 - `--manual=windows-launch`
+
+For a different release, substitute `--version=<version>`,
+`--artifact-dir=<dir>`, and `--app=<path/to/Hydra.app>` with the downloaded
+release artifact directory and extracted packaged app path.
 
 Unknown `--manual=<id>` values are recorded in the evidence file and prevent `complete=true`. Treat that as a typo or stale runbook until corrected.
 
