@@ -80,7 +80,7 @@ class AuthController extends BaseController {
     const { rotationManager } = await import('../services/rotation-manager.js');
     
     // Use IP-based tracking for admin login attempts
-    const clientId = req.ip || req.connection?.remoteAddress || 'admin';
+    const clientId = req.socket?.remoteAddress || req.connection?.remoteAddress || 'admin';
     const loginCheck = rotationManager.recordLoginAttempt(`admin:${clientId}`);
     
     if (!loginCheck.allowed) {
