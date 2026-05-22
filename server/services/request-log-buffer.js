@@ -91,8 +91,13 @@ export async function flushRequestLogBuffer() {
   try {
     while (queue.length > 0) {
       const batch = queue.splice(0, MAX_FLUSH_BATCH);
-      for (const row of batch) {
-        await writeRequestLog(row);
+      try {
+        await prisma.requestLog.createMany({ data: batch });
+      } catch {
+        // Fall back to sequential writes if batch fails (e.g., due to a bad keyHash)
+        for (const row of batch) {
+          await writeRequestLog(row);
+        }
       }
     }
   } finally {
