@@ -7,6 +7,40 @@ browser-only screenshots do not close release blockers here.
 Run this only after source-level hardening, package smoke, lint, build, tests,
 CLI audit, and docs updates are current.
 
+## Current Release Quick Path
+
+For the current published release, use v1.0.14 artifacts from GitHub Releases.
+This keeps the manual pass tied to the same package set verified in
+`docs/RELEASE_AUDIT.md`.
+
+```bash
+DOGFOOD_DIR="$(mktemp -d /private/tmp/hydra-v1014-manual.XXXXXX)"
+gh release download v1.0.14 --repo zaydiscold/hydra --dir "$DOGFOOD_DIR"
+ditto -x -k "$DOGFOOD_DIR/Hydra-1.0.14-mac-arm64.zip" "$DOGFOOD_DIR/extracted-mac-arm64"
+open -n "$DOGFOOD_DIR/extracted-mac-arm64/Hydra.app"
+```
+
+After the real packaged app pass, write evidence with only the flags that were
+actually verified:
+
+```bash
+npm run dogfood:final -- \
+  --write-evidence=/private/tmp/hydra-final-dogfood-v1.0.14.json \
+  --version=1.0.14 \
+  --artifact-dir="$DOGFOOD_DIR" \
+  --app="$DOGFOOD_DIR/extracted-mac-arm64/Hydra.app" \
+  --launch-diagnostics \
+  --manual=packaged-gui-launch \
+  --manual=window-controls \
+  --manual=splash-unlock-dashboard \
+  --manual=navigation-dead-buttons
+```
+
+Add `--manual=touch-id`, `--manual=live-account-flows`,
+`--manual=screenshots-redacted`, and `--manual=windows-launch` only after those
+specific checks are done. The script records unknown manual IDs and refuses
+`complete=true`, so typoed flags do not silently close blockers.
+
 ## Launch Rules
 
 Use LaunchServices for macOS GUI dogfood:
@@ -79,6 +113,19 @@ Then copy the relevant summary into `docs/RELEASE_AUDIT.md`.
 | Windows installer launch | Install and launch the current `release/Hydra-<version>-win-x64.exe` or CI release artifact on Windows; record OS and result | pending |
 | Docker runtime | `npm run docker:smoke` passes against a live Docker daemon | pending |
 | Screenshot audit | Last step only: packaged Electron screenshots across representative sizes are reviewed for layout/color/text issues | pending |
+
+Manual flag mapping:
+
+| Manual flag | Requires |
+| --- | --- |
+| `--manual=packaged-gui-launch` | Packaged app launched from `.app`/LaunchServices in a real GUI session and Hydra is visible/running. |
+| `--manual=window-controls` | Traffic lights, drag, close/minimize/zoom, tray reopen, and quit behavior were tried in the packaged app. |
+| `--manual=splash-unlock-dashboard` | Splash appeared, unlock/setup path completed or behaved correctly, and Dashboard loaded without a blank fallback. |
+| `--manual=navigation-dead-buttons` | Main routes opened and visible actions either worked, showed disabled/preflight state, or surfaced a clear error/toast. |
+| `--manual=touch-id` | Touch ID enable, test, disable, and unlock behavior were verified on macOS Touch ID hardware. |
+| `--manual=live-account-flows` | Live OTP/login, bulk OTP isolation, code redemption, and proxy/SSE request paths were exercised with safe test data. |
+| `--manual=screenshots-redacted` | Packaged Electron screenshots were captured after functional dogfood and checked for secrets. |
+| `--manual=windows-launch` | Current Windows NSIS artifact installed and launched on Windows; OS/version/result recorded. |
 
 ## Screenshot Rules
 
