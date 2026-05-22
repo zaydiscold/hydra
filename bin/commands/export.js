@@ -7,7 +7,7 @@
  */
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { c, json, status } from '../lib/output.js';
+import { json, status } from '../lib/output.js';
 import { loadServices, resolveUser, shutdown } from '../lib/services.js';
 
 function hasFlag(argv, flag) {
