@@ -2,7 +2,7 @@
  * `hydra stop` — authenticated shutdown for a running standalone server.
  */
 import net from 'node:net';
-import { c, json, status } from '../lib/output.js';
+import { json, status } from '../lib/output.js';
 
 const DEFAULT_PORT = Number(process.env.HYDRA_PORT || process.env.PORT || 3001);
 const SHUTDOWN_TIMEOUT_MS = 5000;
