@@ -28,7 +28,7 @@ test('CI and Docker workflows run on the supported Node 24 action runtime', () =
   assert.match(docker, /cache-to:\s*type=registry/, 'Docker publish workflow must refresh registry cache');
 });
 
-test('electron package smoke workflow covers macOS, Windows, and Linux packages', () => {
+test('electron package smoke workflow covers macOS and Linux packages on PRs', () => {
   const workflow = read('.github/workflows/electron-smoke.yml');
 
   assert.match(workflow, /pull_request:/, 'package smoke must run on pull requests');
@@ -44,8 +44,8 @@ test('electron package smoke workflow covers macOS, Windows, and Linux packages'
 
   assert.match(workflow, /build_target:\s*darwin-arm64[\s\S]*target:\s*--mac zip --arm64/, 'must package Apple Silicon macOS zip');
   assert.match(workflow, /build_target:\s*darwin-x64[\s\S]*target:\s*--mac zip --x64/, 'must package Intel macOS zip');
-  assert.match(workflow, /build_target:\s*win32-x64[\s\S]*target:\s*--win nsis --x64/, 'must package Windows x64 NSIS installer');
   assert.match(workflow, /build_target:\s*linux-x64[\s\S]*target:\s*--linux AppImage --x64/, 'must package Linux AppImage');
+  assert.doesNotMatch(workflow, /-\s*os:\s*windows-latest/, 'Windows is not in PR smoke matrix; release.yml still builds Windows installers on tag pushes');
 });
 
 test('release workflow uploads desktop artifacts for every release target', () => {
