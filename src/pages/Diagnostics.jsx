@@ -18,6 +18,188 @@ function formatUptime(seconds) {
   return parts.join(' ');
 }
 
+
+function DiagnosticCard({ title, children }) {
+  return (
+    <div className="card" style={{ padding: 'var(--space-md)' }}>
+      <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function VersionCard({ version }) {
+  return (
+    <DiagnosticCard title="Version">
+      <code style={{ fontSize: '0.85rem', color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)' }}>
+        {version}
+      </code>
+    </DiagnosticCard>
+  );
+}
+
+function ModeCard({ modeLabel }) {
+  return (
+    <DiagnosticCard title="Runtime Mode">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="status-dot success" style={{ width: 6, height: 6 }} />
+        <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+          {modeLabel}
+        </span>
+      </div>
+    </DiagnosticCard>
+  );
+}
+
+function ProxyCard({ proxyStatus }) {
+  return (
+    <DiagnosticCard title="Proxy">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          className="status-dot"
+          style={{
+            width: 6,
+            height: 6,
+            backgroundColor: proxyStatus?.enabled ? 'var(--status-success)' : 'var(--text-tertiary)',
+          }}
+        />
+        <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+          {proxyStatus ? (proxyStatus.enabled ? 'Enabled' : 'Disabled') : 'Loading…'}
+        </span>
+      </div>
+    </DiagnosticCard>
+  );
+}
+
+function ServerHealthCard({ health, loading, formatUptime }) {
+  return (
+    <DiagnosticCard title="Server Process Health">
+      {health ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+          <div>Uptime: {formatUptime(health.uptime)}</div>
+          {health.startedAt && <div>Started: {new Date(health.startedAt).toLocaleString()}</div>}
+          {health.serverNow && <div>Server clock: {new Date(health.serverNow).toLocaleString()}</div>}
+          {health.pid && <div>PID: {health.pid}</div>}
+          {health.pool && (
+            <>
+              <div>Pooled keys: {health.pool.pooled ?? '?'}</div>
+              <div>Available: {health.pool.available ?? '?'}</div>
+              <div>Cooldowns: {health.pool.cooldowns ?? '?'}</div>
+            </>
+          )}
+        </div>
+      ) : (
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+          {loading ? 'Loading…' : 'Unavailable'}
+        </span>
+      )}
+    </DiagnosticCard>
+  );
+}
+
+function OpenRouterUpstreamCard({ health, loading }) {
+  return (
+    <DiagnosticCard title="OpenRouter Upstream">
+      {health?.upstream ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              className="status-dot"
+              style={{
+                width: 6,
+                height: 6,
+                backgroundColor:
+                  health.upstream.status === 'online'
+                    ? 'var(--status-success)'
+                    : health.upstream.status === 'offline'
+                      ? 'var(--status-error)'
+                      : 'var(--status-warning)',
+              }}
+            />
+            <span>{health.upstream.status || 'unknown'}</span>
+          </div>
+          {health.upstream.checkedAt && <div>Checked: {new Date(health.upstream.checkedAt).toLocaleString()}</div>}
+          {health.upstream.consecutiveFailures > 0 && <div>Failures: {health.upstream.consecutiveFailures}</div>}
+          {health.upstream.lastError && <div style={{ color: 'var(--status-error)', whiteSpace: 'pre-wrap' }}>{health.upstream.lastError}</div>}
+        </div>
+      ) : (
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+          {loading ? 'Loading…' : 'No pings yet'}
+        </span>
+      )}
+    </DiagnosticCard>
+  );
+}
+
+function AppLocationsCard({ nativeInfo, openAppLocation }) {
+  if (!nativeInfo?.paths) return null;
+
+  return (
+    <DiagnosticCard title="App Locations">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+        {nativeInfo.paths.userData && (
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('userData', 'Data Folder')}>
+            Open Data Folder
+          </button>
+        )}
+        {nativeInfo.paths.logs && (
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('logs', 'Logs Folder')}>
+            Open Logs Folder
+          </button>
+        )}
+      </div>
+    </DiagnosticCard>
+  );
+}
+
+function UnlockTokenCard({ authTokenStatus }) {
+  if (!authTokenStatus) return null;
+
+  return (
+    <DiagnosticCard title="Unlock Token">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+        <div>Status: <span style={{ color: authTokenStatus.present ? 'var(--status-success)' : 'var(--status-warning)' }}>{authTokenStatus.present ? 'stored' : authTokenStatus.expired ? 'expired' : 'not stored'}</span></div>
+        {authTokenStatus.expiresAt && <div>Expires: {new Date(authTokenStatus.expiresAt).toLocaleString()}</div>}
+        <div>Biometric gate: {authTokenStatus.biometricGate ? 'enabled' : 'disabled'}</div>
+      </div>
+    </DiagnosticCard>
+  );
+}
+
+function PrismaEngineCard() {
+  return (
+    <DiagnosticCard title="Prisma Engine">
+      <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+        SQLite (bundled)
+      </span>
+    </DiagnosticCard>
+  );
+}
+
+function ChromiumCard({ inElectron }) {
+  return (
+    <DiagnosticCard title="Chromium / Playwright">
+      <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+        {inElectron
+          ? (import.meta.env.PROD ? 'Available (bundled)' : 'Available (dev runtime)')
+          : 'Browser mode - N/A'}
+      </span>
+    </DiagnosticCard>
+  );
+}
+
+function DatabaseCard({ inElectron }) {
+  return (
+    <DiagnosticCard title="Database">
+      <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+        {inElectron ? 'SQLite — Electron userData/hydra.db' : 'SQLite — active server DATABASE_URL'}
+      </span>
+    </DiagnosticCard>
+  );
+}
+
 export function DiagnosticsPanel({ addToast, embedded = false }) {
   const [health, setHealth] = useState(null);
   const [proxyStatus, setProxyStatus] = useState(null);
@@ -196,177 +378,16 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-md)', alignItems: 'start' }}>
-
-        {/* Hydra Version */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-            Version
-          </div>
-          <code style={{ fontSize: '0.85rem', color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)' }}>
-            {nativeInfo?.version || import.meta.env.VITE_APP_VERSION || 'dev'}
-          </code>
-        </div>
-
-        {/* Mode */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-            Runtime Mode
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="status-dot success" style={{ width: 6, height: 6 }} />
-            <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-              {modeLabel}
-            </span>
-          </div>
-        </div>
-
-        {/* Proxy Status */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-            Proxy
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              className="status-dot"
-              style={{
-                width: 6,
-                height: 6,
-                backgroundColor: proxyStatus?.enabled ? 'var(--status-success)' : 'var(--text-tertiary)',
-              }}
-            />
-            <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-              {proxyStatus ? (proxyStatus.enabled ? 'Enabled' : 'Disabled') : 'Loading…'}
-            </span>
-          </div>
-        </div>
-
-        {/* Server Health */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-            Server Process Health
-          </div>
-          {health ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-              <div>Uptime: {formatUptime(health.uptime)}</div>
-              {health.startedAt && <div>Started: {new Date(health.startedAt).toLocaleString()}</div>}
-              {health.serverNow && <div>Server clock: {new Date(health.serverNow).toLocaleString()}</div>}
-              {health.pid && <div>PID: {health.pid}</div>}
-              {health.pool && (
-                <>
-                  <div>Pooled keys: {health.pool.pooled ?? '?'}</div>
-                  <div>Available: {health.pool.available ?? '?'}</div>
-                  <div>Cooldowns: {health.pool.cooldowns ?? '?'}</div>
-                </>
-              )}
-            </div>
-          ) : (
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-              {loading ? 'Loading…' : 'Unavailable'}
-            </span>
-          )}
-        </div>
-
-        {/* OpenRouter Upstream */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-            OpenRouter Upstream
-          </div>
-          {health?.upstream ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span
-                  className="status-dot"
-                  style={{
-                    width: 6,
-                    height: 6,
-                    backgroundColor:
-                      health.upstream.status === 'online'
-                        ? 'var(--status-success)'
-                        : health.upstream.status === 'offline'
-                          ? 'var(--status-error)'
-                          : 'var(--status-warning)',
-                  }}
-                />
-                <span>{health.upstream.status || 'unknown'}</span>
-              </div>
-              {health.upstream.checkedAt && <div>Checked: {new Date(health.upstream.checkedAt).toLocaleString()}</div>}
-              {health.upstream.consecutiveFailures > 0 && <div>Failures: {health.upstream.consecutiveFailures}</div>}
-              {health.upstream.lastError && <div style={{ color: 'var(--status-error)', whiteSpace: 'pre-wrap' }}>{health.upstream.lastError}</div>}
-            </div>
-          ) : (
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-              {loading ? 'Loading…' : 'No pings yet'}
-            </span>
-          )}
-        </div>
-
-        {/* Electron: App Locations */}
-        {nativeInfo?.paths && (
-          <div className="card" style={{ padding: 'var(--space-md)' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-              App Locations
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-              {nativeInfo.paths.userData && (
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('userData', 'Data Folder')}>
-                  Open Data Folder
-                </button>
-              )}
-              {nativeInfo.paths.logs && (
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('logs', 'Logs Folder')}>
-                  Open Logs Folder
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Electron: 24h unlock token */}
-        {authTokenStatus && (
-          <div className="card" style={{ padding: 'var(--space-md)' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-              Unlock Token
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-              <div>Status: <span style={{ color: authTokenStatus.present ? 'var(--status-success)' : 'var(--status-warning)' }}>{authTokenStatus.present ? 'stored' : authTokenStatus.expired ? 'expired' : 'not stored'}</span></div>
-              {authTokenStatus.expiresAt && <div>Expires: {new Date(authTokenStatus.expiresAt).toLocaleString()}</div>}
-              <div>Biometric gate: {authTokenStatus.biometricGate ? 'enabled' : 'disabled'}</div>
-            </div>
-          </div>
-        )}
-
-        {/* Prisma Engine */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-            Prisma Engine
-          </div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-            SQLite (bundled)
-          </span>
-        </div>
-
-        {/* Chromium / Playwright */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-            Chromium / Playwright
-          </div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-            {inElectron
-              ? (import.meta.env.PROD ? 'Available (bundled)' : 'Available (dev runtime)')
-              : 'Browser mode - N/A'}
-          </span>
-        </div>
-
-        {/* Database */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, color: 'var(--text-secondary)' }}>
-            Database
-          </div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-            {inElectron ? 'SQLite — Electron userData/hydra.db' : 'SQLite — active server DATABASE_URL'}
-          </span>
-        </div>
-
+        <VersionCard version={nativeInfo?.version || import.meta.env.VITE_APP_VERSION || 'dev'} />
+        <ModeCard modeLabel={modeLabel} />
+        <ProxyCard proxyStatus={proxyStatus} />
+        <ServerHealthCard health={health} loading={loading} formatUptime={formatUptime} />
+        <OpenRouterUpstreamCard health={health} loading={loading} />
+        <AppLocationsCard nativeInfo={nativeInfo} openAppLocation={openAppLocation} />
+        <UnlockTokenCard authTokenStatus={authTokenStatus} />
+        <PrismaEngineCard />
+        <ChromiumCard inElectron={inElectron} />
+        <DatabaseCard inElectron={inElectron} />
       </div>
     </>
   );
