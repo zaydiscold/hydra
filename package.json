@@ -52,7 +52,7 @@
     "test:db-proxy-cache": "node --experimental-test-module-mocks --test server/tests/db-proxy-cache.test.mjs",
     "test:schema-self-heal-backups": "node --experimental-test-module-mocks --test server/tests/schema-self-heal-backups.test.mjs",
     "test:electron-url-allowlist": "node --experimental-test-module-mocks --test server/tests/electron-url-allowlist.test.mjs",
-    "test:api-integration": "node --test --test-isolation=none server/tests/electron-api-integration.test.mjs",
+    "test:api-integration": "node --test server/tests/electron-api-integration.test.mjs",
     "test:browser-isolation": "node --test server/tests/playwright-isolation.test.mjs",
     "test:openapi-map": "node --test server/tests/hydra-openapi-map.test.mjs",
     "test:mcp": "node --test server/tests/mcp-cli.test.mjs",

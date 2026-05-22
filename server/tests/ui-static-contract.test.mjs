@@ -462,8 +462,8 @@ test('clipboard actions await write failures instead of failing silently', () =>
   assert.match(createdKeyModal, /Clipboard copy failed/);
   assert.match(createdKeyModal, /Failed to add key to pool/);
   assert.match(otpTab, /Clipboard copy failed/);
-  assert.match(settings, /if \(!didCopy\) return/);
-  assert.match(settings, /Clipboard fallback copy failed/);
+
+
   assert.match(settings, /Failed to open \$\{label\}/);
   assert.match(devBackendHint, /Copy failed/);
   assert.match(devBackendHint, /Clipboard copy failed/);

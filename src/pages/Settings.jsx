@@ -5,6 +5,7 @@ import AnimeText from '../components/AnimeText';
 import { LockIcon, NetworkIcon, SettingsIcon, InfoIcon } from '../components/Icons';
 import { isElectron, native, tryNative, useNativeInfo } from '../lib/native';
 import { DiagnosticsPanel } from './Diagnostics.jsx';
+import { copyToClipboard } from '../utils/clipboard';
 
 export default function Settings({ addToast }) {
   const location = useLocation();
@@ -172,33 +173,13 @@ export default function Settings({ addToast }) {
   }
 
   async function copyUrl() {
-    let didCopy = false;
     try {
-      await navigator.clipboard.writeText(primaryUrl);
-      didCopy = true;
+      await copyToClipboard(primaryUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.warn('[SETTINGS] Clipboard API copy failed:', err.message);
-      // Fallback for non-secure contexts (e.g., HTTP in Electron)
-      let ta = null;
-      try {
-        ta = document.createElement('textarea');
-        ta.value = primaryUrl;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        didCopy = document.execCommand('copy');
-        if (!didCopy) throw new Error('execCommand returned false');
-      } catch (fallbackErr) {
-        console.warn('[SETTINGS] Clipboard fallback copy failed:', fallbackErr.message);
-        addToast(`Failed to copy to clipboard: ${fallbackErr.message || 'permission denied'}`, 'error');
-      } finally {
-        if (ta?.parentNode) document.body.removeChild(ta);
-      }
+      addToast(err.message, 'error');
     }
-    if (!didCopy) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
