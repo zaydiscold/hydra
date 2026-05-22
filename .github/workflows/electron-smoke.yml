@@ -31,12 +31,12 @@ jobs:
           - os: macos-15-intel
             build_target: darwin-x64
             target: --mac zip --x64
-          - os: windows-latest
-            build_target: win32-x64
-            target: --win nsis --x64
           - os: ubuntu-latest
             build_target: linux-x64
             target: --linux AppImage --x64
+          # windows-latest dropped from PR smoke (solo project, no Windows users).
+          # release.yml still builds Windows installers on tag pushes — Windows
+          # breakage is caught at release time, not on every PR.
 
     steps:
       - uses: actions/checkout@v4
