@@ -83,3 +83,4 @@ scratch/
 # Heavy local media/build workspaces
 videos/remotion-project/node_modules/
 videos/remotion-project/out/
+.hydra-ci-data
