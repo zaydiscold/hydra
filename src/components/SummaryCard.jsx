@@ -1,4 +1,3 @@
-import React from 'react';
 import ScrambleText from './ScrambleText';
 
 export default function SummaryCard({
