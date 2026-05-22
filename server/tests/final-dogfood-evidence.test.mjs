@@ -45,7 +45,7 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   assert.doesNotMatch(source, /Cookies-journal|local-secrets|jwt-secret/);
 
   assert.match(docs, /DOGFOOD_EVIDENCE\.json/);
-  assert.match(docs, /--version=<semver>/);
+  assert.match(docs, /--version=<version>/);
   assert.match(docs, /--artifact-dir=<dir>/);
   assert.match(docs, /--app=<path\/to\/Hydra\.app>/);
   assert.match(docs, /--launch-diagnostics/);
@@ -53,8 +53,8 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   assert.match(docs, /--manual=packaged-gui-launch/);
   assert.match(docs, /Do not paste API keys/);
   assert.match(docs, /not release-complete/);
-  assert.match(runbook, /--version=1\.0\.11/);
-  assert.match(runbook, /--artifact-dir=\/path\/to\/downloaded\/v1\.0\.11-assets/);
+  assert.match(runbook, /--version=<version>/);
+  assert.match(runbook, /--artifact-dir=\/path\/to\/downloaded\/release-assets/);
   assert.match(runbook, /--app=\/path\/to\/extracted\/Hydra\.app/);
   assert.match(pkg, /"dogfood:final": "node scripts\/final-dogfood-check\.mjs"/);
 });
