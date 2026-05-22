@@ -974,8 +974,8 @@ export function getGenericProxyKey() {
 }
 
 export async function syncKeysFromOpenRouter(userId, accountId, liveKeys) {
-  for (const keyRecord of liveKeys) {
-    await prisma.key.upsert({
+  const operations = liveKeys.map((keyRecord) => {
+    return prisma.key.upsert({
       where: { hash: keyRecord.hash },
       update: {
         name: keyRecord.name || keyRecord.label || 'Unnamed',
@@ -999,7 +999,9 @@ export async function syncKeysFromOpenRouter(userId, accountId, liveKeys) {
         accountId,
       },
     });
-  }
+  });
+
+  await prisma.$transaction(operations);
 }
 
 
