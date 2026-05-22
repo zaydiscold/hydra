@@ -1,4 +1,3 @@
-import React from 'react';
 
 export default function DeleteKeyModal({ hash, onClose, onConfirm }) {
   if (!hash) return null;
