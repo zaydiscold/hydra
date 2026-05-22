@@ -432,6 +432,7 @@ test('clipboard actions await write failures instead of failing silently', () =>
     'src/components/CreatedKeyModal.jsx',
     'src/components/DevBackendHint.jsx',
     'src/components/OtpTab.jsx',
+    'src/utils/clipboard.js',
   ];
 
   for (const file of files) {
@@ -462,9 +463,10 @@ test('clipboard actions await write failures instead of failing silently', () =>
   assert.match(createdKeyModal, /Clipboard copy failed/);
   assert.match(createdKeyModal, /Failed to add key to pool/);
   assert.match(otpTab, /Clipboard copy failed/);
-  assert.match(settings, /if \(!didCopy\) return/);
-  assert.match(settings, /Clipboard fallback copy failed/);
+
+
   assert.match(settings, /Failed to open \$\{label\}/);
+  assert.match(readRepoFile('src/utils/clipboard.js'), /Fallback copy failed/);
   assert.match(devBackendHint, /Copy failed/);
   assert.match(devBackendHint, /Clipboard copy failed/);
   assert.match(vault, /session status probe\(s\) failed/);
