@@ -13,7 +13,7 @@
 
 import https from 'node:https';
 import { URL } from 'node:url';
-import { USER_AGENT, randomUserAgent, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
+import { randomUserAgent, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
 import { logger } from './logger.js';
 
 // Clerk JS version sent with all FAPI requests.
