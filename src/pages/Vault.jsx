@@ -281,10 +281,11 @@ export default function Vault({ addToast }) {
 
   // ── Computed totals ──
   const totalBalance = accounts.reduce((s, a) => s + (a.credits?.remaining ?? 0), 0);
-  const statusSource = (id) => liveStatuses?.[id] || accounts.find((a) => a.id === id)?.sessionStatus;
-  const activeCount = accounts.filter((a) => statusSource(a.id) === 'active').length;
-  const expiredCount = accounts.filter((a) => ['expired', 'none'].includes(statusSource(a.id))).length;
-  const errorCount = accounts.filter((a) => statusSource(a.id) === 'error').length;
+  // O(1) status lookup to avoid nested O(N) finds during array filtering
+  const statusSource = (acc) => liveStatuses?.[acc.id] || acc.sessionStatus;
+  const activeCount = accounts.filter((a) => statusSource(a) === 'active').length;
+  const expiredCount = accounts.filter((a) => ['expired', 'none'].includes(statusSource(a))).length;
+  const errorCount = accounts.filter((a) => statusSource(a) === 'error').length;
 
   if (loading && accounts.length === 0) {
     return (
