@@ -426,11 +426,19 @@ export async function getAllAccountsWithKeys(userId) {
   const hydrated = await Promise.all(accounts.map(async (account) => {
     try {
       const { config, managementKey } = await canonicalizeManagementKeyState(account);
+      const { plain, decryptFailed } = readSessionPlainResult(account);
       // Exploit #14: Cookie stacking — normalize clientCookies array for hydrated accounts
       const clientCookiesStack = normalizeClientCookies(config);
       return [{
         ...account,
         ...config,
+        email: config.email,
+        authMethod: config.authMethod,
+        hasManagementKey: !!managementKey,
+        passwordOnFile: !!config.password,
+        hasCredentials: !!(config.email && (config.password || config.authMethod === 'otp' || config.authMethod === 'password')),
+        sessionStatus: getSessionStatus(config, plain, decryptFailed, account.id),
+        sessionDecryptFailed: decryptFailed,
         clientCookies: clientCookiesStack,
         managementKey,
         sessionCookie: readSessionToken(account),

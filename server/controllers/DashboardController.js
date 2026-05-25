@@ -60,19 +60,13 @@ class DashboardController extends BaseController {
         });
       }
 
-      let metaById = new Map(
-        (await store.getAccounts(req.user.id)).map((a) => [a.id, a]),
-      );
-
       // Refresh expiring sessions in the background path only when the stored
       // expiry says they are close to death. Unknown/expired sessions are
       // handled by explicit user actions; probing them on every dashboard open
       // creates noisy Clerk/network fan-out while the app is otherwise idle.
-      let refreshedSessions = false;
       await Promise.all(
         accounts.map(async (account) => {
-          const meta = metaById.get(account.id);
-          const needsRefresh = meta?.sessionStatus === 'expiring';
+          const needsRefresh = account.sessionStatus === 'expiring';
           if (!needsRefresh) return;
           
           // Exploit #14: Cookie stacking — try all stacked cookies newest-first
@@ -102,8 +96,11 @@ class DashboardController extends BaseController {
                 refreshed.sessionExpiry,
                 { replaceClientCookies: liveStack },
               );
-              refreshedSessions = true;
-              logger.info(`[DASHBOARD] Session refreshed via clientCookie (account=${account.id}, was=${meta.sessionStatus})`);
+              // Directly update the in-memory account's session status to 'active'
+              const wasStatus = account.sessionStatus;
+              account.sessionStatus = 'active';
+              account.sessionExpiry = refreshed.sessionExpiry;
+              logger.info(`[DASHBOARD] Session refreshed via clientCookie (account=${account.id}, was=${wasStatus})`);
             }
           } catch (err) {
             logger.warn(`[DASHBOARD] Proactive refresh failed (account=${account.id}): ${err.message}`);
@@ -111,12 +108,6 @@ class DashboardController extends BaseController {
         })
       );
       
-      if (refreshedSessions) {
-        metaById = new Map(
-          (await store.getAccounts(req.user.id)).map((a) => [a.id, a]),
-        );
-      }
-
       // Fetch snapshots with concurrency limiting (no artificial delays)
       // Concurrency of 5 to respect OpenRouter rate limits while maximizing speed
       const CONCURRENCY = 5;
@@ -125,8 +116,6 @@ class DashboardController extends BaseController {
       const snapshots = await Promise.all(
         accounts.map((account) =>
           limit(async () => {
-            const meta = metaById.get(account.id) || {};
-            
             // Check cache first (unless account has error status)
             const cached = getCachedSnapshot(account.id);
             if (cached && cached.status !== 'error') {
@@ -135,13 +124,13 @@ class DashboardController extends BaseController {
                 ...cached,
                 id: account.id,
                 alias: account.alias,
-                email: meta.email,
-                authMethod: meta.authMethod,
-                passwordOnFile: meta.passwordOnFile,
-                sessionStatus: meta.sessionStatus,
-                sessionDecryptFailed: meta.sessionDecryptFailed,
-                hasManagementKey: meta.hasManagementKey,
-                hasCredentials: meta.hasCredentials,
+                email: account.email,
+                authMethod: account.authMethod,
+                passwordOnFile: account.passwordOnFile,
+                sessionStatus: account.sessionStatus,
+                sessionDecryptFailed: account.sessionDecryptFailed,
+                hasManagementKey: account.hasManagementKey,
+                hasCredentials: account.hasCredentials,
                 _cached: true, // Flag for debugging
               };
             }
@@ -157,13 +146,13 @@ class DashboardController extends BaseController {
                 id: account.id,
                 alias: account.alias,
                 status: 'ok',
-                email: meta.email,
-                authMethod: meta.authMethod,
-                passwordOnFile: meta.passwordOnFile,
-                sessionStatus: meta.sessionStatus,
-                sessionDecryptFailed: meta.sessionDecryptFailed,
-                hasManagementKey: meta.hasManagementKey,
-                hasCredentials: meta.hasCredentials,
+                email: account.email,
+                authMethod: account.authMethod,
+                passwordOnFile: account.passwordOnFile,
+                sessionStatus: account.sessionStatus,
+                sessionDecryptFailed: account.sessionDecryptFailed,
+                hasManagementKey: account.hasManagementKey,
+                hasCredentials: account.hasCredentials,
                 ...snapshot,
               };
               
@@ -184,13 +173,13 @@ class DashboardController extends BaseController {
                 alias: account.alias,
                 status: 'error',
                 error: err.message,
-                email: meta.email,
-                authMethod: meta.authMethod,
-                passwordOnFile: meta.passwordOnFile,
-                sessionStatus: meta.sessionStatus,
-                sessionDecryptFailed: meta.sessionDecryptFailed,
-                hasManagementKey: meta.hasManagementKey,
-                hasCredentials: meta.hasCredentials,
+                email: account.email,
+                authMethod: account.authMethod,
+                passwordOnFile: account.passwordOnFile,
+                sessionStatus: account.sessionStatus,
+                sessionDecryptFailed: account.sessionDecryptFailed,
+                hasManagementKey: account.hasManagementKey,
+                hasCredentials: account.hasCredentials,
                 credits: { total: 0, used: 0, remaining: 0 },
                 keys: { total: 0, active: 0, disabled: 0, list: [] },
               };
@@ -225,17 +214,16 @@ class DashboardController extends BaseController {
             displaySessionStatuses[snapshot.id] = payload.status;
             // Merge display status into snapshot so response is immediately accurate
             snapshot.sessionStatus = payload.status;
-            // Also add lastLoginAt if not already present from meta
-            if (!snapshot.lastLoginAt) {
-              const meta = metaById.get(snapshot.id);
-              if (meta?.lastLoginAt) snapshot.lastLoginAt = meta.lastLoginAt;
+            // Also add lastLoginAt if not already present from account object
+            const account = accounts.find((a) => a.id === snapshot.id);
+            if (!snapshot.lastLoginAt && account?.lastLoginAt) {
+              snapshot.lastLoginAt = account.lastLoginAt;
             }
-            if (!snapshot.sessionExpiry) {
-              const meta = metaById.get(snapshot.id);
-              if (meta?.sessionExpiry) snapshot.sessionExpiry = meta.sessionExpiry;
+            if (!snapshot.sessionExpiry && account?.sessionExpiry) {
+              snapshot.sessionExpiry = account.sessionExpiry;
             }
           } catch (err) {
-            // Non-fatal: keep existing sessionStatus from meta
+            // Non-fatal: keep existing sessionStatus
             logger.warn(`[DASHBOARD] Stored session status payload failed (account=${snapshot.id}): ${err.message}`);
           }
         }))

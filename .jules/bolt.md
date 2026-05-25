@@ -1,0 +1,3 @@
+## 2024-05-25 - [Removed redundant Database reads on Dashboard load]
+**Learning:** Found an N+1 style inefficiency where the `DashboardController` re-queries the full `Account` record list (which includes decrypting `config` fields) using `store.getAccounts()` to map a `metaById` dictionary, despite already calling `store.getAllAccountsWithKeys()` on the previous line.
+**Action:** When a method returns `Account` objects, ensure all necessary UI metadata properties (like `sessionStatus`, `hasManagementKey`, `email`, etc) are attached directly via object spreading when decrypting to prevent callers from having to manually fetch the same items multiple times.

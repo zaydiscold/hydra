@@ -168,8 +168,8 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*prunePromise = pruneRequestLogs\(\);[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
   assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\r?\n\s*prunePromise = pruneRequestLogs\(\);/);
   assert.match(supervisor, /const TASK_SWEEP_INTERVAL_MS = 30 \* 1000/);
-  assert.match(dashboard, /const needsRefresh = meta\?\.sessionStatus === 'expiring'/);
-  assert.doesNotMatch(dashboard, /meta\?\.sessionStatus === 'expired' \|\| meta\?\.sessionStatus === 'unknown'/);
+  assert.match(dashboard, /const needsRefresh = account\.sessionStatus === 'expiring'/);
+  assert.doesNotMatch(dashboard, /account\.sessionStatus === 'expired' \|\| account\.sessionStatus === 'unknown'/);
   assert.doesNotMatch(metrics, /function probeProvisionTruth|async function probeProvisionTruth/);
   assert.doesNotMatch(vault, /Provision readiness probe failed|probeProvisionTruth/);
   assert.doesNotMatch(accountDetail, /probeSession\(\);\s*\}\)\(\);/);
