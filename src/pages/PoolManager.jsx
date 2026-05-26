@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePools } from '../hooks/usePools';
+import { useOwnedTimeouts } from '../hooks/useOwnedTimeouts';
 import AnimeText from '../components/AnimeText';
 import DeleteKeyModal from '../components/DeleteKeyModal';
 import RegisterKeyModal from '../components/RegisterKeyModal';
@@ -27,17 +28,31 @@ function formatModelCacheSubtitle(modelCache) {
 function CopyButton({ text, label }) {
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const copyResetTimerRef = useRef(null);
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
+
+  useEffect(() => () => {
+    clearOwnedTimeout(copyResetTimerRef.current);
+  }, [clearOwnedTimeout]);
+
   const handleCopy = async () => {
+    clearOwnedTimeout(copyResetTimerRef.current);
     try {
       await navigator.clipboard.writeText(text);
       setCopyFailed(false);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copyResetTimerRef.current = setOwnedTimeout(() => {
+        copyResetTimerRef.current = null;
+        setCopied(false);
+      }, 2000);
     } catch (err) {
       console.warn(`[POOL_MANAGER] Copy ${label} failed:`, err.message);
       setCopied(false);
       setCopyFailed(true);
-      setTimeout(() => setCopyFailed(false), 3000);
+      copyResetTimerRef.current = setOwnedTimeout(() => {
+        copyResetTimerRef.current = null;
+        setCopyFailed(false);
+      }, 3000);
     }
   };
   return (
@@ -63,18 +78,31 @@ function EndpointCard({
   const [keyVisible, setKeyVisible] = useState(false);
   const [copiedModelId, setCopiedModelId] = useState(null);
   const [copyFailedModelId, setCopyFailedModelId] = useState(null);
+  const modelCopyResetTimerRef = useRef(null);
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
+
+  useEffect(() => () => {
+    clearOwnedTimeout(modelCopyResetTimerRef.current);
+  }, [clearOwnedTimeout]);
 
   async function copyModelId(modelId) {
+    clearOwnedTimeout(modelCopyResetTimerRef.current);
     try {
       await navigator.clipboard.writeText(modelId);
       setCopyFailedModelId(null);
       setCopiedModelId(modelId);
-      setTimeout(() => setCopiedModelId(null), 2000);
+      modelCopyResetTimerRef.current = setOwnedTimeout(() => {
+        modelCopyResetTimerRef.current = null;
+        setCopiedModelId(null);
+      }, 2000);
     } catch (err) {
       console.warn(`[POOL_MANAGER] Copy model id failed for ${modelId}:`, err.message);
       setCopiedModelId(null);
       setCopyFailedModelId(modelId);
-      setTimeout(() => setCopyFailedModelId(null), 3000);
+      modelCopyResetTimerRef.current = setOwnedTimeout(() => {
+        modelCopyResetTimerRef.current = null;
+        setCopyFailedModelId(null);
+      }, 3000);
     }
   }
 

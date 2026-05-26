@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useOwnedTimeouts } from '../hooks/useOwnedTimeouts';
 
 export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
   const [pasteVal, setPasteVal] = useState('');
@@ -6,6 +7,8 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
   const [error, setError] = useState('');
   const [pasteHint, setPasteHint] = useState('');
   const inputRef = useRef(null);
+  const focusTimerRef = useRef(null);
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
 
   useEffect(() => {
     if (!hash) return;
@@ -21,8 +24,13 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
     }
 
     tryPaste();
-    setTimeout(() => inputRef.current?.focus(), 50);
-  }, [hash]);
+    clearOwnedTimeout(focusTimerRef.current);
+    focusTimerRef.current = setOwnedTimeout(() => {
+      focusTimerRef.current = null;
+      inputRef.current?.focus();
+    }, 50);
+    return () => clearOwnedTimeout(focusTimerRef.current);
+  }, [clearOwnedTimeout, hash, setOwnedTimeout]);
 
   async function handleSave() {
     setError('');

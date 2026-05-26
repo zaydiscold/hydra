@@ -131,10 +131,23 @@ test('ScrambleText clears delayed intervals on unmount', () => {
 });
 
 test('short-lived renderer feedback timers are cleared on unmount', () => {
+  const ownedTimeouts = readRepoFile('src/hooks/useOwnedTimeouts.js');
+  const app = readRepoFile('src/App.jsx');
   const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
   const settings = readRepoFile('src/pages/Settings.jsx');
   const codeRedemption = readRepoFile('src/pages/CodeRedemption.jsx');
+  const poolManager = readRepoFile('src/pages/PoolManager.jsx');
+  const diagnostics = readRepoFile('src/pages/Diagnostics.jsx');
+  const createdKeyModal = readRepoFile('src/components/CreatedKeyModal.jsx');
+  const devBackendHint = readRepoFile('src/components/DevBackendHint.jsx');
+  const registerKeyModal = readRepoFile('src/components/RegisterKeyModal.jsx');
+  const otpTab = readRepoFile('src/components/OtpTab.jsx');
 
+  assert.match(ownedTimeouts, /timersRef = useRef\(new Set\(\)\)/);
+  assert.match(ownedTimeouts, /clearTimeout\(timer\)/);
+  assert.match(ownedTimeouts, /timersRef\.current\.delete\(timer\)/);
+  assert.match(app, /useOwnedTimeouts/);
+  assert.doesNotMatch(app, /setTimeout\(\(\) => setToasts/);
   assert.match(accountDetail, /copyTimerRef = useRef\(null\)/);
   assert.match(accountDetail, /transientTimersRef = useRef\(new Set\(\)\)/);
   assert.match(accountDetail, /for \(const timer of transientTimersRef\.current\) clearTimeout\(timer\)/);
@@ -142,6 +155,13 @@ test('short-lived renderer feedback timers are cleared on unmount', () => {
   assert.match(settings, /if \(copiedTimerRef\.current\) clearTimeout\(copiedTimerRef\.current\)/);
   assert.match(codeRedemption, /historyRefreshTimerRef = useRef\(null\)/);
   assert.match(codeRedemption, /if \(historyRefreshTimerRef\.current\) clearTimeout\(historyRefreshTimerRef\.current\)/);
+  assert.match(poolManager, /copyResetTimerRef = useRef\(null\)/);
+  assert.match(poolManager, /modelCopyResetTimerRef = useRef\(null\)/);
+  assert.match(diagnostics, /copiedResetTimerRef = useRef\(null\)/);
+  assert.match(createdKeyModal, /copiedResetTimerRef = useRef\(null\)/);
+  assert.match(devBackendHint, /copyResetTimerRef = useRef\(null\)/);
+  assert.match(registerKeyModal, /focusTimerRef = useRef\(null\)/);
+  assert.match(otpTab, /copyStatusTimerRef\.current = null/);
 });
 
 test('global form controls cannot fall back to white native browser styling', () => {

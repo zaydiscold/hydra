@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import process from 'node:process';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 
@@ -87,6 +87,7 @@ function assertFileNonEmpty(path, label) {
 function assertPackagedServerConfigImports(resourcesDir) {
   const appDir = join(resourcesDir, 'app');
   const configPath = join(appDir, 'server/config.js');
+  const configUrl = pathToFileURL(configPath).href;
   assertFileNonEmpty(configPath, 'packaged server config module');
 
   const output = execFileSync(process.execPath, [
@@ -107,7 +108,7 @@ function assertPackagedServerConfigImports(resourcesDir) {
       NODE_ENV: 'production',
       DATABASE_URL: `file:${join(resourcesDir, 'data/empty-hydra.db')}`,
       JWT_SECRET: 'hydra-smoke-secret-with-32-characters',
-      HYDRA_PACKAGED_CONFIG_PATH: configPath,
+      HYDRA_PACKAGED_CONFIG_PATH: configUrl,
     },
   });
   if (output.trim()) {

@@ -1,5 +1,6 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CopyIcon, EyeIcon, EyeOffIcon, KeyIcon, NetworkIcon } from './Icons';
+import { useOwnedTimeouts } from '../hooks/useOwnedTimeouts';
 
 /**
  * Modal displayed after creating a new API key.
@@ -13,20 +14,31 @@ export default function CreatedKeyModal({ keyData, onClose, onAddToPool }) {
   const [addingToPool, setAddingToPool] = useState(false);
   const [poolAdded, setPoolAdded] = useState(false);
   const [poolError, setPoolError] = useState('');
+  const copiedResetTimerRef = useRef(null);
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
 
   const copyToClipboard = useCallback(async (value, { quiet = false } = {}) => {
+    if (!quiet) clearOwnedTimeout(copiedResetTimerRef.current);
     try {
       await navigator.clipboard.writeText(value);
       setCopyError('');
       if (!quiet) {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        copiedResetTimerRef.current = setOwnedTimeout(() => {
+          copiedResetTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       }
     } catch (err) {
+      clearOwnedTimeout(copiedResetTimerRef.current);
       setCopied(false);
       setCopyError(`Clipboard copy failed: ${err.message || 'permission denied'}`);
     }
-  }, []);
+  }, [clearOwnedTimeout, setOwnedTimeout]);
+
+  useEffect(() => () => {
+    clearOwnedTimeout(copiedResetTimerRef.current);
+  }, [clearOwnedTimeout]);
 
   // Auto-copy to clipboard when modal opens. If macOS/browser permission blocks it,
   // the modal shows the same failure state as the manual copy button.

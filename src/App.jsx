@@ -4,6 +4,7 @@ import './index.css';
 import * as api from './api';
 import { logger } from './lib/client-logger.js';
 import { isElectron, native as nativeBridge, tryNative, useNativeInfo } from './lib/native';
+import { useOwnedTimeouts } from './hooks/useOwnedTimeouts';
 import DevBackendHint from './components/DevBackendHint';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
@@ -595,6 +596,7 @@ export default function App() {
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const [upstreamHealth, setUpstreamHealth] = useState(null);
   const recentToastsRef = useRef(new Map());
+  const { setOwnedTimeout } = useOwnedTimeouts();
   const navigate = useNavigate();
   const location = useLocation();
   const electronMode = isElectron();
@@ -633,7 +635,7 @@ export default function App() {
     if (now - lastShownAt < 1500) return;
 
     recentToastsRef.current.set(toastKey, now);
-    setTimeout(() => {
+    setOwnedTimeout(() => {
       if (recentToastsRef.current.get(toastKey) === now) {
         recentToastsRef.current.delete(toastKey);
       }
@@ -641,8 +643,8 @@ export default function App() {
 
     const id = `${now}-${Math.random().toString(36).slice(2, 8)}`;
     setToasts((prev) => [...prev, { id, message, type, durationMs }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), durationMs);
-  }, []);
+    setOwnedTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), durationMs);
+  }, [setOwnedTimeout]);
 
   const dismissToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));

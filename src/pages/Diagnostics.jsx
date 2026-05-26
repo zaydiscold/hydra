@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as api from '../api';
 import AnimeText from '../components/AnimeText';
 import { InfoIcon, RefreshIcon, CopyIcon } from '../components/Icons';
+import { useOwnedTimeouts } from '../hooks/useOwnedTimeouts';
 import { isElectron, native, tryNative } from '../lib/native';
 
 function formatUptime(seconds) {
@@ -27,6 +28,8 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
   const [copied, setCopied] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [diagnosticsError, setDiagnosticsError] = useState('');
+  const copiedResetTimerRef = useRef(null);
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
 
   const inElectron = isElectron();
 
@@ -77,6 +80,10 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
   }, [addToast, inElectron]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => () => {
+    clearOwnedTimeout(copiedResetTimerRef.current);
+  }, [clearOwnedTimeout]);
 
   const handleCopyBundle = useCallback(async () => {
     const lines = [];
@@ -131,12 +138,16 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopied(true);
       addToast('Support bundle copied to clipboard', 'success');
-      setTimeout(() => setCopied(false), 2000);
+      clearOwnedTimeout(copiedResetTimerRef.current);
+      copiedResetTimerRef.current = setOwnedTimeout(() => {
+        copiedResetTimerRef.current = null;
+        setCopied(false);
+      }, 2000);
     } catch (err) {
       console.warn('[DIAGNOSTICS] Support bundle copy failed:', err.message);
       addToast(`Failed to copy to clipboard: ${err.message || 'permission denied'}`, 'error');
     }
-  }, [nativeInfo, authTokenStatus, proxyStatus, health, inElectron, addToast]);
+  }, [nativeInfo, authTokenStatus, proxyStatus, health, inElectron, addToast, clearOwnedTimeout, setOwnedTimeout]);
 
   const openAppLocation = useCallback(async (location, label) => {
     try {

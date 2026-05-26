@@ -427,10 +427,12 @@ export async function getAccountWithKey(userId, id) {
   const { config, managementKey } = await canonicalizeManagementKeyState(account);
   // Exploit #14: Cookie stacking — normalize clientCookies array
   const clientCookiesStack = normalizeClientCookies(config);
+  const latestClientCookie = getLatestClientCookie(config);
   return {
     ...account,
     ...config,
     clientCookies: clientCookiesStack,
+    clientCookie: latestClientCookie,
     password: config.password,
     sessionCookie: readSessionToken(account),
     managementKey,
@@ -445,10 +447,12 @@ export async function getAllAccountsWithKeys(userId) {
       const { config, managementKey } = await canonicalizeManagementKeyState(account);
       // Exploit #14: Cookie stacking — normalize clientCookies array for hydrated accounts
       const clientCookiesStack = normalizeClientCookies(config);
+      const latestClientCookie = getLatestClientCookie(config);
       return [{
         ...account,
         ...config,
         clientCookies: clientCookiesStack,
+        clientCookie: latestClientCookie,
         managementKey,
         sessionCookie: readSessionToken(account),
       }];
@@ -629,11 +633,25 @@ const MAX_STACKED_CLIENT_COOKIES = 25;
  * Backward compat: if readConfig returns a string clientCookie, convert to single-element array.
  * Exploit #14: Cookie stacking — clientCookie string → clientCookies array of {cookie, issuedAt}.
  */
-export function normalizeClientCookies(config) {
-  // New format already present
+export function normalizeClientCookies(config = {}) {
+  const normalized = [];
+  const seen = new Set();
+
   if (Array.isArray(config.clientCookies) && config.clientCookies.length > 0) {
-    return config.clientCookies;
+    for (const entry of config.clientCookies) {
+      const rawCookie = typeof entry === 'string' ? entry : entry?.cookie;
+      const cookie = rawCookie != null ? String(rawCookie).trim() : '';
+      if (!cookie || cookie === 'undefined' || seen.has(cookie)) continue;
+      seen.add(cookie);
+      normalized.push({
+        cookie,
+        issuedAt: typeof entry === 'object' && entry?.issuedAt ? entry.issuedAt : new Date().toISOString(),
+      });
+      if (normalized.length >= MAX_STACKED_CLIENT_COOKIES) break;
+    }
+    if (normalized.length > 0) return normalized;
   }
+
   // Legacy: string clientCookie → single-element array
   const cc = config.clientCookie ? String(config.clientCookie).trim() : '';
   if (cc && cc !== 'undefined') {
@@ -757,9 +775,10 @@ export async function getAccountSession(userId, id) {
   const config = readConfig(account);
   // Exploit #14: Cookie stacking — return clientCookies array alongside legacy clientCookie
   const clientCookiesStack = normalizeClientCookies(config);
+  const latestClientCookie = getLatestClientCookie(config);
   return {
     sessionCookie: readSessionToken(account),
-    clientCookie: config.clientCookie,
+    clientCookie: latestClientCookie,
     clientCookies: clientCookiesStack,
     sessionExpiry: config.sessionExpiry,
     cfCookieExpirations: config.cfCookieExpirations || {},

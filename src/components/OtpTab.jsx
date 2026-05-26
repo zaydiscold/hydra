@@ -91,7 +91,10 @@ export default function OtpTab({
     } catch (err) {
       setCopyExportStatus(`Clipboard copy failed: ${err.message || 'permission denied'}`);
     }
-    copyStatusTimerRef.current = setTimeout(() => setCopyExportStatus(''), 3000);
+    copyStatusTimerRef.current = setTimeout(() => {
+      copyStatusTimerRef.current = null;
+      setCopyExportStatus('');
+    }, 3000);
   }
 
   return (

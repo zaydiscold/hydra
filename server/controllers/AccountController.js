@@ -38,6 +38,17 @@ function pruneDeadClientCookies(stack, refreshed) {
   return stack.filter((entry) => !deadSet.has(entry.cookie));
 }
 
+function latestClientCookie(session) {
+  const stacked = Array.isArray(session?.clientCookies)
+    ? session.clientCookies.find((entry) => entry?.cookie && String(entry.cookie).trim() !== 'undefined')
+    : null;
+  return stacked?.cookie || session?.clientCookie || '';
+}
+
+function hasRefreshCookie(session) {
+  return !!latestClientCookie(session);
+}
+
 function isAuthoritativeSessionFailure(errLike) {
   const code = String(errLike?.code || '').toUpperCase();
   const msg = String(errLike?.message || '').toLowerCase();
@@ -287,7 +298,7 @@ export class AccountController extends BaseController {
       const session = await store.getAccountSession(req.user.id, req.params.id);
 
       // Ghost session recovery: try silent __client → __session refresh before forcing OTP
-      if (session.clientCookie) {
+      if (hasRefreshCookie(session)) {
         try {
           const cookieInput244 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
           const refreshed = await clerkAuth.refreshSession(cookieInput244, session.sessionCookie);
@@ -296,7 +307,7 @@ export class AccountController extends BaseController {
             await store.updateAccountSession(
               req.user.id, req.params.id,
               refreshed.sessionToken,
-              refreshed.clientCookie ?? session.clientCookie,
+              refreshed.clientCookie ?? latestClientCookie(session),
               refreshed.sessionExpiry ?? null,
               { replaceClientCookies: liveStack },
             );
@@ -430,7 +441,7 @@ export class AccountController extends BaseController {
       const { signInId, code, totpSecondFactor, isSignUp } = this.validate(req.body, otpVerifySchema);
 
       const accountSession = await store.getAccountSession(req.user.id, req.params.id);
-      const storedClient = accountSession.clientCookie;
+      const storedClient = latestClientCookie(accountSession);
       if (
         !storedClient ||
         String(storedClient).trim() === '' ||
@@ -445,8 +456,8 @@ export class AccountController extends BaseController {
         );
       }
       const session = totpSecondFactor
-        ? await clerkAuth.completeSecondFactor(signInId, code, accountSession.clientCookie)
-        : await clerkAuth.completeEmailOTP(signInId, code, accountSession.clientCookie, { isSignUp: isSignUp ?? false });
+        ? await clerkAuth.completeSecondFactor(signInId, code, storedClient)
+        : await clerkAuth.completeEmailOTP(signInId, code, storedClient, { isSignUp: isSignUp ?? false });
       await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry, { isNewLogin: true });
       await store.updateAccountLastSync(req.user.id, req.params.id);
       await store.logAccountEvent(req.user.id, req.params.id, 'OTP_VERIFIED', 'Signed in via OTP');
@@ -507,7 +518,7 @@ export class AccountController extends BaseController {
       const cookieInput448 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
       const refreshed = await clerkAuth.refreshSession(cookieInput448, session.sessionCookie);
       if (!refreshed) return this.error(res, 'Session refresh failed — please log in again', 401);
-      const cc = refreshed.clientCookie ?? session.clientCookie;
+      const cc = refreshed.clientCookie ?? latestClientCookie(session);
       const liveStack = pruneDeadClientCookies(session.clientCookies, refreshed);
       await store.updateAccountSession(req.user.id, req.params.id, refreshed.sessionCookie, cc, refreshed.sessionExpiry, {
         replaceClientCookies: liveStack,
@@ -904,7 +915,7 @@ export class AccountController extends BaseController {
     try {
       const session = await store.getAccountSession(req.user.id, req.params.id);
 
-      if (!session.clientCookie) {
+      if (!hasRefreshCookie(session)) {
         return this.error(res, 'No client cookie stored — silent refresh not possible. Use Sign In to re-authenticate.', 400);
       }
 
@@ -924,7 +935,7 @@ export class AccountController extends BaseController {
       await store.updateAccountSession(
         req.user.id, req.params.id,
         refreshed.sessionToken,
-        refreshed.clientCookie ?? session.clientCookie,
+        refreshed.clientCookie ?? latestClientCookie(session),
         refreshed.sessionExpiry ?? null,
         { replaceClientCookies: pruneDeadClientCookies(session.clientCookies, refreshed) },
       );

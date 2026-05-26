@@ -146,6 +146,7 @@ test('electron package smoke validates target-specific Chromium archives', () =>
   assert.match(script, /win32-x64[\s\S]*chrome-win[\s\S]*chrome-win64/, 'smoke must verify Windows Chromium payloads');
   assert.match(script, /function assertPackagedServerConfigImports/, 'smoke must import the packaged server config module');
   assert.match(script, /HYDRA_PACKAGED_CONFIG_PATH/, 'smoke must import server config from the packaged app path');
+  assert.match(script, /pathToFileURL\(configPath\)\.href/, 'smoke must import packaged config through a file URL so Windows drive-letter paths do not break ESM');
   assert.match(script, /packaged server config import OK/, 'smoke logs must prove packaged server config import ran');
   assert.match(script, /Chromium archive target mismatch/, 'smoke must explain wrong-target Chromium archives directly');
   assert.match(script, /unsupported HYDRA_BUILD_TARGET/, 'smoke must reject unknown target names');
