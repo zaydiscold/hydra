@@ -25,6 +25,24 @@ export function extractAuthToken(req) {
   return parseCookies(req.headers.cookie)[AUTH_TOKEN_COOKIE] || null;
 }
 
+export function extractAuthTokenCandidates(req) {
+  const tokens = [];
+  const header = req.headers.authorization || '';
+  if (header.startsWith('Bearer ')) tokens.push(header.slice(7));
+  const cookieToken = parseCookies(req.headers.cookie)[AUTH_TOKEN_COOKIE] || null;
+  if (cookieToken && !tokens.includes(cookieToken)) tokens.push(cookieToken);
+  return tokens;
+}
+
+export async function validateRequestAuth(req) {
+  const tokens = extractAuthTokenCandidates(req);
+  for (const token of tokens) {
+    const user = await validateToken(token);
+    if (user) return user;
+  }
+  return null;
+}
+
 export function setAuthTokenCookie(res, token) {
   res.cookie(AUTH_TOKEN_COOKIE, token, {
     maxAge: AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS * 1000,
@@ -43,8 +61,7 @@ export function clearAuthTokenCookie(res) {
 }
 
 export async function requireUnlocked(req, res, next) {
-  const token = extractAuthToken(req);
-  const user = await validateToken(token);
+  const user = await validateRequestAuth(req);
 
   if (!user) {
     return res.status(401).json({ error: 'Not authenticated' });

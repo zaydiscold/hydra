@@ -1,6 +1,8 @@
 // @platform all
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const validateCalls = [];
 
@@ -16,6 +18,7 @@ mock.module(new URL('../services/auth.js', import.meta.url).href, {
 const {
   AUTH_TOKEN_COOKIE,
   extractAuthToken,
+  extractAuthTokenCandidates,
   setAuthTokenCookie,
   clearAuthTokenCookie,
   requireUnlocked,
@@ -30,6 +33,17 @@ test('extractAuthToken prefers Authorization bearer token over cookie', () => {
   };
 
   assert.equal(extractAuthToken(req), 'header-token');
+});
+
+test('extractAuthTokenCandidates keeps bearer first but preserves cookie fallback', () => {
+  const req = {
+    headers: {
+      authorization: 'Bearer stale-header-token',
+      cookie: `${AUTH_TOKEN_COOKIE}=valid-cookie-token`,
+    },
+  };
+
+  assert.deepEqual(extractAuthTokenCandidates(req), ['stale-header-token', 'valid-cookie-token']);
 });
 
 test('extractAuthToken falls back to hydra_token cookie', () => {
@@ -104,6 +118,29 @@ test('requireUnlocked accepts cookie token', async () => {
   assert.equal(validateCalls.at(-1), 'valid-cookie-token');
 });
 
+test('requireUnlocked falls back to valid HttpOnly cookie when bearer token is stale', async () => {
+  const req = {
+    headers: {
+      authorization: 'Bearer stale-header-token',
+      cookie: `${AUTH_TOKEN_COOKIE}=valid-cookie-token`,
+    },
+  };
+  const res = {
+    status() {
+      throw new Error('status should not be called when cookie fallback authenticates');
+    },
+  };
+  let calledNext = false;
+
+  await requireUnlocked(req, res, () => {
+    calledNext = true;
+  });
+
+  assert.equal(calledNext, true);
+  assert.deepEqual(req.user, { id: 'user-1', username: 'admin' });
+  assert.deepEqual(validateCalls.slice(-2), ['stale-header-token', 'valid-cookie-token']);
+});
+
 test('auth token cookie is HttpOnly and scoped to same-site localhost routes', () => {
   const calls = [];
   const res = {
@@ -138,4 +175,11 @@ test('auth token cookie is HttpOnly and scoped to same-site localhost routes', (
       httpOnly: true,
     },
   });
+});
+
+test('logout route clears HttpOnly cookies even after token expiry', () => {
+  const routeSource = readFileSync(resolve(import.meta.dirname, '../routes/auth.js'), 'utf8');
+
+  assert.match(routeSource, /router\.post\('\/logout', AuthController\.logout\.bind\(AuthController\)\)/);
+  assert.doesNotMatch(routeSource, /router\.post\('\/logout', requireUnlocked/);
 });

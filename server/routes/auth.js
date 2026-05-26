@@ -30,8 +30,8 @@ router.post('/login', AuthController.login.bind(AuthController));
 // Nuclear Reset (Wipe Database)
 router.post('/nuke', AuthController.nuke.bind(AuthController));
 
-// Logout (Stateless JWTs mean frontend just deletes token)
-router.post('/logout', requireUnlocked, AuthController.logout.bind(AuthController));
+// Logout must remain idempotent/public so expired HttpOnly cookies can still be cleared.
+router.post('/logout', AuthController.logout.bind(AuthController));
 
 // Change password (requires current session)
 router.post('/change-password', requireUnlocked, AuthController.changePassword.bind(AuthController));

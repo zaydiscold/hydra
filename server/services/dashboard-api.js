@@ -15,6 +15,7 @@ import {
   signInWithPassword,
   refreshSession,
   NeedSecondFactorError,
+  clerkFapiDeviceCookieHeader,
   openRouterDashboardDeviceCookies,
   openRouterPlaywrightDeviceCookies,
 } from './clerk-auth.js';
@@ -642,7 +643,7 @@ export async function getFreshJwt(sessionCookie, clientCookie) {
     return cached.token;
   }
   try {
-    const cookieHeader = `__session=${sessionCookie}; ${clientCookie}`;
+    const cookieHeader = clerkClientCookieHeader(sessionCookie, clientCookie);
     const clerkJsVersion = process.env.HYDRA_CLERK_JS_VERSION || '5.125.7';
     const url = `https://clerk.openrouter.ai/v1/client?_clerk_js_version=${clerkJsVersion}`;
     
@@ -679,9 +680,21 @@ export async function getFreshJwt(sessionCookie, clientCookie) {
   }
 }
 
-function dashboardHeaders(sessionCookie, clientCookie, extra = {}) {
+function clerkClientCookieHeader(sessionCookie, clientCookie) {
+  const parts = [];
+  if (sessionCookie) parts.push(`__session=${sessionCookie}`);
+  const device = clientCookie ? clerkFapiDeviceCookieHeader(clientCookie) : '';
+  if (device) parts.push(device);
+  return parts.join('; ');
+}
+
+function dashboardCookieHeader(sessionCookie, clientCookie) {
   const device = clientCookie ? openRouterDashboardDeviceCookies(clientCookie) : '';
-  const cookieHeader = `__session=${sessionCookie}${device ? `; ${device}` : ''}`;
+  return `__session=${sessionCookie}${device ? `; ${device}` : ''}`;
+}
+
+function dashboardHeaders(sessionCookie, clientCookie, extra = {}) {
+  const cookieHeader = dashboardCookieHeader(sessionCookie, clientCookie);
 
   // Debug logging: show which cookies are being sent (redacted for security)
   if (provisionStepLogEnabled()) {
@@ -1497,6 +1510,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
     // Get fresh JWT first
     const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
     const jwtToUse = freshJwt || sessionCookie;
+    const cookieHeader = dashboardCookieHeader(jwtToUse, clientCookie);
     
     // Try various REST endpoints that might work
     const endpoints = [
@@ -1515,7 +1529,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${jwtToUse}`,
-            'Cookie': clientCookie,
+            'Cookie': cookieHeader,
             'Origin': OR_ORIGIN,
             'User-Agent': USER_AGENT,
           },
@@ -1573,7 +1587,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${jwtToUse}`,
-            'Cookie': clientCookie,
+            'Cookie': cookieHeader,
             'Origin': OR_ORIGIN,
             'User-Agent': USER_AGENT,
           },
@@ -1632,6 +1646,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
   try {
     const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
     const jwtToUse = freshJwt || sessionCookie;
+    const cookieHeader = dashboardCookieHeader(jwtToUse, clientCookie);
 
     const endpoints = [
       // Primary: /api/v1/credits/redeem — most RESTful pattern
@@ -1669,7 +1684,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${jwtToUse}`,
-            'Cookie': clientCookie,
+            'Cookie': cookieHeader,
             'Origin': OR_ORIGIN,
             'Referer': `${OR_ORIGIN}/redeem`,
             'User-Agent': USER_AGENT,
@@ -3584,10 +3599,7 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
       extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
     });
 
-    const cookies = openRouterDashboardDeviceCookies(sessionCookie, clientCookie);
-    await context.addCookies(cookies.map(([name, value]) => ({
-      name, value, domain: OR_HOSTNAME, path: '/', secure: true, httpOnly: false, sameSite: 'Lax',
-    })));
+    await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
 
     const page = await context.newPage();
     await page.goto(`${OR_ORIGIN}/settings/keys`, { waitUntil: 'domcontentloaded', timeout: 30000 });

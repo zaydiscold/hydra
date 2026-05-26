@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import BaseController from './BaseController.js';
 import * as auth from '../services/auth.js';
-import { clearAuthTokenCookie, extractAuthToken, setAuthTokenCookie } from '../middleware/auth.js';
+import { clearAuthTokenCookie, setAuthTokenCookie, validateRequestAuth } from '../middleware/auth.js';
 
 const setupSchema = z.object({
   password: z.string().min(1, 'Password must be at least 1 character'),
@@ -32,8 +32,7 @@ class AuthController extends BaseController {
       needsFirstAccount = false,
       bootstrapRequired = false,
     } = await auth.getSetupStatus();
-    const token = extractAuthToken(req);
-    const authenticated = !!(token && await auth.validateToken(token));
+    const authenticated = !!(await validateRequestAuth(req));
     const needsRestart = auth.isRestartRequired();
 
     return this.success(res, {

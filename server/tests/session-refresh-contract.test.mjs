@@ -118,3 +118,58 @@ test('debug tRPC probes serialize normalized dashboard device cookies', () => {
   assert.match(debugController, /clientCookie = refreshed\.clientCookie \?\? clientCookie/);
   assert.doesNotMatch(debugController, /__client=\$\{clientCookie\}/);
 });
+
+test('dashboard API normalizes Clerk and OpenRouter cookie headers instead of replaying raw clientCookie strings', () => {
+  const dashboardApi = read('server/services/dashboard-api.js');
+
+  assert.match(dashboardApi, /clerkFapiDeviceCookieHeader/);
+  assert.match(dashboardApi, /function clerkClientCookieHeader\(sessionCookie, clientCookie\)/);
+  assert.match(dashboardApi, /function dashboardCookieHeader\(sessionCookie, clientCookie\)/);
+  assert.match(dashboardApi, /const cookieHeader = clerkClientCookieHeader\(sessionCookie, clientCookie\)/);
+  assert.match(dashboardApi, /const cookieHeader = dashboardCookieHeader\(jwtToUse, clientCookie\)/);
+  assert.doesNotMatch(dashboardApi, /['"]Cookie['"]:\s*clientCookie/);
+  assert.doesNotMatch(dashboardApi, /`__session=\$\{sessionCookie\}; \$\{clientCookie\}`/);
+});
+
+test('API-key Playwright fallback injects real browser cookie objects, not a serialized header string', () => {
+  const dashboardApi = read('server/services/dashboard-api.js');
+
+  assert.match(dashboardApi, /await context\.addCookies\(await playwrightCookiesForOpenRouter\(sessionCookie, clientCookie\)\)/);
+  assert.doesNotMatch(dashboardApi, /openRouterDashboardDeviceCookies\(sessionCookie,\s*clientCookie\)/);
+  assert.doesNotMatch(dashboardApi, /cookies\.map\(\(\[name, value\]\)/);
+});
+
+test('getFreshJwt sends normalized Clerk FAPI cookies for legacy raw client values', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      async json() {
+        return {
+          response: {
+            sessions: [
+              { last_active_token: { jwt: 'fresh-jwt-from-clerk' } },
+            ],
+          },
+        };
+      },
+    };
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const spec = `${new URL('../services/dashboard-api.js', import.meta.url).href}?fresh-jwt-cookie-test=${Date.now()}`;
+  const { getFreshJwt } = await import(spec);
+
+  const token = await getFreshJwt('session-cookie-for-runtime-test', 'raw-client-token');
+
+  assert.equal(token, 'fresh-jwt-from-clerk');
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0].options.headers.Cookie,
+    '__session=session-cookie-for-runtime-test; __client=raw-client-token',
+  );
+});
