@@ -604,15 +604,18 @@ export function createSplashWindow() {
     + 'const ctx=cvs.getContext("2d");'
     // Canvas covers the full splash window (position:fixed/inset:0). Backing
     // store sized to devicePixelRatio so glyphs stay crisp on Retina.
-    + 'function size(){const dpr=Math.min(devicePixelRatio||1,2);'
+    + 'function size(){'
     +   'const w=window.innerWidth||1,h=window.innerHeight||1;'
+    +   'const rawDpr=Math.min(devicePixelRatio||1,2);'
+    +   'const maxPixels=2800000;'
+    +   'const dpr=Math.min(rawDpr,Math.max(1,Math.sqrt(maxPixels/(w*h))));'
     +   'cvs.style.width=w+"px";cvs.style.height=h+"px";'
     +   'cvs.width=Math.round(w*dpr);cvs.height=Math.round(h*dpr);'
     +   'ctx.setTransform(dpr,0,0,dpr,0,0);}'
     + 'size();window.addEventListener("resize",size);'
     + 'function W(){return window.innerWidth||1;}function H(){return window.innerHeight||1;}'
     // ─── matter.js handles + engine ──────────────────────────────────────
-    + 'const M=Matter,Eng=M.Engine,Wld=M.World,Bod=M.Bodies,Body=M.Body,Comp=M.Composite,Evt=M.Events,Run=M.Runner;'
+    + 'const M=Matter,Eng=M.Engine,Wld=M.World,Bod=M.Bodies,Body=M.Body,Comp=M.Composite,Evt=M.Events;'
     + 'const engine=Eng.create({enableSleeping:true,positionIterations:8,velocityIterations:6});'
     // intro gravity. matter.js gravity is dimensionless × scale. scale=0.0012
     // gives ~1.0 g a fall feel comparable to Pica\'s introGravity.
@@ -723,23 +726,32 @@ export function createSplashWindow() {
     +     'Body.setAngularVelocity(b,b.angularVelocity+(Math.random()-0.5)*0.08);'
     +   '}'
     + '},8000);'
-    // Start the physics runner.
-    + 'const runner=Run.create({delta:1000/45});Run.run(runner,engine);'
+    // One owned requestAnimationFrame loop steps Matter and paints the canvas.
+    // Matter.Runner is intentionally not used here: it schedules its own
+    // browser frame loop, which would double the splash's RAF traffic because
+    // we already own a throttled paint loop.
     + 'function disposeHydraSplash(){'
     +   'if(hydraSplashDisposed)return;hydraSplashDisposed=true;'
     +   'for(let i=0;i<hydraSplashTimers.length;i++){clearTimeout(hydraSplashTimers[i]);clearInterval(hydraSplashTimers[i]);}'
     +   'hydraSplashTimers.length=0;'
     +   'if(hydraSplashRaf)cancelAnimationFrame(hydraSplashRaf);hydraSplashRaf=0;'
     +   'window.removeEventListener("resize",size);window.removeEventListener("resize",rebuildWalls);'
-    +   'try{Run.stop(runner);Eng.clear(engine);Wld.clear(engine.world,false);}catch(err){console.warn("[hydra-splash] dispose failed:",err&&err.message?err.message:err);}'
+    +   'try{Eng.clear(engine);Wld.clear(engine.world,false);}catch(err){console.warn("[hydra-splash] dispose failed:",err&&err.message?err.message:err);}'
     + '}'
     + 'window.addEventListener("beforeunload",disposeHydraSplash,{once:true});'
     + 'hydraSplashSetTimeout(disposeHydraSplash,12500);'
     // ─── Render — draw each body as a rotated glyph at its world transform.
-    + 'const HYDRA_SPLASH_RENDER_FRAME_MS=1000/30;let hydraSplashLastRender=0;'
+    + 'const HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45,HYDRA_SPLASH_RENDER_FRAME_MS=1000/30;'
+    + 'let hydraSplashLastFrame=0,hydraSplashPhysicsCarry=0,hydraSplashLastRender=0;'
     + 'function render(now){'
     +   'if(hydraSplashDisposed)return;'
     +   'hydraSplashRaf=requestAnimationFrame(render);'
+    +   'if(!hydraSplashLastFrame)hydraSplashLastFrame=now;'
+    +   'let delta=Math.min(now-hydraSplashLastFrame,1000/15);'
+    +   'hydraSplashLastFrame=now;hydraSplashPhysicsCarry+=delta;'
+    +   'let steps=0;'
+    +   'while(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2){Eng.update(engine,HYDRA_SPLASH_PHYSICS_STEP_MS);hydraSplashPhysicsCarry-=HYDRA_SPLASH_PHYSICS_STEP_MS;steps++;}'
+    +   'if(steps>=2)hydraSplashPhysicsCarry=0;'
     +   'if(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS)return;'
     +   'hydraSplashLastRender=now;'
     +   'ctx.clearRect(0,0,W(),H());'

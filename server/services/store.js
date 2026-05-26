@@ -376,31 +376,48 @@ export async function getAccounts(userId) {
   const shaped = await Promise.all(accounts.map(async (account) => {
     const { config, managementKey } = await canonicalizeManagementKeyState(account);
     const { plain, decryptFailed } = readSessionPlainResult(account);
-    return {
-      id: account.id,
-      alias: account.alias,
-      email: config.email,
-      authMethod: config.authMethod,
-      hasManagementKey: !!managementKey,
-      /** True when a non-empty password is stored (encrypted). OTP-only accounts are false. */
-      passwordOnFile: !!config.password,
-      hasCredentials: !!(config.email && (config.password || config.authMethod === 'otp' || config.authMethod === 'password')),
-      // Sync version checks async cache first, falls back to JWT heuristic on cache miss
-      sessionStatus: getSessionStatus(config, plain, decryptFailed, account.id),
-      sessionDecryptFailed: decryptFailed,
-      lastSync: config.lastSync,
-      lastLoginAt: config.lastLoginAt || null,
-      sessionRefreshedAt: config.sessionRefreshedAt || null,
-      sessionExpiry: config.sessionExpiry || null,
-      events: config.events || [],
-      createdAt: account.createdAt,
-      // Accounts in the OTP wizard that haven't verified yet are hidden from the dashboard.
-      pendingVerification: !!config.pendingVerification,
-    };
+    return shapeAccountMetadata(account, config, managementKey, plain, decryptFailed);
   }));
 
   // Hide OTP stub accounts that haven't completed sign-in yet.
   return shaped.filter((a) => !a.pendingVerification);
+}
+
+function shapeAccountMetadata(account, config, managementKey, sessionTokenPlain, sessionDecryptFailed) {
+  return {
+    id: account.id,
+    alias: account.alias,
+    email: config.email,
+    authMethod: config.authMethod,
+    hasManagementKey: !!managementKey,
+    /** True when a non-empty password is stored (encrypted). OTP-only accounts are false. */
+    passwordOnFile: !!config.password,
+    hasCredentials: !!(config.email && (config.password || config.authMethod === 'otp' || config.authMethod === 'password')),
+    // Sync version checks async cache first, falls back to stored expiry heuristic on cache miss.
+    sessionStatus: getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed, account.id),
+    sessionDecryptFailed,
+    lastSync: config.lastSync,
+    lastLoginAt: config.lastLoginAt || null,
+    sessionRefreshedAt: config.sessionRefreshedAt || null,
+    sessionExpiry: config.sessionExpiry || null,
+    events: config.events || [],
+    createdAt: account.createdAt,
+    // Accounts in the OTP wizard that haven't verified yet are hidden from the dashboard.
+    pendingVerification: !!config.pendingVerification,
+  };
+}
+
+export function getHydratedAccountMetadata(account) {
+  return shapeAccountMetadata(account, account, account.managementKey, account.sessionCookie || '', false);
+}
+
+export function getHydratedSessionStatusPayload(account) {
+  const status = getSessionStatus(account, account.sessionCookie || '', false, account.id);
+  return {
+    status,
+    sessionExpiry: account.sessionExpiry ?? null,
+    sessionDecryptFailed: false,
+  };
 }
 
 export async function getAccountWithKey(userId, id) {

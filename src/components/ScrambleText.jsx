@@ -29,9 +29,10 @@ export default function ScrambleText({ text, duration = 600, delay = 0, classNam
     const chars = targetText.length;
     const stepDuration = duration / chars;
     let currentIndex = 0;
+    let interval = null;
 
     const startTimeout = setTimeout(() => {
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         currentIndex++;
         setRevealed(currentIndex);
 
@@ -41,12 +42,11 @@ export default function ScrambleText({ text, duration = 600, delay = 0, classNam
         }
       }, stepDuration);
 
-      // Cleanup interval if component unmounts
-      return () => clearInterval(interval);
     }, delay);
 
     return () => {
       clearTimeout(startTimeout);
+      if (interval) clearInterval(interval);
     };
   }, [text, duration, delay, targetText]);
 

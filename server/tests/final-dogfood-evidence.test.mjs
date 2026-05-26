@@ -45,6 +45,8 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   assert.doesNotMatch(source, /Cookies-journal|local-secrets|jwt-secret/);
 
   assert.match(docs, /DOGFOOD_EVIDENCE\.json/);
+  assert.match(docs, /HYDRA_RELEASE_VERSION="\$\(node -p "require\('\.\/package\.json'\)\.version"\)"/);
+  assert.match(docs, /gh release download "v\$HYDRA_RELEASE_VERSION"/);
   assert.match(docs, /--version=<version>/);
   assert.match(docs, /--artifact-dir=<dir>/);
   assert.match(docs, /--app=<path\/to\/Hydra\.app>/);
@@ -53,6 +55,8 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   assert.match(docs, /--manual=packaged-gui-launch/);
   assert.match(docs, /Do not paste API keys/);
   assert.match(docs, /not release-complete/);
+  assert.match(runbook, /HYDRA_RELEASE_VERSION="\$\(node -p "require\('\.\/package\.json'\)\.version"\)"/);
+  assert.match(runbook, /gh release download "v\$HYDRA_RELEASE_VERSION"/);
   assert.match(runbook, /--version=<version>/);
   assert.match(runbook, /--artifact-dir=\/path\/to\/downloaded\/release-assets/);
   assert.match(runbook, /--app=\/path\/to\/extracted\/Hydra\.app/);

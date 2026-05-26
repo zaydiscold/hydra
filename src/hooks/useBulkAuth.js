@@ -81,40 +81,65 @@ export function useBulkAuth(addToast) {
         return;
       }
 
-      for (const [email, poll] of Object.entries(pollRefs.current)) {
-        if (poll.inFlight) continue;
-        poll.inFlight = true;
+      const pollEntries = Object.entries(pollRefs.current).filter(([, poll]) => !poll.inFlight);
+      if (pollEntries.length === 0) return;
 
-        void api.getMagicLinkStatus(poll.accountId, poll.signInId)
-          .then(async (res) => {
+      void (async () => {
+        const completed = [];
+        await Promise.all(pollEntries.map(async ([email, poll]) => {
+          poll.inFlight = true;
+          try {
+            const res = await api.getMagicLinkStatus(poll.accountId, poll.signInId);
             poll.consecutiveFailures = 0;
             const st = res?.data?.status ?? res?.status;
-            if (st !== 'completed_or_expired') return;
-
-            stopMagicLinkPolling(email);
-            const accs = await api.getAccounts();
-            const list = Array.isArray(accs?.data) ? accs.data : [];
-            const acc = list.find((a) => a.id === poll.accountId);
-            if (acc && acc.sessionStatus === 'active') {
-              updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in' });
-              appendEmailLinkLog(`✓ magic link claimed → ${email}`);
-              addToast?.(`${email} signed in via magic link`, 'success');
-            } else {
-              updateEmailLinkRow(email, { status: 'sent', message: 'Waiting for click…' });
+            if (st === 'completed_or_expired') {
+              completed.push([email, poll]);
             }
-          })
-          .catch((err) => {
+          } catch (err) {
             poll.consecutiveFailures += 1;
             if (poll.consecutiveFailures >= 3) {
               stopMagicLinkPolling(email);
               updateEmailLinkRow(email, { status: 'error', message: 'Poll failed — check connection' });
               appendEmailLinkLog(`✗ magic link poll failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
             }
-          })
-          .finally(() => {
-            poll.inFlight = false;
-          });
-      }
+          }
+        }));
+
+        if (completed.length === 0) {
+          for (const [, poll] of pollEntries) poll.inFlight = false;
+          return;
+        }
+
+        let list = [];
+        try {
+          const accs = await api.getAccounts();
+          list = Array.isArray(accs?.data) ? accs.data : [];
+        } catch (err) {
+          for (const [email, poll] of completed) {
+            poll.consecutiveFailures += 1;
+            if (poll.consecutiveFailures >= 3) {
+              stopMagicLinkPolling(email);
+              updateEmailLinkRow(email, { status: 'error', message: 'Poll failed — check connection' });
+              appendEmailLinkLog(`✗ magic link account refresh failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
+            }
+          }
+          return;
+        } finally {
+          for (const [, poll] of pollEntries) poll.inFlight = false;
+        }
+
+        for (const [email, poll] of completed) {
+          stopMagicLinkPolling(email);
+          const acc = list.find((a) => a.id === poll.accountId);
+          if (acc && acc.sessionStatus === 'active') {
+            updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in' });
+            appendEmailLinkLog(`✓ magic link claimed → ${email}`);
+            addToast?.(`${email} signed in via magic link`, 'success');
+          } else {
+            updateEmailLinkRow(email, { status: 'sent', message: 'Waiting for click…' });
+          }
+        }
+      })();
     }, POLL_INTERVAL);
   }, [addToast, appendEmailLinkLog, stopMagicLinkPolling, updateEmailLinkRow]);
 

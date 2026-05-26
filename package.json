@@ -106,6 +106,7 @@
     "animejs": "^4.4.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
     "electron-updater": "^6.8.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",

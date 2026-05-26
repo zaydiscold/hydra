@@ -4,13 +4,24 @@ The final Hydra dogfood pass needs packaged Electron and live-account evidence
 that Codex cannot safely infer from source tests. Use the checked-in preflight
 to create a redacted evidence artifact after you run the real app.
 
+Current pre-dogfood performance evidence from 2026-05-26 is in
+`docs/RELEASE_AUDIT.md`: dashboard metadata/status shaping is down 61.1% in
+the local DB microbench, proxy retry body encoding is down 86.9% in the request
+body benchmark, session refresher selected reads are down 13.4%, and the rebuilt
+packaged macOS arm64 app sampled near-zero idle CPU after splash settle. The
+five-minute packaged idle sample ended with Hydra main at 0.1% CPU and the GPU,
+network, and renderer helpers at 0.0% CPU; a later current-source rebuild also
+settled back to 0.0% CPU across all Hydra processes at the post-splash sample.
+
 The full operator checklist is in `docs/PACKAGED_ELECTRON_DOGFOOD.md`. For the
-current published release, use the v1.0.14 quick path:
+current published release, derive the release version from `package.json`:
 
 ```bash
-DOGFOOD_DIR="$(mktemp -d /private/tmp/hydra-v1014-manual.XXXXXX)"
-gh release download v1.0.14 --repo zaydiscold/hydra --dir "$DOGFOOD_DIR"
-ditto -x -k "$DOGFOOD_DIR/Hydra-1.0.14-mac-arm64.zip" "$DOGFOOD_DIR/extracted-mac-arm64"
+HYDRA_RELEASE_VERSION="$(node -p "require('./package.json').version")"
+HYDRA_RELEASE_SLUG="${HYDRA_RELEASE_VERSION//./}"
+DOGFOOD_DIR="$(mktemp -d "/private/tmp/hydra-v${HYDRA_RELEASE_SLUG}-manual.XXXXXX")"
+gh release download "v$HYDRA_RELEASE_VERSION" --repo zaydiscold/hydra --dir "$DOGFOOD_DIR"
+ditto -x -k "$DOGFOOD_DIR/Hydra-$HYDRA_RELEASE_VERSION-mac-arm64.zip" "$DOGFOOD_DIR/extracted-mac-arm64"
 open -n "$DOGFOOD_DIR/extracted-mac-arm64/Hydra.app"
 ```
 
@@ -18,8 +29,8 @@ Run from the repo root after the packaged app pass:
 
 ```bash
 npm run dogfood:final -- \
-  --write-evidence=/private/tmp/hydra-final-dogfood-v1.0.14.json \
-  --version=1.0.14 \
+  --write-evidence="/private/tmp/hydra-final-dogfood-v$HYDRA_RELEASE_VERSION.json" \
+  --version="$HYDRA_RELEASE_VERSION" \
   --artifact-dir="$DOGFOOD_DIR" \
   --app="$DOGFOOD_DIR/extracted-mac-arm64/Hydra.app" \
   --launch-diagnostics \

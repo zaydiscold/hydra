@@ -243,7 +243,7 @@ router.use(async (req, res) => {
   }
 
   const baseBody = req.body && typeof req.body === 'object'
-    ? JSON.parse(JSON.stringify(req.body))
+    ? (Array.isArray(req.body) ? [...req.body] : { ...req.body })
     : req.body;
   let forcedFreeModel = null;
   if (req.method === 'POST' && path === '/free/chat/completions') {
@@ -264,21 +264,34 @@ router.use(async (req, res) => {
   const evicted = new Set();
   let lastError = null;
   let fallbackModel = forcedFreeModel;
+  const shouldIncludeStreamUsage = isStream && upstreamPathWithQuery.startsWith('/chat/completions');
+  const encodedBodyCache = new Map();
 
   const currentModel = () => fallbackModel || baseBody?.model || 'unknown';
   const buildBody = () => {
     if (req.method === 'GET' || !baseBody) return undefined;
     if (typeof baseBody !== 'object') return JSON.stringify(baseBody);
 
-    const cloned = JSON.parse(JSON.stringify(baseBody));
-    if (fallbackModel) cloned.model = fallbackModel;
-    if (cloned.stream === true && upstreamPathWithQuery.startsWith('/chat/completions')) {
-      cloned.stream_options = {
-        ...(cloned.stream_options && typeof cloned.stream_options === 'object' ? cloned.stream_options : {}),
+    const cacheKey = `${fallbackModel || ''}:${shouldIncludeStreamUsage ? 'usage' : 'plain'}`;
+    if (encodedBodyCache.has(cacheKey)) return encodedBodyCache.get(cacheKey);
+
+    if (!fallbackModel && !shouldIncludeStreamUsage) {
+      const encoded = JSON.stringify(baseBody);
+      encodedBodyCache.set(cacheKey, encoded);
+      return encoded;
+    }
+
+    const body = Array.isArray(baseBody) ? [...baseBody] : { ...baseBody };
+    if (fallbackModel && !Array.isArray(body)) body.model = fallbackModel;
+    if (shouldIncludeStreamUsage && !Array.isArray(body)) {
+      body.stream_options = {
+        ...(body.stream_options && typeof body.stream_options === 'object' ? body.stream_options : {}),
         include_usage: true,
       };
     }
-    return JSON.stringify(cloned);
+    const encoded = JSON.stringify(body);
+    encodedBodyCache.set(cacheKey, encoded);
+    return encoded;
   };
 
   // ── Failover loop ──

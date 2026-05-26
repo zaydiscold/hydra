@@ -51,7 +51,7 @@ class DashboardController extends BaseController {
 
   async getDashboard(req, res) {
     try {
-      const accounts = await store.getAllAccountsWithKeys(req.user.id);
+      let accounts = await store.getAllAccountsWithKeys(req.user.id);
       
       if (accounts.length === 0) {
         return this.success(res, {
@@ -60,9 +60,15 @@ class DashboardController extends BaseController {
         });
       }
 
-      let metaById = new Map(
-        (await store.getAccounts(req.user.id)).map((a) => [a.id, a]),
-      );
+      let accountById;
+      let metaById;
+      const rebuildHydratedAccountViews = () => {
+        accountById = new Map(accounts.map((account) => [account.id, account]));
+        metaById = new Map(
+          accounts.map((account) => [account.id, store.getHydratedAccountMetadata(account)]),
+        );
+      };
+      rebuildHydratedAccountViews();
 
       // Refresh expiring sessions in the background path only when the stored
       // expiry says they are close to death. Unknown/expired sessions are
@@ -112,9 +118,8 @@ class DashboardController extends BaseController {
       );
       
       if (refreshedSessions) {
-        metaById = new Map(
-          (await store.getAccounts(req.user.id)).map((a) => [a.id, a]),
-        );
+        accounts = await store.getAllAccountsWithKeys(req.user.id);
+        rebuildHydratedAccountViews();
       }
 
       // Fetch snapshots with concurrency limiting (no artificial delays)
@@ -217,29 +222,29 @@ class DashboardController extends BaseController {
       // Warm display session status cache server-side (cheap/cached status).
       // This payload is for passive UI display only.
       const displaySessionStatuses = {};
-      const liveStatusLimit = pLimit(CONCURRENCY);
-      await Promise.allSettled(
-        snapshots.map((snapshot) => liveStatusLimit(async () => {
-          try {
-            const payload = await store.getStoredSessionStatusPayload(req.user.id, snapshot.id);
-            displaySessionStatuses[snapshot.id] = payload.status;
-            // Merge display status into snapshot so response is immediately accurate
-            snapshot.sessionStatus = payload.status;
-            // Also add lastLoginAt if not already present from meta
-            if (!snapshot.lastLoginAt) {
-              const meta = metaById.get(snapshot.id);
-              if (meta?.lastLoginAt) snapshot.lastLoginAt = meta.lastLoginAt;
-            }
-            if (!snapshot.sessionExpiry) {
-              const meta = metaById.get(snapshot.id);
-              if (meta?.sessionExpiry) snapshot.sessionExpiry = meta.sessionExpiry;
-            }
-          } catch (err) {
-            // Non-fatal: keep existing sessionStatus from meta
-            logger.warn(`[DASHBOARD] Stored session status payload failed (account=${snapshot.id}): ${err.message}`);
+      for (const snapshot of snapshots) {
+        try {
+          const source = accountById.get(snapshot.id);
+          const payload = source
+            ? store.getHydratedSessionStatusPayload(source)
+            : await store.getStoredSessionStatusPayload(req.user.id, snapshot.id);
+          displaySessionStatuses[snapshot.id] = payload.status;
+          // Merge display status into snapshot so response is immediately accurate
+          snapshot.sessionStatus = payload.status;
+          // Also add lastLoginAt if not already present from meta
+          if (!snapshot.lastLoginAt) {
+            const meta = metaById.get(snapshot.id);
+            if (meta?.lastLoginAt) snapshot.lastLoginAt = meta.lastLoginAt;
           }
-        }))
-      );
+          if (!snapshot.sessionExpiry) {
+            const meta = metaById.get(snapshot.id);
+            if (meta?.sessionExpiry) snapshot.sessionExpiry = meta.sessionExpiry;
+          }
+        } catch (err) {
+          // Non-fatal: keep existing sessionStatus from meta
+          logger.warn(`[DASHBOARD] Stored session status payload failed (account=${snapshot.id}): ${err.message}`);
+        }
+      }
 
       return this.success(res, {
         accounts: snapshots,

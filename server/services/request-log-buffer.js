@@ -107,7 +107,7 @@ export async function flushRequestLogBuffer() {
 }
 
 export async function stopRequestLogBuffer() {
-  if (timer) clearInterval(timer);
+  if (timer) clearTimeout(timer);
   timer = null;
   let drainTimeout = null;
   try {

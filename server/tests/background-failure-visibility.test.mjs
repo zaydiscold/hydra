@@ -93,6 +93,10 @@ test('pool status and sync-key registration fallbacks are logged', () => {
 test('rotation manager weighted-selection fallbacks are logged', () => {
   const source = readRepoFile('server/services/rotation-manager.js');
 
+  assert.match(source, /this\._loadPromise = null/);
+  assert.match(source, /if \(this\._loadPromise\) return this\._loadPromise/);
+  assert.match(source, /this\._loadPromise = \(async \(\) => \{/);
+  assert.match(source, /\}\)\(\)\.finally\(\(\) => \{\s*this\._loadPromise = null;/);
   assert.match(source, /SELECTION_FALLBACK_LOG_WINDOW_MS/);
   assert.match(source, /Weighted key selection failed for \$\{available\.length\} available key\(s\); using round-robin fallback/);
   assert.match(source, /invalid limitRemaining for key/);
@@ -105,6 +109,27 @@ test('dashboard session-status fallback is logged', () => {
 
   assert.match(source, /Stored session status payload failed \(account=\$\{snapshot\.id\}\): \$\{err\.message\}/);
   assert.doesNotMatch(source, /catch \{\s*\/\/ Non-fatal: keep existing sessionStatus from meta/);
+});
+
+test('dashboard reuses hydrated account rows for display metadata and session status', () => {
+  const source = readRepoFile('server/controllers/DashboardController.js');
+  const hotPath = source.slice(
+    source.indexOf('let accounts = await store.getAllAccountsWithKeys'),
+    source.indexOf('if (refreshedSessions)'),
+  );
+  const displayStatusBlock = source.slice(
+    source.indexOf('Warm display session status cache server-side'),
+    source.indexOf('return this.success'),
+  );
+
+  assert.match(source, /function rebuildHydratedAccountViews|const rebuildHydratedAccountViews = \(\) =>/);
+  assert.match(source, /store\.getHydratedAccountMetadata\(account\)/);
+  assert.match(source, /accountById\.get\(snapshot\.id\)/);
+  assert.match(source, /store\.getHydratedSessionStatusPayload\(source\)/);
+  assert.doesNotMatch(hotPath, /store\.getAccounts\(req\.user\.id\)/);
+  assert.doesNotMatch(displayStatusBlock, /Promise\.allSettled/);
+  assert.doesNotMatch(displayStatusBlock, /pLimit\(CONCURRENCY\)/);
+  assert.doesNotMatch(displayStatusBlock, /accounts\.find\(\(account\) => account\.id === snapshot\.id\)/);
 });
 
 test('debug vampire-mode profile preload fallbacks are logged', () => {
@@ -304,6 +329,7 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   assert.match(requestLogBuffer, /export async function stopRequestLogBuffer/, 'request log buffer must drain on shutdown');
   assert.match(requestLogBuffer, /HYDRA_REQUEST_LOG_SHUTDOWN_DRAIN_MS/, 'shutdown drain must be bounded');
   assert.match(requestLogBuffer, /Promise\.race/, 'shutdown drain must not hang indefinitely on SQLite');
+  assert.match(requestLogBuffer, /clearTimeout\(timer\)/, 'request log buffer timer is a timeout, not an interval');
   assert.doesNotMatch(requestLogBuffer, /queue\.push[\s\S]*without bound/);
 
   assert.match(openrouter, /Account snapshot credits lookup failed: \$\{err\?\.message \|\| err\}/);
@@ -313,6 +339,38 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   assert.match(openrouter, /OpenRouter API request timed out after \$\{timeoutMs\}ms: \$\{path\}/);
   assert.doesNotMatch(openrouter, /getCredits\(managementKey\)\.catch\(\(\) => \(\{ total: 0, used: 0, remaining: 0 \}\)\)/);
   assert.doesNotMatch(openrouter, /listKeys\(managementKey\)\.catch\(\(\) => \[\]\)/);
+});
+
+test('proxy request body encoding is cached across retries', () => {
+  const source = readRepoFile('server/routes/proxy.js');
+  const proxyHandler = source.slice(
+    source.indexOf('router.use(async (req, res) =>'),
+    source.indexOf('// ─── /v1/models handler'),
+  );
+  const buildBody = proxyHandler.slice(
+    proxyHandler.indexOf('const buildBody = () =>'),
+    proxyHandler.indexOf('// ── Failover loop'),
+  );
+
+  assert.match(proxyHandler, /const encodedBodyCache = new Map\(\)/);
+  assert.match(buildBody, /encodedBodyCache\.has\(cacheKey\)/);
+  assert.match(buildBody, /encodedBodyCache\.set\(cacheKey, encoded\)/);
+  assert.match(buildBody, /const body = Array\.isArray\(baseBody\) \? \[\.\.\.baseBody\] : \{ \.\.\.baseBody \}/);
+  assert.doesNotMatch(buildBody, /JSON\.parse\(JSON\.stringify/);
+});
+
+test('bulk magic-link polling batches account refresh after completions', () => {
+  const source = readRepoFile('src/hooks/useBulkAuth.js');
+  const poller = source.slice(
+    source.indexOf('const ensureMagicLinkPoller = useCallback'),
+    source.indexOf('const startMagicLinkPolling = useCallback'),
+  );
+
+  assert.match(poller, /const completed = \[\]/);
+  assert.match(poller, /await Promise\.all\(pollEntries\.map/);
+  assert.match(poller, /const accs = await api\.getAccounts\(\)/);
+  assert.match(poller, /for \(const \[email, poll\] of completed\)/);
+  assert.doesNotMatch(poller, /getMagicLinkStatus[\s\S]{0,500}const accs = await api\.getAccounts\(\)/);
 });
 
 test('account generator browser signup uses the encrypted proxy pool when present', () => {
@@ -343,6 +401,7 @@ test('session lifetime probe failures keep account-level evidence', () => {
   const source = readRepoFile('server/services/session-refresher.js');
   const store = readRepoFile('server/services/store.js');
 
+  assert.match(source, /prisma\.account\.findMany\(\{\s*select: \{\s*id: true,\s*userId: true,\s*alias: true,\s*config: true,\s*sessionToken: true,/s);
   assert.match(source, /Stored session token decrypt failed for account=\$\{account\.id\}: \$\{err\.message\}/);
   assert.match(source, /Live refresh probe failed for account=\$\{account\.id\}: \$\{err\.message\}/);
   assert.match(source, /function _redactAlias\(alias\)/);

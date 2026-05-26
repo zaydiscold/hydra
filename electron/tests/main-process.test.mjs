@@ -271,8 +271,10 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
 
     assert.match(windows, /let hydraSplashDisposed=false/);
     assert.match(windows, /function disposeHydraSplash\(\)/);
-    assert.match(windows, /Run\.create\(\{delta:1000\/45\}\)/);
-    assert.match(windows, /Run\.stop\(runner\)/);
+    assert.match(windows, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
+    assert.match(windows, /Eng\.update\(engine,HYDRA_SPLASH_PHYSICS_STEP_MS\)/);
+    assert.doesNotMatch(windows, /Run\.create/);
+    assert.doesNotMatch(windows, /Run\.run/);
     assert.match(windows, /Eng\.clear\(engine\)/);
     assert.match(windows, /cancelAnimationFrame\(hydraSplashRaf\)/);
     assert.match(windows, /window\.removeEventListener\("resize",size\)/);

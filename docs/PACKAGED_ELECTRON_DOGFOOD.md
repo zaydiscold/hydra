@@ -9,14 +9,16 @@ CLI audit, and docs updates are current.
 
 ## Current Release Quick Path
 
-For the current published release, use v1.0.14 artifacts from GitHub Releases.
-This keeps the manual pass tied to the same package set verified in
-`docs/RELEASE_AUDIT.md`.
+For the current published release, derive the version from `package.json` and
+download the matching GitHub Release artifacts. This keeps the manual pass tied
+to the same package set verified in `docs/RELEASE_AUDIT.md`.
 
 ```bash
-DOGFOOD_DIR="$(mktemp -d /private/tmp/hydra-v1014-manual.XXXXXX)"
-gh release download v1.0.14 --repo zaydiscold/hydra --dir "$DOGFOOD_DIR"
-ditto -x -k "$DOGFOOD_DIR/Hydra-1.0.14-mac-arm64.zip" "$DOGFOOD_DIR/extracted-mac-arm64"
+HYDRA_RELEASE_VERSION="$(node -p "require('./package.json').version")"
+HYDRA_RELEASE_SLUG="${HYDRA_RELEASE_VERSION//./}"
+DOGFOOD_DIR="$(mktemp -d "/private/tmp/hydra-v${HYDRA_RELEASE_SLUG}-manual.XXXXXX")"
+gh release download "v$HYDRA_RELEASE_VERSION" --repo zaydiscold/hydra --dir "$DOGFOOD_DIR"
+ditto -x -k "$DOGFOOD_DIR/Hydra-$HYDRA_RELEASE_VERSION-mac-arm64.zip" "$DOGFOOD_DIR/extracted-mac-arm64"
 open -n "$DOGFOOD_DIR/extracted-mac-arm64/Hydra.app"
 ```
 
@@ -25,8 +27,8 @@ actually verified:
 
 ```bash
 npm run dogfood:final -- \
-  --write-evidence=/private/tmp/hydra-final-dogfood-v1.0.14.json \
-  --version=1.0.14 \
+  --write-evidence="/private/tmp/hydra-final-dogfood-v$HYDRA_RELEASE_VERSION.json" \
+  --version="$HYDRA_RELEASE_VERSION" \
   --artifact-dir="$DOGFOOD_DIR" \
   --app="$DOGFOOD_DIR/extracted-mac-arm64/Hydra.app" \
   --launch-diagnostics \

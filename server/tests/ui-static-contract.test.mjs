@@ -30,6 +30,15 @@ function listFiles(dir, predicate) {
   return files.sort();
 }
 
+function cssRuleBlock(css, selector) {
+  const start = css.indexOf(selector);
+  assert.notEqual(start, -1, `missing CSS selector ${selector}`);
+  const tail = css.slice(start);
+  const end = tail.indexOf('\n}');
+  assert.notEqual(end, -1, `missing CSS rule close for ${selector}`);
+  return tail.slice(0, end + 2);
+}
+
 test('Electron app chrome draws its own drag strip on macOS with traffic-light clearance', () => {
   const app = readRepoFile('src/App.jsx');
   const css = readRepoFile('src/index.css');
@@ -65,6 +74,52 @@ test('Electron app chrome draws its own drag strip on macOS with traffic-light c
   assert.match(css, /\.app-chrome\s*\{[\s\S]*?-webkit-app-region:\s*drag;/);
   assert.match(css, /\.app-chrome__controls\s*\{[\s\S]*?-webkit-app-region:\s*no-drag;/);
   assert.match(css, /\.app-chrome--mac\s*\{[\s\S]*?padding-left:\s*82px;/);
+});
+
+test('ambient app chrome animations settle after launch instead of running forever', () => {
+  const app = readRepoFile('src/App.jsx');
+  const css = readRepoFile('src/index.css');
+
+  assert.match(app, /const \[ambientMotion, setAmbientMotion\] = useState\(true\)/);
+  assert.match(app, /setTimeout\(\(\) => setAmbientMotion\(false\), 12_000\)/);
+  assert.match(app, /document\.hidden/);
+  assert.match(app, /app-shell--ambient-motion/);
+  assert.match(app, /app-shell--motion-settled/);
+
+  assert.doesNotMatch(cssRuleBlock(css, '.nebula-glow {'), /animation:/);
+  assert.doesNotMatch(cssRuleBlock(css, '.starfield::before {'), /animation:/);
+  assert.doesNotMatch(cssRuleBlock(css, '.starfield::after {'), /animation:/);
+  assert.doesNotMatch(cssRuleBlock(css, '.meteor {'), /animation:/);
+  assert.doesNotMatch(cssRuleBlock(css, '.sidebar-logo-icon {'), /animation:/);
+
+  assert.match(css, /\.app-shell--ambient-motion \.nebula-glow\s*\{[\s\S]*?animation:\s*nebulaFlow 20s ease-in-out infinite alternate;/);
+  assert.match(css, /\.app-shell--ambient-motion \.starfield::before\s*\{[\s\S]*?animation:\s*twinkle 4s ease-in-out infinite alternate;/);
+  assert.match(css, /\.app-shell--ambient-motion \.meteor\s*\{[\s\S]*?animation:\s*meteorFall linear infinite;/);
+  assert.match(css, /\.app-shell--ambient-motion \.sidebar-logo-icon\s*\{[\s\S]*?animation:\s*logo-breathing 4s ease-in-out infinite;/);
+  assert.match(css, /\.app-shell--motion-settled \.meteor-container\s*\{[\s\S]*?display:\s*none;/);
+});
+
+test('splash owns one throttled physics and render loop', () => {
+  const windowsJs = readRepoFile('electron/app/windows.js');
+
+  assert.match(windowsJs, /const maxPixels=2800000/);
+  assert.match(windowsJs, /Math\.sqrt\(maxPixels\/\(w\*h\)\)/);
+  assert.match(windowsJs, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
+  assert.match(windowsJs, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
+  assert.match(windowsJs, /Eng\.update\(engine,HYDRA_SPLASH_PHYSICS_STEP_MS\)/);
+  assert.match(windowsJs, /while\(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2\)/);
+  assert.doesNotMatch(windowsJs, /Run\.create/);
+  assert.doesNotMatch(windowsJs, /Run\.run/);
+  assert.doesNotMatch(windowsJs, /Run\.stop/);
+});
+
+test('ScrambleText clears delayed intervals on unmount', () => {
+  const source = readRepoFile('src/components/ScrambleText.jsx');
+
+  assert.match(source, /let interval = null/);
+  assert.match(source, /interval = setInterval\(\(\) => \{/);
+  assert.match(source, /if \(interval\) clearInterval\(interval\)/);
+  assert.doesNotMatch(source, /return \(\) => clearInterval\(interval\);\s*\}, delay\)/);
 });
 
 test('global form controls cannot fall back to white native browser styling', () => {

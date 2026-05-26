@@ -53,7 +53,15 @@ async function _sweepImpl() {
   let skipped = 0;
 
   try {
-    const accounts = await prisma.account.findMany({});
+    const accounts = await prisma.account.findMany({
+      select: {
+        id: true,
+        userId: true,
+        alias: true,
+        config: true,
+        sessionToken: true,
+      },
+    });
     swept = accounts.length;
     const now = Date.now();
 
@@ -194,7 +202,15 @@ function _redactSid(sid) {
 }
 
 async function _runSessionProbe() {
-  const accounts = await prisma.account.findMany({});
+  const accounts = await prisma.account.findMany({
+    select: {
+      id: true,
+      userId: true,
+      alias: true,
+      config: true,
+      sessionToken: true,
+    },
+  });
   const probeAccounts = [];
 
   for (const account of accounts) {

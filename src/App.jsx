@@ -590,6 +590,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
+  const [ambientMotion, setAmbientMotion] = useState(true);
   const [toasts, setToasts] = useState([]);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const [upstreamHealth, setUpstreamHealth] = useState(null);
@@ -697,6 +698,19 @@ export default function App() {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  useEffect(() => {
+    setAmbientMotion(true);
+    const timer = setTimeout(() => setAmbientMotion(false), 12_000);
+    const handleVisibility = () => {
+      if (document.hidden) setAmbientMotion(false);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [authState]);
 
   useEffect(() => {
     if (authState !== 'app') {
@@ -907,37 +921,38 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <AppChrome />
-      <AppVersionStamp />
-      <GlobalLoadingBar />
-      {/* Brutalist Space Background Assets (Now global) */}
-      <div className="starfield" />
-      <div className="nebula-glow" />
-      <div className="meteor-container">
-        <div className="meteor" />
-        <div className="meteor" />
-        <div className="meteor" />
-        <div className="meteor" />
-      </div>
-      <div className="planet planet-1" />
-      <div className="planet planet-2" />
+      <div className={`app-shell${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}`}>
+        <AppChrome />
+        <AppVersionStamp />
+        <GlobalLoadingBar />
+        {/* Brutalist Space Background Assets (Now global) */}
+        <div className="starfield" />
+        <div className="nebula-glow" />
+        <div className="meteor-container">
+          <div className="meteor" />
+          <div className="meteor" />
+          <div className="meteor" />
+          <div className="meteor" />
+        </div>
+        <div className="planet planet-1" />
+        <div className="planet planet-2" />
 
-      {authState === 'setup' || authState === 'login' ? (
-        <>
-          <AuthScreen
-            mode={authState}
-            onSuccess={handleAuthSuccess}
-            onRestartRequired={handleRestartRequired}
-            onRefreshAuth={checkAuth}
-          />
-          <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-        </>
-      ) : (
-        <>
-          {/* #64: Skip-to-content link for keyboard users */}
-          <a href="#main-content" className="skip-to-content">
-            Skip to main content
-          </a>
+        {authState === 'setup' || authState === 'login' ? (
+          <>
+            <AuthScreen
+              mode={authState}
+              onSuccess={handleAuthSuccess}
+              onRestartRequired={handleRestartRequired}
+              onRefreshAuth={checkAuth}
+            />
+            <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+          </>
+        ) : (
+          <>
+            {/* #64: Skip-to-content link for keyboard users */}
+            <a href="#main-content" className="skip-to-content">
+              Skip to main content
+            </a>
         <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}${rendererChrome ? ' app-layout--with-chrome' : ''}`}>
           <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`} role="navigation" aria-label="Main navigation">
             <button type="button" className="sidebar-logo"
@@ -1087,8 +1102,9 @@ export default function App() {
             </div>
           )}
         </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </ErrorBoundary>
   );
 }

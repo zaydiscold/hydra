@@ -132,7 +132,9 @@ test('utility probes do not hide diagnostic failures', () => {
 test('electron package smoke validates target-specific Chromium archives', () => {
   const script = read('scripts/smoke-electron-package.mjs');
   const prepareScript = read('scripts/prepare-electron-resources.mjs');
+  const pkg = JSON.parse(read('package.json'));
 
+  assert.ok(pkg.dependencies.dotenv, 'dotenv must be a production dependency because packaged server/config.js imports dotenv/config');
   assert.match(script, /const target = process\.env\.HYDRA_BUILD_TARGET \|\| null/, 'smoke must read the requested build target before choosing resources');
   assert.match(script, /'darwin-arm64': join\(RELEASE, 'mac-arm64\/Hydra\.app\/Contents\/Resources'\)/, 'smoke must choose ARM resources for darwin-arm64');
   assert.match(script, /'darwin-x64': join\(RELEASE, 'mac\/Hydra\.app\/Contents\/Resources'\)/, 'smoke must choose x64 resources for darwin-x64');
@@ -142,6 +144,9 @@ test('electron package smoke validates target-specific Chromium archives', () =>
   assert.match(script, /darwin-x64[\s\S]*chrome-mac-x64/, 'smoke must verify Intel macOS Chromium payloads');
   assert.match(script, /linux-x64[\s\S]*chrome-linux[\s\S]*chrome-linux64/, 'smoke must verify Linux Chromium payloads');
   assert.match(script, /win32-x64[\s\S]*chrome-win[\s\S]*chrome-win64/, 'smoke must verify Windows Chromium payloads');
+  assert.match(script, /function assertPackagedServerConfigImports/, 'smoke must import the packaged server config module');
+  assert.match(script, /HYDRA_PACKAGED_CONFIG_PATH/, 'smoke must import server config from the packaged app path');
+  assert.match(script, /packaged server config import OK/, 'smoke logs must prove packaged server config import ran');
   assert.match(script, /Chromium archive target mismatch/, 'smoke must explain wrong-target Chromium archives directly');
   assert.match(script, /unsupported HYDRA_BUILD_TARGET/, 'smoke must reject unknown target names');
   assert.match(prepareScript, /function chromiumCacheGuidance/, 'prepare must explain target-cache misses');

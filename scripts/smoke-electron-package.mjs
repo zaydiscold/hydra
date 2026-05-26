@@ -7,6 +7,7 @@
  * prebuilt empty DB, bundled Chromium, and package size.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import process from 'node:process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -80,6 +81,37 @@ function assertFileNonEmpty(path, label) {
   const stats = statSync(path);
   if (!stats.isFile() || stats.size <= 0) {
     throw new Error(`${label} is empty or not a file at ${path}`);
+  }
+}
+
+function assertPackagedServerConfigImports(resourcesDir) {
+  const appDir = join(resourcesDir, 'app');
+  const configPath = join(appDir, 'server/config.js');
+  assertFileNonEmpty(configPath, 'packaged server config module');
+
+  const output = execFileSync(process.execPath, [
+    '--input-type=module',
+    '-e',
+    [
+      'const configPath = process.env.HYDRA_PACKAGED_CONFIG_PATH;',
+      'const { validateConfig } = await import(configPath);',
+      'validateConfig();',
+      'console.log("[electron-smoke] packaged server config import OK");',
+    ].join('\n'),
+  ], {
+    cwd: appDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      DATABASE_URL: `file:${join(resourcesDir, 'data/empty-hydra.db')}`,
+      JWT_SECRET: 'hydra-smoke-secret-with-32-characters',
+      HYDRA_PACKAGED_CONFIG_PATH: configPath,
+    },
+  });
+  if (output.trim()) {
+    console.log(output.trim());
   }
 }
 
@@ -379,6 +411,8 @@ console.log(`[electron-smoke] -> assert Prisma schema/migrations/empty-db`);
 assertExists(join(resourcesDir, 'prisma/schema.prisma'), 'Prisma schema resource');
 assertExists(join(resourcesDir, 'prisma/migrations'), 'Prisma migrations resource');
 assertExists(join(resourcesDir, 'data/empty-hydra.db'), 'Empty packaged DB');
+console.log(`[electron-smoke] -> assertPackagedServerConfigImports`);
+assertPackagedServerConfigImports(resourcesDir);
 console.log(`[electron-smoke] -> findPrismaEngine`);
 const engine = findPrismaEngine(resourcesDir);
 console.log(`[electron-smoke] -> hasBundledChromium`);

@@ -31,16 +31,26 @@ class RotationManager {
     this.lastSyncAt = null;
     /** @type {AbortController|null} — cancels in-flight reload during shutdown */
     this._reloadController = null;
+    /** @type {Promise<void>|null} — dedupes concurrent cold-load requests. */
+    this._loadPromise = null;
     this._lastSelectionFallbackWarningAt = 0;
   }
 
   /** Called lazily on first request if pool was never initialized */
   async ensureLoaded() {
     if (this.loaded) return;
-    const user = await prisma.user.findFirst();
-    if (!user) return;
-    this.userId = user.id;
-    await this.reload();
+    if (this._loadPromise) return this._loadPromise;
+
+    this._loadPromise = (async () => {
+      const user = await prisma.user.findFirst();
+      if (!user) return;
+      this.userId = user.id;
+      await this.reload();
+    })().finally(() => {
+      this._loadPromise = null;
+    });
+
+    return this._loadPromise;
   }
 
   /** Reload the pool from DB. Call after any pool toggle. Cancellable via cancelReload(). */
@@ -82,6 +92,7 @@ class RotationManager {
     if (this._reloadController) {
       this._reloadController.abort();
     }
+    this._loadPromise = null;
   }
 
   /**
