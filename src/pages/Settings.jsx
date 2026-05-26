@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import * as api from '../api';
 import AnimeText from '../components/AnimeText';
@@ -17,6 +17,7 @@ export default function Settings({ addToast }) {
   const [accountProxies, setAccountProxies] = useState('');
   const [accountProxyCount, setAccountProxyCount] = useState(0);
   const [proxySaving, setProxySaving] = useState(false);
+  const copiedTimerRef = useRef(null);
 
   // Electron native info — single hook handles in-Electron check + load
   const inElectron = isElectron();
@@ -29,6 +30,10 @@ export default function Settings({ addToast }) {
     }, 100);
     return () => clearTimeout(t);
   }, [location.hash]);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+  }, []);
 
   // Privacy + biometric prefs (Electron-only). The Result-type wrapper
   // already hides the "not in Electron" path via tryNative — we just
@@ -198,7 +203,11 @@ export default function Settings({ addToast }) {
     }
     if (!didCopy) return;
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => {
+      copiedTimerRef.current = null;
+      setCopied(false);
+    }, 2000);
   }
 
   return (

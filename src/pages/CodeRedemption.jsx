@@ -75,6 +75,7 @@ export default function CodeRedemption({ addToast }) {
     error: null,
   });
   const didInitialLoadRef = useRef(false);
+  const historyRefreshTimerRef = useRef(null);
   const [historyLogs, setHistoryLogs] = useState([]);
   const [historyError, setHistoryError] = useState('');
 
@@ -108,6 +109,10 @@ export default function CodeRedemption({ addToast }) {
       .catch(err => addToast(err.message, 'error'));
     fetchHistory();
   }, [addToast]);
+
+  useEffect(() => () => {
+    if (historyRefreshTimerRef.current) clearTimeout(historyRefreshTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (selectedAccountIds.length === 0) {
@@ -268,7 +273,11 @@ export default function CodeRedemption({ addToast }) {
     const total = Object.keys(newResults).length;
     addToast(`Done: ${successCount}/${total} redeemed`, successCount > 0 ? 'success' : 'error');
     // Refresh history after a run
-    setTimeout(fetchHistory, 400);
+    if (historyRefreshTimerRef.current) clearTimeout(historyRefreshTimerRef.current);
+    historyRefreshTimerRef.current = setTimeout(() => {
+      historyRefreshTimerRef.current = null;
+      fetchHistory();
+    }, 400);
   }
 
   function clearAll() {

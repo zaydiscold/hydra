@@ -30,6 +30,11 @@ function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
   const [errors, setErrors] = useState({});
   const [createdKey, setCreatedKey] = useState(null);
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -62,7 +67,11 @@ function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
     try {
       await navigator.clipboard.writeText(createdKey);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => {
+        copyTimerRef.current = null;
+        setCopied(false);
+      }, 2000);
     } catch (err) {
       onCopyError?.(err);
     }
@@ -179,6 +188,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
   const initialFetchDone = useRef(false);
+  const transientTimersRef = useRef(new Set());
 
   // Live Clerk session probe — overrides stale heuristic from getAccounts()
   const [liveSessionStatus, setLiveSessionStatus] = useState(null);
@@ -201,6 +211,15 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const [mgmtKeyFull, setMgmtKeyFull] = useState(null);
   const [revealedMgmt, setRevealedMgmt] = useState(false);
   const [loadingMgmtReveal, setLoadingMgmtReveal] = useState(false);
+
+  const scheduleTransientTimeout = useCallback((fn, ms) => {
+    const timer = setTimeout(() => {
+      transientTimersRef.current.delete(timer);
+      fn();
+    }, ms);
+    transientTimersRef.current.add(timer);
+    return timer;
+  }, []);
 
   // Management keys storage (New)
   const [managementKeys, setManagementKeys] = useState([]);
@@ -305,6 +324,11 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   // accountMeta intentionally not a dependency: we only want the initial decision once.
   }, [resolvedAccountId, fetchSnapshot, fetchMeta, fetchManagementKeys, probeSession, addToast, onBack]);
 
+  useEffect(() => () => {
+    for (const timer of transientTimersRef.current) clearTimeout(timer);
+    transientTimersRef.current.clear();
+  }, []);
+
   async function handleToggleKey(hash, currentDisabled) {
     setActionLoading((p) => ({ ...p, [hash]: true }));
     try {
@@ -376,7 +400,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
       await navigator.clipboard.writeText(value || hash);
       setCopiedKey(hash);
       addToast?.('Copied key to clipboard', 'success');
-      setTimeout(() => setCopiedKey(null), 2000);
+      scheduleTransientTimeout(() => setCopiedKey(null), 2000);
     } catch (err) {
       addToast?.(`Clipboard copy failed: ${err.message || 'permission denied'}`, 'error');
     }
@@ -387,10 +411,10 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     try {
       const res = await api.testKey(resolvedAccountId, hash);
       setTestKeyStatus((p) => ({ ...p, [hash]: { loading: false, valid: true, data: res.data } }));
-      setTimeout(() => setTestKeyStatus((p) => { const n = { ...p }; delete n[hash]; return n; }), 6000);
+      scheduleTransientTimeout(() => setTestKeyStatus((p) => { const n = { ...p }; delete n[hash]; return n; }), 6000);
     } catch (err) {
       setTestKeyStatus((p) => ({ ...p, [hash]: { loading: false, valid: false, error: err.message } }));
-      setTimeout(() => setTestKeyStatus((p) => { const n = { ...p }; delete n[hash]; return n; }), 6000);
+      scheduleTransientTimeout(() => setTestKeyStatus((p) => { const n = { ...p }; delete n[hash]; return n; }), 6000);
     }
   }
 

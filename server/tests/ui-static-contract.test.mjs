@@ -130,6 +130,20 @@ test('ScrambleText clears delayed intervals on unmount', () => {
   assert.doesNotMatch(source, /return \(\) => clearInterval\(interval\);\s*\}, delay\)/);
 });
 
+test('short-lived renderer feedback timers are cleared on unmount', () => {
+  const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
+  const settings = readRepoFile('src/pages/Settings.jsx');
+  const codeRedemption = readRepoFile('src/pages/CodeRedemption.jsx');
+
+  assert.match(accountDetail, /copyTimerRef = useRef\(null\)/);
+  assert.match(accountDetail, /transientTimersRef = useRef\(new Set\(\)\)/);
+  assert.match(accountDetail, /for \(const timer of transientTimersRef\.current\) clearTimeout\(timer\)/);
+  assert.match(settings, /copiedTimerRef = useRef\(null\)/);
+  assert.match(settings, /if \(copiedTimerRef\.current\) clearTimeout\(copiedTimerRef\.current\)/);
+  assert.match(codeRedemption, /historyRefreshTimerRef = useRef\(null\)/);
+  assert.match(codeRedemption, /if \(historyRefreshTimerRef\.current\) clearTimeout\(historyRefreshTimerRef\.current\)/);
+});
+
 test('global form controls cannot fall back to white native browser styling', () => {
   const css = readRepoFile('src/index.css');
 
