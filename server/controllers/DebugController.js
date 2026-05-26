@@ -14,7 +14,7 @@ import { getCredits } from '../services/openrouter.js';
 import { OR_BASE } from '../config.js';
 import { logger } from '../services/logger.js';
 import { trpcCall, getFreshJwt } from '../services/dashboard-api.js';
-import { refreshSession } from '../services/clerk-auth.js';
+import { clerkFapiDeviceCookieHeader, openRouterDashboardDeviceCookies, refreshSession } from '../services/clerk-auth.js';
 
 // ─── tRPC candidate routes to probe ──────────────────────────────────────────
 // Grouped by category for structured output.
@@ -50,6 +50,14 @@ const PROBE_ROUTES = {
 
 // ─── Primary probe: use trpcCall (handles JWT refresh + HTML detection) ─────────
 // sessionCookie should already be a fresh JWT (pre-refreshed in trpcProbe before calling this)
+function dashboardCookieHeader(sessionCookie, clientCookie, { includeSession = true } = {}) {
+  const parts = [];
+  if (includeSession && sessionCookie) parts.push(`__session=${sessionCookie}`);
+  const device = clientCookie ? openRouterDashboardDeviceCookies(clientCookie) : '';
+  if (device) parts.push(device);
+  return parts.join('; ');
+}
+
 async function probeRoute(route, input, sessionCookie, clientCookie, referer = '/settings') {
   const OR_ORIGIN = new URL(OR_BASE).origin;
   const url = `${OR_BASE}/api/trpc/${route}?batch=1`;
@@ -89,7 +97,7 @@ async function probeRoute(route, input, sessionCookie, clientCookie, referer = '
       });
       const res = await fetch(url, {
         method: 'POST',
-        headers: makeHeaders(`__client=${clientCookie}`),
+        headers: makeHeaders(dashboardCookieHeader(null, clientCookie, { includeSession: false })),
         body,
       });
       const text = await res.text();
@@ -149,7 +157,7 @@ async function rawTrpcGet(route, input, sessionCookie, clientCookie, referer = '
   const OR_ORIGIN = new URL(OR_BASE).origin;
   const inputEncoded = encodeURIComponent(JSON.stringify({ '0': { json: input } }));
   const url = `${OR_BASE}/api/trpc/${route}?batch=1&input=${inputEncoded}`;
-  const cookie = `__session=${sessionCookie}; __client=${clientCookie}`;
+  const cookie = dashboardCookieHeader(sessionCookie, clientCookie);
 
   try {
     const res = await fetch(url, {
@@ -247,7 +255,7 @@ class DebugController extends BaseController {
       let sessionCookie = session.sessionCookie;
       // Prefer stacked array over legacy single-string field.
       const cookieInput = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
-      const clientCookie = session.clientCookie; // kept for header construction below
+      let clientCookie = session.clientCookie; // kept for header construction below
 
       // Pre-refresh the session before probing — `getFreshJwt` only reads Clerk's client object
       // which may show empty sessions even when the stored JWT is valid. `refreshSession` uses
@@ -256,8 +264,9 @@ class DebugController extends BaseController {
         const refreshed = await refreshSession(cookieInput, sessionCookie);
         if (refreshed?.sessionCookie) {
           sessionCookie = refreshed.sessionCookie;
+          clientCookie = refreshed.clientCookie ?? clientCookie;
           // Persist so subsequent calls benefit too
-          await store.updateAccountSession(req.user.id, accountId, refreshed.sessionCookie, refreshed.clientCookie ?? clientCookie, refreshed.sessionExpiry ?? null);
+          await store.updateAccountSession(req.user.id, accountId, refreshed.sessionCookie, clientCookie, refreshed.sessionExpiry ?? null);
           logger.info(`[DEBUG] Session pre-refreshed for ${account?.alias}`);
         }
       } catch (err) {
@@ -352,6 +361,7 @@ class DebugController extends BaseController {
       if (!session?.sessionCookie) return this.error(res, 'No active session', 400);
 
       const { sessionCookie, clientCookie } = session;
+      const cookieHeader = dashboardCookieHeader(sessionCookie, clientCookie);
       const OR_ORIGIN = new URL(OR_BASE).origin;
 
       // Read current bio first, then write it back unchanged (true no-op).
@@ -361,7 +371,7 @@ class DebugController extends BaseController {
         const profileUrl = `${OR_BASE}/api/trpc/user.getProfile?batch=1`;
         const profileRes = await fetch(profileUrl, {
           headers: {
-            'Cookie': `__session=${sessionCookie}; __client=${clientCookie}`,
+            'Cookie': cookieHeader,
             'Origin': OR_ORIGIN,
             'Referer': `${OR_ORIGIN}/settings`,
             'x-trpc-source': 'nextjs-react',
@@ -390,7 +400,7 @@ class DebugController extends BaseController {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Cookie': `__session=${sessionCookie}; __client=${clientCookie}`,
+              'Cookie': cookieHeader,
               'Origin': OR_ORIGIN,
               'Referer': `${OR_ORIGIN}/settings`,
               'x-trpc-source': 'nextjs-react',
@@ -445,7 +455,7 @@ class DebugController extends BaseController {
       const CLERK_BASE_URL = 'https://clerk.openrouter.ai/v1';
       // Use best available: newest in stack, or legacy string
       const clientCookie = session.clientCookies?.[0]?.cookie || session.clientCookie;
-      const cookieHeader = clientCookie.includes('=') ? clientCookie : `__client=${clientCookie}`;
+      const cookieHeader = clerkFapiDeviceCookieHeader(clientCookie);
 
       // Probe Clerk directly with the stored __client cookie
       const r = await fetch(`${CLERK_BASE_URL}/client`, {

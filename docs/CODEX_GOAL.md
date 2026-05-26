@@ -144,7 +144,7 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
 - Store-layer local-state fallbacks now log account/key-scoped evidence for live session probe errors, stored session-token decrypt failures, uniqueness checks that skip unreadable accounts, and encrypted API-key decrypt failures while preserving non-fatal UI/API behavior; `server/tests/background-failure-visibility.test.mjs` covers this source contract
 - Legacy storage reset probes now log field-level unreadable ciphertext evidence for account config, account session tokens, and stored key material before triggering the legacy reset/block path; `server/tests/background-failure-visibility.test.mjs` covers this source contract
 - OpenRouter account/key requests and model-list cache refreshes are timeout bounded with `AbortSignal.timeout(30000)`; account snapshot fallbacks log when credits or key-list lookups fail before returning safe zero/empty defaults, so account metadata degradation does not look like a real empty account without evidence; `server/tests/background-failure-visibility.test.mjs` covers this contract
-- CLI status/doctor/logs/data-dir/stop degraded paths now stay explicit for closed-app automation: top-level system commands default to the same repo `data/` runtime as service-backed commands unless `HYDRA_DATA_DIR` is set, `hydra doctor --json` recognizes packaged `chromium.zip` resources, `hydra status --json` includes a `warnings` channel for proxy metadata degradation, and `hydra stop` bounds shutdown requests, preserves non-JSON response bodies, and reports timeout/request failures without hanging or hiding endpoint evidence; `server/tests/cli.test.mjs` covers the source contract
+- CLI status/doctor/logs/data-dir/stop degraded paths now stay explicit for closed-app automation: top-level system commands default to the same repo `data/` runtime as service-backed commands unless `HYDRA_DATA_DIR` is set, `hydra doctor --json` recognizes packaged `chromium.zip` resources, separates Hydra-owned app/browser automation processes from unrelated Chrome/Playwright/Electron tooling in `otherBrowserToolProcesses`, `hydra status --json` includes a `warnings` channel for proxy metadata degradation, and `hydra stop` bounds shutdown requests, preserves non-JSON response bodies, and reports timeout/request failures without hanging or hiding endpoint evidence; `server/tests/cli.test.mjs` covers the source contract
 - Test-chain completeness is enforced by `server/tests/test-chain-completeness.test.mjs`, which fails if normal `server/tests/*.test.mjs` or `electron/tests/*.test.mjs` files are not reachable from `npm test`
 
 ---
@@ -184,6 +184,7 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
 - `getSessionStatusAsync` persists fresh Clerk client cookies and expiry after live refresh; `server/tests/session-refresh-contract.test.mjs` verifies the source contract
 - `clientCookies` stack traversal is used before legacy `clientCookie` in refresh entrypoints; `server/tests/session-refresh-contract.test.mjs` scans the relevant files
 - Session refresh contract is unified around stacked cookie input plus live-probe persistence; focused regression coverage passed on 2026-05-16
+- Clerk/dashboard cookie utilities now round-trip raw legacy `__client` values and lone `__client=value` strings without double-prefixing headers, and DebugController's private probes use the same Clerk/dashboard serializers as production paths instead of ad hoc `__client=${value}` construction; `server/tests/cookie-utils.test.mjs` and `server/tests/session-refresh-contract.test.mjs` cover this
 - Test biometric-gated auth tokens: enable Touch ID, lock, unlock via Touch ID, verify session resumes
 - Biometric-gated auth-token release now fails closed: when `biometricEnabled`
   is true, `native:auth-token:get` always calls `promptBiometric('Unlock
@@ -196,7 +197,7 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
   same-origin cookies, legacy JS cookies are only cleared, and
   `server/tests/auth-cookie.test.mjs` plus `server/tests/electron-data-path.test.mjs`
   lock the cookie, native auth-token, and no-`safeStorage`/`keytar` contracts.
-- Clerk webhook handler for `session.ended`/`session.revoked` clears matching local sessions by Clerk `sid`; `server/tests/clerk-webhook-session-revoke.test.mjs` covers `session.revoked`
+- Clerk webhook handler for `session.ended`/`session.revoked` clears matching local sessions by Clerk `sid` while account events avoid storing the full `sid`; `server/tests/clerk-webhook-session-revoke.test.mjs` covers both event types and the redaction contract
 
 ---
 

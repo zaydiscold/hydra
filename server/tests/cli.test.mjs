@@ -616,6 +616,8 @@ test('hydra doctor --json reports concrete checks', () => {
   assert.equal(Array.isArray(report.performance.hydraPlaywrightProfiles.profiles), true);
   assert.equal(typeof report.performance.hydraProcesses.unavailable, 'boolean');
   assert.equal(Array.isArray(report.performance.hydraProcesses.processes), true);
+  assert.equal(typeof report.performance.hydraProcesses.otherBrowserToolProcesses.count, 'number');
+  assert.equal(Array.isArray(report.performance.hydraProcesses.otherBrowserToolProcesses.processes), true);
   assert.ok(report.performance.cleanup == null);
 });
 
@@ -647,6 +649,13 @@ test('hydra doctor includes local performance diagnostics for fan-pressure repor
   assert.match(source, /deleted: 0/);
   assert.match(source, /function inspectHydraProcesses\(\)/);
   assert.match(source, /ps', \['-axo', 'pid,pcpu,pmem,rss,command'\]/);
+  assert.match(source, /function isHydraOwnedProcess\(command\)/);
+  assert.match(source, /function isBrowserToolingProcess\(command\)/);
+  assert.ok(source.includes('/^\\S*Hydra\\.app\\/Contents\\//'));
+  assert.match(source, /otherBrowserToolProcesses/);
+  assert.match(source, /Hydra-owned match\(es\)/);
+  assert.match(source, /unrelated browser-tool match\(es\)/);
+  assert.doesNotMatch(source, /Hydra\|hydra\|chromium\|Chromium\|Google Chrome for Testing\|playwright/);
   assert.match(source, /performance: \{/);
   assert.match(source, /const refreshedProfileReport = cleanStaleProfiles \? inspectHydraPlaywrightProfiles\(\) : profileReport/);
   assert.match(source, /hydraPlaywrightProfiles: refreshedProfileReport/);

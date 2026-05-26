@@ -93,4 +93,45 @@ test('Clerk session.revoked webhook clears matching local account session', asyn
   const session = await store.getAccountSession(user.id, account.id);
   assert.equal(session.sessionCookie, '');
   assert.equal(session.sessionExpiry, null);
+
+  const accountAfterRevoke = await store.getAccountWithKey(user.id, account.id);
+  assert.equal(accountAfterRevoke.events[0].type, 'SESSION_REVOKED');
+  assert.match(accountAfterRevoke.events[0].message, /Matching Clerk session revoked via webhook \(session\.revoked\)/);
+  assert.doesNotMatch(accountAfterRevoke.events[0].message, /sess_to_revoke/);
+
+  await store.updateAccountSession(
+    user.id,
+    account.id,
+    fakeJwt({ sid: 'sess_to_end', sub: 'user_123' }),
+    '__client=client_before_end',
+    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    { isNewLogin: true },
+  );
+
+  const endedServer = await startWebhookServer();
+  try {
+    const port = endedServer.address().port;
+    const res = await fetch(`http://127.0.0.1:${port}/api/webhooks/clerk`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'svix-id': 'evt-session-ended-1',
+      },
+      body: JSON.stringify({
+        type: 'session.ended',
+        data: { session_id: 'sess_to_end' },
+      }),
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual(body.action, { type: 'session_revoke', matched: 1, revoked: 1 });
+  } finally {
+    await new Promise((resolveClose) => endedServer.close(resolveClose));
+  }
+
+  const endedSession = await store.getAccountSession(user.id, account.id);
+  assert.equal(endedSession.sessionCookie, '');
+  const accountAfterEnd = await store.getAccountWithKey(user.id, account.id);
+  assert.match(accountAfterEnd.events[0].message, /Matching Clerk session revoked via webhook \(session\.ended\)/);
+  assert.doesNotMatch(accountAfterEnd.events[0].message, /sess_to_end/);
 });

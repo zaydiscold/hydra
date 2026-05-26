@@ -223,7 +223,7 @@ export async function revokeSessionsByClerkSessionId(clerkSessionId, reason = 'c
     config.events = Array.isArray(config.events) ? config.events : [];
     config.events.unshift({
       type: 'SESSION_REVOKED',
-      message: `Clerk session ${targetSid} revoked via webhook (${reason})`,
+      message: `Matching Clerk session revoked via webhook (${reason})`,
       timestamp: new Date().toISOString(),
     });
     if (config.events.length > 20) config.events = config.events.slice(0, 20);
@@ -675,7 +675,9 @@ export function appendClientCookie(existing, newCookie) {
   const trimmed = newCookie.trim();
   if (!trimmed || trimmed === 'undefined') return existing;
 
-  const stack = Array.isArray(existing) ? [...existing] : normalizeClientCookies({ clientCookie: existing });
+  const stack = Array.isArray(existing)
+    ? normalizeClientCookies({ clientCookies: existing })
+    : normalizeClientCookies({ clientCookie: existing });
 
   // Dedup: if this exact cookie string already exists, move it to front (renew)
   const dupIdx = stack.findIndex(e => e.cookie === trimmed);
@@ -705,10 +707,7 @@ export async function updateAccountSession(userId, id, sessionCookie, clientCook
   const preserveSessionToken = options.preserveSessionToken === true;
   const cfCookieExpirations = options.cfCookieExpirations;
   const replaceClientCookies = Array.isArray(options.replaceClientCookies)
-    ? options.replaceClientCookies
-        .filter((entry) => entry && typeof entry.cookie === 'string' && entry.cookie.trim() && entry.cookie.trim() !== 'undefined')
-        .map((entry) => ({ cookie: entry.cookie.trim(), issuedAt: entry.issuedAt || new Date().toISOString() }))
-        .slice(0, MAX_STACKED_CLIENT_COOKIES)
+    ? normalizeClientCookies({ clientCookies: options.replaceClientCookies })
     : null;
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');

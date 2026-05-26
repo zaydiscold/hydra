@@ -226,9 +226,13 @@ export function parseClerkDeviceCookieJar(stored) {
   }
   
   if (!t.includes(';')) {
-    if (t.includes(';') || t.includes('\n') || t.includes('\r')) {
-      logger.error('[COOKIE_SECURITY] parseClerkDeviceCookieJar: rejecting invalid legacy token with dangerous characters');
-      return {};
+    const eq = t.indexOf('=');
+    if (eq > 0) {
+      const k = t.slice(0, eq).trim();
+      const v = t.slice(eq + 1).trim();
+      if (isValidCookieName(k) && isClerkDeviceCookieName(k) && v && !v.includes('\n') && !v.includes('\r')) {
+        return { [k]: v };
+      }
     }
     return { __client: t };
   }
@@ -267,6 +271,18 @@ export function parseAllDeviceCookies(stored) {
   if (t.includes('\x00')) {
     logger.error('[COOKIE_SECURITY] parseAllDeviceCookies: rejecting cookie string containing null bytes');
     return {};
+  }
+
+  if (!t.includes(';')) {
+    const eq = t.indexOf('=');
+    if (eq > 0) {
+      const k = t.slice(0, eq).trim();
+      const v = t.slice(eq + 1).trim();
+      if (isValidCookieName(k) && isDashboardDeviceCookieName(k) && v && !v.includes('\n') && !v.includes('\r')) {
+        return { [k]: v };
+      }
+    }
+    return { __client: t };
   }
   
   const jar = {};

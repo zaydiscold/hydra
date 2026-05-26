@@ -84,6 +84,15 @@ test('cookie stack normalization is bounded and legacy-compatible', async () => 
   assert.equal(store.getLatestClientCookie({ clientCookies: [{ cookie: 'stack-only', issuedAt: 'now' }] }), 'stack-only');
   const legacy = store.normalizeClientCookies({ clientCookie: ' legacy-only ', clientCookieIssuedAt: 'legacy-issued' });
   assert.deepEqual(legacy, [{ cookie: 'legacy-only', issuedAt: 'legacy-issued' }]);
+  const appended = store.appendClientCookie(
+    [
+      { cookie: ' stale ', issuedAt: 'old' },
+      { cookie: 'stale', issuedAt: 'dup' },
+      { cookie: 'undefined', issuedAt: 'bad' },
+    ],
+    ' fresh ',
+  );
+  assert.deepEqual(appended.map((entry) => entry.cookie), ['fresh', 'stale']);
 });
 
 test('session controllers use the normalized latest cookie, not only legacy clientCookie', () => {
@@ -97,4 +106,15 @@ test('session controllers use the normalized latest cookie, not only legacy clie
   assert.match(accountController, /completeEmailOTP\(signInId, code, storedClient/);
   assert.match(accountController, /if \(!hasRefreshCookie\(session\)\)/);
   assert.doesNotMatch(accountController, /if \(!session\.clientCookie\)/);
+});
+
+test('debug tRPC probes serialize normalized dashboard device cookies', () => {
+  const debugController = read('server/controllers/DebugController.js');
+
+  assert.match(debugController, /openRouterDashboardDeviceCookies/);
+  assert.match(debugController, /clerkFapiDeviceCookieHeader/);
+  assert.match(debugController, /function dashboardCookieHeader\(sessionCookie, clientCookie/);
+  assert.match(debugController, /let clientCookie = session\.clientCookie/);
+  assert.match(debugController, /clientCookie = refreshed\.clientCookie \?\? clientCookie/);
+  assert.doesNotMatch(debugController, /__client=\$\{clientCookie\}/);
 });

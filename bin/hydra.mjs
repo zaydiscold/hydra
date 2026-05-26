@@ -299,6 +299,53 @@ function moveStaleHydraPlaywrightProfiles() {
   };
 }
 
+function processTotals(processes) {
+  const totalCpuPercent = Number(processes.reduce((sum, proc) => sum + proc.cpuPercent, 0).toFixed(1));
+  const totalRssBytes = processes.reduce((sum, proc) => sum + proc.rssBytes, 0);
+  return {
+    count: processes.length,
+    totalCpuPercent,
+    totalRssBytes,
+    totalRss: formatBytes(totalRssBytes),
+    processes: processes.slice(0, 20),
+  };
+}
+
+function isHydraOwnedProcess(command) {
+  const value = String(command || '');
+
+  // Packaged Electron app and its helper processes. Match the executable path
+  // at the front of the command so shell/awk diagnostics that merely mention
+  // `Hydra.app/Contents` are not counted as app processes.
+  if (/^\S*Hydra\.app\/Contents\//.test(value)) return true;
+
+  // Hydra-owned Playwright/Chrome-for-Testing instances use fresh temp
+  // profiles with this prefix. Plain playwright-mcp/chrome-devtools-mcp
+  // processes are external tooling and must not inflate Hydra fan reports.
+  if (/hydra-pw-profile-/.test(value)) return true;
+  if (/Google Chrome for Testing/.test(value) && /Hydra|hydra|hydra-pw-profile-/.test(value)) return true;
+  if (/(^|\s)\S*build\/electron\/chromium\b|(^|\s)\S*Contents\/Resources\/chromium\b/.test(value)) return true;
+
+  // Long-running Hydra CLI/server modes are Hydra-owned. Short diagnostic
+  // commands such as `hydra doctor` are intentionally excluded.
+  if (/\bbin\/hydra\.mjs\s+(serve|start|proxy|mcp)\b/.test(value)) return true;
+  if (value.includes(root) && /(server\/standalone\.js|launch\.js|electron\/main\.js)/.test(value)) return true;
+
+  return false;
+}
+
+function isBrowserToolingProcess(command) {
+  const value = String(command || '');
+  if (isHydraOwnedProcess(value)) return false;
+  return (
+    /\/Applications\/Google Chrome\.app\/Contents\//.test(value) ||
+    /Google Chrome Helper/.test(value) ||
+    /\b(chrome-devtools-mcp|playwright|playwright-mcp|browser-harness)\b/i.test(value) ||
+    /(^|\s)\S*(?:Chrome|Chromium|Electron)\.app\/Contents\//.test(value) ||
+    /(^|\s)\S*node_modules\/electron\/dist\//.test(value)
+  );
+}
+
 function inspectHydraProcesses() {
   if (process.platform === 'win32') {
     return {
@@ -315,12 +362,12 @@ function inspectHydraProcesses() {
       encoding: 'utf-8',
     });
     const rows = out.trim().split('\n').slice(1);
-    const processes = rows
+    const parsed = rows
       .map((line) => {
         const match = line.trim().match(/^(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+(.+)$/);
         if (!match) return null;
         const [, pid, cpu, mem, rssKb, command] = match;
-        if (!/(Hydra|hydra|chromium|Chromium|Google Chrome for Testing|playwright)/.test(command)) return null;
+        if (Number(pid) === process.pid) return null;
         return {
           pid: Number(pid),
           cpuPercent: Number(cpu),
@@ -332,14 +379,17 @@ function inspectHydraProcesses() {
       })
       .filter(Boolean)
       .sort((a, b) => b.cpuPercent - a.cpuPercent || b.rssBytes - a.rssBytes);
+    const hydraProcesses = parsed.filter((proc) => isHydraOwnedProcess(proc.command));
+    const otherBrowserToolProcesses = parsed.filter((proc) => isBrowserToolingProcess(proc.command));
+
     return {
       ok: true,
       unavailable: false,
-      count: processes.length,
-      totalCpuPercent: Number(processes.reduce((sum, proc) => sum + proc.cpuPercent, 0).toFixed(1)),
-      totalRssBytes: processes.reduce((sum, proc) => sum + proc.rssBytes, 0),
-      totalRss: formatBytes(processes.reduce((sum, proc) => sum + proc.rssBytes, 0)),
-      processes: processes.slice(0, 20),
+      ...processTotals(hydraProcesses),
+      otherBrowserToolProcesses: {
+        ...processTotals(otherBrowserToolProcesses),
+        note: 'Chrome/Chromium/Playwright/Electron processes not owned by Hydra; included for fan-pressure context only.',
+      },
     };
   } catch (err) {
     return {
@@ -596,7 +646,8 @@ Checks
 Performance
   Playwright profiles: ${report.performance.hydraPlaywrightProfiles.count} stale Hydra dir(s), ${report.performance.hydraPlaywrightProfiles.totalSize}
   Profile cleanup:      ${profileCleanup ? `${profileCleanup.moved.length} moved, ${profileCleanup.failed.length} failed, backup ${profileCleanup.backupDir || 'none'}` : 'not requested'}
-  Hydra processes:     ${report.performance.hydraProcesses.unavailable ? `unavailable (${report.performance.hydraProcesses.reason})` : `${report.performance.hydraProcesses.count} match(es), CPU ${report.performance.hydraProcesses.totalCpuPercent}%, RSS ${report.performance.hydraProcesses.totalRss}`}`);
+  Hydra processes:     ${report.performance.hydraProcesses.unavailable ? `unavailable (${report.performance.hydraProcesses.reason})` : `${report.performance.hydraProcesses.count} Hydra-owned match(es), CPU ${report.performance.hydraProcesses.totalCpuPercent}%, RSS ${report.performance.hydraProcesses.totalRss}`}
+  Browser tooling:     ${report.performance.hydraProcesses.unavailable ? 'unavailable' : `${report.performance.hydraProcesses.otherBrowserToolProcesses.count} unrelated browser-tool match(es), CPU ${report.performance.hydraProcesses.otherBrowserToolProcesses.totalCpuPercent}%, RSS ${report.performance.hydraProcesses.otherBrowserToolProcesses.totalRss}`}`);
   process.exit(0);
 } else if (sub === 'logs') {
   const wantTail = cliArgs.includes('--tail') || cliArgs.includes('-f');
