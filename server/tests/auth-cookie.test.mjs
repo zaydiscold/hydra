@@ -16,6 +16,8 @@ mock.module(new URL('../services/auth.js', import.meta.url).href, {
 const {
   AUTH_TOKEN_COOKIE,
   extractAuthToken,
+  setAuthTokenCookie,
+  clearAuthTokenCookie,
   requireUnlocked,
 } = await import('../middleware/auth.js');
 
@@ -100,4 +102,40 @@ test('requireUnlocked accepts cookie token', async () => {
   assert.equal(calledNext, true);
   assert.deepEqual(req.user, { id: 'user-1', username: 'admin' });
   assert.equal(validateCalls.at(-1), 'valid-cookie-token');
+});
+
+test('auth token cookie is HttpOnly and scoped to same-site localhost routes', () => {
+  const calls = [];
+  const res = {
+    cookie(name, value, options) {
+      calls.push({ type: 'set', name, value, options });
+    },
+    clearCookie(name, options) {
+      calls.push({ type: 'clear', name, options });
+    },
+  };
+
+  setAuthTokenCookie(res, 'server-token');
+  clearAuthTokenCookie(res);
+
+  assert.deepEqual(calls[0], {
+    type: 'set',
+    name: AUTH_TOKEN_COOKIE,
+    value: 'server-token',
+    options: {
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
+      sameSite: 'lax',
+      httpOnly: true,
+    },
+  });
+  assert.deepEqual(calls[1], {
+    type: 'clear',
+    name: AUTH_TOKEN_COOKIE,
+    options: {
+      path: '/',
+      sameSite: 'lax',
+      httpOnly: true,
+    },
+  });
 });

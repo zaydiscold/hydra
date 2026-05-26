@@ -68,6 +68,7 @@ test('Electron exposes 24-hour renderer auth-token persistence', () => {
   const nativeSrc = readFileSync(resolve(ROOT, 'src/lib/native.js'), 'utf-8');
   const authMiddlewareSrc = readFileSync(resolve(ROOT, 'server/middleware/auth.js'), 'utf-8');
   const configSrc = readFileSync(resolve(ROOT, 'server/config.js'), 'utf-8');
+  const packageSrc = readFileSync(resolve(ROOT, 'package.json'), 'utf-8');
 
   assert.match(ipcSrc, /AUTH_TOKEN_TTL_MS\s*=\s*24\s*\*\s*60\s*\*\s*60\s*\*\s*1000/);
   assert.match(ipcSrc, /renderer-auth-token\.json/);
@@ -91,5 +92,11 @@ test('Electron exposes 24-hour renderer auth-token persistence', () => {
   assert.match(apiSrc, /const nativeToken\s*=\s*await\s+nativeAuthToken\(['"]getAuthToken['"]\)/);
   assert.doesNotMatch(apiSrc, /window\??\.hydraNative|globalThis\.window\??\.hydraNative/);
   assert.match(authMiddlewareSrc, /AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS\s*=\s*24\s*\*\s*60\s*\*\s*60/);
+  assert.match(authMiddlewareSrc, /httpOnly:\s*true/);
   assert.match(configSrc, /HYDRA_MASTER_JWT_TTL:[\s\S]*default\(['"]24h['"]\)/);
+  assert.match(apiSrc, /credentials:\s*['"]same-origin['"]/);
+  assert.match(apiSrc, /clearLegacyAuthCookie\(\)/);
+  assert.doesNotMatch(apiSrc, /document\.cookie\s*=\s*`hydra_token=\$\{encodeURIComponent\(token\)/);
+  assert.doesNotMatch(ipcSrc, /\bsafeStorage\b|keytar|SecKeychain/);
+  assert.doesNotMatch(packageSrc, /"keytar"\s*:/);
 });

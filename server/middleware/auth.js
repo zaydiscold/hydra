@@ -30,6 +30,7 @@ export function setAuthTokenCookie(res, token) {
     maxAge: AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS * 1000,
     path: '/',
     sameSite: 'lax',
+    httpOnly: true,
   });
 }
 
@@ -37,6 +38,7 @@ export function clearAuthTokenCookie(res) {
   res.clearCookie(AUTH_TOKEN_COOKIE, {
     path: '/',
     sameSite: 'lax',
+    httpOnly: true,
   });
 }
 

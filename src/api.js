@@ -3,7 +3,6 @@ import { invokeNative, NotInElectronError } from './lib/native';
 const API = '/api';
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const RETRY_DELAY_MS = 150;
-const AUTH_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
 
 /** Map API `source` to UI label (API may still return `playwright` for browser automation). */
 export function formatProvisionSourceForUi(source) {
@@ -67,11 +66,9 @@ function getToken() {
   return localStorage.getItem('hydra_token') || '';
 }
 
-function setAuthCookie(token) {
-  document.cookie = `hydra_token=${encodeURIComponent(token)}; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`;
-}
-
-function clearAuthCookie() {
+function clearLegacyAuthCookie() {
+  // Server-issued unlock cookies are HttpOnly. This only clears the older
+  // JS-readable cookie written by previous builds.
   document.cookie = 'hydra_token=; Max-Age=0; Path=/; SameSite=Lax';
 }
 
@@ -143,7 +140,7 @@ async function request(path, options = {}) {
     const token = getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
-  const fetchOptions = { method: normalizedMethod, headers, signal, keepalive };
+  const fetchOptions = { method: normalizedMethod, headers, signal, keepalive, credentials: 'same-origin' };
   if (body) fetchOptions.body = JSON.stringify(body);
   const attempts = isRetryableRequest(normalizedMethod) ? 2 : 1;
 
@@ -255,7 +252,6 @@ export const shutdownServer = () =>
 export async function saveToken(token) {
   handledAuthFailure = false;
   localStorage.setItem('hydra_token', token);
-  setAuthCookie(token);
   // Await the native write so a quick window-close right after login
   // doesn't lose the persisted token. The disk write is fast (~1 ms);
   // not awaiting was a real session-loss bug in packaged builds.
@@ -263,7 +259,7 @@ export async function saveToken(token) {
 }
 export async function clearToken() {
   localStorage.removeItem('hydra_token');
-  clearAuthCookie();
+  clearLegacyAuthCookie();
   await nativeAuthToken('clearAuthToken');
 }
 export function hasToken() {
