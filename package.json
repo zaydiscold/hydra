@@ -92,6 +92,7 @@
     "docker:smoke": "node scripts/docker-smoke.mjs",
     "// ─── Setup & Tools ─────────────────────────────────────────────────────": "",
     "openapi:hydra": "node scripts/generate-hydra-openapi.mjs",
+    "icons:generate": "node scripts/generate-hydra-source-icon.mjs && node scripts/generate-icons.mjs",
     "setup": "npm install && prisma db push --skip-generate && prisma generate && npm run build",
     "link": "npm link",
     "check:clerk": "node scripts/recon/check-clerk-connectivity.mjs",

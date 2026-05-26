@@ -113,6 +113,14 @@ test('splash owns one throttled physics and render loop', () => {
   assert.doesNotMatch(windowsJs, /Run\.stop/);
 });
 
+test('vault status totals avoid self-nested account lookups', () => {
+  const vault = readRepoFile('src/pages/Vault.jsx');
+
+  assert.match(vault, /const statusSource = \(account\) => liveStatuses\?\.\[account\.id\] \|\| account\.sessionStatus/);
+  assert.match(vault, /accounts\.filter\(\(a\) => statusSource\(a\) === 'active'\)/);
+  assert.doesNotMatch(vault, /statusSource\(id\)[\s\S]*accounts\.find\(\(a\) => a\.id === id\)/);
+});
+
 test('ScrambleText clears delayed intervals on unmount', () => {
   const source = readRepoFile('src/components/ScrambleText.jsx');
 

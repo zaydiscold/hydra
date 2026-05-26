@@ -1,4 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+#!/usr/bin/env node
+/**
+ * Generate Hydra's source app icon and favicon.
+ *
+ * The source image feeds scripts/generate-icons.mjs, which then produces the
+ * macOS .icns, Windows .ico, and Linux PNG app icons.
+ */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, '..');
+const publicDir = path.join(ROOT, 'public');
+const sourcePng = path.join(publicDir, 'hydra_dragon.png');
+const faviconSvg = path.join(publicDir, 'favicon.svg');
+
+const svg = String.raw`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="bg" x1="160" y1="96" x2="864" y2="928" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#07111f"/>
@@ -90,4 +108,10 @@
     <circle cx="818" cy="602" r="7"/>
     <circle cx="682" cy="219" r="6"/>
   </g>
-</svg>
+</svg>`;
+
+mkdirSync(publicDir, { recursive: true });
+writeFileSync(faviconSvg, svg);
+await sharp(Buffer.from(svg)).png().toFile(sourcePng);
+console.log(`[generate-hydra-source-icon] wrote ${sourcePng}`);
+console.log(`[generate-hydra-source-icon] wrote ${faviconSvg}`);

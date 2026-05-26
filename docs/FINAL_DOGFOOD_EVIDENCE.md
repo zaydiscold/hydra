@@ -7,11 +7,15 @@ to create a redacted evidence artifact after you run the real app.
 Current pre-dogfood performance evidence from 2026-05-26 is in
 `docs/RELEASE_AUDIT.md`: dashboard metadata/status shaping is down 61.1% in
 the local DB microbench, proxy retry body encoding is down 86.9% in the request
-body benchmark, session refresher selected reads are down 13.4%, and the rebuilt
-packaged macOS arm64 app sampled near-zero idle CPU after splash settle. The
+body benchmark, Vault status-total rendering is down 96.0% in the synthetic
+5000-account benchmark, session refresher selected reads are down 13.4%, and the
+rebuilt packaged macOS arm64 app sampled near-zero idle CPU after splash settle. The
 five-minute packaged idle sample ended with Hydra main at 0.1% CPU and the GPU,
 network, and renderer helpers at 0.0% CPU; a later current-source rebuild also
 settled back to 0.0% CPU across all Hydra processes at the post-splash sample.
+The icon-refresh rebuild packaged the regenerated macOS ICNS byte-for-byte and
+also settled back to 0.0% CPU across all Hydra processes at `t+50s`.
+A second icon-refresh relaunch repeated the same post-splash CPU result.
 
 The full operator checklist is in `docs/PACKAGED_ELECTRON_DOGFOOD.md`. For the
 current published release, derive the release version from `package.json`:
