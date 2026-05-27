@@ -30,7 +30,12 @@ import * as dashboardApi from './dashboard-api.js';
 import { logger } from './logger.js';
 import { taskSupervisor } from './task-supervisor.js';
 import { USER_AGENT, OR_BASE } from '../config.js';
-import { describeProxy, pickAccountProxy, toPlaywrightProxy } from './account-proxy-pool.js';
+import {
+  describeAutomationNetworkRoute,
+  mergeAutomationLaunchArgs,
+  pickAutomationNetworkRoute,
+  playwrightProxyForAutomation,
+} from './automation-network.js';
 
 import {
   detectAuthMethod,
@@ -135,14 +140,21 @@ async function launchSignupFlowPlaywright(task) {
       // build into the packaged app's resourcesPath; `resolveChromiumLaunchOptions`
       // points `executablePath` there.
       const { chromium } = await import('playwright-core');
-      const accountProxy = pickAccountProxy();
-      if (accountProxy) {
-        logger.info(`[Account Generator] Using account proxy ${describeProxy(accountProxy)} for task ${task.taskId}`);
+      const automationRoute = pickAutomationNetworkRoute();
+      if (automationRoute.accountProxy) {
+        logger.info(`[Account Generator] Using account proxy ${describeAutomationNetworkRoute(automationRoute)} for task ${task.taskId}`);
         taskSupervisor.updateTask(task.taskId, {
-          metadata: { ...task.metadata, proxy: describeProxy(accountProxy) },
+          metadata: { ...task.metadata, automationRoute: automationRoute.label },
+        });
+      } else {
+        taskSupervisor.updateTask(task.taskId, {
+          metadata: { ...task.metadata, automationRoute: automationRoute.label },
         });
       }
-      const launchOptions = resolveChromiumLaunchOptions({ headless: true, args: launchArgs });
+      const launchOptions = resolveChromiumLaunchOptions({
+        headless: true,
+        args: mergeAutomationLaunchArgs(launchArgs, automationRoute),
+      });
       const profileDir = launchOptions.userDataDir;
       taskSupervisor.updateTask(task.taskId, {
         cleanup: async () => cleanupEphemeralProfileDir(profileDir),
@@ -150,7 +162,7 @@ async function launchSignupFlowPlaywright(task) {
       const browser = await chromium.launch(launchOptions);
       const context = await browser.newContext({
         userAgent: USER_AGENT,
-        proxy: toPlaywrightProxy(accountProxy),
+        proxy: playwrightProxyForAutomation(automationRoute),
       });
       const page = await context.newPage();
       taskSupervisor.attachResources(task.taskId, { browser, context, page });

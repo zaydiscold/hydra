@@ -24,6 +24,11 @@ const {
   setAccountProxyPool,
   toPlaywrightProxy,
 } = await import('../services/account-proxy-pool.js');
+const {
+  fetchOptionsWithAutomationProxy,
+  mergeAutomationLaunchArgs,
+  pickAutomationNetworkRoute,
+} = await import('../services/automation-network.js');
 
 test.after(() => {
   rmSync(dataDir, { recursive: true, force: true });
@@ -85,4 +90,38 @@ test('stores proxy pool encrypted and returns masked public state', () => {
   const cleared = setAccountProxyPool('');
   assert.equal(cleared.count, 0);
   assert.equal(pickAccountProxy(), null);
+});
+
+test('automation network route is explicit for account proxies and direct mode', () => {
+  setAccountProxyPool('');
+  const direct = pickAutomationNetworkRoute();
+
+  assert.equal(direct.mode, 'direct-localhost');
+  assert.equal(direct.accountProxy, null);
+  assert.deepEqual(direct.chromiumArgs, ['--no-proxy-server']);
+  assert.equal(direct.playwrightProxy, undefined);
+  assert.deepEqual(mergeAutomationLaunchArgs(['--disable-dev-shm-usage'], direct), [
+    '--no-proxy-server',
+    '--disable-dev-shm-usage',
+  ]);
+  assert.equal(fetchOptionsWithAutomationProxy({ method: 'GET' }, direct).dispatcher, undefined);
+
+  setAccountProxyPool('10.0.0.2:9001:alice:secret');
+  const proxied = pickAutomationNetworkRoute();
+
+  assert.equal(proxied.mode, 'account-proxy');
+  assert.equal(proxied.label, '10.0.0.2:9001:a***e:s****t');
+  assert.deepEqual(proxied.chromiumArgs, []);
+  assert.deepEqual(proxied.playwrightProxy, {
+    server: 'http://10.0.0.2:9001',
+    username: 'alice',
+    password: 'secret',
+    bypass: 'localhost,127.0.0.1,::1',
+  });
+  const firstFetchOptions = fetchOptionsWithAutomationProxy({ method: 'POST' }, proxied);
+  const secondFetchOptions = fetchOptionsWithAutomationProxy({ method: 'POST' }, proxied);
+  assert.ok(firstFetchOptions.dispatcher);
+  assert.equal(firstFetchOptions.dispatcher, secondFetchOptions.dispatcher);
+
+  setAccountProxyPool('');
 });

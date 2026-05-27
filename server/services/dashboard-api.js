@@ -8,7 +8,6 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ProxyAgent } from 'undici';
 import { OR_BASE, config, USER_AGENT } from '../config.js';
 import {
   isSessionValid,
@@ -24,7 +23,14 @@ import { logger } from './logger.js';
 import { getCredits } from './openrouter.js';
 import { runInBatches } from './batch-runner.js';
 import { cleanupEphemeralProfileDir, resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
-import { describeProxy, pickAccountProxy, toPlaywrightProxy } from './account-proxy-pool.js';
+import {
+  describeAutomationNetworkRoute,
+  fetchOptionsWithAutomationProxy,
+  mergeAutomationLaunchArgs,
+  normalizeAutomationNetworkRoute,
+  pickAutomationNetworkRoute,
+  playwrightProxyForAutomation,
+} from './automation-network.js';
 
 import {
   truncateForLog,
@@ -51,16 +57,8 @@ const OR_HOSTNAME = (() => {
   }
 })();
 
-function proxyAgentForAccountProxy(proxy) {
-  if (!proxy) return undefined;
-  const username = encodeURIComponent(proxy.username);
-  const password = encodeURIComponent(proxy.password);
-  return new ProxyAgent(`http://${username}:${password}@${proxy.host}:${proxy.port}`);
-}
-
-function fetchOptionsWithAccountProxy(options = {}, proxy = null) {
-  const dispatcher = proxyAgentForAccountProxy(proxy);
-  return dispatcher ? { ...options, dispatcher } : options;
+function fetchOptionsWithAccountProxy(options = {}, routeOrProxy = null) {
+  return fetchOptionsWithAutomationProxy(options, routeOrProxy);
 }
 
 function formatDashboardLogExtra(extra) {
@@ -428,7 +426,7 @@ function summarizeTrpcFailure(err) {
  * @param {string} keyName - Name for the management key
  * @returns {Promise<string|null>} - The created key or null
  */
-async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName) {
+async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute = null) {
   dashboardError('[dashboard-api] Attempting Server Action replay for management key creation');
 
   // Get fresh JWT before making the call - OTP sessions have short-lived JWTs (60s)
@@ -488,11 +486,11 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
           dashboardError(`[tryManagementKeyServerActionReplay] POST ${url} with content-type=${attempt.contentType}, body=${body.slice(0, 100)}`);
         }
 
-        const res = await fetch(url, {
+        const res = await fetch(url, fetchOptionsWithAccountProxy({
           method: 'POST',
           headers,
           body,
-        });
+        }, automationRoute));
 
         const contentType = res.headers.get('content-type') || '';
 
@@ -511,14 +509,14 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
         // A 404 specifically means the Next-Action hash is stale — try self-healing once
         if (res.status === 404) {
           dashboardWarn('[dashboard-api] Mgmt-key Server Action returned 404 — hash may be stale, attempting self-heal…');
-          const newHash = await selfHealHash('mgmt-key', url, headers, body);
+          const newHash = await selfHealHash('mgmt-key', url, headers, body, automationRoute);
           if (newHash) {
             // Retry with the discovered hash
-            const retryRes = await fetch(url, {
+            const retryRes = await fetch(url, fetchOptionsWithAccountProxy({
               method: 'POST',
               headers: { ...headers, 'Next-Action': newHash },
               body,
-            });
+            }, automationRoute));
             if (retryRes.ok || retryRes.status === 200) {
               const { text: retryText, error: retryReadErr } = await safeResponseText(retryRes, 50000);
               if (!retryReadErr) {
@@ -1505,7 +1503,7 @@ function shouldAbortProvisioning(err) {
  * @param {string} keyName - Name for the new key
  * @returns {Promise<{key?: string, error?: string}>}
  */
-async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
+async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute = null) {
   try {
     // Get fresh JWT first
     const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
@@ -1524,7 +1522,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
       try {
         dashboardError(`[tryRestApiCreateKey] Trying ${endpoint.method} ${endpoint.url}`);
         
-        const res = await fetch(endpoint.url, {
+        const res = await fetch(endpoint.url, fetchOptionsWithAccountProxy({
           method: endpoint.method,
           headers: {
             'Content-Type': 'application/json',
@@ -1534,7 +1532,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
             'User-Agent': USER_AGENT,
           },
           body: JSON.stringify(endpoint.body),
-        });
+        }, automationRoute));
         
         if (!res.ok) {
           dashboardError(`[tryRestApiCreateKey] ${endpoint.url} returned ${res.status}`);
@@ -1582,7 +1580,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
     for (const endpoint of expandedEndpoints) {
       try {
         dashboardError(`[tryRestApiCreateKey] Trying expanded ${endpoint.method} ${endpoint.url}`);
-        const res = await fetch(endpoint.url, {
+        const res = await fetch(endpoint.url, fetchOptionsWithAccountProxy({
           method: endpoint.method,
           headers: {
             'Content-Type': 'application/json',
@@ -1592,7 +1590,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName) {
             'User-Agent': USER_AGENT,
           },
           body: JSON.stringify(endpoint.body),
-        });
+        }, automationRoute));
 
         // Log EVERY response status — even 404s tell us what doesn't exist
         dashboardError(`[tryRestApiCreateKey] ${endpoint.url} → HTTP ${res.status} ${res.statusText}`);
@@ -1765,11 +1763,15 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
 export async function createManagementKey(userId, accountId, keyName = 'Hydra Auto Key') {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
   logProvisionOpenRouterBase(accountId, sessionCookie);
+  const automationRoute = pickAutomationNetworkRoute();
+  if (automationRoute.accountProxy) {
+    dashboardWarn(`[dashboard-api] Using account proxy ${describeAutomationNetworkRoute(automationRoute)} for management-key automation account=${accountId}`);
+  }
 
   // Try direct HTTP Server Action first — this is the confirmed correct approach.
   // OpenRouter uses Next.js Server Actions (not tRPC) for management key creation.
   // The Next-Action hash and body format were captured from live browser traffic.
-  const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName);
+  const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute);
   if (fromSa) {
     await persistProvisionedManagementKey(userId, accountId, fromSa, 'server-action');
     return { key: fromSa, source: 'server-action' };
@@ -1787,7 +1789,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   ];
 
   // Context for Cloudflare cookie migration
-  const migrationContext = { userId, accountId };
+  const migrationContext = { userId, accountId, accountProxy: automationRoute };
 
   let lastTrpcRouteAttempted = null;
   if (endpoint) {
@@ -1874,7 +1876,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   );
 
   // Try REST API with session JWT as Bearer token
-  const restResult = await tryRestApiCreateKey(sessionCookie, clientCookie, keyName);
+  const restResult = await tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute);
   if (restResult?.key) {
     dashboardError(`[dashboard-api] Success via REST API`);
     await persistProvisionedManagementKey(userId, accountId, restResult.key, 'rest-api');
@@ -1885,7 +1887,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     `[dashboard-api] REST API failed, falling back to browser UI automation (Chromium).`,
   );
 
-  return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, {
+  return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, automationRoute, {
     ...summarizeTrpcFailure(lastTrpcError),
     trpcLastRoute: lastTrpcRouteAttempted,
   });
@@ -2316,11 +2318,12 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
  *
  * When headless, adds anti-detection and container-safe flags.
  */
-function playwrightProvisionLaunchOptions() {
+function playwrightProvisionLaunchOptions(automationRoute = null) {
   const headless = !config.HYDRA_PLAYWRIGHT_HEADED;
-  const args = headless
+  const baseArgs = headless
     ? ['--disable-blink-features=AutomationControlled', '--disable-dev-shm-usage']
-    : undefined;
+    : [];
+  const args = mergeAutomationLaunchArgs(baseArgs, automationRoute);
   return resolveChromiumLaunchOptions({ headless, args });
 }
 
@@ -2335,12 +2338,15 @@ async function launchManagedChromium(chromium, launchOptions) {
   }
 }
 
-async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, trpcPhaseSummary = {}) {
+async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, selectedAutomationRoute = null, trpcPhaseSummary = {}) {
   // playwright-core: API-only package, no auto-downloaded browser bundle.
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
   // The full `playwright` package is dev-only now (see package.json).
   const { chromium } = await import('playwright-core');
   const cdpUrl = config.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim();
+  const automationRoute = cdpUrl
+    ? pickAutomationNetworkRoute({ allowAccountProxy: false })
+    : normalizeAutomationNetworkRoute(selectedAutomationRoute);
   let connectMode = 'launch';
   let profileDir = null;
   const browser = cdpUrl
@@ -2350,7 +2356,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       return chromium.connectOverCDP(cdpUrl);
     })()
     : await (async () => {
-      const launchOptions = playwrightProvisionLaunchOptions();
+      const launchOptions = playwrightProvisionLaunchOptions(automationRoute);
       const launched = await launchManagedChromium(chromium, launchOptions);
       profileDir = launched.profileDir;
       return launched.browser;
@@ -2360,15 +2366,11 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
   let capturedKey = null;
   const networkLogLines = [];
   let traceStarted = false;
-  const accountProxy = cdpUrl ? null : pickAccountProxy();
-  if (accountProxy) {
-    dashboardWarn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for management-key provision account=${accountId}`);
-  }
 
   try {
     context = await browser.newContext({
       userAgent: USER_AGENT,
-      proxy: toPlaywrightProxy(accountProxy),
+      proxy: playwrightProxyForAutomation(automationRoute),
     });
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
     try {
@@ -3151,17 +3153,17 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, acco
 /** Order: Server Action (fast HTTP) → cached tRPC → tRPC candidates → Playwright fallback */
 export async function redeemCode(userId, accountId, code) {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
-  const accountProxy = pickAccountProxy();
-  if (accountProxy) {
-    dashboardWarn(`[dashboard-api] Using account proxy ${describeProxy(accountProxy)} for code redemption account=${accountId}`);
+  const automationRoute = pickAutomationNetworkRoute();
+  if (automationRoute.accountProxy) {
+    dashboardWarn(`[dashboard-api] Using account proxy ${describeAutomationNetworkRoute(automationRoute)} for code redemption account=${accountId}`);
   }
 
   // Context for Cloudflare cookie migration
-  const migrationContext = { userId, accountId, accountProxy };
+  const migrationContext = { userId, accountId, accountProxy: automationRoute };
 
   // ── Step 0: Server Action (pure HTTP, confirmed working 2026-04-07) ──────────
   try {
-    const saResult = await redeemCodeViaServerAction(sessionCookie, clientCookie, code, accountProxy);
+    const saResult = await redeemCodeViaServerAction(sessionCookie, clientCookie, code, automationRoute);
     if (saResult.success) return saResult;
   } catch (err) {
     const stale = err.message?.includes('stale');
@@ -3241,7 +3243,7 @@ export async function redeemCode(userId, accountId, code) {
   // ── EXPLOIT #12: REST API fallback probe for credit redemption ──
   // Try REST endpoints with session JWT as Bearer token before Playwright
   dashboardError('[dashboard-api] All tRPC redeem routes exhausted, trying REST API fallback');
-  const restRedeemResult = await tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountProxy);
+  const restRedeemResult = await tryRestApiRedeemCode(sessionCookie, clientCookie, code, automationRoute);
   if (restRedeemResult?.success) {
     dashboardError(`[dashboard-api] Redemption succeeded via REST API at ${restRedeemResult.probedUrl || 'unknown endpoint'}`);
     return restRedeemResult;
@@ -3257,7 +3259,7 @@ export async function redeemCode(userId, accountId, code) {
 
   dashboardError('[dashboard-api] REST API redemption failed, falling back to Playwright browser automation');
 
-  return await redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, accountProxy);
+  return await redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, automationRoute);
 }
 
 async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapshot, managementKey, attempted, code) {
@@ -3343,13 +3345,16 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
   return row;
 }
 
-async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, selectedAccountProxy = null) {
+async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, selectedAutomationRoute = null) {
   // playwright-core: API-only package, no auto-downloaded browser bundle.
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
   // The full `playwright` package is dev-only now (see package.json).
   const { chromium } = await import('playwright-core');
-  const accountProxy = selectedAccountProxy;
-  const launchOptions = resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED });
+  const automationRoute = normalizeAutomationNetworkRoute(selectedAutomationRoute);
+  const launchOptions = resolveChromiumLaunchOptions({
+    headless: !config.HYDRA_PLAYWRIGHT_HEADED,
+    args: mergeAutomationLaunchArgs([], automationRoute),
+  });
   const { browser, profileDir } = await launchManagedChromium(chromium, launchOptions);
   let result = {
     success: false,
@@ -3379,7 +3384,7 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
   try {
     const context = await browser.newContext({
       userAgent: USER_AGENT,
-      proxy: toPlaywrightProxy(accountProxy),
+      proxy: playwrightProxyForAutomation(automationRoute),
     });
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
     const page = await context.newPage();
@@ -3548,6 +3553,10 @@ export async function getUserProfile(sessionCookie, clientCookie) {
  */
 export async function syncApiKeys(userId, accountId) {
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
+  const automationRoute = pickAutomationNetworkRoute();
+  if (automationRoute.accountProxy) {
+    dashboardWarn(`[syncApiKeys] Using account proxy ${describeAutomationNetworkRoute(automationRoute)} for account=${accountId}`);
+  }
 
   // ── Fast path: probe session-auth tRPC routes that might expose plaintexts ──
   const keyListCandidates = [
@@ -3560,7 +3569,7 @@ export async function syncApiKeys(userId, accountId) {
 
   for (const route of keyListCandidates) {
     try {
-      const result = await trpcCall(route, {}, sessionCookie, clientCookie);
+      const result = await trpcCall(route, {}, sessionCookie, clientCookie, {}, { accountProxy: automationRoute });
       if (!result) continue;
       // Look for array of objects with a key/plaintext/secret field
       const items = Array.isArray(result) ? result : (result.keys || result.data || result.items || []);
@@ -3581,15 +3590,19 @@ export async function syncApiKeys(userId, accountId) {
   }
 
   // ── Fallback: Playwright scrape of /settings/keys ──
-  return await syncApiKeysViaPlaywright(sessionCookie, clientCookie);
+  return await syncApiKeysViaPlaywright(sessionCookie, clientCookie, automationRoute);
 }
 
-async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
+async function syncApiKeysViaPlaywright(sessionCookie, clientCookie, selectedAutomationRoute = null) {
   // playwright-core: API-only package, no auto-downloaded browser bundle.
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
   // The full `playwright` package is dev-only now (see package.json).
   const { chromium } = await import('playwright-core');
-  const launchOptions = resolveChromiumLaunchOptions({ headless: !config.HYDRA_PLAYWRIGHT_HEADED });
+  const automationRoute = normalizeAutomationNetworkRoute(selectedAutomationRoute);
+  const launchOptions = resolveChromiumLaunchOptions({
+    headless: !config.HYDRA_PLAYWRIGHT_HEADED,
+    args: mergeAutomationLaunchArgs([], automationRoute),
+  });
   const { browser, profileDir } = await launchManagedChromium(chromium, launchOptions);
   const results = [];
 
@@ -3597,6 +3610,7 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie) {
     const context = await browser.newContext({
       userAgent: USER_AGENT,
       extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+      proxy: playwrightProxyForAutomation(automationRoute),
     });
 
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));

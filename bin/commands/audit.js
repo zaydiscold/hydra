@@ -193,6 +193,7 @@ function buildAudit() {
   const dashboardApi = safeRead('server/services/dashboard-api.js');
   const accountGenerator = safeRead('server/services/account-generator.js');
   const accountProxyPool = safeRead('server/services/account-proxy-pool.js');
+  const automationNetwork = safeRead('server/services/automation-network.js');
   const systemController = safeRead('server/controllers/SystemController.js');
   const systemRoutes = safeRead('server/routes/system.js');
   const poolController = safeRead('server/controllers/PoolController.js');
@@ -414,18 +415,30 @@ function buildAudit() {
         && rendererApi.includes('setAccountProxies')
         && settingsPage.includes('Account Proxy Pool')
         && settingsPage.includes('Save Proxies')
-        && accountGenerator.includes('pickAccountProxy')
-        && accountGenerator.includes('proxy: toPlaywrightProxy(accountProxy)')
-        && dashboardApi.includes('ProxyAgent')
+        && automationNetwork.includes("import { ProxyAgent } from 'undici'")
+        && automationNetwork.includes("import { describeProxy, pickAccountProxy, toPlaywrightProxy } from './account-proxy-pool.js'")
+        && automationNetwork.includes("mode: accountProxy ? 'account-proxy' : 'direct-localhost'")
+        && automationNetwork.includes("DIRECT_CHROMIUM_PROXY_ARGS = Object.freeze(['--no-proxy-server'])")
+        && automationNetwork.includes('bypass: LOCAL_PROXY_BYPASS')
+        && automationNetwork.includes('fetchOptionsWithAutomationProxy')
+        && accountGenerator.includes('pickAutomationNetworkRoute')
+        && accountGenerator.includes('mergeAutomationLaunchArgs(launchArgs, automationRoute)')
+        && accountGenerator.includes('proxy: playwrightProxyForAutomation(automationRoute)')
+        && accountGenerator.includes('automationRoute: automationRoute.label')
+        && dashboardApi.includes('pickAutomationNetworkRoute')
         && dashboardApi.includes('fetchOptionsWithAccountProxy')
-        && dashboardApi.includes('redeemCodeViaServerAction(sessionCookie, clientCookie, code, accountProxy)')
-        && dashboardApi.includes('tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountProxy)')
-        && dashboardApi.includes('redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, accountProxy)')
+        && dashboardApi.includes('tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute)')
+        && dashboardApi.includes('tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute)')
+        && dashboardApi.includes('redeemCodeViaServerAction(sessionCookie, clientCookie, code, automationRoute)')
+        && dashboardApi.includes('tryRestApiRedeemCode(sessionCookie, clientCookie, code, automationRoute)')
+        && dashboardApi.includes('redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, automationRoute)')
+        && dashboardApi.includes('syncApiKeysViaPlaywright(sessionCookie, clientCookie, automationRoute)')
         && String(pkg.scripts?.test || '').includes('test:account-proxy-pool')
         && backgroundFailureTest.includes('ProxyAgent')
-        && backgroundFailureTest.includes('fetchOptionsWithAccountProxy')
-        && backgroundFailureTest.includes('redeemCodeViaServerAction\\(sessionCookie, clientCookie, code, accountProxy\\)'),
-      'Settings/API store one proxy per line encrypted; signup, management-key, HTTP redemption, REST redemption, and Playwright redemption paths select and use a redacted random account proxy with empty-list fallback',
+        && backgroundFailureTest.includes('fetchOptionsWithAutomationProxy')
+        && backgroundFailureTest.includes('redeemCodeViaServerAction\\(sessionCookie, clientCookie, code, automationRoute\\)')
+        && backgroundFailureTest.includes('syncApiKeysViaPlaywright\\(sessionCookie, clientCookie, automationRoute\\)'),
+      'Settings/API store one proxy per line encrypted; signup, management-key, HTTP redemption, REST redemption, API-key sync, and Playwright fallback paths share one per-task automation route, with random account-proxy selection and explicit direct-localhost fallback',
     ),
     check(
       'readme-navigation',

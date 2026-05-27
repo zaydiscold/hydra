@@ -263,18 +263,27 @@ test('file logging is rotated for unattended API-router runs', () => {
 
 test('dashboard Playwright automation soft failures are logged', () => {
   const source = readRepoFile('server/services/dashboard-api.js');
+  const automationNetwork = readRepoFile('server/services/automation-network.js');
   const automationSource = source.slice(source.indexOf('async function dismissOpenRouterBlockingOverlays'));
 
-  assert.match(source, /pickAccountProxy/);
-  assert.match(source, /ProxyAgent/);
-  assert.match(source, /fetchOptionsWithAccountProxy/);
-  assert.match(source, /redeemCodeViaServerAction\(sessionCookie, clientCookie, code, accountProxy\)/);
+  assert.match(source, /pickAutomationNetworkRoute/);
+  assert.match(source, /mergeAutomationLaunchArgs/);
+  assert.match(source, /playwrightProxyForAutomation/);
+  assert.match(automationNetwork, /mode: accountProxy \? 'account-proxy' : 'direct-localhost'/);
+  assert.match(automationNetwork, /DIRECT_CHROMIUM_PROXY_ARGS = Object\.freeze\(\['--no-proxy-server'\]\)/);
+  assert.match(automationNetwork, /bypass: LOCAL_PROXY_BYPASS/);
+  assert.match(automationNetwork, /ProxyAgent/);
+  assert.match(source, /fetchOptionsWithAutomationProxy/);
+  assert.match(source, /tryManagementKeyServerActionReplay\(sessionCookie, clientCookie, keyName, automationRoute\)/);
+  assert.match(source, /tryRestApiCreateKey\(sessionCookie, clientCookie, keyName, automationRoute\)/);
+  assert.match(source, /redeemCodeViaServerAction\(sessionCookie, clientCookie, code, automationRoute\)/);
   assert.match(source, /trpcCall\(route, input, sessionCookie, clientCookie, headerOverrides, \{ accountProxy: context\.accountProxy \}\)/);
-  assert.match(source, /tryRestApiRedeemCode\(sessionCookie, clientCookie, code, accountProxy\)/);
-  assert.match(source, /redeemCodeViaPlaywright\(userId, accountId, sessionCookie, clientCookie, code, accountProxy\)/);
-  assert.match(source, /Using account proxy \$\{describeProxy\(accountProxy\)\} for management-key provision account=\$\{accountId\}/);
-  assert.match(source, /Using account proxy \$\{describeProxy\(accountProxy\)\} for code redemption account=\$\{accountId\}/);
-  assert.match(source, /proxy: toPlaywrightProxy\(accountProxy\)/);
+  assert.match(source, /tryRestApiRedeemCode\(sessionCookie, clientCookie, code, automationRoute\)/);
+  assert.match(source, /redeemCodeViaPlaywright\(userId, accountId, sessionCookie, clientCookie, code, automationRoute\)/);
+  assert.match(source, /syncApiKeysViaPlaywright\(sessionCookie, clientCookie, automationRoute\)/);
+  assert.match(source, /Using account proxy \$\{describeAutomationNetworkRoute\(automationRoute\)\} for management-key automation account=\$\{accountId\}/);
+  assert.match(source, /Using account proxy \$\{describeAutomationNetworkRoute\(automationRoute\)\} for code redemption account=\$\{accountId\}/);
+  assert.match(source, /proxy: playwrightProxyForAutomation\(automationRoute\)/);
   assert.match(source, /Escape press failed \(\$\{err\.message\}\)/);
   assert.match(source, /dismiss click failed \(\$\{err\.message\}\)/);
   assert.match(source, /captureKeyFromPageImmediate: Copy click failed \(\$\{err\.message\}\)/);
@@ -429,9 +438,11 @@ test('bulk magic-link polling batches account refresh after completions', () => 
 test('account generator browser signup uses the encrypted proxy pool when present', () => {
   const source = readRepoFile('server/services/account-generator.js');
 
-  assert.match(source, /pickAccountProxy/);
-  assert.match(source, /Using account proxy \$\{describeProxy\(accountProxy\)\} for task \$\{task\.taskId\}/);
-  assert.match(source, /proxy: toPlaywrightProxy\(accountProxy\)/);
+  assert.match(source, /pickAutomationNetworkRoute/);
+  assert.match(source, /mergeAutomationLaunchArgs\(launchArgs, automationRoute\)/);
+  assert.match(source, /Using account proxy \$\{describeAutomationNetworkRoute\(automationRoute\)\} for task \$\{task\.taskId\}/);
+  assert.match(source, /automationRoute: automationRoute\.label/);
+  assert.match(source, /proxy: playwrightProxyForAutomation\(automationRoute\)/);
 });
 
 test('OpenRouter model-list cache requests are timeout bounded', () => {

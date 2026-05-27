@@ -23,7 +23,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   `0.0%` CPU with RSS dropping from `298.69 MB` to `277.45 MB`; the follow-up
   `/private/tmp/hydra-profile-20260527T175641Z-goal-item1` sample again kept
   Hydra at `0.0%` CPU with RSS dropping from `278.92 MB` to `249.23 MB` and
-  preserved full before/after process grep output.
+  preserved full before/after process grep output. The later
+  `/private/tmp/hydra-profile-20260527T183654Z-seek-improvement` sample kept
+  `hydraPlaywrightProfiles.count` at `0` and sampled Hydra at `0.0%` CPU /
+  `250.31 MB` RSS before and `0.5%` CPU / `256.70 MB` RSS after.
 - `hydra doctor` now separates Hydra-owned process load from unrelated
   Chrome/CDP/browser-tooling load, which stayed heavy and was intentionally not
   closed.
@@ -84,6 +87,13 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   This is not the complete packaged screenshot audit: Computer Use timed out
   twice, System Events lacked Accessibility permission, and only the Dashboard
   route was captured.
+- Automation network routing is now shared by Playwright and non-Playwright
+  OpenRouter automation: Server Action/tRPC/REST probes and Playwright
+  fallbacks use one per-task route, either `account-proxy` from the encrypted
+  account proxy pool or explicit `direct-localhost` with Chromium
+  `--no-proxy-server`. Reusing the task route's undici dispatcher reduced
+  repeated proxy HTTP-probe setup from `33.231ms` to `0.141ms` over `1000`
+  rounds (`99.576%`).
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
