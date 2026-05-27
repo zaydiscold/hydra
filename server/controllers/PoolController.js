@@ -482,11 +482,7 @@ class PoolController extends BaseController {
   /** GET /pool/models — returns cached model list (id + name + ctx) */
   async getModels(req, res) {
     try {
-      const { prisma } = await import('../services/db.js');
-      const models = await prisma.cachedModel.findMany({
-        select: { id: true, name: true, ctx: true },
-        orderBy: { name: 'asc' },
-      });
+      const models = await modelCatalog.getCachedPoolModels();
       return this.success(res, { models, count: models.length });
     } catch (err) {
       return this.error(res, err.message);

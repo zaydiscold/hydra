@@ -437,18 +437,28 @@ test('account generator browser signup uses the encrypted proxy pool when presen
 test('OpenRouter model-list cache requests are timeout bounded', () => {
   const source = readRepoFile('server/services/model-cache.js');
   const proxy = readRepoFile('server/routes/proxy.js');
+  const pool = readRepoFile('server/controllers/PoolController.js');
+  const getModels = pool.slice(
+    pool.indexOf('async getModels(req, res)'),
+    pool.indexOf('/** GET /pool/sync-status'),
+  );
 
   assert.match(source, /MODEL_LIST_TIMEOUT_MS = 30000/);
   assert.match(source, /signal: AbortSignal\.timeout\(MODEL_LIST_TIMEOUT_MS\)/);
   assert.match(source, /CLIENT_MODEL_CACHE_TTL_MS/);
   assert.match(source, /let clientModelCache = \{/);
+  assert.match(source, /let poolModelCache = \{/);
   assert.match(source, /export function clearClientModelCache\(\)/);
   assert.match(source, /clearClientModelCache\(\);/);
   assert.match(source, /export async function getCachedClientModels\(\{ freeOnly = false \} = \{\}\)/);
+  assert.match(source, /export async function getCachedPoolModels\(\)/);
   assert.match(source, /if \(clientModelCache\.all && clientModelCache\.expiresAt > now\)/);
+  assert.match(source, /if \(poolModelCache\.models && poolModelCache\.expiresAt > now\)/);
   assert.match(source, /free: all\.filter\(\(model\) => isFreeModelId\(model\.id\)\)/);
   assert.match(proxy, /getCachedClientModels\(\{ freeOnly \}\)/);
+  assert.match(getModels, /modelCatalog\.getCachedPoolModels\(\)/);
   assert.doesNotMatch(proxy, /prisma\.cachedModel\.findMany/);
+  assert.doesNotMatch(getModels, /prisma\.cachedModel\.findMany/);
 });
 
 test('auth callback best-effort provisioning and opener notification failures are logged', () => {

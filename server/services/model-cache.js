@@ -9,6 +9,10 @@ let clientModelCache = {
   all: null,
   free: null,
 };
+let poolModelCache = {
+  expiresAt: 0,
+  models: null,
+};
 
 export function normalizeModelId(id) {
   return String(id ?? '').trim().toLowerCase();
@@ -28,6 +32,10 @@ export function clearClientModelCache() {
     expiresAt: 0,
     all: null,
     free: null,
+  };
+  poolModelCache = {
+    expiresAt: 0,
+    models: null,
   };
 }
 
@@ -111,6 +119,23 @@ export async function getCachedClientModels({ freeOnly = false } = {}) {
   };
 
   return freeOnly ? clientModelCache.free : clientModelCache.all;
+}
+
+export async function getCachedPoolModels() {
+  const now = Date.now();
+  if (poolModelCache.models && poolModelCache.expiresAt > now) {
+    return poolModelCache.models;
+  }
+
+  const models = await prisma.cachedModel.findMany({
+    select: { id: true, name: true, ctx: true },
+    orderBy: { name: 'asc' },
+  });
+  poolModelCache = {
+    expiresAt: now + CLIENT_MODEL_CACHE_TTL_MS,
+    models,
+  };
+  return poolModelCache.models;
 }
 
 export async function getModelCacheSummary() {

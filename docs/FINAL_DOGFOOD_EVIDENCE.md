@@ -20,7 +20,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   `367.83 MB` across no-relaunch samples of the already-running package. A
   later fresh no-relaunch sample in
   `/private/tmp/hydra-profile-20260527T174343Z-fresh-current` kept Hydra at
-  `0.0%` CPU with RSS dropping from `298.69 MB` to `277.45 MB`.
+  `0.0%` CPU with RSS dropping from `298.69 MB` to `277.45 MB`; the follow-up
+  `/private/tmp/hydra-profile-20260527T175641Z-goal-item1` sample again kept
+  Hydra at `0.0%` CPU with RSS dropping from `278.92 MB` to `249.23 MB` and
+  preserved full before/after process grep output.
 - `hydra doctor` now separates Hydra-owned process load from unrelated
   Chrome/CDP/browser-tooling load, which stayed heavy and was intentionally not
   closed.
@@ -67,6 +70,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   invalidation after model refresh. Local timing with `372` cached models
   reduced repeated model-list reads from `0.976ms` average cold DB-backed to
   `0.0003ms` average warm in-process over `100` rounds.
+- The Pool Manager model picker now uses the same invalidated 30-second
+  in-process cache. Local timing with `372` cached models reduced repeated
+  `/api/pool/models` reads from a direct-Prisma `1.548ms` average in the
+  comparison run to `0.000419ms` warm in-process (`99.973%`) over `200` rounds.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
