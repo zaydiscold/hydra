@@ -46,21 +46,30 @@ async function pruneRequestLogs() {
   }
 }
 
+function scheduleNextPrune(delayMs = RETENTION_INTERVAL_MS) {
+  if (stopping || timer) return;
+  timer = setTimeout(() => {
+    timer = null;
+    if (stopping) return;
+    prunePromise = pruneRequestLogs().finally(() => {
+      prunePromise = null;
+      if (!stopping) scheduleNextPrune(RETENTION_INTERVAL_MS);
+    });
+  }, delayMs);
+  timer.unref?.();
+}
+
 export function startRequestLogRetention() {
-  if (timer) return;
+  if (startupTimer || timer || prunePromise) return;
   stopping = false;
   startupTimer = setTimeout(() => {
     startupTimer = null;
-    prunePromise = pruneRequestLogs();
-    prunePromise.catch((err) => {
-      logger.error(`[RETENTION] Initial prune failed: ${err.message}`);
+    prunePromise = pruneRequestLogs().finally(() => {
+      prunePromise = null;
+      if (!stopping) scheduleNextPrune(RETENTION_INTERVAL_MS);
     });
   }, RETENTION_STARTUP_DELAY_MS);
   startupTimer.unref?.();
-  timer = setInterval(() => {
-    prunePromise = pruneRequestLogs();
-  }, RETENTION_INTERVAL_MS);
-  timer.unref?.();
   logger.info('[RETENTION] RequestLog retention worker initialized');
 }
 
@@ -68,7 +77,7 @@ export async function stopRequestLogRetention() {
   stopping = true;
   if (startupTimer) clearTimeout(startupTimer);
   startupTimer = null;
-  if (timer) clearInterval(timer);
+  if (timer) clearTimeout(timer);
   timer = null;
   if (prunePromise) {
     await prunePromise.catch((err) => {
