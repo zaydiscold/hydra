@@ -278,6 +278,9 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /HYDRA_SPLASH_EXIT_MS=10000/);
     assert.match(windows, /HYDRA_SPLASH_DISPOSE_MS=14500/);
     assert.match(windows, /HYDRA_SPLASH_TARGET=92/);
+    assert.match(windows, /tiltBias=hydraSplashTiltGravityX\*\(W\(\)\*0\.18\)/);
+    assert.match(windows, /hydraSplashTiltGravityX\*2\.2/);
+    assert.match(windows, /hydraSplashLeanX\+= \(hydraSplashTiltGravityX-hydraSplashLeanX\)\*0\.08/);
     assert.match(windows, /window\.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics/);
     assert.match(windows, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
     assert.match(windows, /Eng\.update\(engine,HYDRA_SPLASH_PHYSICS_STEP_MS\)/);

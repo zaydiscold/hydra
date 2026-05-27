@@ -41,6 +41,7 @@ It is designed for operators who want a native control plane without shipping ac
 - [Local API Router](#local-api-router)
 - [Operator Hardening](#operator-hardening)
 - [Development And Release Gates](#development-and-release-gates)
+- [Versioning](docs/VERSIONING.md)
 - [Gallery](#gallery)
 
 ## Highlights
@@ -174,6 +175,11 @@ npm run electron:smoke      # Smoke-test packaged Electron artifact
 npm run docker:smoke        # Docker runtime contract check
 npm run openapi:hydra       # Regenerate tracked OpenAPI map
 ```
+
+Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
+source/doc hardening commits use `[skip-bump]`; the current performance tranche
+is intended to ship as a minor release with `[bump:minor]` once the release audit
+and dogfood evidence are complete.
 
 ## Star History
 

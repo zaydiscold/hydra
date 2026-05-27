@@ -20,6 +20,10 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
     or be torn down after the splash/main transition; no runaway canvas,
     Anime.js, requestAnimationFrame, interval, timeout, or Matter.js physics
     tasks should survive past their visual purpose.
+  - Keep the front splash feeling rich: the current target is a 12 second
+    visible splash with 92 falling random words (+15% over the prior 80), and
+    the pile should visibly bias left or right when real laptop/device tilt
+    data is exposed, with a tiny fallback side lean when no sensor exists.
   - Look broadly for CPU/RAM wins and smoother perceived performance in the
     Electron main process, renderer, embedded API server, proxy/router,
     account automation, request logging, health polling, and dashboard refresh
@@ -30,6 +34,12 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
   - Ship the performance fixes together as one coherent version release, with
     source contracts/tests and `docs/RELEASE_AUDIT.md` evidence updated before
     dogfood/screenshots.
+  - Versioning policy for this tranche: keep incremental commits on `master`
+    with `[skip-bump]`; once all 12 acceptance items and final gates are green,
+    cut the release as a minor bump using `[bump:minor]` so the performance,
+    splash-density, tilt, runtime-diagnostics, and auth/session hardening work
+    lands as `1.1.0` if the package is still in the `1.0.x` lane. See
+    `docs/VERSIONING.md`.
 - Keep local source, packaged app resources, and remote `master` aligned. If local HEAD is stale or stashed work leaves the packaged app behind, bring the working tree/build artifact back to the latest pushed source before dogfooding.
 - Fix the packaged Electron startup crash from `electron-updater` ESM import mismatch:
   `SyntaxError: The requested module 'electron-updater' does not provide an export named 'autoUpdater'`.

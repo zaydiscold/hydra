@@ -3,7 +3,9 @@ name: Auto-version
 # Every push to master that's NOT itself a release-bump commit:
 #   1. Read package.json version
 #   2. Check if a tag for that version already exists on origin
-#   3. If yes (someone already shipped this version), bump patch
+#   3. If yes (someone already shipped this version), bump patch by default
+#      or bump minor/major when the triggering commit says `[bump:minor]`
+#      or `[bump:major]`
 #   4. Write the new version to package.json + package-lock.json
 #   5. Commit with `[skip-bump]` tag so this workflow doesn't recurse
 #   6. Push the commit + push the matching `vX.Y.Z` tag
@@ -16,6 +18,11 @@ name: Auto-version
 # Escape hatch: include `[skip-bump]` in any commit message to skip
 # auto-versioning. The bump commit itself always carries this tag so
 # it doesn't trigger another bump.
+#
+# Release sizing:
+#   - default / `[bump:patch]`: bug fixes, docs, small hardening
+#   - `[bump:minor]`: coherent user-visible feature/performance release
+#   - `[bump:major]`: breaking local data/API/operator-contract change
 
 on:
   push:
@@ -52,6 +59,8 @@ jobs:
 
       - name: Determine next version
         id: nextver
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           current=$(node -p "require('./package.json').version")
@@ -69,13 +78,38 @@ jobs:
             exit 0
           fi
 
-          # Otherwise bump patch (1.0.7 -> 1.0.8).
+          bump="patch"
+          if [[ "$COMMIT_MESSAGE" == *"[bump:major]"* ]]; then
+            bump="major"
+          elif [[ "$COMMIT_MESSAGE" == *"[bump:minor]"* ]]; then
+            bump="minor"
+          elif [[ "$COMMIT_MESSAGE" == *"[bump:patch]"* ]]; then
+            bump="patch"
+          fi
+
           IFS=. read -r major minor patch <<< "$current"
-          patch=$((patch + 1))
+          case "$bump" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+            *)
+              echo "Unknown bump type: $bump" >&2
+              exit 1
+              ;;
+          esac
           next="${major}.${minor}.${patch}"
           echo "next=$next" >> "$GITHUB_OUTPUT"
           echo "needs_bump=true" >> "$GITHUB_OUTPUT"
-          echo "Bumping $current -> $next"
+          echo "Bumping $current -> $next ($bump)"
 
       - name: Write new version into package.json
         if: steps.nextver.outputs.needs_bump == 'true'

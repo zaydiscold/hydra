@@ -12,6 +12,54 @@ Hydra can support side-leaning splash physics through three browser/Electron sen
 
 The exact MacBook screen hinge angle is a different signal. It is exposed through an Apple HID lid-angle sensor on supported modern MacBooks, but it is not a standard Electron or web API. Adding that would require a native macOS HID bridge, hardware/model compatibility checks, and graceful fallback when the sensor is missing or permission-blocked.
 
+## Current Splash Version Behavior
+
+The current source splash is intentionally denser and longer than the first
+Matter.js pass:
+
+- `SPLASH_MIN_VISIBLE_MS = 12000` in `electron/main.js`.
+- `HYDRA_SPLASH_DURATION_MS=12000` in `electron/app/windows.js`.
+- `HYDRA_SPLASH_EXIT_MS=10000`, so the pile gets about 10 seconds to fall and
+  pack before the upward exit flip.
+- `HYDRA_SPLASH_TARGET=92`, which is 15% more falling words than the prior
+  80-word runtime.
+- `HYDRA_SPLASH_DISPOSE_MS=14500`, so the splash has a bounded cleanup window
+  after the main transition and cannot leave Matter/RAF/timer work alive.
+
+This is why the next release notes should treat the splash change as part of
+the minor `1.1.0` performance/UX tranche, not as a tiny patch note.
+
+## How The Lean Works
+
+Hydra does not wait until letters are already stacked before applying tilt.
+The current implementation applies the left/right value in three places:
+
+1. `engine.world.gravity.x`: the Matter.js world gets horizontal gravity during
+   physics stepping.
+2. Spawn position: new words get a tilt-dependent `W() * 0.18` x-bias, clamped
+   inside the viewport walls.
+3. Initial velocity: new words get a tilt-dependent horizontal velocity kick.
+
+The raw sensor/fallback value is stored in `hydraSplashTiltGravityX`. The render
+loop eases a second value, `hydraSplashLeanX`, toward it each frame:
+
+```js
+hydraSplashLeanX += (hydraSplashTiltGravityX - hydraSplashLeanX) * 0.08;
+engine.world.gravity.x = hydraSplashLeanX;
+```
+
+That smoothing avoids jitter if an OS/browser sensor reports noisy readings.
+The fallback path picks a tiny random side lean (`+/-0.035`) so unsupported
+machines still get a subtle organic pile instead of a mathematically centered
+drop. Real sensors are clamped to `+/-0.65` before use.
+
+The visual result should be:
+
+- on machines with supported sensor data, the pile packs toward the lower side;
+- on machines without sensor data, the pile has a mild one-sided bias;
+- after the splash exits, all sensor listeners and optional Generic Sensor
+  instances are stopped by `disposeHydraSplash()`.
+
 ## How
 
 Local probes:
@@ -28,6 +76,10 @@ Code paths now used by the splash:
 - `electron/app/windows.js` listens for `deviceorientation` and `devicemotion`.
 - `electron/app/windows.js` also attempts `new (window.GravitySensor || window.Accelerometer)({ frequency: 15 })`.
 - Splash diagnostics record `tilt.source`, `tilt.sensorApi`, `tilt.gravityX`, and `tilt.error`.
+- Real or fallback tilt now changes three things: horizontal gravity, the
+  initial falling-word x position, and the initial horizontal word velocity.
+  That makes the contents visibly lean and pack toward one side instead of
+  only drifting slightly after they have already spawned.
 - Splash disposal removes event listeners and stops any Generic Sensor instance.
 
 ## Why It Matters

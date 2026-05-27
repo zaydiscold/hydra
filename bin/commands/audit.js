@@ -148,6 +148,7 @@ function buildAudit() {
   const packageLock = safeRead('package-lock.json');
   const goalDoc = safeRead('docs/CODEX_GOAL.md');
   const releaseAudit = safeRead('docs/RELEASE_AUDIT.md');
+  const versioningDoc = safeRead('docs/VERSIONING.md');
   const dogfoodDoc = safeRead('docs/PACKAGED_ELECTRON_DOGFOOD.md');
   const finalDogfoodDoc = safeRead('docs/FINAL_DOGFOOD_EVIDENCE.md');
   const finalDogfoodScript = safeRead('scripts/final-dogfood-check.mjs');
@@ -163,6 +164,7 @@ function buildAudit() {
     && releaseAudit.includes('Build & Push');
   const smokeWorkflow = safeRead('.github/workflows/electron-smoke.yml');
   const releaseWorkflow = safeRead('.github/workflows/release.yml');
+  const autoVersionWorkflow = safeRead('.github/workflows/auto-version.yml');
   const uiStatic = safeRead('server/tests/ui-static-contract.test.mjs');
   const workflowContract = safeRead('server/tests/workflow-contract.test.mjs');
   const electronMain = safeRead('electron/main.js');
@@ -194,6 +196,7 @@ function buildAudit() {
   const systemController = safeRead('server/controllers/SystemController.js');
   const systemRoutes = safeRead('server/routes/system.js');
   const rendererApi = safeRead('src/api.js');
+  const runtimeDiagnostics = safeRead('src/lib/runtimeDiagnostics.js');
   const settingsPage = safeRead('src/pages/Settings.jsx');
   const rotationManager = safeRead('server/services/rotation-manager.js');
   const store = safeRead('server/services/store.js');
@@ -428,8 +431,15 @@ function buildAudit() {
         && readme.includes('Captured from the packaged Electron app')
         && readme.includes('Account proxy pool')
         && readme.includes('ip:port:user:pass')
-        && readme.includes('The README avoids embedding real account data, full API keys, or live secrets'),
-      'README.md has top navigation, grouped CLI/router/hardening/release sections, proxy-pool docs, and packaged-Electron screenshot secrecy guidance',
+        && readme.includes('The README avoids embedding real account data, full API keys, or live secrets')
+        && readme.includes('[docs/VERSIONING.md](docs/VERSIONING.md)')
+        && versioningDoc.includes('[bump:minor]')
+        && versioningDoc.includes('1.0.20 -> 1.1.0')
+        && versioningDoc.includes('Splash Density And Tilt In The Version Notes')
+        && versioningDoc.includes('x-axis value affects horizontal gravity, spawn')
+        && versioningDoc.includes('Exact MacBook lid-angle tilt is not exposed through a standard Electron API')
+        && goalDoc.includes('cut the release as a minor bump using `[bump:minor]`'),
+      'README.md has top navigation, grouped CLI/router/hardening/release sections, proxy-pool docs, versioning policy, splash tilt notes, and packaged-Electron screenshot secrecy guidance',
     ),
     check(
       'dependency-audit',
@@ -444,22 +454,42 @@ function buildAudit() {
       'Performance and fan-pressure pass',
       goalDoc.includes('Primary focus for the next 4-5 hours: performance and efficiency release')
         && releaseAudit.includes('performance and efficiency pass')
-        && electronWindows.includes('Run.create({delta:1000/45})')
+        && electronWindows.includes('HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45')
+        && electronWindows.includes('Eng.update(engine,HYDRA_SPLASH_PHYSICS_STEP_MS)')
+        && !electronWindows.includes('Run.create')
+        && !electronWindows.includes('Run.run')
         && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
+        && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=12000')
+        && electronWindows.includes('HYDRA_SPLASH_TARGET=92')
+        && electronWindows.includes('tiltBias=hydraSplashTiltGravityX*(W()*0.18)')
+        && electronWindows.includes('hydraSplashLeanX+= (hydraSplashTiltGravityX-hydraSplashLeanX)*0.08')
         && electronWindows.includes('disposeHydraSplash')
         && electronMainProcessTest.includes('splash physics and animation loops have a finite cleanup path')
         && accountGenerator.includes('cleanupEphemeralProfileDir(profileDir)')
         && dashboardApi.includes('cleanupEphemeralProfileDir(profileDir)')
         && requestLogBuffer.includes('timer = setTimeout')
         && !requestLogBuffer.includes('timer = setInterval')
+        && runtimeDiagnostics.includes('__HYDRA_RENDERER_DIAGNOSTICS__')
+        && runtimeDiagnostics.includes('activeTotal: timeouts.active + intervals.active + animationFrames.active + animations.active')
+        && runtimeDiagnostics.includes('trackRendererAnimation')
+        && uiStatic.includes('__HYDRA_RENDERER_DIAGNOSTICS__')
+        && uiStatic.includes('short-lived renderer feedback timers are cleared on unmount')
+        && uiStatic.includes('ScrambleText clears delayed intervals on unmount')
         && rendererApp.includes('if (document.hidden || inFlight) return')
+        && rendererApp.includes("setTrackedTimeout('App.upstreamHealth'")
         && metricsHook.includes('inFlightRef.current')
+        && metricsHook.includes("setTrackedTimeout('useMetrics.autoRefresh'")
         && trafficHook.includes('inFlightRef.current')
+        && trafficHook.includes("setTrackedTimeout('useTraffic.autoRefresh'")
         && vaultPage.includes('loadInFlightRef.current')
+        && vaultPage.includes("setTrackedTimeout('Vault.autoRefresh'")
         && generatorPage.includes('statusPollInFlightRef.current')
         && generatorPage.includes('heartbeatInFlightRef.current')
+        && generatorPage.includes("setTrackedTimeout('Generator.statusPoll'")
+        && generatorPage.includes("setTrackedTimeout('Generator.heartbeat'")
         && bulkAuthHook.includes('pollTimerRef.current')
         && bulkAuthHook.includes('poll.inFlight')
+        && bulkAuthHook.includes("setTrackedTimeout('useBulkAuth.magicLinkSendDelay'")
         && !bulkAuthHook.includes('pollRefs.current[email] = setInterval')
         && cliMain.includes('inspectHydraPlaywrightProfiles')
         && cliMain.includes('inspectHydraProcesses')
@@ -470,7 +500,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled; Playwright launch profile dirs are removed after browser automation paths; request-log flushing, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 12s with 92 words and stronger sensor/fallback side lean, Playwright launch profile dirs are removed after browser automation paths; request-log flushing, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',
@@ -648,6 +678,11 @@ function buildAudit() {
         && smokeWorkflow.includes('node-version: 24')
         && releaseWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
         && releaseWorkflow.includes('node-version: 24')
+        && autoVersionWorkflow.includes('[bump:minor]')
+        && autoVersionWorkflow.includes('[bump:major]')
+        && autoVersionWorkflow.includes('minor=$((minor + 1))')
+        && autoVersionWorkflow.includes('major=$((major + 1))')
+        && autoVersionWorkflow.includes('patch=0')
         && smokeWorkflow.includes('windows-latest')
         && releaseWorkflow.includes('windows-2022')
         && releaseWorkflow.includes('--publish never')
@@ -690,7 +725,7 @@ function buildAudit() {
         && electronPrepare.includes('PLAYWRIGHT_BROWSERS_PATH cache')
         && workflowContract.includes('electron package smoke validates target-specific Chromium archives')
         && workflowContract.includes('electron package smoke validates distributable release artifacts'),
-      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, merged multi-arch latest-mac.yml auto-update metadata, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
+      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, patch/minor/major auto-version controls, merged multi-arch latest-mac.yml auto-update metadata, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
     ),
     check(
       'docker-docs',

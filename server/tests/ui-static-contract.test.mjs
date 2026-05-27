@@ -109,6 +109,9 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /HYDRA_SPLASH_TARGET=92/);
   assert.match(windowsJs, /const maxPixels=2800000/);
   assert.match(windowsJs, /Math\.sqrt\(maxPixels\/\(w\*h\)\)/);
+  assert.match(windowsJs, /tiltBias=hydraSplashTiltGravityX\*\(W\(\)\*0\.18\)/);
+  assert.match(windowsJs, /hydraSplashTiltGravityX\*2\.2/);
+  assert.match(windowsJs, /hydraSplashLeanX\+= \(hydraSplashTiltGravityX-hydraSplashLeanX\)\*0\.08/);
   assert.match(windowsJs, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
   assert.match(windowsJs, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
   assert.match(windowsJs, /Eng\.update\(engine,HYDRA_SPLASH_PHYSICS_STEP_MS\)/);
@@ -118,7 +121,7 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /window\.GravitySensor\|\|window\.Accelerometer/);
   assert.match(windowsJs, /hydraSplashTiltSensor\.start\(\)/);
   assert.match(windowsJs, /hydraSplashTiltSensor\.stop\(\)/);
-  assert.match(windowsJs, /engine\.world\.gravity\.x=hydraSplashTiltGravityX/);
+  assert.match(windowsJs, /engine\.world\.gravity\.x=hydraSplashLeanX/);
   assert.match(windowsJs, /hydraSplashDiagnostics\.physicsSteps\+=steps/);
   assert.doesNotMatch(windowsJs, /Run\.create/);
   assert.doesNotMatch(windowsJs, /Run\.run/);

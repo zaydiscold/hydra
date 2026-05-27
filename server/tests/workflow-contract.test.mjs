@@ -89,6 +89,10 @@ test('auto-version dispatches the release workflow after creating tags', () => {
   assert.match(workflow, /GH_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/, 'auto-version must authenticate gh workflow dispatch');
   assert.match(workflow, /git push origin "\$NEW"[\s\S]*gh workflow run release\.yml --ref "\$NEW"/, 'auto-version must dispatch release.yml on the tag ref after pushing the tag');
   assert.match(workflow, /Tags pushed by the default[\s\S]*GITHUB_TOKEN[\s\S]*do not reliably trigger another workflow run/, 'auto-version must document why explicit dispatch exists');
+  assert.match(workflow, /\[bump:minor\]/, 'auto-version must support deliberate minor releases');
+  assert.match(workflow, /\[bump:major\]/, 'auto-version must support deliberate major releases');
+  assert.match(workflow, /minor=\$\(\(minor \+ 1\)\)[\s\S]*patch=0/, 'minor releases must increment minor and reset patch');
+  assert.match(workflow, /major=\$\(\(major \+ 1\)\)[\s\S]*minor=0[\s\S]*patch=0/, 'major releases must increment major and reset minor/patch');
 });
 
 test('mac updater metadata merge keeps both architectures', () => {
