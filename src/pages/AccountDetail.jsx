@@ -6,6 +6,7 @@ import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
 import SessionDot from '../components/SessionDot';
 import { accountNeedsSession, canProvisionWithSession, isSessionProbePending } from '../utils/accountSession';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 import {
   WalletIcon,
   CreditsIcon,
@@ -33,7 +34,7 @@ function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
   const copyTimerRef = useRef(null);
 
   useEffect(() => () => {
-    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    if (copyTimerRef.current) clearTrackedTimeout(copyTimerRef.current);
   }, []);
 
   async function handleSubmit(e) {
@@ -67,8 +68,8 @@ function CreateKeyModal({ accountId, onClose, onCreated, onCopyError }) {
     try {
       await navigator.clipboard.writeText(createdKey);
       setCopied(true);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => {
+      if (copyTimerRef.current) clearTrackedTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTrackedTimeout('AccountDetail.createKeyCopy', () => {
         copyTimerRef.current = null;
         setCopied(false);
       }, 2000);
@@ -213,7 +214,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const [loadingMgmtReveal, setLoadingMgmtReveal] = useState(false);
 
   const scheduleTransientTimeout = useCallback((fn, ms) => {
-    const timer = setTimeout(() => {
+    const timer = setTrackedTimeout('AccountDetail.transientStatus', () => {
       transientTimersRef.current.delete(timer);
       fn();
     }, ms);
@@ -325,7 +326,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   }, [resolvedAccountId, fetchSnapshot, fetchMeta, fetchManagementKeys, probeSession, addToast, onBack]);
 
   useEffect(() => () => {
-    for (const timer of transientTimersRef.current) clearTimeout(timer);
+    for (const timer of transientTimersRef.current) clearTrackedTimeout(timer);
     transientTimersRef.current.clear();
   }, []);
 

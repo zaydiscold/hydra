@@ -1,6 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import * as api from '../api';
 import { accountNeedsSession } from '../utils/accountSession';
+import {
+  clearTrackedInterval,
+  setTrackedInterval,
+  setTrackedTimeout,
+} from '../lib/runtimeDiagnostics.js';
 
 const POLL_INTERVAL = 5000;
 
@@ -66,7 +71,7 @@ export function useBulkAuth(addToast) {
   const stopMagicLinkPolling = useCallback((email) => {
     delete pollRefs.current[email];
     if (Object.keys(pollRefs.current).length === 0 && pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
+      clearTrackedInterval(pollTimerRef.current);
       pollTimerRef.current = null;
     }
   }, []);
@@ -74,9 +79,9 @@ export function useBulkAuth(addToast) {
   const ensureMagicLinkPoller = useCallback(() => {
     if (pollTimerRef.current) return;
 
-    pollTimerRef.current = setInterval(() => {
+    pollTimerRef.current = setTrackedInterval('useBulkAuth.magicLinkPoller', () => {
       if (unmountedRef.current) {
-        clearInterval(pollTimerRef.current);
+        clearTrackedInterval(pollTimerRef.current);
         pollTimerRef.current = null;
         return;
       }
@@ -173,7 +178,7 @@ export function useBulkAuth(addToast) {
       unmountedRef.current = true;
       for (const email of Object.keys(activePolls)) delete activePolls[email];
       if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
+        clearTrackedInterval(pollTimerRef.current);
         pollTimerRef.current = null;
       }
     };
@@ -202,7 +207,7 @@ export function useBulkAuth(addToast) {
 
       await Promise.all(
         newRows.map((row, idx) =>
-          new Promise((resolve) => setTimeout(resolve, idx * 400)).then(async () => {
+          new Promise((resolve) => setTrackedTimeout('useBulkAuth.magicLinkSendDelay', resolve, idx * 400)).then(async () => {
             updateEmailLinkRow(row.email, { status: 'sending', message: 'Sending…' });
             try {
               const res = await api.sendMagicLink(row.id, row.email);

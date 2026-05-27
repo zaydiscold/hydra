@@ -81,7 +81,8 @@ test('ambient app chrome animations settle after launch instead of running forev
   const css = readRepoFile('src/index.css');
 
   assert.match(app, /const \[ambientMotion, setAmbientMotion\] = useState\(true\)/);
-  assert.match(app, /setTimeout\(\(\) => setAmbientMotion\(false\), 12_000\)/);
+  assert.match(app, /setTrackedTimeout\('App\.ambientMotion', \(\) => setAmbientMotion\(false\), 12_000\)/);
+  assert.match(app, /clearTrackedTimeout\(timer\)/);
   assert.match(app, /document\.hidden/);
   assert.match(app, /app-shell--ambient-motion/);
   assert.match(app, /app-shell--motion-settled/);
@@ -136,39 +137,45 @@ test('ScrambleText clears delayed intervals on unmount', () => {
   const source = readRepoFile('src/components/ScrambleText.jsx');
 
   assert.match(source, /let interval = null/);
-  assert.match(source, /interval = setInterval\(\(\) => \{/);
-  assert.match(source, /if \(interval\) clearInterval\(interval\)/);
+  assert.match(source, /interval = setTrackedInterval\('ScrambleText\.reveal', \(\) => \{/);
+  assert.match(source, /if \(interval\) clearTrackedInterval\(interval\)/);
   assert.doesNotMatch(source, /return \(\) => clearInterval\(interval\);\s*\}, delay\)/);
 });
 
 test('short-lived renderer feedback timers are cleared on unmount', () => {
+  const diagnostics = readRepoFile('src/lib/runtimeDiagnostics.js');
   const ownedTimeouts = readRepoFile('src/hooks/useOwnedTimeouts.js');
   const app = readRepoFile('src/App.jsx');
   const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
   const settings = readRepoFile('src/pages/Settings.jsx');
   const codeRedemption = readRepoFile('src/pages/CodeRedemption.jsx');
   const poolManager = readRepoFile('src/pages/PoolManager.jsx');
-  const diagnostics = readRepoFile('src/pages/Diagnostics.jsx');
+  const diagnosticsPage = readRepoFile('src/pages/Diagnostics.jsx');
   const createdKeyModal = readRepoFile('src/components/CreatedKeyModal.jsx');
   const devBackendHint = readRepoFile('src/components/DevBackendHint.jsx');
   const registerKeyModal = readRepoFile('src/components/RegisterKeyModal.jsx');
   const otpTab = readRepoFile('src/components/OtpTab.jsx');
 
+  assert.match(diagnostics, /__HYDRA_RENDERER_DIAGNOSTICS__/);
+  assert.match(diagnostics, /activeTotal: timeouts\.active \+ intervals\.active \+ animationFrames\.active \+ animations\.active/);
+  assert.match(diagnostics, /setTrackedTimeout\(owner, fn, ms\)/);
+  assert.match(diagnostics, /setTrackedInterval\(owner, fn, ms\)/);
+  assert.match(diagnostics, /requestTrackedAnimationFrame\(owner, fn\)/);
   assert.match(ownedTimeouts, /timersRef = useRef\(new Set\(\)\)/);
-  assert.match(ownedTimeouts, /clearTimeout\(timer\)/);
+  assert.match(ownedTimeouts, /clearTrackedTimeout\(timer\)/);
   assert.match(ownedTimeouts, /timersRef\.current\.delete\(timer\)/);
   assert.match(app, /useOwnedTimeouts/);
   assert.doesNotMatch(app, /setTimeout\(\(\) => setToasts/);
   assert.match(accountDetail, /copyTimerRef = useRef\(null\)/);
   assert.match(accountDetail, /transientTimersRef = useRef\(new Set\(\)\)/);
-  assert.match(accountDetail, /for \(const timer of transientTimersRef\.current\) clearTimeout\(timer\)/);
+  assert.match(accountDetail, /for \(const timer of transientTimersRef\.current\) clearTrackedTimeout\(timer\)/);
   assert.match(settings, /copiedTimerRef = useRef\(null\)/);
-  assert.match(settings, /if \(copiedTimerRef\.current\) clearTimeout\(copiedTimerRef\.current\)/);
+  assert.match(settings, /if \(copiedTimerRef\.current\) clearTrackedTimeout\(copiedTimerRef\.current\)/);
   assert.match(codeRedemption, /historyRefreshTimerRef = useRef\(null\)/);
-  assert.match(codeRedemption, /if \(historyRefreshTimerRef\.current\) clearTimeout\(historyRefreshTimerRef\.current\)/);
+  assert.match(codeRedemption, /if \(historyRefreshTimerRef\.current\) clearTrackedTimeout\(historyRefreshTimerRef\.current\)/);
   assert.match(poolManager, /copyResetTimerRef = useRef\(null\)/);
   assert.match(poolManager, /modelCopyResetTimerRef = useRef\(null\)/);
-  assert.match(diagnostics, /copiedResetTimerRef = useRef\(null\)/);
+  assert.match(diagnosticsPage, /copiedResetTimerRef = useRef\(null\)/);
   assert.match(createdKeyModal, /copiedResetTimerRef = useRef\(null\)/);
   assert.match(devBackendHint, /copyResetTimerRef = useRef\(null\)/);
   assert.match(registerKeyModal, /focusTimerRef = useRef\(null\)/);
@@ -224,7 +231,9 @@ test('AnimeText uses current splitText addEffect cleanup pattern', () => {
   assert.match(animeText, /variant === 'signal'/);
   assert.match(animeText, /stagger\(delay, \{ from: 'first' \}\)/);
   assert.match(animeText, /stagger\(Math\.max\(6, Math\.floor\(delay \/ 2\)\), \{ from: 'last' \}\)/);
-  assert.match(animeText, /return \(\) => splitter\.revert\(\)/);
+  assert.match(animeText, /trackRendererAnimation\(`AnimeText\.\$\{variant\}`, animation\)/);
+  assert.match(animeText, /for \(const dispose of animationDisposers\.splice\(0\)\) dispose\(\)/);
+  assert.match(animeText, /splitter\.revert\(\)/);
   assert.match(animeText, /prefers-reduced-motion: reduce/);
 });
 
@@ -520,9 +529,9 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   assert.match(app, /const \[upstreamHealth, setUpstreamHealth\] = useState\(null\)/);
   assert.match(app, /if \(authState !== 'app'\)/);
   assert.match(app, /api\.getSystemHealth\(\)/);
-  assert.match(app, /timer = setTimeout\(async \(\) => \{/);
+  assert.match(app, /timer = setTrackedTimeout\('App\.upstreamHealth', async \(\) => \{/);
   assert.match(app, /if \(document\.hidden \|\| inFlight\) return/);
-  assert.match(app, /clearTimeout\(timer\)/);
+  assert.match(app, /clearTrackedTimeout\(timer\)/);
   assert.match(app, /<UpstreamStatusBanner upstream=\{upstreamHealth\} \/>/);
 
   assert.match(css, /\.upstream-banner\s*\{/);

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { parseEmails, clerkErrorHint } from '../utils/auth';
 import DevBackendHint from '../components/DevBackendHint';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 
 export default function OtpTab({
   pasteText,
@@ -73,7 +74,7 @@ export default function OtpTab({
   const copyStatusTimerRef = useRef(null);
 
   useEffect(() => () => {
-    if (copyStatusTimerRef.current) clearTimeout(copyStatusTimerRef.current);
+    if (copyStatusTimerRef.current) clearTrackedTimeout(copyStatusTimerRef.current);
   }, []);
 
   const handleCreateStubs = (e) => {
@@ -84,14 +85,14 @@ export default function OtpTab({
 
   async function handleCopyExport() {
     if (!exportLines) return;
-    if (copyStatusTimerRef.current) clearTimeout(copyStatusTimerRef.current);
+    if (copyStatusTimerRef.current) clearTrackedTimeout(copyStatusTimerRef.current);
     try {
       await navigator.clipboard?.writeText(exportLines);
       setCopyExportStatus('Copied export to clipboard');
     } catch (err) {
       setCopyExportStatus(`Clipboard copy failed: ${err.message || 'permission denied'}`);
     }
-    copyStatusTimerRef.current = setTimeout(() => {
+    copyStatusTimerRef.current = setTrackedTimeout('OtpTab.copyExport', () => {
       copyStatusTimerRef.current = null;
       setCopyExportStatus('');
     }, 3000);

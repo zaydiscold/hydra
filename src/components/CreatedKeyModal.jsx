@@ -15,7 +15,7 @@ export default function CreatedKeyModal({ keyData, onClose, onAddToPool }) {
   const [poolAdded, setPoolAdded] = useState(false);
   const [poolError, setPoolError] = useState('');
   const copiedResetTimerRef = useRef(null);
-  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts('CreatedKeyModal.copy');
 
   const copyToClipboard = useCallback(async (value, { quiet = false } = {}) => {
     if (!quiet) clearOwnedTimeout(copiedResetTimerRef.current);

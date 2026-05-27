@@ -29,7 +29,7 @@ function CopyButton({ text, label }) {
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const copyResetTimerRef = useRef(null);
-  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts('PoolManager.endpointCopy');
 
   useEffect(() => () => {
     clearOwnedTimeout(copyResetTimerRef.current);
@@ -79,7 +79,7 @@ function EndpointCard({
   const [copiedModelId, setCopiedModelId] = useState(null);
   const [copyFailedModelId, setCopyFailedModelId] = useState(null);
   const modelCopyResetTimerRef = useRef(null);
-  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts('PoolManager.modelCopy');
 
   useEffect(() => () => {
     clearOwnedTimeout(modelCopyResetTimerRef.current);

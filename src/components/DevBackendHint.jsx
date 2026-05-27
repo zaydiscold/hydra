@@ -7,7 +7,7 @@ import { useOwnedTimeouts } from '../hooks/useOwnedTimeouts';
 export default function DevBackendHint({ message, copyCommand }) {
   const [copyState, setCopyState] = useState('idle');
   const copyResetTimerRef = useRef(null);
-  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts('DevBackendHint.copy');
 
   useEffect(() => () => {
     clearOwnedTimeout(copyResetTimerRef.current);

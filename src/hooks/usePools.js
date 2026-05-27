@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 
 function normalizeAccountKeys(keys) {
   if (Array.isArray(keys)) return keys;
@@ -66,11 +67,13 @@ export function usePools({ addToast }) {
   }, [addToast]);
 
   const loadProxyStatus = useCallback(async () => {
+    let timeoutTimer = null;
     try {
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 5000)
-      );
+      const timeout = new Promise((_, reject) => {
+        timeoutTimer = setTrackedTimeout('usePools.proxyStatusTimeout', () => reject(new Error('timeout')), 5000);
+      });
       const res = await Promise.race([api.getPoolStatus(), timeout]);
+      clearTrackedTimeout(timeoutTimer);
       const data = res.data ?? {};
       setProxyStatus(data.proxy === 'online' ? 'online' : 'offline');
       setProxyStatusStats({
@@ -80,6 +83,7 @@ export function usePools({ addToast }) {
         uptime: data.uptime ?? 0,
       });
     } catch (err) {
+      clearTrackedTimeout(timeoutTimer);
       console.warn('[POOLS] Proxy status probe failed:', err.message);
       setProxyStatus('offline');
       setProxyStatusStats(null);

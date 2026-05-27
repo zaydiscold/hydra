@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 
 export function useTraffic({ addToast }) {
   const [data, setData] = useState(null);
@@ -33,7 +34,7 @@ export function useTraffic({ addToast }) {
 
     const schedule = () => {
       if (cancelled) return;
-      timer = setTimeout(async () => {
+      timer = setTrackedTimeout('useTraffic.autoRefresh', async () => {
         timer = null;
         if (!document.hidden) await fetchTraffic(true);
         schedule();
@@ -45,7 +46,7 @@ export function useTraffic({ addToast }) {
     schedule();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      if (timer) clearTrackedTimeout(timer);
     };
   }, [fetchTraffic]);
 

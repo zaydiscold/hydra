@@ -5,6 +5,12 @@ import * as api from './api';
 import { logger } from './lib/client-logger.js';
 import { isElectron, native as nativeBridge, tryNative, useNativeInfo } from './lib/native';
 import { useOwnedTimeouts } from './hooks/useOwnedTimeouts';
+import {
+  cancelTrackedAnimationFrame,
+  clearTrackedTimeout,
+  requestTrackedAnimationFrame,
+  setTrackedTimeout,
+} from './lib/runtimeDiagnostics.js';
 import DevBackendHint from './components/DevBackendHint';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
@@ -179,19 +185,19 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
         setNukeProgress(nextProgress);
 
         if (nextProgress < 100 && isNuking) {
-          timerRef.current = requestAnimationFrame(update);
+          timerRef.current = requestTrackedAnimationFrame('AuthScreen.nukeProgress', update);
         } else if (nextProgress >= 100) {
           handleFinalNuke();
         }
       };
 
-      timerRef.current = requestAnimationFrame(update);
+      timerRef.current = requestTrackedAnimationFrame('AuthScreen.nukeProgress', update);
     } else if (!isNuking) {
-      cancelAnimationFrame(timerRef.current);
+      cancelTrackedAnimationFrame(timerRef.current);
       setNukeProgress(0);
     }
 
-    return () => cancelAnimationFrame(timerRef.current);
+    return () => cancelTrackedAnimationFrame(timerRef.current);
   }, [handleFinalNuke, isNuking]);
 
   const handleNukeStart = () => setIsNuking(true);
@@ -596,7 +602,7 @@ export default function App() {
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const [upstreamHealth, setUpstreamHealth] = useState(null);
   const recentToastsRef = useRef(new Map());
-  const { setOwnedTimeout } = useOwnedTimeouts();
+  const { setOwnedTimeout } = useOwnedTimeouts('App.toasts');
   const navigate = useNavigate();
   const location = useLocation();
   const electronMode = isElectron();
@@ -703,13 +709,13 @@ export default function App() {
 
   useEffect(() => {
     setAmbientMotion(true);
-    const timer = setTimeout(() => setAmbientMotion(false), 12_000);
+    const timer = setTrackedTimeout('App.ambientMotion', () => setAmbientMotion(false), 12_000);
     const handleVisibility = () => {
       if (document.hidden) setAmbientMotion(false);
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
-      clearTimeout(timer);
+      clearTrackedTimeout(timer);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [authState]);
@@ -742,7 +748,7 @@ export default function App() {
 
     const scheduleHealthRefresh = () => {
       if (cancelled) return;
-      timer = setTimeout(async () => {
+      timer = setTrackedTimeout('App.upstreamHealth', async () => {
         timer = null;
         await refreshHealth();
         scheduleHealthRefresh();
@@ -753,7 +759,7 @@ export default function App() {
     scheduleHealthRefresh();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      if (timer) clearTrackedTimeout(timer);
     };
   }, [authState]);
 

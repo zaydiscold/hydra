@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 
 /**
  * Custom hook for Dashboard metrics and session logic.
@@ -122,7 +123,7 @@ export function useMetrics({ addToast }) {
 
     const schedule = () => {
       if (cancelled) return;
-      timer = setTimeout(async () => {
+      timer = setTrackedTimeout('useMetrics.autoRefresh', async () => {
         timer = null;
         if (!document.hidden) await fetchDashboard(true);
         schedule();
@@ -132,7 +133,7 @@ export function useMetrics({ addToast }) {
     schedule();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      if (timer) clearTrackedTimeout(timer);
     };
   }, [fetchDashboard]);
 

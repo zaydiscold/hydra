@@ -29,7 +29,7 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const copiedResetTimerRef = useRef(null);
-  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts('Diagnostics.copy');
 
   const inElectron = isElectron();
 

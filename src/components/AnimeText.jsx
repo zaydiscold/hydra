@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { animate, createTimeline, splitText, stagger } from 'animejs';
+import { trackRendererAnimation } from '../lib/runtimeDiagnostics.js';
 
 function prefersReducedMotion() {
   return typeof window !== 'undefined'
@@ -27,13 +28,18 @@ export default function AnimeText({
     if (mode === 'words' || mode === 'both') splitOptions.words = { wrap: 'clip' };
     if (mode === 'chars' || mode === 'both') splitOptions.chars = { wrap: 'clip' };
     const splitter = splitText(node, splitOptions);
+    const animationDisposers = [];
+    const trackAnimation = (animation) => {
+      animationDisposers.push(trackRendererAnimation(`AnimeText.${variant}`, animation));
+      return animation;
+    };
 
     splitter.addEffect(({ lines, words, chars }) => {
       const targets = mode === 'lines' ? lines : mode === 'words' ? words : chars;
       if (!targets?.length) return undefined;
 
       if (variant === 'signal') {
-        return createTimeline({
+        return trackAnimation(createTimeline({
           defaults: { duration, ease: 'out(3)' },
         })
           .add(targets, {
@@ -45,11 +51,11 @@ export default function AnimeText({
             color: ['var(--accent-secondary)', 'var(--text-primary)'],
             textShadow: ['0 0 22px var(--accent-secondary)', '0 0 0 rgba(0, 0, 0, 0)'],
             duration: Math.max(260, Math.floor(duration * 0.55)),
-          }, stagger(Math.max(6, Math.floor(delay / 2)), { from: 'last' }));
+          }, stagger(Math.max(6, Math.floor(delay / 2)), { from: 'last' })));
       }
 
       if (variant === 'scanline') {
-        return createTimeline({
+        return trackAnimation(createTimeline({
           defaults: { duration, ease: 'out(3)' },
         })
           .add(targets, {
@@ -61,19 +67,22 @@ export default function AnimeText({
             textShadow: ['0 0 18px var(--accent-secondary)', '0 0 0 rgba(0, 0, 0, 0)'],
             duration: 260,
             ease: 'out(2)',
-          }, stagger(Math.max(4, Math.floor(delay / 2)), { from: 'center' }));
+          }, stagger(Math.max(4, Math.floor(delay / 2)), { from: 'center' })));
       }
 
-      return animate(targets, {
+      return trackAnimation(animate(targets, {
         opacity: [0, 1],
         y: ['85%', '0%'],
         duration,
         ease: 'out(3)',
         delay: stagger(delay),
-      });
+      }));
     });
 
-    return () => splitter.revert();
+    return () => {
+      for (const dispose of animationDisposers.splice(0)) dispose();
+      splitter.revert();
+    };
   }, [children, delay, duration, mode, variant]);
 
   const nextClassName = `anime-text anime-text--${variant} ${className}`.trim();

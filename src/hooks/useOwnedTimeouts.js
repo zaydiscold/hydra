@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 
-export function useOwnedTimeouts() {
+export function useOwnedTimeouts(owner = 'useOwnedTimeouts') {
   const timersRef = useRef(new Set());
+  const ownerRef = useRef(owner);
 
   const clearOwnedTimeout = useCallback((timer) => {
     if (!timer) return;
-    clearTimeout(timer);
+    clearTrackedTimeout(timer);
     timersRef.current.delete(timer);
   }, []);
 
   const setOwnedTimeout = useCallback((fn, ms) => {
-    const timer = setTimeout(() => {
+    const timer = setTrackedTimeout(ownerRef.current, () => {
       timersRef.current.delete(timer);
       fn();
     }, ms);
@@ -19,7 +21,7 @@ export function useOwnedTimeouts() {
   }, []);
 
   useEffect(() => () => {
-    for (const timer of timersRef.current) clearTimeout(timer);
+    for (const timer of timersRef.current) clearTrackedTimeout(timer);
     timersRef.current.clear();
   }, []);
 

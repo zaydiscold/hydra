@@ -8,7 +8,7 @@ export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {
   const [pasteHint, setPasteHint] = useState('');
   const inputRef = useRef(null);
   const focusTimerRef = useRef(null);
-  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts();
+  const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts('RegisterKeyModal.focus');
 
   useEffect(() => {
     if (!hash) return;

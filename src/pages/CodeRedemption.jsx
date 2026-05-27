@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import * as api from '../api';
 import AnimeText from '../components/AnimeText';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 
 const STATUS = {
   idle: null,
@@ -111,7 +112,7 @@ export default function CodeRedemption({ addToast }) {
   }, [addToast]);
 
   useEffect(() => () => {
-    if (historyRefreshTimerRef.current) clearTimeout(historyRefreshTimerRef.current);
+    if (historyRefreshTimerRef.current) clearTrackedTimeout(historyRefreshTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -126,7 +127,7 @@ export default function CodeRedemption({ addToast }) {
       return;
     }
     let cancelled = false;
-    const t = setTimeout(() => {
+    const t = setTrackedTimeout('CodeRedemption.preflightDebounce', () => {
       setSessionPreflight((p) => ({ ...p, loading: true, error: null }));
       const ids = [...selectedAccountIds];
       api
@@ -155,7 +156,7 @@ export default function CodeRedemption({ addToast }) {
     }, 280);
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      clearTrackedTimeout(t);
     };
   }, [selectedAccountIds]);
 
@@ -273,8 +274,8 @@ export default function CodeRedemption({ addToast }) {
     const total = Object.keys(newResults).length;
     addToast(`Done: ${successCount}/${total} redeemed`, successCount > 0 ? 'success' : 'error');
     // Refresh history after a run
-    if (historyRefreshTimerRef.current) clearTimeout(historyRefreshTimerRef.current);
-    historyRefreshTimerRef.current = setTimeout(() => {
+    if (historyRefreshTimerRef.current) clearTrackedTimeout(historyRefreshTimerRef.current);
+    historyRefreshTimerRef.current = setTrackedTimeout('CodeRedemption.historyRefresh', () => {
       historyRefreshTimerRef.current = null;
       fetchHistory();
     }, 400);

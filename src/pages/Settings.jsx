@@ -4,6 +4,7 @@ import * as api from '../api';
 import AnimeText from '../components/AnimeText';
 import { LockIcon, NetworkIcon, SettingsIcon, InfoIcon } from '../components/Icons';
 import { isElectron, native, tryNative, useNativeInfo } from '../lib/native';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 import { DiagnosticsPanel } from './Diagnostics.jsx';
 
 export default function Settings({ addToast }) {
@@ -25,14 +26,14 @@ export default function Settings({ addToast }) {
 
   useEffect(() => {
     if (location.hash !== '#diagnostics') return;
-    const t = setTimeout(() => {
+    const t = setTrackedTimeout('Settings.hashScroll', () => {
       document.getElementById('diagnostics')?.scrollIntoView({ block: 'start' });
     }, 100);
-    return () => clearTimeout(t);
+    return () => clearTrackedTimeout(t);
   }, [location.hash]);
 
   useEffect(() => () => {
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    if (copiedTimerRef.current) clearTrackedTimeout(copiedTimerRef.current);
   }, []);
 
   // Privacy + biometric prefs (Electron-only). The Result-type wrapper
@@ -203,8 +204,8 @@ export default function Settings({ addToast }) {
     }
     if (!didCopy) return;
     setCopied(true);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => {
+    if (copiedTimerRef.current) clearTrackedTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTrackedTimeout('Settings.copy', () => {
       copiedTimerRef.current = null;
       setCopied(false);
     }, 2000);

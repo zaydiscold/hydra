@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react';
+import {
+  clearTrackedInterval,
+  clearTrackedTimeout,
+  setTrackedInterval,
+  setTrackedTimeout,
+} from '../lib/runtimeDiagnostics.js';
 
 /**
  * Optimized ScrambleText - CSS-only implementation
@@ -31,13 +37,13 @@ export default function ScrambleText({ text, duration = 600, delay = 0, classNam
     let currentIndex = 0;
     let interval = null;
 
-    const startTimeout = setTimeout(() => {
-      interval = setInterval(() => {
+    const startTimeout = setTrackedTimeout('ScrambleText.start', () => {
+      interval = setTrackedInterval('ScrambleText.reveal', () => {
         currentIndex++;
         setRevealed(currentIndex);
 
         if (currentIndex >= chars) {
-          clearInterval(interval);
+          clearTrackedInterval(interval);
           setIsAnimating(false);
         }
       }, stepDuration);
@@ -45,8 +51,8 @@ export default function ScrambleText({ text, duration = 600, delay = 0, classNam
     }, delay);
 
     return () => {
-      clearTimeout(startTimeout);
-      if (interval) clearInterval(interval);
+      clearTrackedTimeout(startTimeout);
+      if (interval) clearTrackedInterval(interval);
     };
   }, [text, duration, delay, targetText]);
 

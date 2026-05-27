@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '../api';
 import AnimeText from '../components/AnimeText';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 import {
   GeneratorIcon,
   PlusIcon,
@@ -76,7 +77,7 @@ export default function Generator({ addToast }) {
 
     const schedule = () => {
       if (cancelled) return;
-      timer = setTimeout(async () => {
+      timer = setTrackedTimeout('Generator.statusPoll', async () => {
         timer = null;
         await poll();
         schedule();
@@ -88,7 +89,7 @@ export default function Generator({ addToast }) {
     return () => {
       cancelled = true;
       controller.abort();
-      if (timer) clearTimeout(timer);
+      if (timer) clearTrackedTimeout(timer);
     };
   }, [applyTaskPayload, status, taskId]);
 
@@ -114,7 +115,7 @@ export default function Generator({ addToast }) {
 
     const schedule = () => {
       if (cancelled) return;
-      timer = setTimeout(async () => {
+      timer = setTrackedTimeout('Generator.heartbeat', async () => {
         timer = null;
         await heartbeat();
         schedule();
@@ -126,7 +127,7 @@ export default function Generator({ addToast }) {
     return () => {
       cancelled = true;
       controller.abort();
-      if (timer) clearTimeout(timer);
+      if (timer) clearTrackedTimeout(timer);
     };
   }, [status, taskId]);
 

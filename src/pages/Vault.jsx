@@ -6,6 +6,7 @@ import { VaultIcon, RefreshIcon, LockIcon, SettingsIcon, ShieldIcon, EditIcon, T
 import { accountNeedsSession, canProvisionWithSession } from '../utils/accountSession';
 import SessionDot from '../components/SessionDot';
 import { timeAgo } from '../utils/time';
+import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ export default function Vault({ addToast }) {
 
     const schedule = () => {
       if (cancelled) return;
-      timer = setTimeout(async () => {
+      timer = setTrackedTimeout('Vault.autoRefresh', async () => {
         timer = null;
         if (!document.hidden) await loadAccounts(true);
         schedule();
@@ -140,7 +141,7 @@ export default function Vault({ addToast }) {
     schedule();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      if (timer) clearTrackedTimeout(timer);
     };
   }, [loadAccounts]);
 

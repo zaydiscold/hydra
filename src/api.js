@@ -1,4 +1,5 @@
 import { invokeNative, NotInElectronError } from './lib/native';
+import { setTrackedTimeout } from './lib/runtimeDiagnostics.js';
 
 const API = '/api';
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -111,7 +112,7 @@ function isAbortError(err) {
 }
 
 function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTrackedTimeout('api.retryDelay', resolve, ms));
 }
 
 async function readAuthErrorPayload(res, path) {
