@@ -291,11 +291,11 @@ async function gracefulShutdown(source = 'unknown', { exit = true, timeoutMs = 5
   shutdownInFlight = true;
 
   logger.info(`[SHUTDOWN] Starting graceful shutdown (${source})`);
-  stopPinger();
+  rotationManager.cancelReload();
+  await stopPinger();
   await stopRequestLogBuffer();
   await stopRequestLogRetention();
   stopMagicLinkCleanup();
-  rotationManager.cancelReload();
   await stopSessionRefresher();
 
   try {

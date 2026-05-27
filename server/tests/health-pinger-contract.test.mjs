@@ -15,11 +15,19 @@ test('background health pinger validates keys without completion traffic', () =>
   const source = readRepoFile('server/services/health-pinger.js');
 
   assert.match(source, /const PING_PATH = '\/api\/v1\/auth\/key';/);
+  assert.match(source, /HYDRA_HEALTH_PING_STARTUP_DELAY_MS/);
+  assert.match(source, /HYDRA_HEALTH_PING_INTERVAL_MS/);
   assert.match(source, /method:\s*'GET'/);
   assert.match(source, /await rotationManager\.getNextKey\(\)/);
   assert.match(source, /recordUpstreamHttpResult\(\{/);
   assert.match(source, /Health check returned upstream HTTP \$\{res\.status\}; leaving key state unchanged/);
   assert.match(source, /rotationManager\.recordSuccess\(keyEntry\.hash\)/);
+  assert.match(source, /timer = setTimeout\(\(\) => \{/);
+  assert.match(source, /scheduleNextPing\(PING_INTERVAL_MS\)/);
+  assert.match(source, /activeController\?\.abort\(\)/);
+  assert.match(source, /await pingPromise\.catch/);
+  assert.doesNotMatch(source, /setInterval/);
+  assert.doesNotMatch(source, /clearInterval/);
   assert.doesNotMatch(source, /chat\/completions/);
   assert.doesNotMatch(source, /max_tokens/);
   assert.doesNotMatch(source, /PING_MODEL/);

@@ -162,6 +162,10 @@ test('long-running background timers do not pin idle Node processes', () => {
   const requestLogBuffer = readRepoFile('server/services/request-log-buffer.js');
 
   assert.match(pinger, /timer\.unref\?\.\(\)/);
+  assert.match(pinger, /timer = setTimeout\(\(\) => \{/);
+  assert.match(pinger, /activeController\?\.abort\(\)/);
+  assert.match(pinger, /await pingPromise\.catch/);
+  assert.doesNotMatch(pinger, /setInterval/);
   assert.match(refresher, /_startupTimeoutHandle\.unref\?\.\(\)/);
   assert.match(refresher, /_intervalHandle\.unref\?\.\(\)/);
   assert.match(supervisor, /this\.timer\.unref\?\.\(\)/);
@@ -174,6 +178,7 @@ test('long-running background timers do not pin idle Node processes', () => {
 
 test('idle desktop startup avoids expensive live session probe fan-out', () => {
   const refresher = readRepoFile('server/services/session-refresher.js');
+  const pinger = readRepoFile('server/services/health-pinger.js');
   const retention = readRepoFile('server/services/request-log-retention.js');
   const supervisor = readRepoFile('server/services/task-supervisor.js');
   const dashboard = readRepoFile('server/controllers/DashboardController.js');
@@ -189,6 +194,8 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(refresher, /5 \* 60 \* 1000/);
   assert.match(refresher, /HYDRA_SESSION_LIFETIME_PROBE === '1'/);
   assert.match(refresher, /SESSION_PROBE_ENABLED && Date\.now\(\) - _lastSessionProbeAt >= SESSION_PROBE_INTERVAL_MS/);
+  assert.match(pinger, /HYDRA_HEALTH_PING_STARTUP_DELAY_MS/);
+  assert.match(pinger, /scheduleNextPing\(PING_STARTUP_DELAY_MS\)/);
   assert.match(retention, /HYDRA_REQUEST_LOG_RETENTION_STARTUP_DELAY_MS/);
   assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*prunePromise = pruneRequestLogs\(\);[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
   assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\r?\n\s*prunePromise = pruneRequestLogs\(\);/);

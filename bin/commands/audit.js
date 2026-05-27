@@ -203,6 +203,7 @@ function buildAudit() {
   const legacyStorage = safeRead('server/services/legacy-storage.js');
   const backgroundFailureTest = safeRead('server/tests/background-failure-visibility.test.mjs');
   const sessionRefresher = safeRead('server/services/session-refresher.js');
+  const healthPinger = safeRead('server/services/health-pinger.js');
   const requestLogBuffer = safeRead('server/services/request-log-buffer.js');
   const schemaHash = safeRead('electron/app/schemaHash.js');
   const schemaHashTest = safeRead('server/tests/schema-hash.test.mjs');
@@ -470,6 +471,11 @@ function buildAudit() {
         && dashboardApi.includes('cleanupEphemeralProfileDir(profileDir)')
         && requestLogBuffer.includes('timer = setTimeout')
         && !requestLogBuffer.includes('timer = setInterval')
+        && healthPinger.includes('HYDRA_HEALTH_PING_STARTUP_DELAY_MS')
+        && healthPinger.includes('timer = setTimeout')
+        && healthPinger.includes('scheduleNextPing(PING_INTERVAL_MS)')
+        && healthPinger.includes('activeController?.abort()')
+        && !healthPinger.includes('setInterval')
         && runtimeDiagnostics.includes('__HYDRA_RENDERER_DIAGNOSTICS__')
         && runtimeDiagnostics.includes('activeTotal: timeouts.active + intervals.active + animationFrames.active + animations.active')
         && runtimeDiagnostics.includes('trackRendererAnimation')
@@ -501,7 +507,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 12s with 92 words and stronger sensor/fallback side lean, Playwright launch profile dirs are removed after browser automation paths; request-log flushing, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 12s with 92 words and stronger sensor/fallback side lean, Playwright launch profile dirs are removed after browser automation paths; request-log flushing, health pings, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',
