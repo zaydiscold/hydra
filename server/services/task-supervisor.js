@@ -50,20 +50,34 @@ export class TaskSupervisor {
     this.activeBatchCount = 0;
     this.draining = false;
     this.timer = null;
+    this.sweepPromise = null;
+    this.stopping = false;
   }
 
   start() {
-    if (this.timer) return;
-    this.timer = setInterval(() => {
-      this.expireTasks().catch((err) => {
+    this.stopping = false;
+    if (this.timer || this.sweepPromise) return;
+    this.scheduleNextSweep();
+  }
+
+  scheduleNextSweep(delayMs = TASK_SWEEP_INTERVAL_MS) {
+    if (this.stopping || this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      if (this.stopping) return;
+      this.sweepPromise = this.expireTasks().catch((err) => {
         this.reportBackgroundError('task expiry sweep', err);
+      }).finally(() => {
+        this.sweepPromise = null;
+        if (!this.stopping) this.scheduleNextSweep(TASK_SWEEP_INTERVAL_MS);
       });
-    }, TASK_SWEEP_INTERVAL_MS);
+    }, delayMs);
     this.timer.unref?.();
   }
 
   stop() {
-    if (this.timer) clearInterval(this.timer);
+    this.stopping = true;
+    if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
 
@@ -342,6 +356,11 @@ export class TaskSupervisor {
   async shutdown() {
     this.draining = true;
     this.stop();
+    if (this.sweepPromise) {
+      await this.sweepPromise.catch((err) => {
+        this.reportBackgroundError('task expiry sweep stop wait', err);
+      });
+    }
 
     const queued = this.batchQueue.splice(0, this.batchQueue.length);
     for (const item of queued) {

@@ -15,9 +15,9 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
 - Rebuilt packaged macOS arm64 launches repeatedly settled back to near-zero
   idle CPU after the splash/main transition.
 - The 2026-05-27 five-minute packaged idle profiles kept the four Hydra-owned
-  processes around `0.0%` to `0.1%` CPU, with RSS dropping from `423.23 MB` to
-  `414.91 MB` in one no-relaunch sample and from `421.53 MB` to `399.09 MB` in
-  the next.
+  processes around `0.0%` to `0.2%` CPU, with RSS dropping from `423.23 MB` to
+  `414.91 MB`, from `421.53 MB` to `399.09 MB`, and from `402.78 MB` to
+  `367.83 MB` across no-relaunch samples of the already-running package.
 - `hydra doctor` now separates Hydra-owned process load from unrelated
   Chrome/CDP/browser-tooling load, which stayed heavy and was intentionally not
   closed.
@@ -38,6 +38,11 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   output was redirected outside the repo. A follow-up temp package build passed
   `electron:smoke`, source inspection, no-nested-`release` inspection, and
   deep codesign verification.
+- The newest server cleanup pass converts task expiry and magic-link cleanup
+  work away from permanent intervals: task expiry now uses one unref'd timeout
+  and waits for active sweeps during shutdown, while magic-link cleanup only
+  schedules a timeout when a pending magic-link entry exists. These are source
+  and audit-contract wins until the package is rebuilt and relaunched.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood

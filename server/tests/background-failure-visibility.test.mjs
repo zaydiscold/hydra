@@ -148,8 +148,14 @@ test('magic-link cleanup timer is owned by server lifecycle', () => {
 
   assert.match(manager, /export function startMagicLinkCleanup\(\)/);
   assert.match(manager, /export function stopMagicLinkCleanup\(\)/);
+  assert.match(manager, /export function trackPendingMagicLink\(signInId, entry\)/);
+  assert.match(manager, /function scheduleMagicLinkCleanup\(\)/);
+  assert.match(manager, /nextCleanupDelayMs/);
+  assert.match(manager, /cleanupTimer = setTimeout\(\(\) => \{/);
   assert.match(manager, /cleanupTimer\.unref\?\.\(\)/);
-  assert.doesNotMatch(manager, /^setInterval\(/m);
+  assert.doesNotMatch(manager, /setInterval/);
+  assert.doesNotMatch(manager, /clearInterval/);
+  assert.match(readRepoFile('server/controllers/AccountController.js'), /trackPendingMagicLink\(signInId, \{/);
   assert.match(server, /startMagicLinkCleanup\(\)/);
   assert.match(server, /stopMagicLinkCleanup\(\)/);
 });
@@ -159,6 +165,7 @@ test('long-running background timers do not pin idle Node processes', () => {
   const refresher = readRepoFile('server/services/session-refresher.js');
   const supervisor = readRepoFile('server/services/task-supervisor.js');
   const retention = readRepoFile('server/services/request-log-retention.js');
+  const magicLinks = readRepoFile('server/services/magic-link-manager.js');
   const requestLogBuffer = readRepoFile('server/services/request-log-buffer.js');
 
   assert.match(pinger, /timer\.unref\?\.\(\)/);
@@ -174,11 +181,20 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.doesNotMatch(refresher, /setInterval/);
   assert.doesNotMatch(refresher, /clearInterval/);
   assert.match(supervisor, /this\.timer\.unref\?\.\(\)/);
+  assert.match(supervisor, /scheduleNextSweep\(delayMs = TASK_SWEEP_INTERVAL_MS\)/);
+  assert.match(supervisor, /this\.timer = setTimeout\(\(\) => \{/);
+  assert.match(supervisor, /this\.sweepPromise = this\.expireTasks\(\)\.catch/);
+  assert.doesNotMatch(supervisor, /setInterval/);
+  assert.doesNotMatch(supervisor, /clearInterval/);
   assert.match(retention, /timer\.unref\?\.\(\)/);
   assert.match(retention, /timer = setTimeout\(\(\) => \{/);
   assert.match(retention, /scheduleNextPrune\(RETENTION_INTERVAL_MS\)/);
   assert.doesNotMatch(retention, /setInterval/);
   assert.doesNotMatch(retention, /clearInterval/);
+  assert.match(magicLinks, /cleanupTimer = setTimeout\(\(\) => \{/);
+  assert.match(magicLinks, /trackPendingMagicLink\(signInId, entry\)/);
+  assert.doesNotMatch(magicLinks, /setInterval/);
+  assert.doesNotMatch(magicLinks, /clearInterval/);
   assert.match(retention, /startupTimer\.unref\?\.\(\)/);
   assert.match(requestLogBuffer, /timer\.unref\?\.\(\)/);
   assert.match(requestLogBuffer, /timer = setTimeout/);
@@ -210,6 +226,7 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*prunePromise = pruneRequestLogs\(\)\.finally\(\(\) => \{[\s\S]*scheduleNextPrune\(RETENTION_INTERVAL_MS\)[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
   assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\r?\n\s*prunePromise = pruneRequestLogs\(\);/);
   assert.match(supervisor, /const TASK_SWEEP_INTERVAL_MS = 30 \* 1000/);
+  assert.match(supervisor, /if \(!this\.stopping\) this\.scheduleNextSweep\(TASK_SWEEP_INTERVAL_MS\)/);
   assert.match(dashboard, /const needsRefresh = meta\?\.sessionStatus === 'expiring'/);
   assert.doesNotMatch(dashboard, /meta\?\.sessionStatus === 'expired' \|\| meta\?\.sessionStatus === 'unknown'/);
   assert.doesNotMatch(metrics, /function probeProvisionTruth|async function probeProvisionTruth/);

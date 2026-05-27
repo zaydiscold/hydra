@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
+import { readFileSync } from 'node:fs';
 
 const warnings = [];
 
@@ -73,4 +74,17 @@ test('task supervisor reports asynchronous background errors with context', () =
   supervisor.reportBackgroundError('batch queue drain', new Error('drain exploded'));
 
   assert.deepEqual(warnings, ['[TASK] batch queue drain failed: drain exploded']);
+});
+
+test('task supervisor expiry scheduler is one-shot and shutdown waits on active sweep', () => {
+  const source = new URL('../services/task-supervisor.js', import.meta.url);
+  const text = readFileSync(source, 'utf-8');
+
+  assert.match(text, /scheduleNextSweep\(delayMs = TASK_SWEEP_INTERVAL_MS\)/);
+  assert.match(text, /this\.timer = setTimeout\(\(\) => \{/);
+  assert.match(text, /this\.sweepPromise = this\.expireTasks\(\)\.catch/);
+  assert.match(text, /if \(!this\.stopping\) this\.scheduleNextSweep\(TASK_SWEEP_INTERVAL_MS\)/);
+  assert.match(text, /if \(this\.sweepPromise\) \{[\s\S]*task expiry sweep stop wait/);
+  assert.doesNotMatch(text, /setInterval/);
+  assert.doesNotMatch(text, /clearInterval/);
 });

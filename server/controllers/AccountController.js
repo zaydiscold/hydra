@@ -855,8 +855,8 @@ export class AccountController extends BaseController {
       const isSignUpParam = isSignUp ? '&isSignUp=1' : '';
       const realCallback = `${proto}://${host}/api/auth/magic-callback?signInId=${encodeURIComponent(signInId)}&accountId=${account.id}${isSignUpParam}`;
       // We store the pending entry so the callback can look it up
-      const { pendingMagicLinks } = await import('../services/magic-link-manager.js');
-      pendingMagicLinks.set(signInId, {
+      const { trackPendingMagicLink } = await import('../services/magic-link-manager.js');
+      trackPendingMagicLink(signInId, {
         accountId: account.id,
         userId: req.user.id,
         clientCookie,
