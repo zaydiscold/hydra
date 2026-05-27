@@ -184,6 +184,9 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.match(supervisor, /scheduleNextSweep\(delayMs = TASK_SWEEP_INTERVAL_MS\)/);
   assert.match(supervisor, /this\.timer = setTimeout\(\(\) => \{/);
   assert.match(supervisor, /this\.sweepPromise = this\.expireTasks\(\)\.catch/);
+  assert.match(supervisor, /async function withClearedTimeout\(promise, timeoutMs\)/);
+  assert.match(supervisor, /timeoutHandle\.unref\?\.\(\)/);
+  assert.match(supervisor, /if \(timeoutHandle\) clearTimeout\(timeoutHandle\)/);
   assert.doesNotMatch(supervisor, /setInterval/);
   assert.doesNotMatch(supervisor, /clearInterval/);
   assert.match(retention, /timer\.unref\?\.\(\)/);

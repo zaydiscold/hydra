@@ -85,6 +85,10 @@ test('task supervisor expiry scheduler is one-shot and shutdown waits on active 
   assert.match(text, /this\.sweepPromise = this\.expireTasks\(\)\.catch/);
   assert.match(text, /if \(!this\.stopping\) this\.scheduleNextSweep\(TASK_SWEEP_INTERVAL_MS\)/);
   assert.match(text, /if \(this\.sweepPromise\) \{[\s\S]*task expiry sweep stop wait/);
+  assert.match(text, /async function withClearedTimeout\(promise, timeoutMs\)/);
+  assert.match(text, /timeoutHandle = setTimeout\(resolve, timeoutMs\)/);
+  assert.match(text, /timeoutHandle\.unref\?\.\(\)/);
+  assert.match(text, /if \(timeoutHandle\) clearTimeout\(timeoutHandle\)/);
   assert.doesNotMatch(text, /setInterval/);
   assert.doesNotMatch(text, /clearInterval/);
 });

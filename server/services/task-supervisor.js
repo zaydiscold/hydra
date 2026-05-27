@@ -42,6 +42,21 @@ function withErrorCode(message, code, status = 409) {
   return err;
 }
 
+async function withClearedTimeout(promise, timeoutMs) {
+  let timeoutHandle = null;
+  try {
+    await Promise.race([
+      promise,
+      new Promise(resolve => {
+        timeoutHandle = setTimeout(resolve, timeoutMs);
+        timeoutHandle.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
 export class TaskSupervisor {
   constructor() {
     this.tasks = new Map();
@@ -368,10 +383,10 @@ export class TaskSupervisor {
     }
 
     const activeTasks = this.listActive();
-    await Promise.race([
+    await withClearedTimeout(
       Promise.all(activeTasks.map(task => this.cancel(task.taskId, 'shutdown'))),
-      new Promise(resolve => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS)),
-    ]);
+      SHUTDOWN_TIMEOUT_MS,
+    );
   }
 
   getHealthSnapshot() {

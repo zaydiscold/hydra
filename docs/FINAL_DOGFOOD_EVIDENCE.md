@@ -40,9 +40,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   deep codesign verification.
 - The newest server cleanup pass converts task expiry and magic-link cleanup
   work away from permanent intervals: task expiry now uses one unref'd timeout
-  and waits for active sweeps during shutdown, while magic-link cleanup only
-  schedules a timeout when a pending magic-link entry exists. These are source
-  and audit-contract wins until the package is rebuilt and relaunched.
+  and waits for active sweeps during shutdown, task shutdown caps unref and clear
+  their timeout handle after fast cleanup, and magic-link cleanup only schedules
+  a timeout when a pending magic-link entry exists. These are source and
+  audit-contract wins until the package is rebuilt and relaunched.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
