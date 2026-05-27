@@ -195,6 +195,7 @@ function buildAudit() {
   const accountProxyPool = safeRead('server/services/account-proxy-pool.js');
   const systemController = safeRead('server/controllers/SystemController.js');
   const systemRoutes = safeRead('server/routes/system.js');
+  const poolController = safeRead('server/controllers/PoolController.js');
   const rendererApi = safeRead('src/api.js');
   const runtimeDiagnostics = safeRead('src/lib/runtimeDiagnostics.js');
   const settingsPage = safeRead('src/pages/Settings.jsx');
@@ -478,6 +479,7 @@ function buildAudit() {
         && proxyRoute.includes('const requestLogPromise = createRequestLog(')
         && proxyRoute.includes('requestLogPromise.then')
         && !proxyRoute.includes('const requestLog = await createRequestLog(')
+        && poolController.includes('const [logs, metrics] = await Promise.all([')
         && requestLogRetention.includes('scheduleNextPrune(RETENTION_INTERVAL_MS)')
         && requestLogRetention.includes('timer = setTimeout')
         && !requestLogRetention.includes('setInterval')

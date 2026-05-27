@@ -437,31 +437,33 @@ class PoolController extends BaseController {
   async getTraffic(req, res) {
     try {
       const { prisma } = await import('../services/db.js');
-      // Fetch latest 100 requests for the log table
-      const logs = await prisma.requestLog.findMany({
-        take: 100,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          keyHash: true,
-          model: true,
-          status: true,
-          latencyMs: true,
-          promptTokens: true,
-          completionTokens: true,
-          clientHint: true,
-          createdAt: true,
-          key: { select: { name: true, account: { select: { alias: true } } } },
-        },
-      });
-      
-      // Calculate basic stats for the last 24h
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const metrics = await prisma.requestLog.groupBy({
-        by: ['status'],
-        where: { createdAt: { gte: oneDayAgo } },
-        _count: { id: true }
-      });
+
+      // Fetch latest 100 requests for the log table
+      const [logs, metrics] = await Promise.all([
+        prisma.requestLog.findMany({
+          take: 100,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            keyHash: true,
+            model: true,
+            status: true,
+            latencyMs: true,
+            promptTokens: true,
+            completionTokens: true,
+            clientHint: true,
+            createdAt: true,
+            key: { select: { name: true, account: { select: { alias: true } } } },
+          },
+        }),
+        // Calculate basic stats for the last 24h.
+        prisma.requestLog.groupBy({
+          by: ['status'],
+          where: { createdAt: { gte: oneDayAgo } },
+          _count: { id: true },
+        }),
+      ]);
 
       return this.success(res, { logs, metrics });
     } catch (err) {

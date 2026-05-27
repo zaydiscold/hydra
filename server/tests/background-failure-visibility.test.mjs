@@ -399,6 +399,19 @@ test('proxy request body encoding is cached across retries', () => {
   assert.doesNotMatch(buildBody, /JSON\.parse\(JSON\.stringify/);
 });
 
+test('traffic backend runs independent request-log reads in parallel', () => {
+  const source = readRepoFile('server/controllers/PoolController.js');
+  const handler = source.slice(
+    source.indexOf('async getTraffic(req, res)'),
+    source.indexOf('/** GET /pool/models'),
+  );
+
+  assert.match(handler, /const \[logs, metrics\] = await Promise\.all\(\[/);
+  assert.match(handler, /prisma\.requestLog\.findMany\(/);
+  assert.match(handler, /prisma\.requestLog\.groupBy\(/);
+  assert.doesNotMatch(handler, /const logs = await[\s\S]*const metrics = await/);
+});
+
 test('bulk magic-link polling batches account refresh after completions', () => {
   const source = readRepoFile('src/hooks/useBulkAuth.js');
   const poller = source.slice(

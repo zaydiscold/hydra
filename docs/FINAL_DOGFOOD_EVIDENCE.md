@@ -50,6 +50,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   final usage and latency updates. Synthetic 5ms-placeholder timing reduced the
   isolated pre-forward wait from `6.237ms` average to `0.026ms` average
   (`99.6%`) over `200` rounds.
+- Traffic refresh now runs the latest-log read and 24h status aggregation in
+  parallel. Synthetic 8ms/11ms read timing reduced the isolated query-composition
+  wait from `22.273ms` average to `11.354ms` average (`49.0%`) over `200`
+  rounds.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
