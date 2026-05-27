@@ -23,6 +23,7 @@ let _sweepRunning = false;
 /** @type {Promise<void>|null} — tracks the current sweep so stop() can await it. */
 let _sweepPromise = null;
 let _lastSessionProbeAt = 0;
+let _stopping = false;
 
 async function getConfigForAccount(account) {
   try {
@@ -43,7 +44,10 @@ export async function sweepAndRefresh() {
 
   // #44: Save the promise so stopSessionRefresher() can await the in-flight
   // sweep instead of only clearing timers and returning immediately.
-  _sweepPromise = _sweepImpl().finally(() => { _sweepRunning = false; });
+  _sweepPromise = _sweepImpl().finally(() => {
+    _sweepRunning = false;
+    _sweepPromise = null;
+  });
   return _sweepPromise;
 }
 
@@ -299,25 +303,39 @@ async function _runSessionProbe() {
 let _intervalHandle = null;
 let _startupTimeoutHandle = null;
 
+function scheduleNextSweep(delayMs = INTERVAL_MS) {
+  if (_stopping || _intervalHandle) return;
+  _intervalHandle = setTimeout(() => {
+    _intervalHandle = null;
+    if (_stopping) return;
+    sweepAndRefresh().finally(() => {
+      if (!_stopping) scheduleNextSweep(INTERVAL_MS);
+    });
+  }, delayMs);
+  _intervalHandle.unref?.();
+}
+
 export function startSessionRefresher() {
-  if (_intervalHandle) return;
+  if (_startupTimeoutHandle || _intervalHandle || _sweepRunning) return;
+  _stopping = false;
   _startupTimeoutHandle = setTimeout(() => {
     _startupTimeoutHandle = null;
-    sweepAndRefresh();
+    sweepAndRefresh().finally(() => {
+      if (!_stopping) scheduleNextSweep(INTERVAL_MS);
+    });
   }, STARTUP_DELAY_MS);
-  _intervalHandle = setInterval(() => sweepAndRefresh(), INTERVAL_MS);
   _startupTimeoutHandle.unref?.();
-  _intervalHandle.unref?.();
   logger.info(`[AUTO-REFRESH] Session refresher scheduled (every ${INTERVAL_MS / 3600000}h)`);
 }
 
 export async function stopSessionRefresher() {
+  _stopping = true;
   if (_startupTimeoutHandle) {
     clearTimeout(_startupTimeoutHandle);
     _startupTimeoutHandle = null;
   }
   if (_intervalHandle) {
-    clearInterval(_intervalHandle);
+    clearTimeout(_intervalHandle);
     _intervalHandle = null;
   }
   // #44: Await the in-flight sweep so DB writes complete before shutdown

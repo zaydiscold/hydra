@@ -475,6 +475,10 @@ function buildAudit() {
         && requestLogRetention.includes('scheduleNextPrune(RETENTION_INTERVAL_MS)')
         && requestLogRetention.includes('timer = setTimeout')
         && !requestLogRetention.includes('setInterval')
+        && sessionRefresher.includes('function scheduleNextSweep(delayMs = INTERVAL_MS)')
+        && sessionRefresher.includes('_intervalHandle = setTimeout')
+        && sessionRefresher.includes('scheduleNextSweep(INTERVAL_MS)')
+        && !sessionRefresher.includes('setInterval')
         && healthPinger.includes('HYDRA_HEALTH_PING_STARTUP_DELAY_MS')
         && healthPinger.includes('timer = setTimeout')
         && healthPinger.includes('scheduleNextPing(PING_INTERVAL_MS)')
@@ -511,7 +515,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 12s with 92 words and stronger sensor/fallback side lean, Playwright launch profile dirs are removed after browser automation paths; request-log flushing/retention, health pings, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 12s with 92 words and stronger sensor/fallback side lean, Playwright launch profile dirs are removed after browser automation paths; request-log flushing/retention, health pings, session refresh, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',
