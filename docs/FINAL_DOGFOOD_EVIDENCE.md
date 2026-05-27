@@ -4,18 +4,44 @@ The final Hydra dogfood pass needs packaged Electron and live-account evidence
 that Codex cannot safely infer from source tests. Use the checked-in preflight
 to create a redacted evidence artifact after you run the real app.
 
-Current pre-dogfood performance evidence from 2026-05-26 is in
-`docs/RELEASE_AUDIT.md`: dashboard metadata/status shaping is down 61.1% in
-the local DB microbench, proxy retry body encoding is down 86.9% in the request
-body benchmark, Vault status-total rendering is down 96.0% in the synthetic
-5000-account benchmark, session refresher selected reads are down 13.4%, and the
-rebuilt packaged macOS arm64 app sampled near-zero idle CPU after splash settle. The
-five-minute packaged idle sample ended with Hydra main at 0.1% CPU and the GPU,
-network, and renderer helpers at 0.0% CPU; a later current-source rebuild also
-settled back to 0.0% CPU across all Hydra processes at the post-splash sample.
-The icon-refresh rebuild packaged the regenerated macOS ICNS byte-for-byte and
-also settled back to 0.0% CPU across all Hydra processes at `t+50s`.
-A second icon-refresh relaunch repeated the same post-splash CPU result.
+Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
+`docs/RELEASE_AUDIT.md`. Source and local runtime measurements currently show:
+
+- Dashboard metadata/status shaping is down 61.1% in the local DB microbench.
+- Proxy retry body encoding is down 86.9% in the request-body benchmark.
+- Vault status-total rendering is down 96.0% in the synthetic 5000-account
+  benchmark.
+- Session refresher selected reads are down 13.4%.
+- Rebuilt packaged macOS arm64 launches repeatedly settled back to near-zero
+  idle CPU after the splash/main transition.
+- The 2026-05-27 five-minute packaged idle profiles kept the four Hydra-owned
+  processes around `0.0%` to `0.1%` CPU, with RSS dropping from `423.23 MB` to
+  `414.91 MB` in one no-relaunch sample and from `421.53 MB` to `399.09 MB` in
+  the next.
+- `hydra doctor` now separates Hydra-owned process load from unrelated
+  Chrome/CDP/browser-tooling load, which stayed heavy and was intentionally not
+  closed.
+- `hydra doctor --clean-stale-profiles` moved stale Hydra-owned Playwright
+  profile directories to a timestamped temp backup with `deleted: 0`, and the
+  Playwright isolation tests now clean their own temp profiles.
+- Renderer timers, intervals, animation frames, and Anime.js effects are routed
+  through `window.__HYDRA_RENDERER_DIAGNOSTICS__()` ownership tracking.
+- The splash remains intentionally richer at 12 seconds and 92 falling words,
+  but Matter.js, RAF, timers, listeners, bodies, and optional sensor instances
+  are bounded by the deterministic splash-disposal contract.
+- Tilt support is source-verified as opportunistic device tilt: sensor/fallback
+  x input affects horizontal gravity, spawn-position bias, and initial x
+  velocity. Exact MacBook hinge-angle support remains a future native HID bridge,
+  not a claimed packaged feature.
+- A redirected temp package build found and fixed a packaging hygiene issue where
+  stale `release/**` output could be copied into `Resources/app/release/**` when
+  output was redirected outside the repo. A follow-up temp package build passed
+  `electron:smoke`, source inspection, no-nested-`release` inspection, and
+  deep codesign verification.
+
+This is not release-complete evidence. It is the current source/package-resource
+and local idle-performance evidence that should feed the final manual dogfood
+run.
 
 The full operator checklist is in `docs/PACKAGED_ELECTRON_DOGFOOD.md`. For the
 current published release, derive the release version from `package.json`:
