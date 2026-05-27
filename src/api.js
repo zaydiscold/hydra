@@ -173,7 +173,7 @@ async function request(path, options = {}) {
           const errMsg = d?.error || 'Invalid credentials';
           throw new Error(errMsg);
         }
-        clearToken();
+        await clearToken();
         if (!handledAuthFailure) {
           handledAuthFailure = true;
           window.location.reload();

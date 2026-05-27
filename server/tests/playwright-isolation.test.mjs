@@ -65,6 +65,7 @@ describe('browser isolation — knob 1: binary', () => {
   it('default dev mode does NOT set executablePath or channel — Playwright picks its own bundled Chromium', () => {
     delete process.env.HYDRA_EMBEDDED;
     const opts = resolveChromiumLaunchOptions();
+    cleanupDirs.push(opts.userDataDir);
     assert.strictEqual(opts.executablePath, undefined,
       'dev mode must not pin executablePath — let Playwright choose its bundle');
     assert.strictEqual(opts.channel, undefined,
@@ -74,6 +75,7 @@ describe('browser isolation — knob 1: binary', () => {
   it('does NOT default to channel:chrome (which would launch user\'s real Chrome)', () => {
     delete process.env.HYDRA_PLAYWRIGHT_CHANNEL;
     const opts = resolveChromiumLaunchOptions();
+    cleanupDirs.push(opts.userDataDir);
     assert.notStrictEqual(opts.channel, 'chrome',
       'channel:chrome would launch /Applications/Google Chrome.app with the user\'s real profile');
   });
@@ -239,14 +241,19 @@ describe('browser isolation — overall sanity', () => {
       Object.defineProperty(process, 'resourcesPath', { value: ${JSON.stringify(resources)}, configurable: true });
       process.env.HYDRA_EMBEDDED = '1';
       process.env.HYDRA_DATA_DIR = ${JSON.stringify(dataDir)};
-      const { resolveChromiumLaunchOptions } = await import(${JSON.stringify(new URL('../lib/playwright-browser.js', import.meta.url).href)});
-      const opts = resolveChromiumLaunchOptions();
-      if (!opts.executablePath || !opts.executablePath.includes('/chromium/chrome-linux/chrome')) {
-        throw new Error('unexpected executablePath: ' + opts.executablePath);
+      const { cleanupEphemeralProfileDir, resolveChromiumLaunchOptions } = await import(${JSON.stringify(new URL('../lib/playwright-browser.js', import.meta.url).href)});
+      let opts;
+      try {
+        opts = resolveChromiumLaunchOptions();
+        if (!opts.executablePath || !opts.executablePath.includes('/chromium/chrome-linux/chrome')) {
+          throw new Error('unexpected executablePath: ' + opts.executablePath);
+        }
+        const { existsSync } = await import('node:fs');
+        if (!existsSync(opts.executablePath)) throw new Error('extracted executable missing');
+        console.log(opts.executablePath);
+      } finally {
+        cleanupEphemeralProfileDir(opts?.userDataDir);
       }
-      const { existsSync } = await import('node:fs');
-      if (!existsSync(opts.executablePath)) throw new Error('extracted executable missing');
-      console.log(opts.executablePath);
     `;
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
       encoding: 'utf8',
