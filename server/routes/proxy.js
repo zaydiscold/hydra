@@ -9,8 +9,8 @@ import { Router } from 'express';
 import { OR_BASE } from '../config.js';
 import { SseUsageObserver, forwardSseStream } from '../lib/sse-stream.js';
 import {
-  cachedRowToClientModel,
   fetchOpenRouterModelsList,
+  getCachedClientModels,
   upsertModelsFromUpstream,
 } from '../services/model-cache.js';
 import { prisma } from '../services/db.js';
@@ -42,36 +42,13 @@ const BLOCKED_RESPONSE_HEADERS = new Set([
   'keep-alive',
 ]);
 
-function normalizeModelId(id) {
-  return String(id ?? '').trim().toLowerCase();
-}
-
-function isFreeModelId(id) {
-  const normalized = normalizeModelId(id);
-  return normalized === 'openrouter/free'
-    || normalized.startsWith('openrouter/free/')
-    || normalized.startsWith('openrouter/free:')
-    || normalized.endsWith(':free')
-    || normalized.endsWith('/free');
-}
-
-async function getCachedModels({ freeOnly = false } = {}) {
-  const cached = await prisma.cachedModel.findMany({
-    orderBy: [{ name: 'asc' }],
-    select: { id: true, name: true, ctx: true, ownedBy: true },
-  });
-
-  const models = cached.map(cachedRowToClientModel);
-  return freeOnly ? models.filter((model) => isFreeModelId(model.id)) : models;
-}
-
 async function resolveFreeModel(requestedModel) {
-  const freeModels = await getCachedModels({ freeOnly: true });
+  const freeModels = await getCachedClientModels({ freeOnly: true });
   if (freeModels.length === 0) return null;
 
-  const requested = normalizeModelId(requestedModel);
+  const requested = String(requestedModel ?? '').trim().toLowerCase();
   if (requested) {
-    const match = freeModels.find((model) => normalizeModelId(model.id) === requested);
+    const match = freeModels.find((model) => String(model.id ?? '').trim().toLowerCase() === requested);
     if (match) return match.id;
   }
 
@@ -564,7 +541,7 @@ async function handleFreeModels(req, res) {
 
 async function handleModelList(req, res, { freeOnly = false } = {}) {
   try {
-    const cached = await getCachedModels({ freeOnly });
+    const cached = await getCachedClientModels({ freeOnly });
 
     if (cached.length > 0 || freeOnly) {
       res.setHeader('X-Hydra-Models-Source', 'cache');

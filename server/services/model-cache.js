@@ -3,6 +3,33 @@ import { prisma } from './db.js';
 
 const MODELS_PATH = '/api/v1/models';
 const MODEL_LIST_TIMEOUT_MS = 30000;
+const CLIENT_MODEL_CACHE_TTL_MS = Number(process.env.HYDRA_CLIENT_MODEL_CACHE_TTL_MS || 30000);
+let clientModelCache = {
+  expiresAt: 0,
+  all: null,
+  free: null,
+};
+
+export function normalizeModelId(id) {
+  return String(id ?? '').trim().toLowerCase();
+}
+
+export function isFreeModelId(id) {
+  const normalized = normalizeModelId(id);
+  return normalized === 'openrouter/free'
+    || normalized.startsWith('openrouter/free/')
+    || normalized.startsWith('openrouter/free:')
+    || normalized.endsWith(':free')
+    || normalized.endsWith('/free');
+}
+
+export function clearClientModelCache() {
+  clientModelCache = {
+    expiresAt: 0,
+    all: null,
+    free: null,
+  };
+}
 
 export function normalizeUpstreamModel(m) {
   return {
@@ -26,6 +53,7 @@ export async function upsertModelsFromUpstream(models) {
     prisma.cachedModel.deleteMany({}),
     prisma.cachedModel.createMany({ data: rows }),
   ]);
+  clearClientModelCache();
   return rows.length;
 }
 
@@ -63,6 +91,26 @@ export function cachedRowToClientModel(m) {
     owned_by: m.ownedBy || 'openrouter',
     name: m.name,
   };
+}
+
+export async function getCachedClientModels({ freeOnly = false } = {}) {
+  const now = Date.now();
+  if (clientModelCache.all && clientModelCache.expiresAt > now) {
+    return freeOnly ? clientModelCache.free : clientModelCache.all;
+  }
+
+  const cached = await prisma.cachedModel.findMany({
+    orderBy: [{ name: 'asc' }],
+    select: { id: true, name: true, ctx: true, ownedBy: true },
+  });
+  const all = cached.map(cachedRowToClientModel);
+  clientModelCache = {
+    expiresAt: now + CLIENT_MODEL_CACHE_TTL_MS,
+    all,
+    free: all.filter((model) => isFreeModelId(model.id)),
+  };
+
+  return freeOnly ? clientModelCache.free : clientModelCache.all;
 }
 
 export async function getModelCacheSummary() {

@@ -210,6 +210,7 @@ function buildAudit() {
   const requestLogRetention = safeRead('server/services/request-log-retention.js');
   const taskSupervisor = safeRead('server/services/task-supervisor.js');
   const magicLinkManager = safeRead('server/services/magic-link-manager.js');
+  const modelCache = safeRead('server/services/model-cache.js');
   const schemaHash = safeRead('electron/app/schemaHash.js');
   const schemaHashTest = safeRead('server/tests/schema-hash.test.mjs');
   const importCommand = safeRead('bin/commands/import.js');
@@ -479,6 +480,11 @@ function buildAudit() {
         && proxyRoute.includes('const requestLogPromise = createRequestLog(')
         && proxyRoute.includes('requestLogPromise.then')
         && !proxyRoute.includes('const requestLog = await createRequestLog(')
+        && modelCache.includes('CLIENT_MODEL_CACHE_TTL_MS')
+        && modelCache.includes('export async function getCachedClientModels')
+        && modelCache.includes('clearClientModelCache();')
+        && proxyRoute.includes('getCachedClientModels({ freeOnly })')
+        && !proxyRoute.includes('prisma.cachedModel.findMany')
         && poolController.includes('const [logs, metrics] = await Promise.all([')
         && requestLogRetention.includes('scheduleNextPrune(RETENTION_INTERVAL_MS)')
         && requestLogRetention.includes('timer = setTimeout')

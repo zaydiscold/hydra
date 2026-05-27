@@ -436,9 +436,19 @@ test('account generator browser signup uses the encrypted proxy pool when presen
 
 test('OpenRouter model-list cache requests are timeout bounded', () => {
   const source = readRepoFile('server/services/model-cache.js');
+  const proxy = readRepoFile('server/routes/proxy.js');
 
   assert.match(source, /MODEL_LIST_TIMEOUT_MS = 30000/);
   assert.match(source, /signal: AbortSignal\.timeout\(MODEL_LIST_TIMEOUT_MS\)/);
+  assert.match(source, /CLIENT_MODEL_CACHE_TTL_MS/);
+  assert.match(source, /let clientModelCache = \{/);
+  assert.match(source, /export function clearClientModelCache\(\)/);
+  assert.match(source, /clearClientModelCache\(\);/);
+  assert.match(source, /export async function getCachedClientModels\(\{ freeOnly = false \} = \{\}\)/);
+  assert.match(source, /if \(clientModelCache\.all && clientModelCache\.expiresAt > now\)/);
+  assert.match(source, /free: all\.filter\(\(model\) => isFreeModelId\(model\.id\)\)/);
+  assert.match(proxy, /getCachedClientModels\(\{ freeOnly \}\)/);
+  assert.doesNotMatch(proxy, /prisma\.cachedModel\.findMany/);
 });
 
 test('auth callback best-effort provisioning and opener notification failures are logged', () => {
