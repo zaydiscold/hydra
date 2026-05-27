@@ -45,6 +45,11 @@ files:
   # excludes it. Match with the `**/` prefix that bypasses that filter.
   - "**/node_modules/.prisma/**/*"
   - "**/node_modules/@prisma/**/*"
+  # Never ship previously built distributables inside the next app bundle.
+  # This matters when electron-builder output is redirected outside `release/`:
+  # without this explicit exclude, stale release/mac/*.app output can be copied
+  # into Resources/app/release and then fail code signing as a nested bundle.
+  - "!release/**"
   - "!scratch/**"
   - "!.scratch/**"
   - "!.claude/**"

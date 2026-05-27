@@ -214,6 +214,7 @@ function buildAudit() {
   const mcpTest = safeRead('server/tests/mcp-cli.test.mjs');
   const electronSmoke = safeRead('scripts/smoke-electron-package.mjs');
   const electronPrepare = safeRead('scripts/prepare-electron-resources.mjs');
+  const electronBuilderConfig = safeRead('electron-builder.yml');
   const packagedOpenScript = safeRead('scripts/open-packaged-app.mjs');
 
   const version = pkg.version;
@@ -720,12 +721,13 @@ function buildAudit() {
         && electronSmoke.includes('macOS ARM package must contain darwin-arm64 Prisma engine')
         && electronSmoke.includes('macOS Intel package must contain darwin Prisma engine')
         && electronSmoke.includes('nested .app bundle(s) found under Resources')
+        && electronBuilderConfig.includes('!release/**')
         && electronPrepare.includes('function chromiumCacheGuidance')
         && electronPrepare.includes('Build on the target runner/machine')
         && electronPrepare.includes('PLAYWRIGHT_BROWSERS_PATH cache')
         && workflowContract.includes('electron package smoke validates target-specific Chromium archives')
         && workflowContract.includes('electron package smoke validates distributable release artifacts'),
-      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, patch/minor/major auto-version controls, merged multi-arch latest-mac.yml auto-update metadata, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
+      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, patch/minor/major auto-version controls, merged multi-arch latest-mac.yml auto-update metadata, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, stale release-output exclusion, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
     ),
     check(
       'docker-docs',

@@ -207,6 +207,7 @@ test('electron package smoke validates the packaged app shell without launching 
 
 test('electron package smoke validates distributable release artifacts', () => {
   const script = read('scripts/smoke-electron-package.mjs');
+  const builderConfig = read('electron-builder.yml');
 
   assert.match(script, /function assertReleaseArtifact/, 'smoke must validate the distributable artifact');
   assert.match(script, /macOS ARM zip artifact/, 'smoke must require the macOS ARM zip artifact');
@@ -219,6 +220,7 @@ test('electron package smoke validates distributable release artifacts', () => {
   assert.match(script, /macOS Intel package must contain darwin Prisma engine/, 'smoke must reject wrong macOS Intel Prisma engines');
   assert.match(script, /zip artifact does not contain Hydra\.app executable/, 'smoke must inspect macOS zip contents for the app executable');
   assert.match(script, /release artifact is empty/, 'smoke must reject empty artifacts');
+  assert.match(builderConfig, /!\s*release\/\*\*/, 'packaged app must not embed stale release output when output is redirected');
 });
 
 test('packaged app dogfood launcher uses LaunchServices instead of direct executable spawn', () => {
