@@ -26,6 +26,7 @@ function ok(data) { return { ok: true, data }; }
 function err(message, code) { return { ok: false, error: message, code }; }
 
 const AUTH_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const SPLASH_DIAGNOSTICS_CHANNEL = 'hydra-splash-diagnostics';
 
 function authTokenPath() {
   return path.join(app.getPath('userData'), 'renderer-auth-token.json');
@@ -70,11 +71,44 @@ function redactedPathInfo(name) {
   };
 }
 
+function summarizeSplashDiagnostics(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  const tilt = payload.tilt && typeof payload.tilt === 'object' ? payload.tilt : {};
+  return {
+    durationMs: Number(payload.durationMs) || 0,
+    exitMs: Number(payload.exitMs) || 0,
+    target: Number(payload.target) || 0,
+    timers: Number(payload.timers) || 0,
+    rafActive: Boolean(payload.rafActive),
+    disposed: Boolean(payload.disposed),
+    disposeReason: typeof payload.disposeReason === 'string' ? payload.disposeReason : null,
+    lifetimeMs: Number(payload.disposedAt) && Number(payload.startedAt)
+      ? Math.max(0, Number(payload.disposedAt) - Number(payload.startedAt))
+      : 0,
+    bodyCount: Number(payload.bodyCount) || 0,
+    dynamicBodyCount: Number(payload.dynamicBodyCount) || 0,
+    renderFrames: Number(payload.renderFrames) || 0,
+    physicsSteps: Number(payload.physicsSteps) || 0,
+    matterCleared: Boolean(payload.matterCleared),
+    tilt: {
+      supported: Boolean(tilt.supported),
+      source: typeof tilt.source === 'string' ? tilt.source : 'unknown',
+      gravityX: Number(tilt.gravityX) || 0,
+    },
+  };
+}
+
 /**
  * Register all IPC handlers. No arguments — handlers source their state
  * from `app/state.js` so the wiring is uniform across call sites.
  */
 export function registerIpcHandlers() {
+  ipcMain.on(SPLASH_DIAGNOSTICS_CHANNEL, (_event, payload) => {
+    const diagnostics = summarizeSplashDiagnostics(payload);
+    if (!diagnostics) return;
+    console.warn('[hydra-splash] diagnostics', JSON.stringify(diagnostics));
+  });
+
   ipcMain.handle('native:get-version', async () => {
     try { return ok(app.getVersion()); } catch (e) { return err(e.message); }
   });

@@ -320,9 +320,10 @@ function isHydraOwnedProcess(command) {
   if (/^\S*Hydra\.app\/Contents\//.test(value)) return true;
 
   // Hydra-owned Playwright/Chrome-for-Testing instances use fresh temp
-  // profiles with this prefix. Plain playwright-mcp/chrome-devtools-mcp
-  // processes are external tooling and must not inflate Hydra fan reports.
-  if (/hydra-pw-profile-/.test(value)) return true;
+  // profiles with this prefix, but diagnostic shells may merely mention that
+  // prefix in an awk/grep pattern. Require a browser-ish executable token so
+  // `hydra doctor` does not count its own sampler as app CPU/RSS.
+  if (isHydraProfileBrowserProcess(value)) return true;
   if (/Google Chrome for Testing/.test(value) && /Hydra|hydra|hydra-pw-profile-/.test(value)) return true;
   if (/(^|\s)\S*build\/electron\/chromium\b|(^|\s)\S*Contents\/Resources\/chromium\b/.test(value)) return true;
 
@@ -332,6 +333,14 @@ function isHydraOwnedProcess(command) {
   if (value.includes(root) && /(server\/standalone\.js|launch\.js|electron\/main\.js)/.test(value)) return true;
 
   return false;
+}
+
+function isHydraProfileBrowserProcess(command) {
+  const value = String(command || '');
+  if (!/hydra-pw-profile-/.test(value)) return false;
+  if (/\b(?:zsh|bash|sh)\s+-c\b/.test(value)) return false;
+  if (/\b(?:awk|grep|rg)\b/.test(value)) return false;
+  return /\b(?:Google Chrome for Testing|Google Chrome Helper|Chromium|HeadlessChrome|chrome(?:\.exe)?)\b/i.test(value);
 }
 
 function isBrowserToolingProcess(command) {

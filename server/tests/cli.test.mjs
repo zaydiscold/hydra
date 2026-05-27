@@ -650,6 +650,9 @@ test('hydra doctor includes local performance diagnostics for fan-pressure repor
   assert.match(source, /function inspectHydraProcesses\(\)/);
   assert.match(source, /ps', \['-axo', 'pid,pcpu,pmem,rss,command'\]/);
   assert.match(source, /function isHydraOwnedProcess\(command\)/);
+  assert.match(source, /function isHydraProfileBrowserProcess\(command\)/);
+  assert.match(source, /Require a browser-ish executable token/);
+  assert.match(source, /hydra doctor` does not count its own sampler as app CPU\/RSS/);
   assert.match(source, /function isBrowserToolingProcess\(command\)/);
   assert.ok(source.includes('/^\\S*Hydra\\.app\\/Contents\\//'));
   assert.match(source, /otherBrowserToolProcesses/);

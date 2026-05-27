@@ -199,17 +199,17 @@ export function createSplashWindow() {
   // Background: Pica's onboarding scene is SpriteKit — `SKLabelNode`s wrapped in
   // `SKPhysicsBody` falling under `physicsWorld.gravity` and stacking against
   // an `edgeLoopFrom: frame` floor. CSS keyframes can't replicate that —
-  // letters can't COLLIDE in CSS. We use a `<canvas>` + a tiny custom physics
-  // loop (~120 lines): gravity + AABB-vs-floor + AABB-vs-AABB inter-letter
-  // separation. Random initial position / rotation / angular impulse means
-  // the pile is different every launch.
+  // letters can't COLLIDE in CSS. We use `<canvas>` + vendored matter-js for
+  // rotated body collisions, broadphase/narrowphase resolution, and one
+  // Hydra-owned fixed-step loop. Random initial position / rotation / angular
+  // impulse means the pile is different every launch.
   //
   // Reference: ~/Desktop/pica-teardown/05-falling-letters-animation.md
   //
-  // Performance: density-scaled count (36–100 bodies, see TARGET below).
-  // O(n²) pair check at the cap is 10,000 ops/frame — at 60 fps that's
-  // 600,000 ops/sec, still trivial on any GPU-compositing-disabled CPU
-  // path. Canvas paint is one compositor layer total. The list is
+  // Performance: 92 word bodies entering over ~9.2 s, shattering into glyph
+  // bodies on contact. Physics is fixed at 45 Hz, paint is capped at 30 fps,
+  // and the canvas backing store is pixel-capped for Retina. Canvas paint is
+  // one compositor layer total. The list is
   // intentionally repeated (with reshuffles) to fill the screen — same
   // density trick Pica uses by reusing characters from a name.
   const itemsJson = JSON.stringify(items);
@@ -419,10 +419,10 @@ export function createSplashWindow() {
     + 'background:linear-gradient(90deg,#a855f7,#ec4899,#60a5fa);'
     + 'box-shadow:0 0 14px rgba(168,85,247,.6);'
     + 'transform-origin:left center;transform:scaleX(0);'
-    // 10s — must match SPLASH_MIN_VISIBLE_MS in main.js. Bar fills from 0
+    // 12s — must match SPLASH_MIN_VISIBLE_MS in main.js. Bar fills from 0
     // to 1 over the full visible duration so it reaches 100% as the splash
     // dismisses. Pure CSS, runs even if JS physics fails to start.
-    + 'animation:fillbar 10s cubic-bezier(.22,.61,.36,1) forwards}'
+    + 'animation:fillbar 12s cubic-bezier(.22,.61,.36,1) forwards}'
     + '@keyframes fillbar{0%{transform:scaleX(0)}68%{transform:scaleX(.78)}100%{transform:scaleX(1)}}'
     + '.update-strip{width:220px;height:2px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:9px;opacity:0;transform:translateY(-2px);transition:opacity 180ms ease,transform 180ms ease}'
     + '.update-strip.is-active{opacity:1;transform:translateY(0)}'
@@ -491,7 +491,7 @@ export function createSplashWindow() {
     // Vendored matter-js drives the world. Words enter as compound bodies
     // at the top edge, shatter into per-letter bodies on first contact
     // with anything (walls, floor, or another body), then keep colliding
-    // like SpaghettiOs until gravity flips upward at t=8s and the pile
+    // like SpaghettiOs until gravity flips upward at t=10s and the pile
     // whooshes out the top. Hard static walls extend 400 px outside the
     // viewport so even fast-moving bodies cannot tunnel through.
     //
@@ -585,9 +585,15 @@ export function createSplashWindow() {
     + 'const updateStrip=document.getElementById("update-strip");'
     + 'const updateFill=document.getElementById("update-strip-fill");'
     + 'let phaseIndex=0,updateActive=false;'
+    + 'const HYDRA_SPLASH_DURATION_MS=12000,HYDRA_SPLASH_EXIT_MS=10000,HYDRA_SPLASH_DISPOSE_MS=14500,HYDRA_SPLASH_TARGET=92;'
     + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0;'
-    + 'function hydraSplashSetTimeout(fn,ms){const id=setTimeout(function(){const i=hydraSplashTimers.indexOf(id);if(i>=0)hydraSplashTimers.splice(i,1);if(!hydraSplashDisposed)fn();},ms);hydraSplashTimers.push(id);return id;}'
-    + 'function hydraSplashSetInterval(fn,ms){const id=setInterval(function(){if(hydraSplashDisposed)return;fn();},ms);hydraSplashTimers.push(id);return id;}'
+    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,target:HYDRA_SPLASH_TARGET,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0}};'
+    + 'window.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics;'
+    + 'function hydraSplashRefreshDiagnostics(){hydraSplashDiagnostics.timers=hydraSplashTimers.length;hydraSplashDiagnostics.rafActive=Boolean(hydraSplashRaf)&&!hydraSplashDisposed;return hydraSplashDiagnostics;}'
+    + 'function hydraSplashRemoveTimer(id){const i=hydraSplashTimers.indexOf(id);if(i>=0)hydraSplashTimers.splice(i,1);hydraSplashRefreshDiagnostics();}'
+    + 'function hydraSplashClearTimer(id){clearTimeout(id);clearInterval(id);hydraSplashRemoveTimer(id);}'
+    + 'function hydraSplashSetTimeout(fn,ms){const id=setTimeout(function(){hydraSplashRemoveTimer(id);if(!hydraSplashDisposed)fn();},ms);hydraSplashTimers.push(id);hydraSplashRefreshDiagnostics();return id;}'
+    + 'function hydraSplashSetInterval(fn,ms){const id=setInterval(function(){if(hydraSplashDisposed)return;fn();},ms);hydraSplashTimers.push(id);hydraSplashRefreshDiagnostics();return id;}'
     + 'if(phaseEl){hydraSplashSetInterval(()=>{if(updateActive)return;phaseIndex=(phaseIndex+1)%phases.length;phaseEl.textContent=phases[phaseIndex];},2200);}'
     + 'function updateSplashProgress(payload){'
     + 'payload=payload||{};const pct=Math.max(0,Math.min(100,Number(payload.percent)||0));'
@@ -620,6 +626,12 @@ export function createSplashWindow() {
     // intro gravity. matter.js gravity is dimensionless × scale. scale=0.0012
     // gives ~1.0 g a fall feel comparable to Pica\'s introGravity.
     + 'engine.world.gravity.x=0;engine.world.gravity.y=1.0;engine.world.gravity.scale=0.0012;'
+    + 'const hydraSplashFallbackLean=(Math.random()<0.5?-1:1)*0.035;let hydraSplashTiltGravityX=hydraSplashFallbackLean;'
+    + 'hydraSplashDiagnostics.tilt.gravityX=hydraSplashTiltGravityX;'
+    + 'function setHydraSplashTiltGravity(x,source){if(hydraSplashDisposed)return;const n=Number(x);if(!Number.isFinite(n))return;hydraSplashTiltGravityX=Math.max(-0.55,Math.min(0.55,n));hydraSplashDiagnostics.tilt.supported=source!=="fallback";hydraSplashDiagnostics.tilt.source=source;hydraSplashDiagnostics.tilt.gravityX=hydraSplashTiltGravityX;}'
+    + 'function onHydraSplashDeviceOrientation(evt){const gamma=Number(evt&&evt.gamma);if(Number.isFinite(gamma))setHydraSplashTiltGravity(gamma/90,"deviceorientation");}'
+    + 'function onHydraSplashDeviceMotion(evt){const g=evt&&evt.accelerationIncludingGravity;const x=g&&Number(g.x);if(Number.isFinite(x))setHydraSplashTiltGravity(x/9.81,"devicemotion");}'
+    + 'window.addEventListener("deviceorientation",onHydraSplashDeviceOrientation);window.addEventListener("devicemotion",onHydraSplashDeviceMotion);'
     // ─── HARD WALLS at the viewport edges ────────────────────────────────
     // Each wall is 400 px thick and extends 3× the viewport dimension along
     // its length, so even a body integrated past the visible edge during
@@ -701,12 +713,12 @@ export function createSplashWindow() {
     // ─── Spawn queue — shuffle items + repeat to fill the trickle window.
     + 'function shuffle(a){return a.slice().sort(function(){return Math.random()-0.5;});}'
     + 'function buildQueue(n){const out=[];while(out.length<n){const s=shuffle(items);for(let k=0;k<s.length&&out.length<n;k++)out.push(s[k]);}return out;}'
-    // 80 words over ~8 s = 10/sec — Pica\'s languid trickle, not a burst.
-    + 'const TARGET=80;'
-    + 'const queue=buildQueue(TARGET);'
+    // 92 words over ~9.2 s = 15% more fill than the original 80-word
+    // splash while keeping the same 10/sec trickle, not a burst.
+    + 'const queue=buildQueue(HYDRA_SPLASH_TARGET);'
     + 'let spawnIdx=0;'
     + 'const spawnTimer=hydraSplashSetInterval(function(){'
-    +   'if(spawnIdx>=queue.length){clearInterval(spawnTimer);return;}'
+    +   'if(spawnIdx>=queue.length){hydraSplashClearTimer(spawnTimer);return;}'
     +   'const it=queue[spawnIdx++];'
     +   'const isBrand=it.tag==="brand";'
     +   'const fontSize=isBrand?(30+Math.floor(Math.random()*10)):(20+Math.floor(Math.random()*8));'
@@ -714,7 +726,7 @@ export function createSplashWindow() {
     +   'const color=it.color||PALETTE[hashStr(it.text)%PALETTE.length];'
     +   'spawnWord(it.text,color,fontSize,weight);'
     + '},100);'
-    // ─── Two gravity regimes — flip up at t=8s. Apply an upward velocity
+    // ─── Two gravity regimes — flip up at t=10s. Apply an upward velocity
     // impulse to every dynamic body so the settled pile launches together
     // rather than waiting for the new gravity field to accelerate them.
     + 'hydraSplashSetTimeout(function(){'
@@ -725,21 +737,24 @@ export function createSplashWindow() {
     +     'Body.setVelocity(b,{x:b.velocity.x+(Math.random()-0.5)*2.5,y:-3.5-Math.random()*1.5});'
     +     'Body.setAngularVelocity(b,b.angularVelocity+(Math.random()-0.5)*0.08);'
     +   '}'
-    + '},8000);'
+    + '},HYDRA_SPLASH_EXIT_MS);'
     // One owned requestAnimationFrame loop steps Matter and paints the canvas.
     // Matter.Runner is intentionally not used here: it schedules its own
     // browser frame loop, which would double the splash's RAF traffic because
     // we already own a throttled paint loop.
-    + 'function disposeHydraSplash(){'
-    +   'if(hydraSplashDisposed)return;hydraSplashDisposed=true;'
-    +   'for(let i=0;i<hydraSplashTimers.length;i++){clearTimeout(hydraSplashTimers[i]);clearInterval(hydraSplashTimers[i]);}'
-    +   'hydraSplashTimers.length=0;'
+    + 'function disposeHydraSplash(reason="manual"){'
+    +   'if(hydraSplashDisposed)return hydraSplashRefreshDiagnostics();hydraSplashDisposed=true;'
+    +   'while(hydraSplashTimers.length){const id=hydraSplashTimers.pop();clearTimeout(id);clearInterval(id);}'
     +   'if(hydraSplashRaf)cancelAnimationFrame(hydraSplashRaf);hydraSplashRaf=0;'
-    +   'window.removeEventListener("resize",size);window.removeEventListener("resize",rebuildWalls);'
-    +   'try{Eng.clear(engine);Wld.clear(engine.world,false);}catch(err){console.warn("[hydra-splash] dispose failed:",err&&err.message?err.message:err);}'
+    +   'window.removeEventListener("resize",size);window.removeEventListener("resize",rebuildWalls);window.removeEventListener("deviceorientation",onHydraSplashDeviceOrientation);window.removeEventListener("devicemotion",onHydraSplashDeviceMotion);'
+    +   'try{Eng.clear(engine);Wld.clear(engine.world,false);hydraSplashDiagnostics.matterCleared=true;}catch(err){console.warn("[hydra-splash] dispose failed:",err&&err.message?err.message:err);}'
+    +   'hydraSplashDiagnostics.disposed=true;hydraSplashDiagnostics.disposeReason=reason;hydraSplashDiagnostics.disposedAt=Date.now();hydraSplashDiagnostics.bodyCount=0;hydraSplashDiagnostics.dynamicBodyCount=0;hydraSplashRefreshDiagnostics();'
+    +   'console.info("[hydra-splash] diagnostics",JSON.stringify(hydraSplashDiagnostics));if(window.hydraSplash&&window.hydraSplash.reportDiagnostics)window.hydraSplash.reportDiagnostics(hydraSplashDiagnostics);'
+    +   'return hydraSplashDiagnostics;'
     + '}'
-    + 'window.addEventListener("beforeunload",disposeHydraSplash,{once:true});'
-    + 'hydraSplashSetTimeout(disposeHydraSplash,12500);'
+    + 'window.__HYDRA_DISPOSE_SPLASH__=disposeHydraSplash;'
+    + 'window.addEventListener("beforeunload",function(){disposeHydraSplash("beforeunload");},{once:true});'
+    + 'hydraSplashSetTimeout(function(){disposeHydraSplash("timeout");},HYDRA_SPLASH_DISPOSE_MS);'
     // ─── Render — draw each body as a rotated glyph at its world transform.
     + 'const HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45,HYDRA_SPLASH_RENDER_FRAME_MS=1000/30;'
     + 'let hydraSplashLastFrame=0,hydraSplashPhysicsCarry=0,hydraSplashLastRender=0;'
@@ -750,12 +765,15 @@ export function createSplashWindow() {
     +   'let delta=Math.min(now-hydraSplashLastFrame,1000/15);'
     +   'hydraSplashLastFrame=now;hydraSplashPhysicsCarry+=delta;'
     +   'let steps=0;'
+    +   'engine.world.gravity.x=hydraSplashTiltGravityX;'
     +   'while(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2){Eng.update(engine,HYDRA_SPLASH_PHYSICS_STEP_MS);hydraSplashPhysicsCarry-=HYDRA_SPLASH_PHYSICS_STEP_MS;steps++;}'
+    +   'hydraSplashDiagnostics.physicsSteps+=steps;'
     +   'if(steps>=2)hydraSplashPhysicsCarry=0;'
     +   'if(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS)return;'
     +   'hydraSplashLastRender=now;'
     +   'ctx.clearRect(0,0,W(),H());'
     +   'const all=Comp.allBodies(engine.world);'
+    +   'let dynamicCount=0;for(let c=0;c<all.length;c++){if(!all[c].isStatic)dynamicCount++;}hydraSplashDiagnostics.bodyCount=all.length;hydraSplashDiagnostics.dynamicBodyCount=dynamicCount;hydraSplashDiagnostics.renderFrames++;'
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
     +     'if(b.isStatic||!b.plugin||!b.plugin.hydra)continue;'
     +     'const m=b.plugin.hydra;'
@@ -769,7 +787,7 @@ export function createSplashWindow() {
     +     'ctx.restore();'
     +   '}'
     + '}'
-    + 'hydraSplashRaf=requestAnimationFrame(render);'
+    + 'hydraSplashRaf=requestAnimationFrame(render);hydraSplashRefreshDiagnostics();'
     + '})();</script>'
     + '</body></html>';
 

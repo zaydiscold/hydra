@@ -324,12 +324,15 @@ app.whenReady().then(async () => {
     //             CSS keyframes that just looped). 10s gives the physics
     //             enough time for the pile to settle into a recognizable
     //             pile rather than dismissing mid-bounce.
+    //  12000 ms — +2s density pass (2026-05-26). User feedback: the new
+    //             falling animation looks good; let it breathe longer and
+    //             fill more of the screen before the main window takes over.
     //
     // PROGRESS-BAR LOCKSTEP: the splash canvas physics is self-contained,
     // but the `fillbar` keyframe in windows.js still measures perceived
     // progress for the user. Keep that keyframe duration in lockstep with
     // this constant so the bar reaches 100% as the splash dismisses.
-    const SPLASH_MIN_VISIBLE_MS = 10000;
+    const SPLASH_MIN_VISIBLE_MS = 12000;
     const splashElapsed = Date.now() - splashStartedAt;
     if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
       await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));
@@ -339,6 +342,18 @@ app.whenReady().then(async () => {
     // window literally does not exist — there is no race with main.
     const sp = getSplashWindow();
     if (sp && !sp.isDestroyed()) {
+      try {
+        const splashDiagnostics = await sp.webContents.executeJavaScript(
+          'window.__HYDRA_DISPOSE_SPLASH__ && window.__HYDRA_DISPOSE_SPLASH__("main-destroy")',
+          true,
+        );
+        if (splashDiagnostics && typeof splashDiagnostics === 'object') {
+          console.warn('[hydra-splash] diagnostics', JSON.stringify(splashDiagnostics));
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } catch (disposeErr) {
+        console.warn('[electron] splash diagnostics dispose failed:', disposeErr?.message || disposeErr);
+      }
       sp.setAlwaysOnTop(false);
       sp.destroy();
     }

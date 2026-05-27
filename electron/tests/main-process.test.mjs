@@ -154,6 +154,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /hydraSplash\.onUpdateProgress/);
     assert.match(splashPreload, /contextBridge\.exposeInMainWorld\('hydraSplash'/);
     assert.match(splashPreload, /hydra-update-progress/);
+    assert.match(splashPreload, /hydra-splash-diagnostics/);
+    assert.match(splashPreload, /reportDiagnostics/);
     assert.match(builder, /publish:\s*\n\s*provider: github\s*\n\s*owner: zaydiscold\s*\n\s*repo: hydra/);
     assert.match(pkg, /"electron-updater":/);
   });
@@ -268,9 +270,15 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
 
   it('splash physics and animation loops have a finite cleanup path', () => {
     const windows = readFileSync(resolve(APP_DIR, 'windows.js'), 'utf-8');
+    const surface = readMainProcessSurface();
 
     assert.match(windows, /let hydraSplashDisposed=false/);
-    assert.match(windows, /function disposeHydraSplash\(\)/);
+    assert.match(windows, /function disposeHydraSplash\(reason="manual"\)/);
+    assert.match(windows, /HYDRA_SPLASH_DURATION_MS=12000/);
+    assert.match(windows, /HYDRA_SPLASH_EXIT_MS=10000/);
+    assert.match(windows, /HYDRA_SPLASH_DISPOSE_MS=14500/);
+    assert.match(windows, /HYDRA_SPLASH_TARGET=92/);
+    assert.match(windows, /window\.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics/);
     assert.match(windows, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
     assert.match(windows, /Eng\.update\(engine,HYDRA_SPLASH_PHYSICS_STEP_MS\)/);
     assert.doesNotMatch(windows, /Run\.create/);
@@ -278,10 +286,25 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /Eng\.clear\(engine\)/);
     assert.match(windows, /cancelAnimationFrame\(hydraSplashRaf\)/);
     assert.match(windows, /window\.removeEventListener\("resize",size\)/);
-    assert.match(windows, /window\.addEventListener\("beforeunload",disposeHydraSplash,\{once:true\}\)/);
-    assert.match(windows, /hydraSplashSetTimeout\(disposeHydraSplash,12500\)/);
+    assert.match(windows, /window\.addEventListener\("beforeunload",function\(\)\{disposeHydraSplash\("beforeunload"\);\},\{once:true\}\)/);
+    assert.match(windows, /hydraSplashSetTimeout\(function\(\)\{disposeHydraSplash\("timeout"\);\},HYDRA_SPLASH_DISPOSE_MS\)/);
     assert.match(windows, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
     assert.match(windows, /if\(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS\)return/);
+    assert.match(windows, /window\.removeEventListener\("deviceorientation",onHydraSplashDeviceOrientation\)/);
+    assert.match(windows, /window\.removeEventListener\("devicemotion",onHydraSplashDeviceMotion\)/);
+    assert.match(windows, /console\.info\("\[hydra-splash\] diagnostics",JSON\.stringify\(hydraSplashDiagnostics\)\)/);
+    assert.match(windows, /window\.hydraSplash\.reportDiagnostics\(hydraSplashDiagnostics\)/);
+    assert.match(windows, /window\.__HYDRA_DISPOSE_SPLASH__=disposeHydraSplash/);
+    assert.match(windows, /if\(hydraSplashDisposed\)return hydraSplashRefreshDiagnostics\(\)/);
+    assert.match(windows, /return hydraSplashDiagnostics/);
+    assert.match(surface, /sp\.webContents\.executeJavaScript/);
+    assert.match(surface, /__HYDRA_DISPOSE_SPLASH__\("main-destroy"\)/);
+    assert.match(surface, /const splashDiagnostics = await sp\.webContents\.executeJavaScript/);
+    assert.match(surface, /JSON\.stringify\(splashDiagnostics\)/);
+    assert.match(surface, /SPLASH_DIAGNOSTICS_CHANNEL = 'hydra-splash-diagnostics'/);
+    assert.match(surface, /ipcMain\.on\(SPLASH_DIAGNOSTICS_CHANNEL/);
+    assert.match(surface, /console\.warn\('\[hydra-splash\] diagnostics'/);
+    assert.match(surface, /summarizeSplashDiagnostics/);
     assert.doesNotMatch(windows, /setInterval\(\(\)=>\{if\(updateActive\)return;/);
   });
 

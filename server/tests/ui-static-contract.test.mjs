@@ -102,12 +102,20 @@ test('ambient app chrome animations settle after launch instead of running forev
 test('splash owns one throttled physics and render loop', () => {
   const windowsJs = readRepoFile('electron/app/windows.js');
 
+  assert.match(windowsJs, /HYDRA_SPLASH_DURATION_MS=12000/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=10000/);
+  assert.match(windowsJs, /HYDRA_SPLASH_DISPOSE_MS=14500/);
+  assert.match(windowsJs, /HYDRA_SPLASH_TARGET=92/);
   assert.match(windowsJs, /const maxPixels=2800000/);
   assert.match(windowsJs, /Math\.sqrt\(maxPixels\/\(w\*h\)\)/);
   assert.match(windowsJs, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
   assert.match(windowsJs, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
   assert.match(windowsJs, /Eng\.update\(engine,HYDRA_SPLASH_PHYSICS_STEP_MS\)/);
   assert.match(windowsJs, /while\(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2\)/);
+  assert.match(windowsJs, /window\.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics/);
+  assert.match(windowsJs, /window\.addEventListener\("deviceorientation",onHydraSplashDeviceOrientation\)/);
+  assert.match(windowsJs, /engine\.world\.gravity\.x=hydraSplashTiltGravityX/);
+  assert.match(windowsJs, /hydraSplashDiagnostics\.physicsSteps\+=steps/);
   assert.doesNotMatch(windowsJs, /Run\.create/);
   assert.doesNotMatch(windowsJs, /Run\.run/);
   assert.doesNotMatch(windowsJs, /Run\.stop/);
