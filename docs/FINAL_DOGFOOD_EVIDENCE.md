@@ -74,6 +74,16 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   in-process cache. Local timing with `372` cached models reduced repeated
   `/api/pool/models` reads from a direct-Prisma `1.548ms` average in the
   comparison run to `0.000419ms` warm in-process (`99.973%`) over `200` rounds.
+- Packaged-window screenshot capture is partially verified without browser
+  substitution: CoreGraphics found the already-running packaged Hydra dashboard
+  window (`CGWindowID 31589`, title `Hydra — Dashboard`), `screencapture -l`
+  captured that Electron window, and ImageMagick redacted local account data.
+  Redacted artifact:
+  `docs/evidence/hydra-packaged-dashboard-20260527T183013Z-redacted.png`
+  (`sha256 05a5b416c73edf9c1278e8d5ad562552733cb6f6d41c4c2512f45e386d9db076`).
+  This is not the complete packaged screenshot audit: Computer Use timed out
+  twice, System Events lacked Accessibility permission, and only the Dashboard
+  route was captured.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
