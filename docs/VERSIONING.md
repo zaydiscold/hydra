@@ -13,11 +13,42 @@ The next complete performance release should be a **minor** release, not another
 patch-only release. If `package.json` is still at `1.0.20` when the final gate is
 ready, the intended release is `1.1.0`.
 
+This is intentional release-train behavior:
+
+- `1.0.20` is the latest package metadata and tag line at the time of this doc
+  update, not the target size for the next user-visible release.
+- Every `[skip-bump]` push is still real work on `origin/master`; it is just not
+  allowed to auto-publish to users yet.
+- The performance tranche is being batched because the changes are connected:
+  splash timing/density/tilt, finite graphics cleanup, renderer timer ownership,
+  browser-profile cleanup, request-log/proxy hot-path work, auth/session
+  hardening, and measured idle/process evidence.
+- The final release commit for this tranche should carry `[bump:minor]`, which
+  makes auto-version write `1.1.0` from the current `1.0.x` line.
+- Do not cut another patch just because `package.json` currently says `1.0.x`.
+  Patch is for isolated fixes; this is now a coherent performance and UX train.
+
 That means there can be many pushed source commits between public release
 versions. A `[skip-bump]` commit is not "unreleased work floating locally"; it is
 an intentional checkpoint on `origin/master` that keeps the repository backed up,
 reviewable, and CI-verified while preventing auto-update users from receiving a
 package before the acceptance evidence is complete.
+
+The practical source-of-truth check is:
+
+```bash
+git fetch origin
+git status --short --branch
+git log --oneline --decorate --max-count=10
+gh run list --branch master --limit 10
+```
+
+Expected during the tranche: local `master` equals `origin/master`, recent
+commits are visible on GitHub with `[skip-bump]`, Auto-version is skipped for
+those checkpoints, and CI/Docker keep validating the remote state. Expected at
+the end: one non-`[skip-bump]` commit with `[bump:minor]` triggers auto-version,
+creates `chore(release): v1.1.0 [skip-bump]`, pushes tag `v1.1.0`, and dispatches
+the desktop release workflow.
 
 ## Bump Rules
 
@@ -85,6 +116,32 @@ If the final tranche changes backward compatibility before release, replace
 `[bump:minor]` with `[bump:major]` and document the migration. No current change
 requires that.
 
+## Exact Release Commit Shape
+
+Use a normal source/docs commit for checkpoints:
+
+```bash
+git commit -m "perf(proxy): cache client model lists [skip-bump]"
+git push origin master
+```
+
+Use the final release trigger only after the acceptance list and evidence are
+complete:
+
+```bash
+git commit -m "Release performance and startup tranche [bump:minor]"
+git push origin master
+```
+
+The final commit message should not include `[skip-bump]`. Auto-version reads
+the latest commit message, sees `[bump:minor]`, bumps the middle component, and
+tags the resulting version. If the current package metadata is still `1.0.20`,
+that produces `1.1.0`, not `1.0.21`.
+
+The release trigger is deliberately commit-message based so no one has to edit
+the workflow by hand for patch/minor/major releases. The only manual choice is
+the bump marker in the final commit message.
+
 ## Splash Density And Tilt In The Version Notes
 
 The user-visible splash changes belong in the minor release notes because they
@@ -115,6 +172,19 @@ some hardware, but normal Electron does not expose the MacBook hinge sensor.
 Hydra's current implementation is still valuable because it has a graceful
 fallback and because all tilt-related work is bounded by the splash disposal
 contract.
+
+Release-note wording should be precise:
+
+- Correct: "Splash physics now supports opportunistic device tilt when Chromium
+  exposes motion/orientation sensors, with a bounded fallback lean when no sensor
+  exists."
+- Correct: "The tilt value affects horizontal gravity, spawn x-bias, and initial
+  word x velocity, then is smoothed before each Matter.js step."
+- Incorrect: "Hydra reads the MacBook screen hinge angle." That is not exposed
+  by Electron today and would need a native macOS HID bridge.
+- Incorrect: "The splash keeps running in the background." The release must keep
+  claiming the opposite only while diagnostics prove Matter, RAF, timers,
+  listeners, and optional sensors are disposed.
 
 Keep the release notes honest: source contracts can prove the wiring, but real
 sensor behavior needs packaged-app evidence on hardware that exposes one of the

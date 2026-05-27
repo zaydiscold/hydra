@@ -181,6 +181,16 @@ source/doc hardening commits use `[skip-bump]`; the current performance tranche
 is intended to ship as a minor release with `[bump:minor]` once the release audit
 and dogfood evidence are complete.
 
+Current release-train docs:
+
+- [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
+  checkpoints, and the final `[bump:minor]` path to `1.1.0`.
+- [Splash Tilt Research](docs/SPLASH_TILT_RESEARCH.md): how the 12 second,
+  92-word splash uses opportunistic device tilt, fallback lean, and bounded
+  Matter.js/RAF/sensor cleanup.
+- [Release Audit](docs/RELEASE_AUDIT.md): measured performance evidence,
+  packaged-app evidence, and the remaining manual dogfood blockers.
+
 ## Star History
 
 <a href="https://www.star-history.com/#zaydiscold/hydra&Date">

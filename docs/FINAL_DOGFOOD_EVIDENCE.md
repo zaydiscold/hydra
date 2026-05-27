@@ -17,7 +17,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
 - The 2026-05-27 five-minute packaged idle profiles kept the four Hydra-owned
   processes around `0.0%` to `0.2%` CPU, with RSS dropping from `423.23 MB` to
   `414.91 MB`, from `421.53 MB` to `399.09 MB`, and from `402.78 MB` to
-  `367.83 MB` across no-relaunch samples of the already-running package.
+  `367.83 MB` across no-relaunch samples of the already-running package. A
+  later fresh no-relaunch sample in
+  `/private/tmp/hydra-profile-20260527T174343Z-fresh-current` kept Hydra at
+  `0.0%` CPU with RSS dropping from `298.69 MB` to `277.45 MB`.
 - `hydra doctor` now separates Hydra-owned process load from unrelated
   Chrome/CDP/browser-tooling load, which stayed heavy and was intentionally not
   closed.
@@ -33,6 +36,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   x input affects horizontal gravity, spawn-position bias, and initial x
   velocity. Exact MacBook hinge-angle support remains a future native HID bridge,
   not a claimed packaged feature.
+- Versioning for the current tranche is explicitly minor-release scoped:
+  checkpoint commits keep using `[skip-bump]`, and the final release trigger
+  should use `[bump:minor]` so the batched performance/splash/runtime work ships
+  as `1.1.0` if the package is still in the `1.0.x` lane.
 - A redirected temp package build found and fixed a packaging hygiene issue where
   stale `release/**` output could be copied into `Resources/app/release/**` when
   output was redirected outside the repo. A follow-up temp package build passed
