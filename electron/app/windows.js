@@ -587,7 +587,7 @@ export function createSplashWindow() {
     + 'let phaseIndex=0,updateActive=false;'
     + 'const HYDRA_SPLASH_DURATION_MS=12000,HYDRA_SPLASH_EXIT_MS=10000,HYDRA_SPLASH_DISPOSE_MS=14500,HYDRA_SPLASH_TARGET=92;'
     + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0;'
-    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,target:HYDRA_SPLASH_TARGET,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0}};'
+    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,target:HYDRA_SPLASH_TARGET,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
     + 'window.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics;'
     + 'function hydraSplashRefreshDiagnostics(){hydraSplashDiagnostics.timers=hydraSplashTimers.length;hydraSplashDiagnostics.rafActive=Boolean(hydraSplashRaf)&&!hydraSplashDisposed;return hydraSplashDiagnostics;}'
     + 'function hydraSplashRemoveTimer(id){const i=hydraSplashTimers.indexOf(id);if(i>=0)hydraSplashTimers.splice(i,1);hydraSplashRefreshDiagnostics();}'
@@ -626,12 +626,24 @@ export function createSplashWindow() {
     // intro gravity. matter.js gravity is dimensionless × scale. scale=0.0012
     // gives ~1.0 g a fall feel comparable to Pica\'s introGravity.
     + 'engine.world.gravity.x=0;engine.world.gravity.y=1.0;engine.world.gravity.scale=0.0012;'
-    + 'const hydraSplashFallbackLean=(Math.random()<0.5?-1:1)*0.035;let hydraSplashTiltGravityX=hydraSplashFallbackLean;'
+    + 'const hydraSplashFallbackLean=(Math.random()<0.5?-1:1)*0.035;let hydraSplashTiltGravityX=hydraSplashFallbackLean;let hydraSplashTiltSensor=null;'
     + 'hydraSplashDiagnostics.tilt.gravityX=hydraSplashTiltGravityX;'
     + 'function setHydraSplashTiltGravity(x,source){if(hydraSplashDisposed)return;const n=Number(x);if(!Number.isFinite(n))return;hydraSplashTiltGravityX=Math.max(-0.55,Math.min(0.55,n));hydraSplashDiagnostics.tilt.supported=source!=="fallback";hydraSplashDiagnostics.tilt.source=source;hydraSplashDiagnostics.tilt.gravityX=hydraSplashTiltGravityX;}'
     + 'function onHydraSplashDeviceOrientation(evt){const gamma=Number(evt&&evt.gamma);if(Number.isFinite(gamma))setHydraSplashTiltGravity(gamma/90,"deviceorientation");}'
     + 'function onHydraSplashDeviceMotion(evt){const g=evt&&evt.accelerationIncludingGravity;const x=g&&Number(g.x);if(Number.isFinite(x))setHydraSplashTiltGravity(x/9.81,"devicemotion");}'
     + 'window.addEventListener("deviceorientation",onHydraSplashDeviceOrientation);window.addEventListener("devicemotion",onHydraSplashDeviceMotion);'
+    + 'function startHydraSplashGenericTiltSensor(){'
+    +   'const SensorCtor=window.GravitySensor||window.Accelerometer;'
+    +   'if(typeof SensorCtor!=="function")return;'
+    +   'try{'
+    +     'hydraSplashTiltSensor=new SensorCtor({frequency:15});'
+    +     'hydraSplashDiagnostics.tilt.sensorApi=SensorCtor.name||"GenericSensor";'
+    +     'hydraSplashTiltSensor.addEventListener("reading",function(){const x=Number(hydraSplashTiltSensor&&hydraSplashTiltSensor.x);if(Number.isFinite(x))setHydraSplashTiltGravity(x/9.81,hydraSplashDiagnostics.tilt.sensorApi);});'
+    +     'hydraSplashTiltSensor.addEventListener("error",function(evt){const err=evt&&evt.error;hydraSplashDiagnostics.tilt.error=(err&&err.name?err.name:"SensorError")+(err&&err.message?": "+err.message:"");});'
+    +     'hydraSplashTiltSensor.start();'
+    +   '}catch(err){hydraSplashTiltSensor=null;hydraSplashDiagnostics.tilt.sensorApi=SensorCtor.name||"GenericSensor";hydraSplashDiagnostics.tilt.error=(err&&err.name?err.name:"SensorError")+(err&&err.message?": "+err.message:"");}'
+    + '}'
+    + 'startHydraSplashGenericTiltSensor();'
     // ─── HARD WALLS at the viewport edges ────────────────────────────────
     // Each wall is 400 px thick and extends 3× the viewport dimension along
     // its length, so even a body integrated past the visible edge during
@@ -746,7 +758,7 @@ export function createSplashWindow() {
     +   'if(hydraSplashDisposed)return hydraSplashRefreshDiagnostics();hydraSplashDisposed=true;'
     +   'while(hydraSplashTimers.length){const id=hydraSplashTimers.pop();clearTimeout(id);clearInterval(id);}'
     +   'if(hydraSplashRaf)cancelAnimationFrame(hydraSplashRaf);hydraSplashRaf=0;'
-    +   'window.removeEventListener("resize",size);window.removeEventListener("resize",rebuildWalls);window.removeEventListener("deviceorientation",onHydraSplashDeviceOrientation);window.removeEventListener("devicemotion",onHydraSplashDeviceMotion);'
+    +   'window.removeEventListener("resize",size);window.removeEventListener("resize",rebuildWalls);window.removeEventListener("deviceorientation",onHydraSplashDeviceOrientation);window.removeEventListener("devicemotion",onHydraSplashDeviceMotion);if(hydraSplashTiltSensor&&typeof hydraSplashTiltSensor.stop==="function"){try{hydraSplashTiltSensor.stop();}catch(err){hydraSplashDiagnostics.tilt.error=(err&&err.name?err.name:"SensorStopError")+(err&&err.message?": "+err.message:"");}}hydraSplashTiltSensor=null;'
     +   'try{Eng.clear(engine);Wld.clear(engine.world,false);hydraSplashDiagnostics.matterCleared=true;}catch(err){console.warn("[hydra-splash] dispose failed:",err&&err.message?err.message:err);}'
     +   'hydraSplashDiagnostics.disposed=true;hydraSplashDiagnostics.disposeReason=reason;hydraSplashDiagnostics.disposedAt=Date.now();hydraSplashDiagnostics.bodyCount=0;hydraSplashDiagnostics.dynamicBodyCount=0;hydraSplashRefreshDiagnostics();'
     +   'console.info("[hydra-splash] diagnostics",JSON.stringify(hydraSplashDiagnostics));if(window.hydraSplash&&window.hydraSplash.reportDiagnostics)window.hydraSplash.reportDiagnostics(hydraSplashDiagnostics);'

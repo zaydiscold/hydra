@@ -290,6 +290,9 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /hydraSplashSetTimeout\(function\(\)\{disposeHydraSplash\("timeout"\);\},HYDRA_SPLASH_DISPOSE_MS\)/);
     assert.match(windows, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
     assert.match(windows, /if\(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS\)return/);
+    assert.match(windows, /window\.GravitySensor\|\|window\.Accelerometer/);
+    assert.match(windows, /hydraSplashTiltSensor\.start\(\)/);
+    assert.match(windows, /hydraSplashTiltSensor\.stop\(\)/);
     assert.match(windows, /window\.removeEventListener\("deviceorientation",onHydraSplashDeviceOrientation\)/);
     assert.match(windows, /window\.removeEventListener\("devicemotion",onHydraSplashDeviceMotion\)/);
     assert.match(windows, /console\.info\("\[hydra-splash\] diagnostics",JSON\.stringify\(hydraSplashDiagnostics\)\)/);

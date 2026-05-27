@@ -114,6 +114,9 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /while\(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2\)/);
   assert.match(windowsJs, /window\.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics/);
   assert.match(windowsJs, /window\.addEventListener\("deviceorientation",onHydraSplashDeviceOrientation\)/);
+  assert.match(windowsJs, /window\.GravitySensor\|\|window\.Accelerometer/);
+  assert.match(windowsJs, /hydraSplashTiltSensor\.start\(\)/);
+  assert.match(windowsJs, /hydraSplashTiltSensor\.stop\(\)/);
   assert.match(windowsJs, /engine\.world\.gravity\.x=hydraSplashTiltGravityX/);
   assert.match(windowsJs, /hydraSplashDiagnostics\.physicsSteps\+=steps/);
   assert.doesNotMatch(windowsJs, /Run\.create/);
