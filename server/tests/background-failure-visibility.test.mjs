@@ -354,6 +354,9 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   assert.match(proxy, /Model list fallback used because live\/cache lookup failed: \$\{err\?\.message \|\| err\}/);
   assert.match(proxy, /formatPrismaError\(fallbackErr, 'create RequestLog placeholder without keyHash'\)/);
   assert.match(proxy, /enqueueRequestLog/, 'non-stream proxy request logs must use the bounded request-log buffer');
+  assert.match(proxy, /const requestLogPromise = createRequestLog\(/, 'stream proxy logging must not block first-byte forwarding on the placeholder DB write');
+  assert.match(proxy, /forwardSseStream[\s\S]*requestLogPromise\.then/, 'stream proxy finalization should wait for the placeholder only after forwarding settles');
+  assert.doesNotMatch(proxy, /const requestLog = await createRequestLog\(/);
   assert.match(proxy, /MAX_IN_FLIGHT/, 'proxy must have an explicit in-flight guard for sustained router load');
   assert.match(proxy, /logger\.debug\(`\[PROXY\] \$\{req\.method\}/, 'proxy success logging must stay off info level on the hot path');
   assert.doesNotMatch(proxy, /upstreamRes\.text\(\); \} catch \{ \/\* ignore \*\/ \}/);

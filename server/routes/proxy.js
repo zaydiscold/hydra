@@ -443,7 +443,7 @@ router.use(async (req, res) => {
       res.status(upstreamRes.status);
 
       if (isStream && upstreamRes.body) {
-        const requestLog = await createRequestLog(
+        const requestLogPromise = createRequestLog(
           keyEntry.hash,
           currentModel(),
           upstreamRes.status,
@@ -469,10 +469,16 @@ router.use(async (req, res) => {
             logger.warn(`[PROXY] Stream interrupted: ${reason}`);
           }
 
-          updateRequestLog(requestLog?.id, finalModel, latency, finalUsage);
+          return requestLogPromise.then((requestLog) => {
+            updateRequestLog(requestLog?.id, finalModel, latency, finalUsage);
+          });
         }).catch((err) => {
           logger.error(`[PROXY] Stream forwarder failed: ${err.message}`);
-          updateRequestLog(requestLog?.id, currentModel(), Date.now() - startTime, {});
+          return requestLogPromise.then((requestLog) => {
+            updateRequestLog(requestLog?.id, currentModel(), Date.now() - startTime, {});
+          });
+        }).catch((err) => {
+          logger.error(`[PROXY] Stream request-log finalization failed: ${err.message}`);
         });
         return;
       }

@@ -201,6 +201,7 @@ function buildAudit() {
   const rotationManager = safeRead('server/services/rotation-manager.js');
   const store = safeRead('server/services/store.js');
   const legacyStorage = safeRead('server/services/legacy-storage.js');
+  const proxyRoute = safeRead('server/routes/proxy.js');
   const backgroundFailureTest = safeRead('server/tests/background-failure-visibility.test.mjs');
   const sessionRefresher = safeRead('server/services/session-refresher.js');
   const healthPinger = safeRead('server/services/health-pinger.js');
@@ -474,6 +475,9 @@ function buildAudit() {
         && dashboardApi.includes('cleanupEphemeralProfileDir(profileDir)')
         && requestLogBuffer.includes('timer = setTimeout')
         && !requestLogBuffer.includes('timer = setInterval')
+        && proxyRoute.includes('const requestLogPromise = createRequestLog(')
+        && proxyRoute.includes('requestLogPromise.then')
+        && !proxyRoute.includes('const requestLog = await createRequestLog(')
         && requestLogRetention.includes('scheduleNextPrune(RETENTION_INTERVAL_MS)')
         && requestLogRetention.includes('timer = setTimeout')
         && !requestLogRetention.includes('setInterval')

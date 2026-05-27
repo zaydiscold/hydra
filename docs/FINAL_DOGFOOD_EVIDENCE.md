@@ -44,6 +44,12 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   their timeout handle after fast cleanup, and magic-link cleanup only schedules
   a timeout when a pending magic-link entry exists. These are source and
   audit-contract wins until the package is rebuilt and relaunched.
+- Streaming proxy responses now start their `RequestLog` placeholder write in
+  parallel instead of awaiting that Prisma create before `forwardSseStream()`,
+  removing one DB write from the chat/SSE pre-first-byte path while preserving
+  final usage and latency updates. Synthetic 5ms-placeholder timing reduced the
+  isolated pre-forward wait from `6.237ms` average to `0.026ms` average
+  (`99.6%`) over `200` rounds.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
