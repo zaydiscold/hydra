@@ -279,10 +279,17 @@ export default function PoolManager({ addToast }) {
     );
   }, [accounts, search]);
 
-  // UI Handlers
-  const onToggleKey = (hash, checked) => handleToggleKey(hash, checked);
-  const onSyncKeys = (id) => handleSyncKeys(id);
-  const onProvision = (id) => handleAutoProvision(id);
+  // UI Handlers (Memoized to prevent AccountRow re-renders)
+  const onToggleKey = React.useCallback((hash, checked) => handleToggleKey(hash, checked), [handleToggleKey]);
+  const onSyncKeys = React.useCallback((id) => handleSyncKeys(id), [handleSyncKeys]);
+  const onProvision = React.useCallback((id) => handleAutoProvision(id), [handleAutoProvision]);
+
+  const onRegisterKey = React.useCallback((hash, name) => setRegistering({ hash, name }), []);
+  const onAccountAction = React.useCallback((id, action) => {
+    if (action === 'sync') onSyncKeys(id);
+    if (action === 'provision') onProvision(id);
+    if (action === 'settings') navigate(`/account/${id}`);
+  }, [onSyncKeys, onProvision, navigate]);
 
   if (loading && accounts.length === 0) {
     return (
@@ -346,14 +353,10 @@ export default function PoolManager({ addToast }) {
                     key={a.id}
                     account={a}
                     onToggleKey={onToggleKey}
-                    onRegisterKey={(hash, name) => setRegistering({ hash, name })}
+                    onRegisterKey={onRegisterKey}
                     onDisableKey={handleDisableKey}
                     onDeleteKey={setDeleting}
-                    onAccountAction={(id, action) => {
-                      if (action === 'sync') onSyncKeys(id);
-                      if (action === 'provision') onProvision(id);
-                      if (action === 'settings') navigate(`/account/${id}`);
-                    }}
+                    onAccountAction={onAccountAction}
                   />
                 ))
               )}
