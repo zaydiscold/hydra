@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import KeyRow from './KeyRow';
 import {
   UserIcon,
@@ -18,7 +18,7 @@ function StatusDot({ active }) {
   );
 }
 
-export default function AccountRow({
+const AccountRow = memo(function AccountRow({
   account,
   onToggleKey,
   onRegisterKey,
@@ -167,4 +167,6 @@ export default function AccountRow({
       )}
     </div>
   );
-}
+});
+
+export default AccountRow;

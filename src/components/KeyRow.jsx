@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import ScrambleText from './ScrambleText';
 import {
   KeyIcon,
@@ -25,7 +25,7 @@ function StatusDot({ pooled, hasKey }) {
   );
 }
 
-export default function KeyRow({
+const KeyRow = memo(function KeyRow({
   keyData,
   onToggle,
   onRegister,
@@ -200,4 +200,6 @@ export default function KeyRow({
       </div>
     </div>
   );
-}
+});
+
+export default KeyRow;

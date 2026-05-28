@@ -1,0 +1,3 @@
+## 2024-05-23 - React.memo for Dashboard List Rows
+**Learning:** In list-heavy dashboard views like `PoolManager` and `Vault`, rendering performance degrades significantly if complex rows (`AccountRow`, `KeyRow`) re-render on every container state update (e.g., ticking the refresh clock, updating an unrelated item). Unstable callback props (e.g. inline functions) implicitly defeat `React.memo` and cause whole-list re-renders even when the underlying data (`account` or `key`) hasn't changed.
+**Action:** Always wrap list row components (`AccountRow`, `KeyRow`) with `React.memo` and strictly memoize all callback props passed to them from the parent container using `useCallback` to prevent cascading re-renders across the list.
