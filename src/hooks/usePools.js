@@ -177,7 +177,7 @@ export function usePools({ addToast }) {
     }
   }
 
-  async function handleDisableKey(hash, currentlyEnabled) {
+  const handleDisableKey = useCallback(async (hash, currentlyEnabled) => {
     try {
       await api.disablePoolKey(hash, currentlyEnabled);
       if (addToast) addToast(`Key ${currentlyEnabled ? 'disabled' : 're-enabled'}`, 'success');
@@ -185,9 +185,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(`Toggle failed: ${err.message}`, 'error');
     }
-  }
+  }, [addToast, load]);
 
-  async function handleDeleteKey(hash) {
+  const handleDeleteKey = useCallback(async (hash) => {
     try {
       await api.deletePoolKey(hash);
       if (addToast) addToast('Key deleted from OpenRouter and local DB', 'success');
@@ -195,7 +195,7 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(`Delete failed: ${err.message}`, 'error');
     }
-  }
+  }, [addToast, load]);
 
   async function handleReloadPool() {
     setReloadingPool(true);
