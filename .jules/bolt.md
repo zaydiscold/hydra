@@ -1,0 +1,3 @@
+## 2026-05-29 - React List Rendering Optimization
+**Learning:** Wrapping list items (`AccountRow`, `KeyRow`) with `React.memo()` in a UI where global polling and unrelated updates cause heavy parent re-renders can have an outsized performance impact. Passing down stable callbacks (e.g. `useCallback` on event handlers) is necessary to realize these benefits and prevent breaking the `memo` check.
+**Action:** When adding or maintaining data-heavy lists (like accounts or keys), ensure components are wrapped in `memo` and functions passed to them as props maintain referential equality across renders, especially in pages with high-frequency updates or search filtering.
