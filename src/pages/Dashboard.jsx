@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMetrics } from '../hooks/useMetrics';
 import AccountCard from '../components/AccountCard';
@@ -31,6 +31,45 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     fetchDashboard(true);
   }, [addToast, fetchDashboard]);
 
+  const {
+    syncedCount,
+    attentionCount,
+    fleetHealth,
+    burnRate,
+    lastSyncLabel,
+    lastSyncText,
+    activity,
+    statusLabel,
+    statusClass,
+  } = useMemo(() => {
+    const totals = data?.totals || {};
+    const accounts = data?.accounts || [];
+    const sCount = accounts.filter((a) => {
+      const mergedSessionStatus = liveStatuses[a.id] ?? a.sessionStatus;
+      return getAccountDashboardCardState({ ...a, sessionStatus: mergedSessionStatus }).isReady;
+    }).length;
+    const aCount = accounts.length - sCount;
+    const health = getFleetHealth(accounts, liveStatuses);
+    const burn = (totals.totalUsed || 0) / 30;
+    const syncLabel = getLastSyncLabel(accounts);
+    const syncText = formatHeaderSyncLabel(syncLabel);
+    const act = getDashboardActivity(accounts, liveStatuses, cooldownMap);
+    const sLabel = aCount > 0 ? 'FLEET ATTENTION' : accounts.length > 0 ? 'FLEET NOMINAL' : 'FLEET EMPTY';
+    const sClass = aCount > 0 ? 'warning' : accounts.length > 0 ? 'success' : 'neutral';
+
+    return {
+      syncedCount: sCount,
+      attentionCount: aCount,
+      fleetHealth: health,
+      burnRate: burn,
+      lastSyncLabel: syncLabel,
+      lastSyncText: syncText,
+      activity: act,
+      statusLabel: sLabel,
+      statusClass: sClass,
+    };
+  }, [data, liveStatuses, cooldownMap]);
+
   if (loading && !data) {
     return (
       <div className="animate-fade-in">
@@ -51,20 +90,8 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     );
   }
 
-  const totals = data?.totals || {};
   const accounts = data?.accounts || [];
-  const syncedCount = accounts.filter((a) => {
-    const mergedSessionStatus = liveStatuses[a.id] ?? a.sessionStatus;
-    return getAccountDashboardCardState({ ...a, sessionStatus: mergedSessionStatus }).isReady;
-  }).length;
-  const attentionCount = accounts.length - syncedCount;
-  const fleetHealth = getFleetHealth(accounts, liveStatuses);
-  const burnRate = ((totals.totalUsed || 0) / 30);
-  const lastSyncLabel = getLastSyncLabel(accounts);
-  const lastSyncText = formatHeaderSyncLabel(lastSyncLabel);
-  const activity = getDashboardActivity(accounts, liveStatuses, cooldownMap);
-  const statusLabel = attentionCount > 0 ? 'FLEET ATTENTION' : accounts.length > 0 ? 'FLEET NOMINAL' : 'FLEET EMPTY';
-  const statusClass = attentionCount > 0 ? 'warning' : accounts.length > 0 ? 'success' : 'neutral';
+  const totals = data?.totals || {};
 
   return (
     <>
