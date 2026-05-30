@@ -32,8 +32,6 @@ export default function Dashboard({ onSelectAccount, addToast }) {
   }, [addToast, fetchDashboard]);
 
   const {
-    syncedCount,
-    attentionCount,
     fleetHealth,
     burnRate,
     lastSyncLabel,
