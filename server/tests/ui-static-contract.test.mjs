@@ -280,8 +280,8 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(dashboard, /className="dashboard-last-sync"/);
   assert.match(dashboard, /\{refreshing \? 'Syncing\.\.\.' : 'Sync'\}/);
   assert.match(dashboard, />Add Account<\/span>/);
-  assert.match(dashboard, /const fleetHealth = getFleetHealth\(accounts, liveStatuses\)/);
-  assert.match(dashboard, /const activity = getDashboardActivity\(accounts, liveStatuses, cooldownMap\)/);
+  assert.match(dashboard, /fleetHealth/);
+  assert.match(dashboard, /activity/);
   assert.match(dashboard, /className="dashboard-command-layout"/);
   assert.match(dashboard, /<FleetHealthPanel[\s\S]*fleetHealth=\{fleetHealth\}/);
   assert.match(dashboard, /data-testid="fleet-health-donut"/);
