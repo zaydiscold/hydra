@@ -988,3 +988,21 @@ This evidence file is not release-complete by itself. The release remains not co
   used `[skip-bump]`; Auto-version run `26725827316` skipped, CI run
   `26725827309` passed, and Docker workflow run `26725827291` passed runtime
   smoke plus registry image push.
+- A fresh exact-public `v1.4.0` native accessibility retry reproduced the
+  existing Computer Use profiling distortion: `get_app_state("com.zayd.hydra")`
+  timed out after `120s`, the external `SkyComputerUseService` helper held
+  `30.4%` CPU, and Hydra's main process held `69.7%` CPU while the other
+  packaged helpers stayed idle. Terminating only that external helper returned
+  the unchanged four-process Hydra tree to `0.0%` sampled CPU with zero stale
+  profiles. Owner-only raw snapshots are under
+  `/private/tmp/hydra-v140-cua-attach-retry-20260531T151812Z`.
+- Native CoreGraphics enumeration then selected the exact packaged `Hydra`
+  owner and captured Dashboard window `2637` without shadow or browser
+  substitution. The raw account-bearing capture remains owner-only outside
+  the repository. The checked-in
+  `docs/evidence/hydra-v140-packaged-dashboard-privacy-redacted.png` image
+  pixelates everything below the titlebar, hashes to
+  `74789ea47e6a33fff972ac15a40667fe0e99af786aae9e13b3cc65cd3f92fc0f`,
+  has nonzero ImageMagick variance, and returned zero Tesseract OCR matches
+  for credential-shaped or endpoint-shaped text. This is packaged provenance
+  proof only; interactive route review and Touch ID approval remain manual.

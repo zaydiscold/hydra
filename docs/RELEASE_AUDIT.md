@@ -1039,3 +1039,27 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Auto-version run `26725827316` skipped as intended, CI run `26725827309`
   passed, and Docker workflow run `26725827291` passed both runtime smoke and
   registry image push.
+- 2026-05-31 exact-public `v1.4.0` native accessibility retry: a controlled
+  `get_app_state("com.zayd.hydra")` attempt against the settled canonical
+  package again timed out after `120s`. The external
+  `SkyComputerUseService` helper held `30.4%` CPU and continuously requested
+  macOS accessibility attributes; Hydra's main process consequently held
+  `69.7%` CPU while its GPU, network, and renderer helpers remained idle.
+  Terminating only the external helper returned the unchanged four-process
+  Hydra tree to `0.0%` sampled CPU with `493.77 MB` RSS and zero stale Hydra
+  Playwright profiles. Raw owner-only evidence is under
+  `/private/tmp/hydra-v140-cua-attach-retry-20260531T151812Z`; the profiling
+  rule remains: discard measurements after a timed-out accessibility attach.
+- 2026-05-31 exact-public `v1.4.0` native Dashboard privacy proof:
+  CoreGraphics selected the exact `Hydra` window owner and
+  `/usr/sbin/screencapture -x -o -l 2637` captured the canonical packaged
+  Dashboard without browser tooling or window shadow. The raw account-bearing
+  capture remains owner-only outside the repository.
+  `docs/evidence/hydra-v140-packaged-dashboard-privacy-redacted.png`
+  pixelates every pixel below the renderer titlebar before check-in. Its
+  SHA-256 is
+  `74789ea47e6a33fff972ac15a40667fe0e99af786aae9e13b3cc65cd3f92fc0f`;
+  ImageMagick reports `2880x1800`, `3737` colors, and nonzero variance;
+  Tesseract OCR found zero credential-shaped or endpoint-shaped hits. This is
+  packaged-app provenance evidence, not a replacement for the deferred
+  interactive route review.

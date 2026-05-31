@@ -2,7 +2,8 @@
 
 This directory contains the public-safe packaged Electron screenshot checkpoint
 for Hydra. The full representative suite came from exact-public `v1.1.4`; the
-exact-public `v1.3.0` canonical app adds a native Dashboard privacy proof.
+exact-public `v1.3.0` and `v1.4.0` canonical apps add native Dashboard privacy
+proofs.
 
 ## Capture Rules
 
@@ -27,9 +28,9 @@ exact-public `v1.3.0` canonical app adds a native Dashboard privacy proof.
 
 macOS Vision OCR scanned every PNG for email markers, `sk-` key prefixes,
 credential assignments, and uninterrupted token-shaped strings. It found zero
-hits. The `v1.3.0` Dashboard proof was additionally scanned with Tesseract OCR
-for credential-shaped and endpoint-shaped patterns after pixelation. ImageMagick
-reported nonblank color variance for every PNG.
+hits. The `v1.3.0` and `v1.4.0` Dashboard proofs were additionally scanned with
+Tesseract OCR for credential-shaped and endpoint-shaped patterns after
+pixelation. ImageMagick reported nonblank color variance for every PNG.
 
 Computer Use still timed out against Hydra after `120s`, so final human visual
 review remains a manual release boundary.
@@ -48,3 +49,4 @@ review remains a manual release boundary.
 | `hydra-v114-cli-proxy-status-redacted.png` | Rendered from fresh redacted `hydra proxy status` output | `7b71001415d98785ba2763d67eeff3ebecb6dad0f8fa3de1a4bcb316779464e6` |
 | `hydra-v114-cli-doctor-redacted.png` | Rendered from fresh compact `hydra doctor --json` excerpt | `de99d0c9c587e6cc4e31ec44d628e4f85a3443628c7dd5bb399a615071b1df0d` |
 | `hydra-v130-packaged-dashboard-privacy-redacted.png` | Native exact-public Dashboard window, content pixelated below titlebar before check-in | `d09cb79b6c2a819eb3eb7957f6fd33464193d492cfa74bf8aae6badd96e27c6c` |
+| `hydra-v140-packaged-dashboard-privacy-redacted.png` | Native exact-public Dashboard window without shadow, content pixelated below titlebar before check-in | `74789ea47e6a33fff972ac15a40667fe0e99af786aae9e13b3cc65cd3f92fc0f` |

@@ -19,6 +19,14 @@ This was not a splash, renderer, timer, or animation runaway. Terminating the
 stuck external helper returned the same Hydra process tree to `0.0%` sampled
 CPU without relaunching Hydra.
 
+A fresh controlled retry against the exact-public `v1.4.0` package reproduced
+the same failure mode on 2026-05-31. `get_app_state("com.zayd.hydra")` timed
+out after `120s`; external `SkyComputerUseService` held `30.4%` CPU; Hydra's
+main process held `69.7%` CPU while its GPU, network, and renderer helpers
+remained idle. Terminating only that external helper returned the unchanged
+four-process Hydra tree to `0.0%` sampled CPU with zero stale Hydra Playwright
+profiles.
+
 ## Why It Matters
 
 Native accessibility attachment is not suitable for Hydra idle profiling in
@@ -81,6 +89,12 @@ A second sample of the external helper is preserved at:
 /private/tmp/skycomputeruse-highcpu-21327.sample.txt
 ```
 
+The fresh exact-public `v1.4.0` retry and recovery snapshots are preserved at:
+
+```text
+/private/tmp/hydra-v140-cua-attach-retry-20260531T151812Z
+```
+
 ## Recovery
 
 Terminate only the stuck tool-owned helper, then remeasure Hydra without
@@ -103,3 +117,7 @@ The clean post-recovery five-minute sampler is preserved at:
 All 11 samples kept four Hydra-owned processes and zero stale Hydra Playwright
 profiles. CPU stayed between `0.0%` and `0.2%` (`0.091%` average), and RSS
 moved from `505.36 MiB` to `507.20 MiB` (`+1.84 MiB`).
+
+The fresh exact-public `v1.4.0` recovery snapshot kept four Hydra-owned
+processes, returned aggregate Hydra CPU from `69.7%` to `0.0%`, kept RSS at
+`493.77 MB`, and kept stale Hydra Playwright profiles at zero.
