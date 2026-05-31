@@ -23,7 +23,11 @@ import * as store from './store.js';
 import { logger } from './logger.js';
 import { getCredits } from './openrouter.js';
 import { runInBatches } from './batch-runner.js';
-import { cleanupEphemeralProfileDir, resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
+import {
+  cleanupEphemeralProfileDir,
+  launchChromiumPersistentContext,
+  resolveChromiumLaunchOptions,
+} from '../lib/playwright-browser.js';
 import {
   describeAutomationNetworkRoute,
   fetchOptionsWithAutomationProxy,
@@ -2344,11 +2348,11 @@ function playwrightProvisionLaunchOptions(automationRoute = null) {
   return resolveChromiumLaunchOptions({ headless, args });
 }
 
-async function launchManagedChromium(chromium, launchOptions) {
+async function launchManagedChromium(chromium, launchOptions, contextOptions = {}) {
   const profileDir = launchOptions?.userDataDir ?? null;
   try {
-    const browser = await chromium.launch(launchOptions);
-    return { browser, profileDir };
+    const context = await launchChromiumPersistentContext(chromium, launchOptions, contextOptions);
+    return { browser: context.browser(), context, profileDir };
   } catch (err) {
     cleanupEphemeralProfileDir(profileDir);
     throw err;
@@ -2366,6 +2370,11 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     : normalizeAutomationNetworkRoute(selectedAutomationRoute);
   let connectMode = 'launch';
   let profileDir = null;
+  let context = null;
+  const contextOptions = {
+    userAgent: USER_AGENT,
+    proxy: playwrightProxyForAutomation(automationRoute),
+  };
   const browser = cdpUrl
     ? await (async () => {
       provisionStepLog(accountId, 'browser connectOverCDP', { endpoint: cdpUrl });
@@ -2374,21 +2383,18 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     })()
     : await (async () => {
       const launchOptions = playwrightProvisionLaunchOptions(automationRoute);
-      const launched = await launchManagedChromium(chromium, launchOptions);
+      const launched = await launchManagedChromium(chromium, launchOptions, contextOptions);
       profileDir = launched.profileDir;
+      context = launched.context;
       return launched.browser;
     })();
   let page;
-  let context;
   let capturedKey = null;
   const networkLogLines = [];
   let traceStarted = false;
 
   try {
-    context = await browser.newContext({
-      userAgent: USER_AGENT,
-      proxy: playwrightProxyForAutomation(automationRoute),
-    });
+    context ??= await browser.newContext(contextOptions);
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
     try {
       await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: OR_ORIGIN });
@@ -3368,7 +3374,10 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
     headless: !config.HYDRA_PLAYWRIGHT_HEADED,
     args: mergeAutomationLaunchArgs([], automationRoute),
   });
-  const { browser, profileDir } = await launchManagedChromium(chromium, launchOptions);
+  const { browser, context, profileDir } = await launchManagedChromium(chromium, launchOptions, {
+    userAgent: USER_AGENT,
+    proxy: playwrightProxyForAutomation(automationRoute),
+  });
   let result = {
     success: false,
     message: 'Unknown error',
@@ -3395,10 +3404,6 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
   }
 
   try {
-    const context = await browser.newContext({
-      userAgent: USER_AGENT,
-      proxy: playwrightProxyForAutomation(automationRoute),
-    });
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
     const page = await context.newPage();
 
@@ -3616,16 +3621,14 @@ async function syncApiKeysViaPlaywright(sessionCookie, clientCookie, selectedAut
     headless: !config.HYDRA_PLAYWRIGHT_HEADED,
     args: mergeAutomationLaunchArgs([], automationRoute),
   });
-  const { browser, profileDir } = await launchManagedChromium(chromium, launchOptions);
+  const { browser, context, profileDir } = await launchManagedChromium(chromium, launchOptions, {
+    userAgent: USER_AGENT,
+    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+    proxy: playwrightProxyForAutomation(automationRoute),
+  });
   const results = [];
 
   try {
-    const context = await browser.newContext({
-      userAgent: USER_AGENT,
-      extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
-      proxy: playwrightProxyForAutomation(automationRoute),
-    });
-
     await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
 
     const page = await context.newPage();

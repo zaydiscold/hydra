@@ -22,7 +22,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Packaged screenshot plan | Current gallery and splash media come from packaged Electron only and stay redacted; final interactive human visual review remains manual. The superseded Remotion lane is out of scope. | Partially verified |
-| Docker runtime smoke | GitHub Actions run `26725031856` passed both `Runtime Smoke` and `Build & Push` for the latest `v1.4.0` docs checkpoint. A fresh local hardened-image `npm run docker:smoke -- --start` pass also built the image, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` and Playwright probes reported no missing Chromium libraries and `playwright-launch=ok`. | Verified locally and by CI runtime smoke |
+| Docker runtime smoke | GitHub Actions run `26725445050` passed both `Runtime Smoke` and `Build & Push` for the first local Docker-hardening checkpoint. A stricter follow-up local `npm run docker:smoke -- --start` pass also built the trimmed image, launched full Chromium through Hydra's own persistent-context resolver, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` reported no missing Chromium libraries. | Verified locally and by CI runtime smoke |
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
 | Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 | Idle backend performance pass | PR #18 merged as master f74c195 and v1.0.9 includes delayed session/request-log startup sweeps, opt-in session-lifetime probe, relaxed task-supervisor sweep interval, and removed eager renderer live-probe fan-out from dashboard/vault/account-detail page load. CI, Electron package smoke, Docker, and release automation passed after merge. | Verified by CI/release |
@@ -999,3 +999,38 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Docker smoke rebuilt the hardened image with a `78.39 kB` warm context
   transfer, and OpenAPI regenerated `83 operations`. The temporary zip symlink
   moved reversibly to Trash after the run.
+- 2026-05-31 first Docker-hardening checkpoint publication: commit
+  `938180501985fad29b68d1ea3554130bbf65a0b4` used `[skip-bump]`;
+  Auto-version run `26725445052` skipped as intended, CI run `26725445054`
+  passed, and Docker workflow run `26725445050` passed both runtime smoke and
+  registry image push.
+- 2026-05-31 Docker payload and browser-fallback hardening follow-up: local
+  image inspection found `929 MB` under `/root/.cache/ms-playwright`, including
+  an unused `323 MB` `chromium_headless_shell-1208` directory, plus `19 MB` of
+  apt indexes. Rebuilding with `npx playwright install --with-deps chromium
+  --no-shell` removed the shell payload and reduced apt indexes to `4 kB`.
+  Playwright's default `headless: true` path then correctly failed because it
+  still requests the skipped shell. Current Playwright docs identify
+  `channel: 'chromium'` as the full-Chromium new-headless opt-in; the corrected
+  direct container probe passed with that channel.
+- 2026-05-31 shared Playwright-launch repair: the stricter Docker probe exposed
+  that Hydra's browser resolver passed `userDataDir` into `chromium.launch()`,
+  which Playwright rejects with `userDataDir option is not supported in
+  browserType.launch`. `server/lib/playwright-browser.js` now owns
+  `launchChromiumPersistentContext()`, passing the Hydra-owned profile as the
+  first argument to `chromium.launchPersistentContext()` and cleaning it on
+  launch failure. Signup fallback, management-key capture, code-redemption
+  fallback, and API-key sync all use the shared supported path; the intentional
+  CDP opt-in path still uses `browser.newContext()`. `npm run
+  test:browser-isolation` now covers persistent-profile argument placement and
+  failed-launch cleanup.
+- 2026-05-31 trimmed Docker runtime proof: `Dockerfile` sets
+  `HYDRA_PLAYWRIGHT_CHANNEL=chromium`; `npm run docker:smoke` launches Hydra's
+  own full-Chromium persistent-context path in an ephemeral `docker run`
+  before passing; `npm run docker:smoke -- --start` additionally started the
+  compose service, received HTTP `200`, and removed it. Build-only smoke left
+  no compose resources and no `hydra_default` network. Direct image inspection
+  found only `602 MB` full Chromium, `3.3 MB` FFmpeg, `4 kB` apt indexes, and
+  no missing shared libraries. The inspected image changed from
+  `1,151,831,905` to `1,021,264,136` bytes, removing `130,567,769` bytes
+  (`11.3%`) after layer compression.

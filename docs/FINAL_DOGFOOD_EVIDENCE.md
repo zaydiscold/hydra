@@ -969,3 +969,18 @@ This evidence file is not release-complete by itself. The release remains not co
   local Docker smoke, and OpenAPI regeneration (`83 operations`). The
   temporary already-verified public zip symlink used by package smoke moved
   reversibly to Trash afterward.
+- First Docker-hardening checkpoint `938180501985fad29b68d1ea3554130bbf65a0b4`
+  used `[skip-bump]`; CI run `26725445054` passed, Auto-version run
+  `26725445052` skipped, and Docker workflow run `26725445050` passed runtime
+  smoke plus registry push.
+- A stricter local Docker pass then removed Playwright's unused `323 MB`
+  headless-shell directory and `19 MB` of apt indexes, set
+  `HYDRA_PLAYWRIGHT_CHANNEL=chromium` for full-Chromium new-headless mode, and
+  repaired Hydra's shared browser helper to use the supported
+  `chromium.launchPersistentContext(profileDir, options)` API. The stronger
+  `npm run docker:smoke` now launches that Hydra-owned isolated browser path
+  before passing. Build-only smoke left no compose resources or
+  `hydra_default` network; `npm run docker:smoke -- --start` launched the
+  browser, started Hydra, received HTTP `200`, and tore compose down. Direct
+  inspection reported no missing Chromium libraries and an image reduction
+  from `1,151,831,905` to `1,021,264,136` bytes (`11.3%`).

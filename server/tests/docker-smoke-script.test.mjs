@@ -21,6 +21,10 @@ test('docker smoke runner uses bounded docker compose steps', () => {
   assert.match(src, /'compose', 'config'/, 'must validate compose config');
   assert.match(src, /'info'/, 'must check Docker daemon availability');
   assert.match(src, /'compose', 'build'/, 'must build the Docker image');
+  assert.match(src, /probePlaywrightChromium/, 'must launch Playwright Chromium from the built container');
+  assert.match(src, /'run',\s+'--rm',\s+'--entrypoint',\s+'node',\s+'ghcr\.io\/zaydiscold\/hydra:latest'/, 'browser probe must use an ephemeral docker run without creating compose resources');
+  assert.match(src, /launchOptions\.channel !== 'chromium'/, 'must reject a Docker browser launch that is not pinned to full Chromium');
+  assert.match(src, /cleanupEphemeralProfileDir\(profileDir\)/, 'must clean the Docker browser probe profile');
   assert.match(src, /api\/auth\/status/, 'start smoke must probe Hydra health endpoint');
   assert.match(src, /'compose', 'ps', '-a'/, 'must collect compose state on failed start smoke');
   assert.match(src, /'compose', 'logs'/, 'must collect logs on failed start smoke');
@@ -60,7 +64,12 @@ test('custom Docker runtime installs Playwright Chromium system dependencies', (
   const dockerfile = read('Dockerfile');
   assert.match(
     dockerfile,
-    /RUN npx playwright install --with-deps chromium/,
-    'custom Node runtime must install Linux shared libraries before browser-backed fallbacks can launch',
+    /HYDRA_PLAYWRIGHT_CHANNEL=chromium/,
+    'Docker runtime must opt into full Chromium new-headless mode when skipping headless shell',
+  );
+  assert.match(
+    dockerfile,
+    /RUN npx playwright install --with-deps chromium --no-shell\s+\\\s+&& rm -rf \/var\/lib\/apt\/lists\/\*/,
+    'custom Node runtime must install Linux shared libraries, skip unused headless shell, and remove apt indexes',
   );
 });

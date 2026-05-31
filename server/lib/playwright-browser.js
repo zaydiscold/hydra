@@ -12,7 +12,7 @@
  *   4. Default → standard Playwright-managed binary (dev mode)
  *
  * HYDRA_PLAYWRIGHT_CDP_ENDPOINT is intentionally handled at call sites because
- * it uses chromium.connectOverCDP() instead of chromium.launch().
+ * it uses chromium.connectOverCDP() instead of launchChromiumPersistentContext().
  *
  * @module playwright-browser
  */
@@ -158,7 +158,10 @@ export function sweepStaleEphemeralProfiles(minAgeMs = 60_000) {
 /**
  * Resolve Playwright Chromium launch options with proper browser binary resolution.
  *
- * Returns an options object suitable for `chromium.launch()`. Does NOT handle
+ * Returns an options object suitable for `launchChromiumPersistentContext()`.
+ * Do not pass the result directly to `chromium.launch()`: Playwright requires
+ * `userDataDir` as the first argument to `chromium.launchPersistentContext()`.
+ * Does NOT handle
  * `connectOverCDP` — callers should check `config.HYDRA_PLAYWRIGHT_CDP_ENDPOINT`
  * separately and use `chromium.connectOverCDP()` when set.
  *
@@ -169,7 +172,10 @@ export function sweepStaleEphemeralProfiles(minAgeMs = 60_000) {
  *
  * @example
  *   import { resolveChromiumLaunchOptions } from '../lib/playwright-browser.js';
- *   const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true }));
+ *   const context = await launchChromiumPersistentContext(
+ *     chromium,
+ *     resolveChromiumLaunchOptions({ headless: true }),
+ *   );
  */
 export function resolveChromiumLaunchOptions(overrides = {}) {
   const headless = overrides.headless !== undefined
@@ -231,6 +237,33 @@ export function resolveChromiumLaunchOptions(overrides = {}) {
     opts.args = [...overrides.args];
   }
   return finalizeOptions(opts, overrides);
+}
+
+/**
+ * Launch a Hydra-owned persistent Chromium context with a fresh isolated
+ * profile. Playwright does not accept `userDataDir` in `chromium.launch()`;
+ * its supported isolated-profile API is `chromium.launchPersistentContext()`.
+ *
+ * @param {import('playwright').BrowserType} chromium
+ * @param {import('playwright').LaunchPersistentContextOptions & { userDataDir?: string }} launchOptions
+ * @param {import('playwright').LaunchPersistentContextOptions} [contextOptions={}]
+ * @returns {Promise<import('playwright').BrowserContext>}
+ */
+export async function launchChromiumPersistentContext(chromium, launchOptions, contextOptions = {}) {
+  const { userDataDir, ...browserOptions } = launchOptions ?? {};
+  if (typeof userDataDir !== 'string' || !userDataDir) {
+    throw new Error('Hydra Playwright launch requires an isolated userDataDir');
+  }
+
+  try {
+    return await chromium.launchPersistentContext(userDataDir, {
+      ...browserOptions,
+      ...contextOptions,
+    });
+  } catch (err) {
+    cleanupEphemeralProfileDir(userDataDir);
+    throw err;
+  }
 }
 
 /**

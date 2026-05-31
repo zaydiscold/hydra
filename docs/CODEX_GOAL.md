@@ -558,6 +558,21 @@ closed-app CLI commands, tests, and repo-local documentation.
   local Docker smoke, and OpenAPI regeneration (`83 operations`). The
   temporary already-verified public zip symlink used by package smoke moved
   reversibly to Trash afterward.
+- First Docker-hardening checkpoint `938180501985fad29b68d1ea3554130bbf65a0b4`
+  used `[skip-bump]`; CI run `26725445054` passed, Auto-version run
+  `26725445052` skipped, and Docker workflow run `26725445050` passed runtime
+  smoke plus registry push.
+- A stricter local Docker pass then removed Playwright's unused `323 MB`
+  headless-shell directory and `19 MB` of apt indexes, set
+  `HYDRA_PLAYWRIGHT_CHANNEL=chromium` for full-Chromium new-headless mode, and
+  repaired Hydra's shared browser helper to use the supported
+  `chromium.launchPersistentContext(profileDir, options)` API. The stronger
+  `npm run docker:smoke` now launches that Hydra-owned isolated browser path
+  before passing. Build-only smoke left no compose resources or
+  `hydra_default` network; `npm run docker:smoke -- --start` launched the
+  browser, started Hydra, received HTTP `200`, and tore compose down. Direct
+  inspection reported no missing Chromium libraries and an image reduction
+  from `1,151,831,905` to `1,021,264,136` bytes (`11.3%`).
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

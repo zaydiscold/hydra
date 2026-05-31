@@ -916,13 +916,16 @@ function buildAudit() {
       'Docker runtime docs',
       dockerDoc.includes('docker compose down --remove-orphans')
         && dockerDoc.includes('HYDRA_DOCKER_BUILD_TIMEOUT_MS')
-        && dockerDoc.includes('npx playwright install --with-deps chromium')
-        && dockerfile.includes('RUN npx playwright install --with-deps chromium')
+        && dockerDoc.includes('npx playwright install --with-deps chromium --no-shell')
+        && dockerfile.includes('RUN npx playwright install --with-deps chromium --no-shell')
+        && dockerfile.includes('rm -rf /var/lib/apt/lists/*')
+        && dockerfile.includes('HYDRA_PLAYWRIGHT_CHANNEL=chromium')
         && dockerIgnore.includes('\nbuild\n')
         && dockerIgnore.includes('\nvideos\n')
         && dockerIgnore.includes('\nsplash-previews\n')
-        && dockerSmokeTest.includes('custom Docker runtime installs Playwright Chromium system dependencies'),
-      'docs/DOCKER.md and the Docker regression contract require bounded smoke cleanup, a reduced desktop-artifact context, and launchable Playwright Chromium dependencies',
+        && dockerSmokeTest.includes('custom Docker runtime installs Playwright Chromium system dependencies')
+        && dockerSmokeTest.includes('must launch Playwright Chromium from the built container'),
+      'docs/DOCKER.md and the Docker regression contract require bounded smoke cleanup, a reduced desktop-artifact context, launchable Playwright Chromium dependencies, and a full-Chromium new-headless probe',
     ),
     check(
       'docker-runtime',

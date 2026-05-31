@@ -7,6 +7,7 @@ const DEFAULT_TIMEOUTS = {
   config: 15_000,
   info: 20_000,
   build: 30 * 60_000,
+  browser: 90_000,
   up: 120_000,
   health: 90_000,
   ps: 15_000,
@@ -46,6 +47,7 @@ Timeout overrides:
   HYDRA_DOCKER_CONFIG_TIMEOUT_MS
   HYDRA_DOCKER_INFO_TIMEOUT_MS
   HYDRA_DOCKER_BUILD_TIMEOUT_MS
+  HYDRA_DOCKER_BROWSER_TIMEOUT_MS
   HYDRA_DOCKER_UP_TIMEOUT_MS
   HYDRA_DOCKER_HEALTH_TIMEOUT_MS
   HYDRA_DOCKER_PS_TIMEOUT_MS
@@ -178,6 +180,51 @@ async function cleanupContainer() {
   );
 }
 
+async function probePlaywrightChromium() {
+  const script = `
+    import { chromium } from 'playwright-core';
+    import {
+      cleanupEphemeralProfileDir,
+      launchChromiumPersistentContext,
+      resolveChromiumLaunchOptions,
+    } from './server/lib/playwright-browser.js';
+
+    const launchOptions = resolveChromiumLaunchOptions({
+      headless: true,
+      args: ['--no-sandbox'],
+    });
+    if (launchOptions.channel !== 'chromium') {
+      throw new Error('Docker browser probe expected channel=chromium; got ' + launchOptions.channel);
+    }
+
+    const profileDir = launchOptions.userDataDir;
+    let context;
+    try {
+      context = await launchChromiumPersistentContext(chromium, launchOptions);
+      console.log('[docker:smoke] Playwright full Chromium launch responded');
+    } finally {
+      await context?.close();
+      cleanupEphemeralProfileDir(profileDir);
+    }
+  `;
+
+  await runStep(
+    'Playwright Chromium launch',
+    'docker',
+    [
+      'run',
+      '--rm',
+      '--entrypoint',
+      'node',
+      'ghcr.io/zaydiscold/hydra:latest',
+      '--input-type=module',
+      '-e',
+      script,
+    ],
+    timeoutFor('browser'),
+  );
+}
+
 async function main() {
   await runStep('compose config', 'docker', ['compose', 'config'], timeoutFor('config'));
   await runStep('docker daemon', 'docker', ['info'], timeoutFor('info'));
@@ -186,8 +233,10 @@ async function main() {
     await runStep('compose build', 'docker', ['compose', 'build'], timeoutFor('build'));
   }
 
+  await probePlaywrightChromium();
+
   if (!startContainer) {
-    console.log('[docker:smoke] PASS config, daemon, and image build completed');
+    console.log('[docker:smoke] PASS config, daemon, image build, and Playwright Chromium launch completed');
     return;
   }
 

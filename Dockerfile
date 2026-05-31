@@ -55,6 +55,7 @@ ENV NODE_ENV=production \
     DATABASE_URL=file:/app/data/hydra.db \
     HYDRA_DOCKERIZED=1 \
     HYDRA_PLAYWRIGHT_NO_SANDBOX=1 \
+    HYDRA_PLAYWRIGHT_CHANNEL=chromium \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Install ONLY production dependencies inside the Bookworm environment.
@@ -74,8 +75,12 @@ RUN npm ci --omit=dev --ignore-scripts
 # Must run AFTER npm ci so the playwright binary exists in node_modules/.bin.
 # `--with-deps` is required for custom Node images; without it Chromium is
 # downloaded but cannot launch because NSS, ATK, X11, GBM, and audio libraries
-# are absent.
-RUN npx playwright install --with-deps chromium
+# are absent. Hydra launches the full Chromium executable, so skip the separate
+# headless-shell payload and remove apt indexes after dependency installation.
+# HYDRA_PLAYWRIGHT_CHANNEL=chromium opts Playwright into full Chromium's new
+# headless mode; the default headless launch still expects the skipped shell.
+RUN npx playwright install --with-deps chromium --no-shell \
+    && rm -rf /var/lib/apt/lists/*
 
 # Generate Prisma client against the runtime OS
 COPY prisma ./prisma

@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   cleanupEphemeralProfileDir,
+  launchChromiumPersistentContext,
   resolveChromiumLaunchOptions,
   makeEphemeralProfileDir,
 } from '../lib/playwright-browser.js';
@@ -204,6 +205,48 @@ describe('browser isolation — knob 3: launch flags', () => {
     const callerIdx = opts.args.indexOf('--no-sandbox');
     assert.ok(callerIdx > isolationIdx,
       'caller args must come after isolation defaults so they can override on collision');
+  });
+});
+
+describe('browser isolation — supported Playwright launch API', () => {
+  it('passes userDataDir as the persistent-context profile argument, not a launch option', async () => {
+    const opts = resolveChromiumLaunchOptions({ headless: true });
+    cleanupDirs.push(opts.userDataDir);
+    const calls = [];
+    const expectedContext = { close: async () => {} };
+    const chromium = {
+      launchPersistentContext: async (...args) => {
+        calls.push(args);
+        return expectedContext;
+      },
+    };
+
+    const context = await launchChromiumPersistentContext(chromium, opts, {
+      userAgent: 'hydra-isolation-test',
+    });
+
+    assert.strictEqual(context, expectedContext);
+    assert.equal(calls.length, 1);
+    assert.strictEqual(calls[0][0], opts.userDataDir);
+    assert.strictEqual(calls[0][1].userDataDir, undefined);
+    assert.strictEqual(calls[0][1].headless, true);
+    assert.strictEqual(calls[0][1].userAgent, 'hydra-isolation-test');
+  });
+
+  it('cleans the Hydra-owned profile when persistent-context launch fails', async () => {
+    const opts = resolveChromiumLaunchOptions();
+    assert.ok(existsSync(opts.userDataDir));
+    const chromium = {
+      launchPersistentContext: async () => {
+        throw new Error('synthetic launch failure');
+      },
+    };
+
+    await assert.rejects(
+      launchChromiumPersistentContext(chromium, opts),
+      /synthetic launch failure/,
+    );
+    assert.equal(existsSync(opts.userDataDir), false);
   });
 });
 
