@@ -507,3 +507,7 @@ This evidence file is not release-complete by itself. The release remains not co
   `577.23 MiB` to `579.20 MiB` (`+1.97 MiB`). Raw before/after inventories
   contain only the expected main, GPU, network-utility, and renderer
   processes.
+- Follow-up hygiene checkpoint `86efec9` preserved public desktop version
+  `v1.1.5`. Auto-version run `26715063086` skipped as intended, CI run
+  `26715063087` passed, and Docker workflow run `26715063084` passed both
+  runtime smoke and the registry image push.
