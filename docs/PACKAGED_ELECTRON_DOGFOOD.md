@@ -9,12 +9,16 @@ CLI audit, and docs updates are current.
 
 ## Current Release Quick Path
 
-For the current published release, derive the version from `package.json` and
-download the matching GitHub Release artifacts. This keeps the manual pass tied
-to the same package set verified in `docs/RELEASE_AUDIT.md`.
+For the current published release, derive the version from GitHub and download
+the matching Release artifacts. This keeps the manual pass tied to the same
+package set verified in `docs/RELEASE_AUDIT.md`, even when a resumed sandbox
+cannot refresh local Git metadata and its checked-out `package.json` is stale.
 
 ```bash
-HYDRA_RELEASE_VERSION="$(node -p "require('./package.json').version")"
+HYDRA_RELEASE_VERSION="$(
+  gh release view --repo zaydiscold/hydra --json tagName \
+    --jq '.tagName | ltrimstr("v")'
+)"
 HYDRA_RELEASE_SLUG="${HYDRA_RELEASE_VERSION//./}"
 DOGFOOD_DIR="$(mktemp -d "/private/tmp/hydra-v${HYDRA_RELEASE_SLUG}-manual.XXXXXX")"
 gh release download "v$HYDRA_RELEASE_VERSION" --repo zaydiscold/hydra --dir "$DOGFOOD_DIR"
