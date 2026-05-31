@@ -147,9 +147,12 @@ the bump marker in the final commit message.
 The user-visible splash changes belong in the minor release notes because they
 are not just a patch:
 
-- The visible splash duration is 12 seconds.
-- The falling-word target is 92 words, a 15% density increase over the prior
-  80-word runtime.
+- The visible splash duration is 16 seconds, 33% longer than the prior 12-second
+  sequence.
+- The falling-word target is 120 words, preserving the 10-per-second trickle
+  while giving the downward animation 30% more time than the prior 92-word pass.
+- The exit begins at 13 seconds and ramps upward for three seconds with a
+  delayed fade, replacing the earlier abrupt two-second gravity flip.
 - Matter.js physics still runs through one owned `requestAnimationFrame` loop,
   with physics stepped at 45 Hz and painting throttled to 30 fps.
 - The splash self-disposes after its visual window and reports diagnostics, so

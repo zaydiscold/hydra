@@ -20,10 +20,10 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
     or be torn down after the splash/main transition; no runaway canvas,
     Anime.js, requestAnimationFrame, interval, timeout, or Matter.js physics
     tasks should survive past their visual purpose.
-  - Keep the front splash feeling rich: the current target is a 12 second
-    visible splash with 92 falling random words (+15% over the prior 80), and
-    the pile should visibly bias left or right when real laptop/device tilt
-    data is exposed, with a tiny fallback side lean when no sensor exists.
+  - Keep the front splash feeling rich: the current target is a 16 second
+    visible splash with 120 falling random words, a staged 3 second upward
+    exit, and a pile that visibly biases left or right when real laptop/device
+    tilt data is exposed, with a tiny fallback side lean when no sensor exists.
   - Look broadly for CPU/RAM wins and smoother perceived performance in the
     Electron main process, renderer, embedded API server, proxy/router,
     account automation, request logging, health polling, and dashboard refresh

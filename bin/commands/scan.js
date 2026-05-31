@@ -6,6 +6,7 @@
  */
 import { c, fmtHealth, json, status, table } from '../lib/output.js';
 import { loadServices, resolveUser, shutdown } from '../lib/services.js';
+import { isOtpAuthMethod } from '../../server/utils/auth-method.js';
 
 function hasFlag(argv, flag) {
   return argv.includes(flag);
@@ -29,7 +30,7 @@ function readinessFor(account, session) {
   if (hasSessionCookie && account.sessionStatus !== 'expired') return 'ready';
   if (clientCookieCount > 0) return 'refreshable';
   if (account.passwordOnFile && account.authMethod === 'password') return 'reauth_password';
-  if (account.email && account.authMethod === 'otp') return 'reauth_otp';
+  if (account.email && isOtpAuthMethod(account.authMethod)) return 'reauth_otp';
   return 'blocked';
 }
 

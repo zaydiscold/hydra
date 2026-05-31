@@ -103,10 +103,12 @@ test('ambient app chrome animations settle after launch instead of running forev
 test('splash owns one throttled physics and render loop', () => {
   const windowsJs = readRepoFile('electron/app/windows.js');
 
-  assert.match(windowsJs, /HYDRA_SPLASH_DURATION_MS=12000/);
-  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=10000/);
-  assert.match(windowsJs, /HYDRA_SPLASH_DISPOSE_MS=14500/);
-  assert.match(windowsJs, /HYDRA_SPLASH_TARGET=92/);
+  assert.match(windowsJs, /HYDRA_SPLASH_DURATION_MS=16000/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=13000/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FLIGHT_MS=3000/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FADE_DELAY_MS=1900/);
+  assert.match(windowsJs, /HYDRA_SPLASH_DISPOSE_MS=18500/);
+  assert.match(windowsJs, /HYDRA_SPLASH_TARGET=120/);
   assert.match(windowsJs, /const maxPixels=2800000/);
   assert.match(windowsJs, /Math\.sqrt\(maxPixels\/\(w\*h\)\)/);
   assert.match(windowsJs, /tiltBias=hydraSplashTiltGravityX\*\(W\(\)\*0\.18\)/);
@@ -122,6 +124,8 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /hydraSplashTiltSensor\.start\(\)/);
   assert.match(windowsJs, /hydraSplashTiltSensor\.stop\(\)/);
   assert.match(windowsJs, /engine\.world\.gravity\.x=hydraSplashLeanX/);
+  assert.match(windowsJs, /engine\.world\.gravity\.y=1\+\(-2\.1-1\)\*easedExit/);
+  assert.match(windowsJs, /document\.body\.classList\.add\("is-settling"\)/);
   assert.match(windowsJs, /hydraSplashDiagnostics\.physicsSteps\+=steps/);
   assert.doesNotMatch(windowsJs, /Run\.create/);
   assert.doesNotMatch(windowsJs, /Run\.run/);
@@ -148,6 +152,7 @@ test('ScrambleText clears delayed intervals on unmount', () => {
 test('short-lived renderer feedback timers are cleared on unmount', () => {
   const diagnostics = readRepoFile('src/lib/runtimeDiagnostics.js');
   const ownedTimeouts = readRepoFile('src/hooks/useOwnedTimeouts.js');
+  const visibleRecurring = readRepoFile('src/hooks/useVisibleRecurringTask.js');
   const app = readRepoFile('src/App.jsx');
   const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
   const settings = readRepoFile('src/pages/Settings.jsx');
@@ -167,6 +172,9 @@ test('short-lived renderer feedback timers are cleared on unmount', () => {
   assert.match(ownedTimeouts, /timersRef = useRef\(new Set\(\)\)/);
   assert.match(ownedTimeouts, /clearTrackedTimeout\(timer\)/);
   assert.match(ownedTimeouts, /timersRef\.current\.delete\(timer\)/);
+  assert.match(visibleRecurring, /document\.addEventListener\('visibilitychange', handleVisibility\)/);
+  assert.match(visibleRecurring, /if \(document\.hidden\) clear\(\)/);
+  assert.match(visibleRecurring, /if \(cancelled \|\| document\.hidden\) return/);
   assert.match(app, /useOwnedTimeouts/);
   assert.doesNotMatch(app, /setTimeout\(\(\) => setToasts/);
   assert.match(accountDetail, /copyTimerRef = useRef\(null\)/);
@@ -183,6 +191,22 @@ test('short-lived renderer feedback timers are cleared on unmount', () => {
   assert.match(devBackendHint, /copyResetTimerRef = useRef\(null\)/);
   assert.match(registerKeyModal, /focusTimerRef = useRef\(null\)/);
   assert.match(otpTab, /copyStatusTimerRef\.current = null/);
+});
+
+test('renderer auto-refresh timers pause instead of waking while hidden', () => {
+  const app = readRepoFile('src/App.jsx');
+  const useMetrics = readRepoFile('src/hooks/useMetrics.js');
+  const useTraffic = readRepoFile('src/hooks/useTraffic.js');
+  const vault = readRepoFile('src/pages/Vault.jsx');
+
+  assert.match(app, /useVisibleRecurringTask\('App\.upstreamHealth', refreshUpstreamHealth, 30_000, \{ enabled: authState === 'app' \}\)/);
+  assert.match(useMetrics, /useVisibleRecurringTask\('useMetrics\.autoRefresh', refreshVisibleDashboard, 5 \* 60 \* 1000\)/);
+  assert.match(useTraffic, /useVisibleRecurringTask\('useTraffic\.autoRefresh', refreshVisibleTraffic, 30000\)/);
+  assert.match(vault, /useVisibleRecurringTask\('Vault\.autoRefresh', refreshVisibleVault, 10 \* 60 \* 1000\)/);
+  assert.doesNotMatch(app, /if \(document\.hidden \|\| inFlight\) return/);
+  assert.doesNotMatch(useMetrics, /if \(!document\.hidden\) await fetchDashboard/);
+  assert.doesNotMatch(useTraffic, /if \(!document\.hidden\) await fetchTraffic/);
+  assert.doesNotMatch(vault, /if \(!document\.hidden\) await loadAccounts/);
 });
 
 test('global form controls cannot fall back to white native browser styling', () => {
@@ -522,6 +546,7 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   const app = readRepoFile('src/App.jsx');
   const css = readRepoFile('src/index.css');
   const api = readRepoFile('src/api.js');
+  const visibleRecurring = readRepoFile('src/hooks/useVisibleRecurringTask.js');
 
   assert.match(api, /export const getSystemHealth = \(\) => request\('\/system\/health'\)/);
   assert.match(app, /function UpstreamStatusBanner\(\{ upstream \}\)/);
@@ -531,10 +556,11 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   assert.match(app, /Proxy, provisioning, signup, OTP, and code redemption may fail until connectivity returns/);
   assert.match(app, /const \[upstreamHealth, setUpstreamHealth\] = useState\(null\)/);
   assert.match(app, /if \(authState !== 'app'\)/);
+  assert.match(app, /authStateRef\.current !== 'app'/);
   assert.match(app, /api\.getSystemHealth\(\)/);
-  assert.match(app, /timer = setTrackedTimeout\('App\.upstreamHealth', async \(\) => \{/);
-  assert.match(app, /if \(document\.hidden \|\| inFlight\) return/);
-  assert.match(app, /clearTrackedTimeout\(timer\)/);
+  assert.match(app, /useVisibleRecurringTask\('App\.upstreamHealth', refreshUpstreamHealth, 30_000, \{ enabled: authState === 'app' \}\)/);
+  assert.match(visibleRecurring, /if \(document\.hidden\) clear\(\)/);
+  assert.match(visibleRecurring, /clearTrackedTimeout\(timer\)/);
   assert.match(app, /<UpstreamStatusBanner upstream=\{upstreamHealth\} \/>/);
 
   assert.match(css, /\.upstream-banner\s*\{/);

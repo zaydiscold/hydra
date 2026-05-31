@@ -497,6 +497,7 @@ async function finalizeOtpSubmission(task, otpCode) {
         if (refreshed?.sessionCookie &&
             new Date(refreshed.sessionExpiry || 0).getTime() - Date.now() > ONE_HOUR) {
           sessionCookie = refreshed.sessionCookie;
+          deviceCookies = refreshed.clientCookie ?? deviceCookies;
           logger.info('[Account Generator] Upgraded to long-lived session via refresh');
         } else {
           logger.warn('[Account Generator] Session still short-lived after refresh attempt');

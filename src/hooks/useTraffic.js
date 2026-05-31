@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api';
-import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
+import { useVisibleRecurringTask } from './useVisibleRecurringTask.js';
 
 export function useTraffic({ addToast }) {
   const [data, setData] = useState(null);
@@ -29,26 +29,10 @@ export function useTraffic({ addToast }) {
     if (didInitialLoadRef.current) return;
     didInitialLoadRef.current = true;
     fetchTraffic();
-    let cancelled = false;
-    let timer = null;
-
-    const schedule = () => {
-      if (cancelled) return;
-      timer = setTrackedTimeout('useTraffic.autoRefresh', async () => {
-        timer = null;
-        if (!document.hidden) await fetchTraffic(true);
-        schedule();
-      }, 30000); // 30s auto-refresh; the /api/pool/traffic query is heavy
-                 // (findMany take:100 + groupBy on RequestLog). 6×/min drove
-                 // measurable CPU heat — 2×/min is plenty for an ops dashboard.
-    };
-
-    schedule();
-    return () => {
-      cancelled = true;
-      if (timer) clearTrackedTimeout(timer);
-    };
   }, [fetchTraffic]);
+
+  const refreshVisibleTraffic = useCallback(() => fetchTraffic(true), [fetchTraffic]);
+  useVisibleRecurringTask('useTraffic.autoRefresh', refreshVisibleTraffic, 30000);
 
   return {
     data,

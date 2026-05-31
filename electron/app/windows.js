@@ -206,7 +206,7 @@ export function createSplashWindow() {
   //
   // Reference: ~/Desktop/pica-teardown/05-falling-letters-animation.md
   //
-  // Performance: 92 word bodies entering over ~9.2 s, shattering into glyph
+  // Performance: 120 word bodies entering over ~12 s, shattering into glyph
   // bodies on contact. Physics is fixed at 45 Hz, paint is capped at 30 fps,
   // and the canvas backing store is pixel-capped for Retina. Canvas paint is
   // one compositor layer total. The list is
@@ -329,11 +329,11 @@ export function createSplashWindow() {
     + 'pointer-events:none;z-index:3}'
     + '.vines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:.95}'
     + '.vines .stem,.vines .twig{fill:none;stroke-linecap:round;stroke-linejoin:round;'
-    + 'stroke-dasharray:0 1400;stroke-dashoffset:0;animation:grow 10s cubic-bezier(.18,.86,.2,1) forwards}'
+    + 'stroke-dasharray:0 1400;stroke-dashoffset:0;animation:grow 13s cubic-bezier(.18,.86,.2,1) forwards}'
     + '.vines .stem{filter:drop-shadow(0 0 7px rgba(168,85,247,.28))}'
     + '.vines .twig{stroke-dasharray:0 360;opacity:.72;animation-name:growTwig}'
     + '.vines .bud{fill:rgba(190,242,255,.70);opacity:0;transform-box:fill-box;transform-origin:center;'
-    + 'animation:bud 10s cubic-bezier(.16,1,.3,1) forwards;filter:drop-shadow(0 0 5px rgba(96,165,250,.35))}'
+    + 'animation:bud 13s cubic-bezier(.16,1,.3,1) forwards;filter:drop-shadow(0 0 5px rgba(96,165,250,.35))}'
     + '@keyframes grow{0%{stroke-dasharray:0 1400;opacity:.02}12%{opacity:.55}100%{stroke-dasharray:1400 0;opacity:.86}}'
     + '@keyframes growTwig{0%,18%{stroke-dasharray:0 360;opacity:0}100%{stroke-dasharray:360 0;opacity:.68}}'
     + '@keyframes bud{0%,42%{opacity:0;transform:scale(.25)}70%{opacity:.75;transform:scale(1.08)}100%{opacity:.58;transform:scale(1)}}'
@@ -343,7 +343,9 @@ export function createSplashWindow() {
     // (.outer, vines, hex, decos) and below the brand card (z-index:4),
     // so the brand reveal materializes on top of the falling letters.
     + 'canvas#field{position:fixed;inset:0;width:100vw;height:100vh;'
-    + 'pointer-events:none;z-index:3;display:block}'
+    + 'pointer-events:none;z-index:3;display:block;opacity:1;transition:opacity 1000ms cubic-bezier(.22,.61,.36,1)}'
+    + 'body.is-exiting .card{opacity:0!important;transform:translate(-50%,-54%) scale(.985)!important;transition:opacity 1400ms ease,transform 1800ms cubic-bezier(.22,.61,.36,1)}'
+    + 'body.is-settling canvas#field{opacity:0}'
     // Inner card stays the same size, centered inside the outer-card.
     // (Was position:fixed against viewport — now position:absolute against
     // .outer so they always stay co-centered if the user resizes.)
@@ -360,7 +362,7 @@ export function createSplashWindow() {
     + 'border:1px solid rgba(255,255,255,.12);'
     + 'box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.10);'
     + 'overflow:hidden;z-index:4;opacity:0;'
-    + 'animation:cardIn 800ms 5500ms cubic-bezier(.22,.61,.36,1) forwards}'
+    + 'animation:cardIn 1000ms 6800ms cubic-bezier(.22,.61,.36,1) forwards}'
     + '@keyframes cardIn{'
     +   '0%{opacity:0;transform:translate(-50%,-50%) scale(.94)}'
     +   '60%{opacity:1;transform:translate(-50%,-50%) scale(1.01)}'
@@ -419,10 +421,10 @@ export function createSplashWindow() {
     + 'background:linear-gradient(90deg,#a855f7,#ec4899,#60a5fa);'
     + 'box-shadow:0 0 14px rgba(168,85,247,.6);'
     + 'transform-origin:left center;transform:scaleX(0);'
-    // 12s — must match SPLASH_MIN_VISIBLE_MS in main.js. Bar fills from 0
+    // 16s — must match SPLASH_MIN_VISIBLE_MS in main.js. Bar fills from 0
     // to 1 over the full visible duration so it reaches 100% as the splash
     // dismisses. Pure CSS, runs even if JS physics fails to start.
-    + 'animation:fillbar 12s cubic-bezier(.22,.61,.36,1) forwards}'
+    + 'animation:fillbar 16s cubic-bezier(.22,.61,.36,1) forwards}'
     + '@keyframes fillbar{0%{transform:scaleX(0)}68%{transform:scaleX(.78)}100%{transform:scaleX(1)}}'
     + '.update-strip{width:220px;height:2px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:9px;opacity:0;transform:translateY(-2px);transition:opacity 180ms ease,transform 180ms ease}'
     + '.update-strip.is-active{opacity:1;transform:translateY(0)}'
@@ -491,7 +493,7 @@ export function createSplashWindow() {
     // Vendored matter-js drives the world. Words enter as compound bodies
     // at the top edge, shatter into per-letter bodies on first contact
     // with anything (walls, floor, or another body), then keep colliding
-    // like SpaghettiOs until gravity flips upward at t=10s and the pile
+    // like SpaghettiOs until the eased upward flight starts at t=13s and the pile
     // whooshes out the top. Hard static walls extend 400 px outside the
     // viewport so even fast-moving bodies cannot tunnel through.
     //
@@ -585,9 +587,9 @@ export function createSplashWindow() {
     + 'const updateStrip=document.getElementById("update-strip");'
     + 'const updateFill=document.getElementById("update-strip-fill");'
     + 'let phaseIndex=0,updateActive=false;'
-    + 'const HYDRA_SPLASH_DURATION_MS=12000,HYDRA_SPLASH_EXIT_MS=10000,HYDRA_SPLASH_DISPOSE_MS=14500,HYDRA_SPLASH_TARGET=92;'
-    + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0;'
-    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,target:HYDRA_SPLASH_TARGET,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
+    + 'const HYDRA_SPLASH_DURATION_MS=16000,HYDRA_SPLASH_EXIT_MS=13000,HYDRA_SPLASH_EXIT_FLIGHT_MS=3000,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=1900,HYDRA_SPLASH_DISPOSE_MS=18500,HYDRA_SPLASH_TARGET=120;'
+    + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0,hydraSplashExitStartedAt=0;'
+    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,exitFlightMs:HYDRA_SPLASH_EXIT_FLIGHT_MS,target:HYDRA_SPLASH_TARGET,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
     + 'window.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics;'
     + 'function hydraSplashRefreshDiagnostics(){hydraSplashDiagnostics.timers=hydraSplashTimers.length;hydraSplashDiagnostics.rafActive=Boolean(hydraSplashRaf)&&!hydraSplashDisposed;return hydraSplashDiagnostics;}'
     + 'function hydraSplashRemoveTimer(id){const i=hydraSplashTimers.indexOf(id);if(i>=0)hydraSplashTimers.splice(i,1);hydraSplashRefreshDiagnostics();}'
@@ -726,8 +728,8 @@ export function createSplashWindow() {
     // ─── Spawn queue — shuffle items + repeat to fill the trickle window.
     + 'function shuffle(a){return a.slice().sort(function(){return Math.random()-0.5;});}'
     + 'function buildQueue(n){const out=[];while(out.length<n){const s=shuffle(items);for(let k=0;k<s.length&&out.length<n;k++)out.push(s[k]);}return out;}'
-    // 92 words over ~9.2 s = 15% more fill than the original 80-word
-    // splash while keeping the same 10/sec trickle, not a burst.
+    // 120 words over ~12 s = 30% more time than the prior 92-word splash
+    // while keeping the same 10/sec trickle, not a burst.
     + 'const queue=buildQueue(HYDRA_SPLASH_TARGET);'
     + 'let spawnIdx=0;'
     + 'const spawnTimer=hydraSplashSetInterval(function(){'
@@ -739,16 +741,17 @@ export function createSplashWindow() {
     +   'const color=it.color||PALETTE[hashStr(it.text)%PALETTE.length];'
     +   'spawnWord(it.text,color,fontSize,weight);'
     + '},100);'
-    // ─── Two gravity regimes — flip up at t=10s. Apply an upward velocity
-    // impulse to every dynamic body so the settled pile launches together
-    // rather than waiting for the new gravity field to accelerate them.
+    // ─── Eased exit flight — begin at t=13s. Apply a modest initial lift,
+    // then ramp gravity upward over three seconds so the settled pile visibly
+    // rises and clears the viewport instead of disappearing behind a hard flip.
     + 'hydraSplashSetTimeout(function(){'
-    +   'engine.world.gravity.y=-1.45;'
+    +   'hydraSplashExitStartedAt=performance.now();document.body.classList.add("is-exiting");'
+    +   'hydraSplashSetTimeout(function(){document.body.classList.add("is-settling");},HYDRA_SPLASH_EXIT_FADE_DELAY_MS);'
     +   'const all=Comp.allBodies(engine.world);'
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
     +     'if(b.isStatic)continue;'
-    +     'Body.setVelocity(b,{x:b.velocity.x+(Math.random()-0.5)*2.5,y:-3.5-Math.random()*1.5});'
-    +     'Body.setAngularVelocity(b,b.angularVelocity+(Math.random()-0.5)*0.08);'
+    +     'Body.setVelocity(b,{x:b.velocity.x+(Math.random()-0.5)*1.2,y:b.velocity.y-1.1-Math.random()*0.6});'
+    +     'Body.setAngularVelocity(b,b.angularVelocity+(Math.random()-0.5)*0.04);'
     +   '}'
     + '},HYDRA_SPLASH_EXIT_MS);'
     // One owned requestAnimationFrame loop steps Matter and paints the canvas.
@@ -780,6 +783,7 @@ export function createSplashWindow() {
     +   'let steps=0;'
     +   'hydraSplashLeanX+= (hydraSplashTiltGravityX-hydraSplashLeanX)*0.08;'
     +   'engine.world.gravity.x=hydraSplashLeanX;hydraSplashDiagnostics.tilt.gravityX=hydraSplashLeanX;'
+    +   'if(hydraSplashExitStartedAt){const exitRatio=Math.min(1,(now-hydraSplashExitStartedAt)/HYDRA_SPLASH_EXIT_FLIGHT_MS);const easedExit=exitRatio*exitRatio*(3-2*exitRatio);engine.world.gravity.y=1+(-2.1-1)*easedExit;}'
     +   'while(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2){Eng.update(engine,HYDRA_SPLASH_PHYSICS_STEP_MS);hydraSplashPhysicsCarry-=HYDRA_SPLASH_PHYSICS_STEP_MS;steps++;}'
     +   'hydraSplashDiagnostics.physicsSteps+=steps;'
     +   'if(steps>=2)hydraSplashPhysicsCarry=0;'

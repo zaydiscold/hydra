@@ -7,6 +7,7 @@
  */
 import { c, fmtHealth, json, status } from '../lib/output.js';
 import { loadServices, resolveUser, shutdown } from '../lib/services.js';
+import { isOtpAuthMethod } from '../../server/utils/auth-method.js';
 
 function hasFlag(argv, flag) {
   return argv.includes(flag);
@@ -38,7 +39,7 @@ function summarize(account, session) {
   const hasSessionCookie = Boolean(String(session.sessionCookie || '').trim());
   const hasClientCookie = clientCookieCount > 0;
   const canPasswordReauth = Boolean(account.email && account.passwordOnFile && account.authMethod === 'password');
-  const canOtpReauth = Boolean(account.email && account.authMethod === 'otp');
+  const canOtpReauth = Boolean(account.email && isOtpAuthMethod(account.authMethod));
   let redeemReadiness = 'blocked';
   let hint = 'No dashboard session and no stored reauth path.';
 

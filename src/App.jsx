@@ -5,6 +5,7 @@ import * as api from './api';
 import { logger } from './lib/client-logger.js';
 import { isElectron, native as nativeBridge, tryNative, useNativeInfo } from './lib/native';
 import { useOwnedTimeouts } from './hooks/useOwnedTimeouts';
+import { useVisibleRecurringTask } from './hooks/useVisibleRecurringTask.js';
 import {
   cancelTrackedAnimationFrame,
   clearTrackedTimeout,
@@ -602,6 +603,8 @@ export default function App() {
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const [upstreamHealth, setUpstreamHealth] = useState(null);
   const recentToastsRef = useRef(new Map());
+  const authStateRef = useRef(authState);
+  const upstreamHealthInFlightRef = useRef(false);
   const { setOwnedTimeout } = useOwnedTimeouts('App.toasts');
   const navigate = useNavigate();
   const location = useLocation();
@@ -721,47 +724,35 @@ export default function App() {
   }, [authState]);
 
   useEffect(() => {
+    authStateRef.current = authState;
+  }, [authState]);
+
+  const refreshUpstreamHealth = useCallback(async () => {
+    if (authState !== 'app' || authStateRef.current !== 'app' || upstreamHealthInFlightRef.current) return;
+    upstreamHealthInFlightRef.current = true;
+    try {
+      const res = await api.getSystemHealth();
+      if (authStateRef.current !== 'app') return;
+      const payload = res?.data ?? res ?? {};
+      setUpstreamHealth(payload.upstream ?? null);
+    } catch (err) {
+      logger.warn('Upstream health refresh failed:', err.message);
+      if (authStateRef.current !== 'app') return;
+      setUpstreamHealth(null);
+    } finally {
+      upstreamHealthInFlightRef.current = false;
+    }
+  }, [authState]);
+
+  useEffect(() => {
     if (authState !== 'app') {
       setUpstreamHealth(null);
-      return undefined;
+      return;
     }
+    void refreshUpstreamHealth();
+  }, [authState, refreshUpstreamHealth]);
 
-    let cancelled = false;
-    let timer = null;
-    let inFlight = false;
-
-    const refreshHealth = async () => {
-      if (document.hidden || inFlight) return;
-      inFlight = true;
-      try {
-        const res = await api.getSystemHealth();
-        if (cancelled) return;
-        const payload = res?.data ?? res ?? {};
-        setUpstreamHealth(payload.upstream ?? null);
-      } catch (err) {
-        logger.warn('Upstream health refresh failed:', err.message);
-        if (!cancelled) setUpstreamHealth(null);
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    const scheduleHealthRefresh = () => {
-      if (cancelled) return;
-      timer = setTrackedTimeout('App.upstreamHealth', async () => {
-        timer = null;
-        await refreshHealth();
-        scheduleHealthRefresh();
-      }, 30_000);
-    };
-
-    void refreshHealth();
-    scheduleHealthRefresh();
-    return () => {
-      cancelled = true;
-      if (timer) clearTrackedTimeout(timer);
-    };
-  }, [authState]);
+  useVisibleRecurringTask('App.upstreamHealth', refreshUpstreamHealth, 30_000, { enabled: authState === 'app' });
 
   // ── Listen for main-process navigation (e.g. Cmd+, → Preferences) ──
   // onNavigate returns an unsubscribe — without calling it on cleanup, every

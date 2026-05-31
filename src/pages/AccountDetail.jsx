@@ -6,6 +6,7 @@ import ScrambleText from '../components/ScrambleText';
 import LoginAccountModal from '../components/LoginAccountModal';
 import SessionDot from '../components/SessionDot';
 import { accountNeedsSession, canProvisionWithSession, isSessionProbePending } from '../utils/accountSession';
+import { timeAgo } from '../utils/time';
 import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 import {
   WalletIcon,
@@ -965,11 +966,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         const expiresAt = accountMeta.sessionExpiry ? new Date(accountMeta.sessionExpiry) : null;
         const now = new Date();
         const msPerDay = 86400000;
-        const ageMs = loginAt ? now - loginAt : null;
-        const ttlMs = loginAt && expiresAt ? expiresAt - loginAt : null;
         const remainMs = expiresAt ? expiresAt - now : null;
-        const ageDays = ageMs != null ? (ageMs / msPerDay).toFixed(1) : null;
-        const ttlDays = ttlMs != null ? (ttlMs / msPerDay).toFixed(0) : null;
         const remainDays = remainMs != null ? (remainMs / msPerDay).toFixed(1) : null;
         const isPast = remainMs != null && remainMs < 0;
         return (
@@ -980,7 +977,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                   Observed by live probe
                 </span>
                 <span style={{ marginLeft: 6, color: 'var(--text-primary)' }}>
-                  session is <strong style={{ color: 'var(--text-secondary)' }}>{liveSessionStatus}</strong> now
+                  Clerk login is <strong style={{ color: 'var(--text-secondary)' }}>{liveSessionStatus}</strong> now
                 </span>
               </div>
             )}
@@ -993,22 +990,24 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                 ) : (
                   <span style={{ fontSize: '0.8rem', fontWeight: 700,
                     color: remainMs < msPerDay * 2 ? 'var(--status-warning)' : 'var(--status-success)' }}>
-                    Estimated expiry: {remainDays}d remaining
+                    Stored refresh window: {remainDays}d remaining
                   </span>
                 )}
                 <span style={{ marginLeft: 6 }}>
-                  ({isPast ? 'expired' : 'expires'} {expiresAt.toLocaleDateString()})
+                  ({isPast ? 'passed' : 'through'} {expiresAt.toLocaleDateString()})
                 </span>
               </div>
             )}
             {loginAt && (
-              <div>Estimated login: <strong style={{ color: 'var(--text-secondary)' }}>{loginAt.toLocaleDateString()}</strong> · {ageDays}d ago
+              <div>Signed in <strong style={{ color: 'var(--text-secondary)' }}>{timeAgo(accountMeta.lastLoginAt)}</strong>
                 {refreshedAt && refreshedAt.getTime() !== loginAt?.getTime() && (
-                  <span> · refreshed {refreshedAt.toLocaleDateString()}</span>
+                  <span> · refreshed {timeAgo(accountMeta.sessionRefreshedAt)}</span>
                 )}
               </div>
             )}
-            {ttlDays && <div style={{ color: 'var(--text-tertiary)', marginTop: 2 }}>Estimated TTL from stored session data: {ttlDays}d</div>}
+            <div style={{ color: 'var(--text-tertiary)', marginTop: 2 }}>
+              The stored window is a refresh estimate. Use the probe button for current login truth.
+            </div>
           </div>
         );
       })()}

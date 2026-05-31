@@ -26,7 +26,15 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   preserved full before/after process grep output. The later
   `/private/tmp/hydra-profile-20260527T183654Z-seek-improvement` sample kept
   `hydraPlaywrightProfiles.count` at `0` and sampled Hydra at `0.0%` CPU /
-  `250.31 MB` RSS before and `0.5%` CPU / `256.70 MB` RSS after.
+  `250.31 MB` RSS before and `0.5%` CPU / `256.70 MB` RSS after. The fresh
+  `/private/tmp/hydra-profile-20260527T185734Z-fresh-goal-item1` sample kept
+  Hydra at `0.0%` CPU before/after, with RSS dropping from `248.41 MB` to
+  `205.78 MB` and full `ps-grep-before.txt` / `ps-grep-after.txt` artifacts.
+  A resumed 2026-05-30 five-minute sample in
+  `/private/tmp/hydra-profile-20260531T031156Z-visible-timers-resume`
+  preserved the changed sandbox boundary: direct `ps` / `top` probes and
+  `hydra doctor` process enumeration returned `EPERM`, while doctor still
+  verified `hydraPlaywrightProfiles.count: 0` before and after.
 - `hydra doctor` now separates Hydra-owned process load from unrelated
   Chrome/CDP/browser-tooling load, which stayed heavy and was intentionally not
   closed.
@@ -35,9 +43,11 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   Playwright isolation tests now clean their own temp profiles.
 - Renderer timers, intervals, animation frames, and Anime.js effects are routed
   through `window.__HYDRA_RENDERER_DIAGNOSTICS__()` ownership tracking.
-- The splash remains intentionally richer at 12 seconds and 92 falling words,
-  but Matter.js, RAF, timers, listeners, bodies, and optional sensor instances
-  are bounded by the deterministic splash-disposal contract.
+- The splash now lasts 16 seconds with 120 falling words, then uses a staged
+  three-second upward flight with a gentler initial impulse, eased gravity
+  ramp, card lift/fade, and delayed canvas fade. Matter.js, RAF, timers,
+  listeners, bodies, and optional sensor instances remain bounded by the
+  deterministic splash-disposal contract.
 - Tilt support is source-verified as opportunistic device tilt: sensor/fallback
   x input affects horizontal gravity, spawn-position bias, and initial x
   velocity. Exact MacBook hinge-angle support remains a future native HID bridge,
@@ -94,6 +104,24 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   `--no-proxy-server`. Reusing the task route's undici dispatcher reduced
   repeated proxy HTTP-probe setup from `33.231ms` to `0.141ms` over `1000`
   rounds (`99.576%`).
+- Renderer auto-refresh timers now pause at scheduling time while hidden. App
+  upstream health, Dashboard metrics, Traffic logs, and Vault refresh moved to
+  `useVisibleRecurringTask`; a deterministic 30-minute hidden-window count
+  drops those refresh timer wakeups from `129` to `0`.
+- Targeted Desktop cleanup left one launchable Hydra bundle under `~/Desktop`:
+  `release/mac-arm64/Hydra.app`. Extra/stale bundles and superseded installers
+  were moved reversibly to
+  `/private/tmp/hydra-desktop-duplicates-20260531T031455Z`.
+- Session-memory hardening now retains distinct Clerk device identities instead
+  of raw transient dashboard snapshots. Sanitized forced probes after the
+  change confirmed `4/4` selected stored logins active and redeem-ready,
+  including one active login without a management key; each active cookie stack
+  persisted from `25` equivalent snapshots to `1`.
+- The rebuilt pending-minor macOS arm64 package passes packaged-resource smoke
+  and strict codesign verification. Packaged-source inspection confirms the
+  `16000ms` splash, 120-word target, staged `3000ms` upward flight, and bounded
+  `18500ms` self-disposal. Docker image smoke also passed after redirecting
+  sandbox-blocked Buildx activity state to `/private/tmp/hydra-buildx`.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood

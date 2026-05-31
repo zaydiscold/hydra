@@ -5,6 +5,8 @@ import { getProxyMasterSecret } from './local-secrets.js';
 import { decrypt, decryptConfig, encrypt, encryptConfig } from './storage-codec.js';
 import { logger } from './logger.js';
 import { refreshSession, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
+import { clerkFapiDeviceCookieHeader } from '../utils/cookie-utils.js';
+import { isOtpAuthMethod } from '../utils/auth-method.js';
 import {
   backfillLegacyManagementKey,
   getBestManagementKey,
@@ -38,7 +40,7 @@ export function resolveEffectiveSessionExpiry(config, _sessionTokenPlain) {
 /**
  * Determine session status based on actual API validation, NOT just JWT expiry.
  * 
- * User sessions last 12+ hours, but JWTs expire in ~2.5 minutes. 
+ * Clerk sessions outlive their short-lived JWT proof tokens.
  * We cannot rely on JWT expiry alone to determine session validity.
  * 
  * This function uses actual API call success (validateSession) to determine status.
@@ -111,8 +113,8 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
  * Checks the async validation cache first — if a recent getSessionStatusAsync()
  * result exists (from Dashboard probeAll or getStoredSessionStatus), returns
  * that immediately instead of the JWT heuristic.  This prevents false
- * "expiring" signals caused by short-lived JWTs on perfectly healthy 12-hour
- * Clerk sessions.
+ * "expiring" signals caused by short-lived JWTs on healthy refreshable Clerk
+ * sessions.
  * 
  * Falls back to JWT-based heuristic only on cold start / cache miss.
  * 
@@ -392,7 +394,7 @@ function shapeAccountMetadata(account, config, managementKey, sessionTokenPlain,
     hasManagementKey: !!managementKey,
     /** True when a non-empty password is stored (encrypted). OTP-only accounts are false. */
     passwordOnFile: !!config.password,
-    hasCredentials: !!(config.email && (config.password || config.authMethod === 'otp' || config.authMethod === 'password')),
+    hasCredentials: !!(config.email && (config.password || isOtpAuthMethod(config.authMethod) || config.authMethod === 'password')),
     // Sync version checks async cache first, falls back to stored expiry heuristic on cache miss.
     sessionStatus: getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed, account.id),
     sessionDecryptFailed,
@@ -563,7 +565,7 @@ export async function updateAccount(userId, id, updates) {
 
   if (updates.password !== undefined && String(updates.password).length > 0) {
     config.password = updates.password;
-  } else if (updates.email !== undefined && config.authMethod === 'otp') {
+  } else if (updates.email !== undefined && isOtpAuthMethod(config.authMethod)) {
     config.password = null;
   }
 
@@ -628,6 +630,10 @@ export async function logAccountEvent(userId, id, type, message) {
 /** Maximum stacked __client cookies per account (Exploit #14: Cookie stacking). */
 const MAX_STACKED_CLIENT_COOKIES = 25;
 
+function clientCookieIdentity(cookie) {
+  return clerkFapiDeviceCookieHeader(cookie) || cookie;
+}
+
 /**
  * Normalize config.clientCookie / config.clientCookies into the new array format.
  * Backward compat: if readConfig returns a string clientCookie, convert to single-element array.
@@ -641,8 +647,9 @@ export function normalizeClientCookies(config = {}) {
     for (const entry of config.clientCookies) {
       const rawCookie = typeof entry === 'string' ? entry : entry?.cookie;
       const cookie = rawCookie != null ? String(rawCookie).trim() : '';
-      if (!cookie || cookie === 'undefined' || seen.has(cookie)) continue;
-      seen.add(cookie);
+      const identity = clientCookieIdentity(cookie);
+      if (!cookie || cookie === 'undefined' || seen.has(identity)) continue;
+      seen.add(identity);
       normalized.push({
         cookie,
         issuedAt: typeof entry === 'object' && entry?.issuedAt ? entry.issuedAt : new Date().toISOString(),
@@ -679,12 +686,16 @@ export function appendClientCookie(existing, newCookie) {
     ? normalizeClientCookies({ clientCookies: existing })
     : normalizeClientCookies({ clientCookie: existing });
 
-  // Dedup: if this exact cookie string already exists, move it to front (renew)
-  const dupIdx = stack.findIndex(e => e.cookie === trimmed);
+  // Dashboard/Cloudflare cookies churn during live probes. Retain genuinely
+  // distinct Clerk device identities, but replace snapshots that only differ
+  // in transient dashboard material.
+  const clerkIdentity = clientCookieIdentity(trimmed);
+  const dupIdx = stack.findIndex((entry) => {
+    return clientCookieIdentity(entry.cookie) === clerkIdentity;
+  });
   if (dupIdx >= 0) {
-    const [dup] = stack.splice(dupIdx, 1);
-    dup.issuedAt = new Date().toISOString();
-    stack.unshift(dup);
+    stack.splice(dupIdx, 1);
+    stack.unshift({ cookie: trimmed, issuedAt: new Date().toISOString() });
     return stack.slice(0, MAX_STACKED_CLIENT_COOKIES);
   }
 

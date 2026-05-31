@@ -48,10 +48,12 @@ test('session status probes persist fresh Clerk client cookies after live refres
   );
 });
 
-test('cookie stack helpers keep newest cookies first and cap stored history', () => {
+test('cookie stack helpers keep newest device identities first and cap stored history', () => {
   const storeSrc = read('server/services/store.js');
 
   assert.match(storeSrc, /const MAX_STACKED_CLIENT_COOKIES\s*=\s*25/);
+  assert.match(storeSrc, /function clientCookieIdentity\(cookie\)/);
+  assert.match(storeSrc, /clerkFapiDeviceCookieHeader\(cookie\) \|\| cookie/);
   assert.match(storeSrc, /stack\.unshift\(\{\s*cookie:\s*trimmed,\s*issuedAt:/);
   assert.match(storeSrc, /return stack\.slice\(0,\s*MAX_STACKED_CLIENT_COOKIES\)/);
   assert.match(storeSrc, /config\.clientCookie\s*=\s*config\.clientCookies\[0\]\?\.cookie/);
@@ -93,6 +95,47 @@ test('cookie stack normalization is bounded and legacy-compatible', async () => 
     ' fresh ',
   );
   assert.deepEqual(appended.map((entry) => entry.cookie), ['fresh', 'stale']);
+
+  const equivalentDashboardSnapshots = store.normalizeClientCookies({
+    clientCookies: [
+      { cookie: '__client=device-a; __cf_bm=latest', issuedAt: 'latest' },
+      { cookie: '__client=device-a; __cf_bm=stale', issuedAt: 'stale' },
+      { cookie: '__client=device-b; __cf_bm=other', issuedAt: 'other' },
+    ],
+  });
+  assert.deepEqual(
+    equivalentDashboardSnapshots.map((entry) => entry.cookie),
+    ['__client=device-a; __cf_bm=latest', '__client=device-b; __cf_bm=other'],
+  );
+  const replacedDashboardSnapshot = store.appendClientCookie(
+    equivalentDashboardSnapshots,
+    '__client=device-a; __cf_bm=newest',
+  );
+  assert.deepEqual(
+    replacedDashboardSnapshot.map((entry) => entry.cookie),
+    ['__client=device-a; __cf_bm=newest', '__client=device-b; __cf_bm=other'],
+  );
+});
+
+test('OTP method aliases stay compatible with legacy email_otp vault rows', async () => {
+  const { isOtpAuthMethod } = await import('../utils/auth-method.js');
+
+  assert.equal(isOtpAuthMethod('otp'), true);
+  assert.equal(isOtpAuthMethod('email'), true);
+  assert.equal(isOtpAuthMethod('email_otp'), true);
+  assert.equal(isOtpAuthMethod('password'), false);
+
+  const files = [
+    'server/services/store.js',
+    'server/services/dashboard-api.js',
+    'bin/commands/session.js',
+    'bin/commands/scan.js',
+    'src/components/LoginAccountModal.jsx',
+    'src/hooks/useBulkAuth.js',
+  ];
+  for (const file of files) {
+    assert.match(read(file), /isOtpAuthMethod/, `${file} must use shared OTP alias recognition`);
+  }
 });
 
 test('session controllers use the normalized latest cookie, not only legacy clientCookie', () => {
@@ -129,6 +172,15 @@ test('dashboard API normalizes Clerk and OpenRouter cookie headers instead of re
   assert.match(dashboardApi, /const cookieHeader = dashboardCookieHeader\(jwtToUse, clientCookie\)/);
   assert.doesNotMatch(dashboardApi, /['"]Cookie['"]:\s*clientCookie/);
   assert.doesNotMatch(dashboardApi, /`__session=\$\{sessionCookie\}; \$\{clientCookie\}`/);
+});
+
+test('redeem readiness considers stacked Clerk client cookies before legacy scalar state', () => {
+  const dashboardApi = read('server/services/dashboard-api.js');
+
+  assert.match(
+    dashboardApi,
+    /session\.clientCookies\?\.find\(\(entry\) => String\(entry\?\.cookie \|\| ''\)\.trim\(\)\)\?\.cookie\?\.trim\(\)[\s\S]*\|\| session\.clientCookie\?\.trim\(\)/,
+  );
 });
 
 test('API-key Playwright fallback injects real browser cookie objects, not a serialized header string', () => {

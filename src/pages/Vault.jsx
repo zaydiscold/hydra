@@ -6,7 +6,7 @@ import { VaultIcon, RefreshIcon, LockIcon, SettingsIcon, ShieldIcon, EditIcon, T
 import { accountNeedsSession, canProvisionWithSession } from '../utils/accountSession';
 import SessionDot from '../components/SessionDot';
 import { timeAgo } from '../utils/time';
-import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
+import { useVisibleRecurringTask } from '../hooks/useVisibleRecurringTask.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -123,27 +123,8 @@ export default function Vault({ addToast }) {
 
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
-  // Auto-refresh every 10 minutes while page is visible. Use a one-shot timer
-  // so a slow dashboard request cannot overlap the next refresh.
-  useEffect(() => {
-    let cancelled = false;
-    let timer = null;
-
-    const schedule = () => {
-      if (cancelled) return;
-      timer = setTrackedTimeout('Vault.autoRefresh', async () => {
-        timer = null;
-        if (!document.hidden) await loadAccounts(true);
-        schedule();
-      }, 10 * 60 * 1000);
-    };
-
-    schedule();
-    return () => {
-      cancelled = true;
-      if (timer) clearTrackedTimeout(timer);
-    };
-  }, [loadAccounts]);
+  const refreshVisibleVault = useCallback(() => loadAccounts(true), [loadAccounts]);
+  useVisibleRecurringTask('Vault.autoRefresh', refreshVisibleVault, 10 * 60 * 1000);
 
   // ── Provision management key ──
   const handleProvision = useCallback(async (acc) => {

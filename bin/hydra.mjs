@@ -361,7 +361,11 @@ function inspectHydraProcesses() {
       ok: false,
       unavailable: true,
       reason: 'process snapshot is not implemented for Windows in this CLI yet',
-      processes: [],
+      ...processTotals([]),
+      otherBrowserToolProcesses: {
+        ...processTotals([]),
+        note: 'Chrome/Chromium/Playwright/Electron processes not owned by Hydra; included for fan-pressure context only.',
+      },
     };
   }
 
@@ -405,7 +409,11 @@ function inspectHydraProcesses() {
       ok: false,
       unavailable: true,
       reason: err.message,
-      processes: [],
+      ...processTotals([]),
+      otherBrowserToolProcesses: {
+        ...processTotals([]),
+        note: 'Chrome/Chromium/Playwright/Electron processes not owned by Hydra; included for fan-pressure context only.',
+      },
     };
   }
 }

@@ -18,6 +18,7 @@ import {
   openRouterDashboardDeviceCookies,
   openRouterPlaywrightDeviceCookies,
 } from './clerk-auth.js';
+import { isOtpAuthMethod } from '../utils/auth-method.js';
 import * as store from './store.js';
 import { logger } from './logger.js';
 import { getCredits } from './openrouter.js';
@@ -762,7 +763,7 @@ export async function ensureSession(userId, accountId) {
     }
   }
 
-  // JWT expired or missing. Try refreshing via __client device cookie (12-hour lifetime).
+  // JWT expired or missing. Try refreshing via the stored Clerk device identity.
   // This is the normal path for OTP accounts after the initial 60s JWT expires.
   // Exploit #14: Cookie stacking — try all stacked cookies newest-first
   const refreshInput14b = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
@@ -804,7 +805,7 @@ export async function ensureSession(userId, accountId) {
   }
 
   // OTP accounts: session expired and no password — need re-authentication via email code.
-  if (account.authMethod === 'otp' || (account.email && !account.password)) {
+  if (isOtpAuthMethod(account.authMethod) || (account.email && !account.password)) {
     const err = new Error(
       `Session expired for OTP account ${accountId}. Email verification required. Open the account on the Hydra dashboard and click "Refresh Session" to receive a new verification code.`
     );
@@ -822,13 +823,14 @@ export async function ensureSession(userId, accountId) {
  * Mirrors ensureSession order except network calls (refreshSession, validateSession).
  * 
  * IMPORTANT: Does NOT use JWT expiry alone to determine readiness. 
- * Real sessions last 12+ hours even though JWTs expire in ~2.5 minutes.
+ * Refreshable Clerk sessions outlive their short-lived JWT proof tokens.
  * A session with expired JWT may still be valid and will be validated via API when needed.
  */
 function evaluateRedeemSessionReadiness(account, session) {
   const sessionCookie = session.sessionCookie?.trim();
   const hasSession = Boolean(sessionCookie);
-  const clientCookie = session.clientCookie?.trim();
+  const clientCookie = session.clientCookies?.find((entry) => String(entry?.cookie || '').trim())?.cookie?.trim()
+    || session.clientCookie?.trim();
   
   // If we have a session cookie, it might be valid (JWT expiry is NOT reliable)
   // ensureSession() will validate via API call when needed
@@ -841,7 +843,7 @@ function evaluateRedeemSessionReadiness(account, session) {
       return { ready: true, detail: 'session_valid' };
     }
     
-    // JWT appears expired but session might still be valid (12+ hour real sessions)
+    // JWT appears expired but the refreshable Clerk session might still be valid.
     // Return as 'session_validate' - ensureSession will verify via API
     return { ready: true, detail: 'session_validate' };
   }

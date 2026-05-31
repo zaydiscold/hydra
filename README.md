@@ -185,9 +185,11 @@ Current release-train docs:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
   checkpoints, and the final `[bump:minor]` path to `1.1.0`.
-- [Splash Tilt Research](docs/SPLASH_TILT_RESEARCH.md): how the 12 second,
-  92-word splash uses opportunistic device tilt, fallback lean, and bounded
+- [Splash Tilt Research](docs/SPLASH_TILT_RESEARCH.md): how the 16 second,
+  120-word splash uses opportunistic device tilt, fallback lean, staged exit, and bounded
   Matter.js/RAF/sensor cleanup.
+- [Session Truth](docs/SESSION_TRUTH.md): login-session versus management-key
+  state, live Clerk probes, bounded device-cookie identity memory, and OTP aliases.
 - [Release Audit](docs/RELEASE_AUDIT.md): measured performance evidence,
   packaged-app evidence, and the remaining manual dogfood blockers.
 

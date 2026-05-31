@@ -327,12 +327,15 @@ app.whenReady().then(async () => {
     //  12000 ms — +2s density pass (2026-05-26). User feedback: the new
     //             falling animation looks good; let it breathe longer and
     //             fill more of the screen before the main window takes over.
+    //  16000 ms — +33% elegance pass (2026-05-30). The upward flight now
+    //             ramps over its final three seconds instead of disappearing
+    //             behind a hard two-second gravity flip.
     //
     // PROGRESS-BAR LOCKSTEP: the splash canvas physics is self-contained,
     // but the `fillbar` keyframe in windows.js still measures perceived
     // progress for the user. Keep that keyframe duration in lockstep with
     // this constant so the bar reaches 100% as the splash dismisses.
-    const SPLASH_MIN_VISIBLE_MS = 12000;
+    const SPLASH_MIN_VISIBLE_MS = 16000;
     const splashElapsed = Date.now() - splashStartedAt;
     if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
       await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api';
-import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
+import { useVisibleRecurringTask } from './useVisibleRecurringTask.js';
 
 /**
  * Custom hook for Dashboard metrics and session logic.
@@ -116,26 +116,8 @@ export function useMetrics({ addToast }) {
     }
   }, [data?.accounts, liveStatuses, addToast]);
 
-  // Auto-refresh: one-shot timer avoids overlapping dashboard + sync requests.
-  useEffect(() => {
-    let cancelled = false;
-    let timer = null;
-
-    const schedule = () => {
-      if (cancelled) return;
-      timer = setTrackedTimeout('useMetrics.autoRefresh', async () => {
-        timer = null;
-        if (!document.hidden) await fetchDashboard(true);
-        schedule();
-      }, 5 * 60 * 1000);
-    };
-
-    schedule();
-    return () => {
-      cancelled = true;
-      if (timer) clearTrackedTimeout(timer);
-    };
-  }, [fetchDashboard]);
+  const refreshVisibleDashboard = useCallback(() => fetchDashboard(true), [fetchDashboard]);
+  useVisibleRecurringTask('useMetrics.autoRefresh', refreshVisibleDashboard, 5 * 60 * 1000);
 
   const handleProvision = useCallback(async (accountId) => {
     const account = data?.accounts?.find((item) => item.id === accountId);

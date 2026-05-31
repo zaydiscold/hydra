@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import * as api from '../api';
 import { accountNeedsSession } from '../utils/accountSession';
+import { isOtpAuthMethod } from '../utils/authMethod';
 import {
   clearTrackedInterval,
   setTrackedInterval,
@@ -115,35 +116,30 @@ export function useBulkAuth(addToast) {
           return;
         }
 
-        let list = [];
-        try {
-          const accs = await api.getAccounts();
-          list = Array.isArray(accs?.data) ? accs.data : [];
-        } catch (err) {
-          for (const [email, poll] of completed) {
+        await Promise.all(completed.map(async ([email, poll]) => {
+          try {
+            const res = await api.checkSessionLive(poll.accountId);
+            const status = res?.data?.status ?? res?.status;
+            if (status === 'active') {
+              stopMagicLinkPolling(email);
+              updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in — live session confirmed' });
+              appendEmailLinkLog(`✓ magic link claimed and live session confirmed → ${email}`);
+              addToast?.(`${email} signed in via magic link`, 'success');
+            } else {
+              stopMagicLinkPolling(email);
+              updateEmailLinkRow(email, { status: 'error', message: 'Link expired or session was not confirmed — resend' });
+              appendEmailLinkLog(`✗ magic link ended without an active Clerk session → ${email} (${status || 'unknown'})`);
+            }
+          } catch (err) {
             poll.consecutiveFailures += 1;
             if (poll.consecutiveFailures >= 3) {
               stopMagicLinkPolling(email);
-              updateEmailLinkRow(email, { status: 'error', message: 'Poll failed — check connection' });
-              appendEmailLinkLog(`✗ magic link account refresh failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
+              updateEmailLinkRow(email, { status: 'error', message: 'Session confirmation failed — check connection' });
+              appendEmailLinkLog(`✗ magic link live confirmation failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
             }
           }
-          return;
-        } finally {
-          for (const [, poll] of pollEntries) poll.inFlight = false;
-        }
-
-        for (const [email, poll] of completed) {
-          stopMagicLinkPolling(email);
-          const acc = list.find((a) => a.id === poll.accountId);
-          if (acc && acc.sessionStatus === 'active') {
-            updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in' });
-            appendEmailLinkLog(`✓ magic link claimed → ${email}`);
-            addToast?.(`${email} signed in via magic link`, 'success');
-          } else {
-            updateEmailLinkRow(email, { status: 'sent', message: 'Waiting for click…' });
-          }
-        }
+        }));
+        for (const [, poll] of pollEntries) poll.inFlight = false;
       })();
     }, POLL_INTERVAL);
   }, [addToast, appendEmailLinkLog, stopMagicLinkPolling, updateEmailLinkRow]);
@@ -165,12 +161,25 @@ export function useBulkAuth(addToast) {
       if (!evt.data || evt.data.type !== 'hydra:magic-link-done') return;
       const { email, signInId: doneSignInId } = evt.data;
       if (!email) return;
-      if (doneSignInId && activePolls[email]) {
-        stopMagicLinkPolling(email);
-      }
-      updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in (instant)' });
-      appendEmailLinkLog(`✓ postMessage received — magic link claimed → ${email}`);
-      addToast?.(`${email} signed in via magic link`, 'success');
+      const poll = activePolls[email];
+      if (!poll || (doneSignInId && doneSignInId !== poll.signInId)) return;
+
+      updateEmailLinkRow(email, { status: 'sent', message: 'Link clicked — confirming session…' });
+      void api.checkSessionLive(poll.accountId)
+        .then((res) => {
+          const status = res?.data?.status ?? res?.status;
+          if (status !== 'active') {
+            appendEmailLinkLog(`magic link clicked; Clerk session not active yet → ${email} (${status || 'unknown'})`);
+            return;
+          }
+          stopMagicLinkPolling(email);
+          updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in — live session confirmed' });
+          appendEmailLinkLog(`✓ magic link claimed and live session confirmed → ${email}`);
+          addToast?.(`${email} signed in via magic link`, 'success');
+        })
+        .catch((err) => {
+          appendEmailLinkLog(`magic link clicked; live session confirmation failed → ${email}: ${err?.message || 'unknown'}`);
+        });
     };
     window.addEventListener('message', onMessage);
     return () => {
@@ -420,7 +429,7 @@ export function useBulkAuth(addToast) {
         throw err;
       }
       const candidates = list.filter(
-        (a) => a.email && (a.authMethod === 'otp' || a.authMethod === 'email') && accountNeedsSession(a.sessionStatus)
+        (a) => a.email && isOtpAuthMethod(a.authMethod) && accountNeedsSession(a.sessionStatus)
       );
       
       let mergedLen = 0;

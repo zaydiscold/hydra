@@ -1,6 +1,6 @@
 # Splash Tilt Research
 
-Date: 2026-05-27
+Date: 2026-05-30
 
 ## What Was Found
 
@@ -17,13 +17,16 @@ The exact MacBook screen hinge angle is a different signal. It is exposed throug
 The current source splash is intentionally denser and longer than the first
 Matter.js pass:
 
-- `SPLASH_MIN_VISIBLE_MS = 12000` in `electron/main.js`.
-- `HYDRA_SPLASH_DURATION_MS=12000` in `electron/app/windows.js`.
-- `HYDRA_SPLASH_EXIT_MS=10000`, so the pile gets about 10 seconds to fall and
-  pack before the upward exit flip.
-- `HYDRA_SPLASH_TARGET=92`, which is 15% more falling words than the prior
-  80-word runtime.
-- `HYDRA_SPLASH_DISPOSE_MS=14500`, so the splash has a bounded cleanup window
+- `SPLASH_MIN_VISIBLE_MS = 16000` in `electron/main.js`.
+- `HYDRA_SPLASH_DURATION_MS=16000` in `electron/app/windows.js`.
+- `HYDRA_SPLASH_EXIT_MS=13000`, so the pile gets about 13 seconds to fall and
+  pack before the staged upward exit starts.
+- `HYDRA_SPLASH_EXIT_FLIGHT_MS=3000`, so the exit gravity ramps upward over
+  three seconds while the card lifts/fades and the canvas fades only near the
+  end of the flight.
+- `HYDRA_SPLASH_TARGET=120`, preserving the prior 10-word-per-second trickle
+  while extending the downward animation by about 30%.
+- `HYDRA_SPLASH_DISPOSE_MS=18500`, so the splash has a bounded cleanup window
   after the main transition and cannot leave Matter/RAF/timer work alive.
 
 This is why the next release notes should treat the splash change as part of
@@ -57,9 +60,9 @@ Current constants and their intent:
 
 | Value | Current setting | Why |
 | --- | --- | --- |
-| Visible splash | `12000ms` | Gives the richer falling-word sequence two extra seconds without letting graphics run forever. |
-| Exit flip | `10000ms` | Lets the pile settle for most of the splash, then reverses gravity for the upward whoosh. |
-| Word target | `92` | 15% denser than the earlier `80`-word Matter.js pass. |
+| Visible splash | `16000ms` | Extends the prior 12-second sequence by 33% without letting graphics run forever. |
+| Exit flight | `13000ms` start, `3000ms` ramp | Lets the pile settle, then stages the upward whoosh instead of applying a hard final flip. |
+| Word target | `120` | Preserves the 10-per-second trickle while extending the downward animation by about 30%. |
 | Sensor clamp | `+/-0.65` | Prevents a noisy sensor or extreme reading from pinning every word into a wall. |
 | Fallback lean | `+/-0.035` | Adds a visible but subtle side bias when no real sensor is exposed. |
 | Spawn x bias | `tilt * W() * 0.18` | Makes new words enter closer to the lower side instead of only drifting after spawn. |

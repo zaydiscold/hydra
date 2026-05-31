@@ -175,6 +175,7 @@ function buildAudit() {
   const metricsHook = safeRead('src/hooks/useMetrics.js');
   const trafficHook = safeRead('src/hooks/useTraffic.js');
   const bulkAuthHook = safeRead('src/hooks/useBulkAuth.js');
+  const visibleRecurringHook = safeRead('src/hooks/useVisibleRecurringTask.js');
   const vaultPage = safeRead('src/pages/Vault.jsx');
   const generatorPage = safeRead('src/pages/Generator.jsx');
   const nativeBridge = safeRead('src/lib/native.js');
@@ -302,7 +303,7 @@ function buildAudit() {
         && finalDogfoodScript.includes('--manual=')
         && finalDogfoodScript.includes('not API keys, cookies, account emails, Clerk session IDs')
         && finalDogfoodTest.includes('final dogfood evidence capture is redacted and manually explicit'),
-      'README/docs define Electron-only final dogfood screenshot requirements, Remotion plan, and redacted user-run evidence capture',
+      'README/docs define Electron-only final dogfood screenshot requirements and redacted user-run evidence capture',
     ),
     check(
       'mac-arm-artifact',
@@ -453,6 +454,7 @@ function buildAudit() {
         && readme.includes('Account proxy pool')
         && readme.includes('ip:port:user:pass')
         && readme.includes('The README avoids embedding real account data, full API keys, or live secrets')
+        && !/Remotion|remotion/.test(readme)
         && readme.includes('[docs/VERSIONING.md](docs/VERSIONING.md)')
         && versioningDoc.includes('[bump:minor]')
         && versioningDoc.includes('1.0.20 -> 1.1.0')
@@ -460,7 +462,7 @@ function buildAudit() {
         && versioningDoc.includes('x-axis value affects horizontal gravity, spawn')
         && versioningDoc.includes('Exact MacBook lid-angle tilt is not exposed through a standard Electron API')
         && goalDoc.includes('cut the release as a minor bump using `[bump:minor]`'),
-      'README.md has top navigation, grouped CLI/router/hardening/release sections, proxy-pool docs, versioning policy, splash tilt notes, and packaged-Electron screenshot secrecy guidance',
+      'README.md has top navigation, grouped CLI/router/hardening/release sections, proxy-pool docs, versioning policy, splash tilt notes, no Remotion references, and packaged-Electron screenshot secrecy guidance',
     ),
     check(
       'dependency-audit',
@@ -480,8 +482,9 @@ function buildAudit() {
         && !electronWindows.includes('Run.create')
         && !electronWindows.includes('Run.run')
         && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
-        && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=12000')
-        && electronWindows.includes('HYDRA_SPLASH_TARGET=92')
+        && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=16000')
+        && electronWindows.includes('HYDRA_SPLASH_EXIT_FLIGHT_MS=3000')
+        && electronWindows.includes('HYDRA_SPLASH_TARGET=120')
         && electronWindows.includes('tiltBias=hydraSplashTiltGravityX*(W()*0.18)')
         && electronWindows.includes('hydraSplashLeanX+= (hydraSplashTiltGravityX-hydraSplashLeanX)*0.08')
         && electronWindows.includes('disposeHydraSplash')
@@ -527,14 +530,16 @@ function buildAudit() {
         && uiStatic.includes('__HYDRA_RENDERER_DIAGNOSTICS__')
         && uiStatic.includes('short-lived renderer feedback timers are cleared on unmount')
         && uiStatic.includes('ScrambleText clears delayed intervals on unmount')
-        && rendererApp.includes('if (document.hidden || inFlight) return')
-        && rendererApp.includes("setTrackedTimeout('App.upstreamHealth'")
+        && visibleRecurringHook.includes("document.addEventListener('visibilitychange', handleVisibility)")
+        && visibleRecurringHook.includes('if (document.hidden) clear()')
+        && visibleRecurringHook.includes('if (cancelled || document.hidden) return')
+        && rendererApp.includes("useVisibleRecurringTask('App.upstreamHealth', refreshUpstreamHealth, 30_000, { enabled: authState === 'app' })")
         && metricsHook.includes('inFlightRef.current')
-        && metricsHook.includes("setTrackedTimeout('useMetrics.autoRefresh'")
+        && metricsHook.includes("useVisibleRecurringTask('useMetrics.autoRefresh', refreshVisibleDashboard, 5 * 60 * 1000)")
         && trafficHook.includes('inFlightRef.current')
-        && trafficHook.includes("setTrackedTimeout('useTraffic.autoRefresh'")
+        && trafficHook.includes("useVisibleRecurringTask('useTraffic.autoRefresh', refreshVisibleTraffic, 30000)")
         && vaultPage.includes('loadInFlightRef.current')
-        && vaultPage.includes("setTrackedTimeout('Vault.autoRefresh'")
+        && vaultPage.includes("useVisibleRecurringTask('Vault.autoRefresh', refreshVisibleVault, 10 * 60 * 1000)")
         && generatorPage.includes('statusPollInFlightRef.current')
         && generatorPage.includes('heartbeatInFlightRef.current')
         && generatorPage.includes("setTrackedTimeout('Generator.statusPoll'")
@@ -552,7 +557,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 12s with 92 words and stronger sensor/fallback side lean, Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 16s with 120 words, a staged 3s exit flight, and stronger sensor/fallback side lean; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',

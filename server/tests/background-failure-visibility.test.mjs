@@ -215,6 +215,7 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   const vault = readRepoFile('src/pages/Vault.jsx');
   const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
   const app = readRepoFile('src/App.jsx');
+  const visibleRecurring = readRepoFile('src/hooks/useVisibleRecurringTask.js');
   const generator = readRepoFile('src/pages/Generator.jsx');
   const bulkAuth = readRepoFile('src/hooks/useBulkAuth.js');
 
@@ -235,7 +236,11 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.doesNotMatch(metrics, /function probeProvisionTruth|async function probeProvisionTruth/);
   assert.doesNotMatch(vault, /Provision readiness probe failed|probeProvisionTruth/);
   assert.doesNotMatch(accountDetail, /probeSession\(\);\s*\}\)\(\);/);
-  assert.match(app, /if \(document\.hidden \|\| inFlight\) return/);
+  assert.match(app, /upstreamHealthInFlightRef\.current/);
+  assert.match(app, /authStateRef\.current !== 'app'/);
+  assert.match(app, /useVisibleRecurringTask\('App\.upstreamHealth', refreshUpstreamHealth, 30_000, \{ enabled: authState === 'app' \}\)/);
+  assert.match(visibleRecurring, /if \(document\.hidden\) clear\(\)/);
+  assert.match(visibleRecurring, /if \(cancelled \|\| document\.hidden\) return/);
   assert.match(metrics, /inFlightRef\.current/);
   assert.match(traffic, /inFlightRef\.current/);
   assert.match(vault, /loadInFlightRef\.current/);
@@ -421,7 +426,7 @@ test('traffic backend runs independent request-log reads in parallel', () => {
   assert.doesNotMatch(handler, /const logs = await[\s\S]*const metrics = await/);
 });
 
-test('bulk magic-link polling batches account refresh after completions', () => {
+test('bulk magic-link polling confirms completed links with a live Clerk session probe', () => {
   const source = readRepoFile('src/hooks/useBulkAuth.js');
   const poller = source.slice(
     source.indexOf('const ensureMagicLinkPoller = useCallback'),
@@ -430,9 +435,12 @@ test('bulk magic-link polling batches account refresh after completions', () => 
 
   assert.match(poller, /const completed = \[\]/);
   assert.match(poller, /await Promise\.all\(pollEntries\.map/);
-  assert.match(poller, /const accs = await api\.getAccounts\(\)/);
-  assert.match(poller, /for \(const \[email, poll\] of completed\)/);
-  assert.doesNotMatch(poller, /getMagicLinkStatus[\s\S]{0,500}const accs = await api\.getAccounts\(\)/);
+  assert.match(poller, /await Promise\.all\(completed\.map/);
+  assert.match(poller, /completed\.map\(async \(\[email, poll\]\) => \{\s*try \{/);
+  assert.match(poller, /api\.checkSessionLive\(poll\.accountId\)/);
+  assert.match(poller, /status === 'active'/);
+  assert.match(poller, /Link expired or session was not confirmed/);
+  assert.doesNotMatch(poller, /api\.getAccounts\(\)/);
 });
 
 test('account generator browser signup uses the encrypted proxy pool when present', () => {

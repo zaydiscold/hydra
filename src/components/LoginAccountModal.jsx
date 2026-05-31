@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import * as api from '../api';
+import { isOtpAuthMethod } from '../utils/authMethod';
 
 function initialStepForAccount(account) {
-  if (account?.authMethod === 'otp') return 'otp_intro';
+  if (isOtpAuthMethod(account?.authMethod)) return 'otp_intro';
   if (account?.passwordOnFile === false) return 'otp_intro';
   return 'password';
 }
@@ -102,7 +103,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
     setSignInId('');
     setOtpMode(OTP_MODE.email);
     setErrors({});
-    const otpFirst = account.authMethod === 'otp' || account.passwordOnFile === false;
+    const otpFirst = isOtpAuthMethod(account.authMethod) || account.passwordOnFile === false;
     setStep(otpFirst ? 'otp_intro' : 'password');
   }
 
