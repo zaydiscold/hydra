@@ -163,3 +163,25 @@ under:
 ```text
 /private/tmp/hydra-v115-public-session-ui-20260531T134932Z
 ```
+
+## 2026-05-31 Exact-Public v1.4.0 Recheck
+
+A post-release sequential sweep repeated the production
+`hydra session <id> --refresh --json` probe path against all stored rows. The
+owner-only (`0600`) redacted summary lives at:
+
+```text
+/private/tmp/hydra-live-session-recheck-v140-20260531T212329Z/redacted-summary.json
+```
+
+The summary contains no account IDs, aliases, emails, cookies, session tokens,
+or management keys. Results:
+
+- `12/12` stored rows completed a live Clerk probe.
+- `4` logins were active and redeem-ready.
+- `8` rows had no active stored login and remained explicit OTP re-auth
+  candidates.
+- `0` probes failed and `0` rows reported decrypt failures.
+- One active login intentionally had no management key.
+- Every active row retained a one-entry Clerk identity stack, a just-now
+  silent renewal timestamp, and a `7.0d` next local renewal checkpoint.

@@ -33,7 +33,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 
 | # | Acceptance item | Current evidence | State |
 | --- | --- | --- | --- |
-| 1 | Five-minute idle CPU improvement or honest unmeasurable boundary | Fresh exact-public-`v1.1.4` profiling sampled the already-settled packaged app every 30 seconds for five minutes: four Hydra-owned processes and zero Hydra Playwright profiles throughout, `0.0-0.3%` instantaneous CPU (`0.03%` average, ending at `0.0%`), and `575.92 MB -> 577.41 MB` RSS (`+1.48 MiB`). A later independent recheck again kept four processes and zero profiles across all 11 samples, with `0.0-0.7%` CPU (`0.082%` average) and RSS falling from `592.53 MiB` to `553.19 MiB` (`-39.34 MiB`). The exact-public `v1.1.5` steady-dot repair repeated the same 11-sample no-interaction profile at `0.0-0.5%` CPU (`0.136%` average) with `+5.59 MiB` RSS drift. The fresh exact-public `v1.3.0` post-closeout pass retained four processes and zero profiles across all 11 samples at `0.0-0.4%` CPU (`0.091%` average, `33.2%` below the `v1.1.5` calm public baseline) with `604.80 MiB -> 606.66 MiB` RSS (`+1.86 MiB`). | Verified |
+| 1 | Five-minute idle CPU improvement or honest unmeasurable boundary | Fresh exact-public-`v1.1.4` profiling sampled the already-settled packaged app every 30 seconds for five minutes: four Hydra-owned processes and zero Hydra Playwright profiles throughout, `0.0-0.3%` instantaneous CPU (`0.03%` average, ending at `0.0%`), and `575.92 MB -> 577.41 MB` RSS (`+1.48 MiB`). A later independent recheck again kept four processes and zero profiles across all 11 samples, with `0.0-0.7%` CPU (`0.082%` average) and RSS falling from `592.53 MiB` to `553.19 MiB` (`-39.34 MiB`). The exact-public `v1.1.5` steady-dot repair repeated the same 11-sample no-interaction profile at `0.0-0.5%` CPU (`0.136%` average) with `+5.59 MiB` RSS drift. The fresh exact-public `v1.3.0` post-closeout pass retained four processes and zero profiles across all 11 samples at `0.0-0.4%` CPU (`0.091%` average, `33.2%` below the `v1.1.5` calm public baseline) with `604.80 MiB -> 606.66 MiB` RSS (`+1.86 MiB`). The exact-public `v1.4.0` post-closeout pass retained the same four-process PID set and zero profiles across all 11 samples at `0.0-0.1%` CPU (`0.064%` average, `53.2%` below the `v1.1.5` calm public baseline) with `600.36 MiB -> 593.58 MiB` RSS (`-6.78 MiB`). | Verified |
 | 2 | No orphan browser/helper processes after owning surface | Exact-public-`v1.1.5` LaunchServices relaunch evidence captured four owned processes before quit, zero after quit, one splash renderer during animation, and one replacement main renderer after teardown. After the bounded startup window, the replacement tree settled to four owned processes at `0.0%` CPU; `hydra doctor --json` reported zero Hydra Playwright profiles. Raw `ps -ax \| grep -iE 'chrome\|chromium\|playwright\|electron\|hydra'` snapshots are preserved locally with the anchored Hydra-owned subsets. | Verified |
 | 3 | No runaway renderer/Matter/Anime/timer loops after unmount | Fresh packaged splash diagnostics report `72/72` unique shatters, `0` duplicate skips, collision-free portal entry, `timers=0`, `rafActive=false`, and Matter cleared after teardown. Exact-public-`v1.1.5` route instrumentation mounted Dashboard, Bulk OTP, Vault, Pool Manager, Redeem, Generator, Traffic, Settings, and Account Detail. Settled Settings and Account Detail each reported `0` intervals, `0` active RAFs, `0` Anime effects, and only the bounded `App.upstreamHealth` timeout. Account Detail's mount-only `ScrambleText.reveal` intervals and `AnimeText.scanline` effect cleared after the visual window. | Verified |
 | 4 | `electron-updater` ESM import crash fixed; packaged smoke green | Default import/destructure source contract passes; `v1.1.0` release matrix run `26702889329` passed smoke on all desktop targets. | Verified |
@@ -931,3 +931,35 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   remains checked. Interactive route review, account-grid magnetic-response
   review, live OTP/redemption/proxy flows, Touch ID fingerprint approval, and
   real Windows NSIS install/open UX remain explicit manual boundaries.
+- 2026-05-31 exact-public `v1.4.0` post-closeout idle profile:
+  `/private/tmp/hydra-v140-public-post-closeout-idle-profile-20260531T141703`
+  sampled the untouched canonical package every 30 seconds for five minutes.
+  All 11 samples retained the same four Hydra-owned PIDs and zero stale Hydra
+  Playwright profiles. Aggregate CPU stayed between `0.0%` and `0.1%`
+  (`0.064%` average), which is `53.2%` below the exact-public `v1.1.5` calm
+  public baseline. RSS moved from `600.36 MiB` to `593.58 MiB` (`-6.78 MiB`).
+  The local evidence directory preserves before/after broad process
+  inventories, anchored Hydra-owned subsets, doctor snapshots, all samples,
+  and `summary.json`.
+- 2026-05-31 exact-public `v1.4.0` live-session recheck:
+  `/private/tmp/hydra-live-session-recheck-v140-20260531T212329Z/redacted-summary.json`
+  is an owner-only (`0600`) aggregate from 12 sequential
+  `hydra session <id> --refresh --json` calls through the production
+  `store.probeSessionLive()` path. All 12 probes completed without decrypt or
+  command failures: four logins were active and redeem-ready, eight remained
+  explicit OTP re-auth candidates, every active row retained a one-entry Clerk
+  identity stack and a `7.0d` renewal checkpoint, and one active login remained
+  intentionally independent of management-key state. The artifact contains no
+  account IDs, aliases, emails, cookies, tokens, or management keys.
+- 2026-05-31 exact-public `v1.4.0` post-closeout verification: `npm run lint`,
+  full `npm test`, `npm run gate` (`12/12`), `npm run build`,
+  `npm run openapi:hydra` (`83 operations`), `git diff --check`, strict deep
+  `codesign`, and `node bin/hydra.mjs audit --json` (`31 ok / 5 deferred /
+  0 missing / 0 blockers`) passed. The first explicit-resource ARM package
+  smoke correctly reported that the cleaned local release directory no longer
+  held the public zip; the corrected rerun temporarily symlinked the already
+  SHA-verified public `Hydra-1.4.0-mac-arm64.zip`, passed
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, and moved the
+  symlink reversibly to Trash. Local `docker info` remains unavailable because
+  Docker Desktop is stopped; hosted Docker run `26724119196` remains the
+  current runtime-smoke and registry-push evidence.

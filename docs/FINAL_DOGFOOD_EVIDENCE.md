@@ -926,3 +926,26 @@ This evidence file is not release-complete by itself. The release remains not co
   checked. Interactive route review, account-grid magnetic-response review,
   live OTP/redemption/proxy flows, Touch ID fingerprint approval, and real
   Windows NSIS install/open UX remain explicit manual boundaries.
+- `/private/tmp/hydra-v140-public-post-closeout-idle-profile-20260531T141703`
+  sampled the untouched exact-public `v1.4.0` canonical package every 30
+  seconds for five minutes. All 11 samples retained the same four Hydra-owned
+  PIDs and zero stale profiles. Aggregate CPU stayed between `0.0%` and `0.1%`
+  (`0.064%` average), `53.2%` below the exact-public `v1.1.5` calm public
+  baseline; RSS moved from `600.36 MiB` to `593.58 MiB` (`-6.78 MiB`).
+  Before/after broad process inventories, anchored Hydra-owned subsets, doctor
+  snapshots, and `summary.json` remain preserved locally.
+- `/private/tmp/hydra-live-session-recheck-v140-20260531T212329Z/redacted-summary.json`
+  is an owner-only (`0600`) aggregate from 12 sequential production
+  `store.probeSessionLive()` calls through `hydra session <id> --refresh
+  --json`. All 12 probes completed without failures or decrypt errors: four
+  logins remained active and redeem-ready, eight remained explicit OTP re-auth
+  candidates, active cookie stacks stayed at one Clerk identity, and one
+  active login remained intentionally independent of management-key state.
+  The artifact contains no account identifiers or secret material.
+- The post-closeout local verification chain passed `npm run lint`, full
+  `npm test`, `npm run gate` (`12/12`), `npm run build`,
+  `npm run openapi:hydra` (`83 operations`), `git diff --check`, strict deep
+  `codesign`, corrected explicit-resource ARM package smoke against the
+  already SHA-verified public zip, and `hydra audit` (`31 ok / 5 deferred /
+  0 missing / 0 blockers`). Local Docker Desktop is stopped; hosted Docker run
+  `26724119196` remains the current runtime-smoke and registry-push evidence.

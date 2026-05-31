@@ -515,6 +515,29 @@ closed-app CLI commands, tests, and repo-local documentation.
   verified; interactive route review, magnetic-grid visual review, live
   account flows, Touch ID fingerprint approval, and real Windows NSIS
   install/open UX remain explicit manual boundaries.
+- `/private/tmp/hydra-v140-public-post-closeout-idle-profile-20260531T141703`
+  sampled the untouched exact-public `v1.4.0` package every 30 seconds for five
+  minutes. All 11 samples retained the same four Hydra-owned PIDs and zero
+  stale profiles. Aggregate CPU stayed between `0.0%` and `0.1%` (`0.064%`
+  average), `53.2%` below the exact-public `v1.1.5` calm public baseline; RSS
+  moved from `600.36 MiB` to `593.58 MiB` (`-6.78 MiB`). Before/after broad
+  process inventories, anchored Hydra-owned subsets, doctor snapshots, and
+  `summary.json` remain preserved locally.
+- `/private/tmp/hydra-live-session-recheck-v140-20260531T212329Z/redacted-summary.json`
+  is an owner-only (`0600`) aggregate from 12 sequential production
+  `store.probeSessionLive()` calls through `hydra session <id> --refresh
+  --json`. All 12 probes completed without failures or decrypt errors: four
+  logins remained active and redeem-ready, eight remained explicit OTP re-auth
+  candidates, active cookie stacks stayed at one Clerk identity, and one
+  active login remained intentionally independent of management-key state.
+  The artifact contains no account identifiers or secret material.
+- The exact-public `v1.4.0` post-closeout local verification chain passed
+  `npm run lint`, full `npm test`, `npm run gate` (`12/12`), `npm run build`,
+  `npm run openapi:hydra` (`83 operations`), `git diff --check`, strict deep
+  `codesign`, corrected explicit-resource ARM package smoke against the
+  already SHA-verified public zip, and `hydra audit` (`31 ok / 5 deferred /
+  0 missing / 0 blockers`). Local Docker Desktop is stopped; hosted Docker run
+  `26724119196` remains the current runtime-smoke and registry-push evidence.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
