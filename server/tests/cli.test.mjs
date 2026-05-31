@@ -378,7 +378,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'touch-id-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'windows-launch-dogfood' && item.state === 'deferred' && /hosted Windows unpacked-app startup\/cleanup passed/.test(item.evidence) && /NSIS installer install\/open UX/.test(item.evidence)));
-  assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence) && /newest recorded checkpoint run 26723122021/.test(item.evidence)));
+  assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence) && /newest recorded checkpoint run 26724119196/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'session-probe-redaction' && item.state === 'ok' && /masking account aliases/.test(item.evidence)));
   for (const item of report.items.filter((entry) => entry.state === 'deferred')) {
     assert.match(item.evidence, /not release-complete evidence/);

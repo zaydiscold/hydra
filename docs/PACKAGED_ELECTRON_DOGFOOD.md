@@ -116,8 +116,8 @@ Then copy the relevant summary into `docs/RELEASE_AUDIT.md`.
 | Bulk OTP isolation | Multi-account bulk OTP run keeps account states isolated and visible | pending |
 | Code redemption | Single and bulk redemption paths are verified with live or controlled redeemable codes | pending |
 | Proxy rotation/SSE | `/v1/chat/completions` with real pooled keys streams and rotates as expected | pending |
-| Windows installer launch | Install and launch the current `release/Hydra-<version>-win-x64.exe` or CI release artifact on a real Windows desktop; record OS and result. Hosted `windows-2022` unpacked-app startup/cleanup smoke passed for public `v1.3.0` in release run `26723127043`. | pending |
-| Docker runtime | Hosted Docker workflow run `26723524082` passed `Runtime Smoke` and `Build & Push` for public-release closeout checkpoint `8945d53`. A local `npm run docker:smoke` rerun is optional while Docker Desktop is stopped. | verified by hosted runtime |
+| Windows installer launch | Install and launch the current `release/Hydra-<version>-win-x64.exe` or CI release artifact on a real Windows desktop; record OS and result. Hosted `windows-2022` unpacked-app startup/cleanup smoke passed for public `v1.4.0` in release run `26724123318`. | pending |
+| Docker runtime | Hosted Docker workflow run `26724119196` passed `Runtime Smoke` and `Build & Push` for the `v1.4.0` release trigger. A local `npm run docker:smoke` rerun is optional while Docker Desktop is stopped. | verified by hosted runtime |
 | Screenshot audit | Last step only: packaged Electron screenshots across representative sizes are reviewed for layout/color/text issues | pending |
 
 Manual flag mapping:
@@ -134,7 +134,7 @@ Manual flag mapping:
 | `--manual=windows-launch` | Current Windows NSIS artifact installed and launched on Windows; OS/version/result recorded. |
 
 Hosted Windows automation is a narrower release gate than the manual flag.
-Public desktop release workflow run `26723127043` built the `v1.3.0` Windows
+Public desktop release workflow run `26724123318` built the `v1.4.0` Windows
 package, passed target-specific filesystem smoke, launched
 `release/win-unpacked/Hydra.exe` with isolated app data, observed the main,
 GPU, network-utility, and renderer processes after `25,000ms`, then verified
@@ -191,6 +191,28 @@ found zero credential-shaped or endpoint-shaped hits; ImageMagick reported a
 nonblank `3016x1936` image with `6443` colors. This proves current packaged-app
 capture provenance without promoting the deferred interactive visual-review
 checkbox.
+
+## v1.4.0 Public Desktop Closeout
+
+Public release workflow run `26724123318` passed shared gates, package smoke
+for macOS arm64, macOS Intel, Windows x64 NSIS, and Linux x64 AppImage, the
+hosted Windows unpacked-executable launch-and-cleanup check, artifact uploads,
+and merged macOS updater metadata. All ten downloaded public assets matched
+their GitHub SHA-256 digests. The updater SHA-512 values matched both Mac
+archives, the Windows installer, and the Linux AppImage.
+
+The downloaded public arm64 zip passed strict deep codesign and
+explicit-resource package smoke before installation. The previous canonical
+app moved reversibly to Trash; `release/mac-arm64/Hydra.app` now reports
+`1.4.0`, Spotlight resolves only that app, and a normal no-debug
+LaunchServices launch surfaced one native `Hydra — Dashboard` window at
+`1440x900`. A settled doctor snapshot reported four Hydra-owned processes at
+`0.0%` CPU, `591.00 MB` RSS, and zero stale Hydra Playwright profiles.
+
+This closes machine-verifiable release evidence only. Interactive route
+review, account-grid magnetic-response review, Touch ID fingerprint approval,
+live OTP/redemption/proxy flows, and real Windows NSIS install/open UX remain
+manual boundaries.
 
 ## Native Accessibility Profiling Guardrail
 

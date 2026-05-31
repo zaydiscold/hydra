@@ -17,12 +17,12 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Multi-arch macOS updater metadata | Release workflow includes `mac-update-metadata` and `scripts/merge-mac-update-yml.mjs`; workflow contract requires merged `latest-mac.yml` with arm64 and x64 files. v1.0.17 release artifact inspection verified `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` were published with macOS arm64/x64 and Windows artifacts. | Verified by release |
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
-| Release artifacts | GitHub release v1.3.0 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26723127043` passed shared gates, package smoke on every target, the hosted Windows unpacked-executable launch-and-cleanup gate, artifact uploads, and macOS updater-metadata merge. The earlier v1.0.17 macOS arm64 GUI startup failure exposed a missing packaged `dotenv` dependency; later package smoke reproduced the old failure and passed after the dependency fix. Real Intel GUI and Windows NSIS install/open UX remain target-runner or user-run evidence only. | Asset presence verified; startup fix released |
+| Release artifacts | GitHub release v1.4.0 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26724123318` passed shared gates, package smoke on every target, the hosted Windows unpacked-executable launch-and-cleanup gate, artifact uploads, and macOS updater-metadata merge. All ten downloaded public assets matched GitHub SHA-256 digests; every updater SHA-512 matched its released binary. Real Intel GUI and Windows NSIS install/open UX remain target-runner or user-run evidence only. | Asset presence verified; startup fix released |
 | macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The latest locally dogfooded v1.0.11 macOS arm64 release artifact verifies with `codesign --verify --deep --strict`, includes the vendored splash physics runtime, and `ELECTRON_RUN_AS_NODE=1 Hydra.app/Contents/MacOS/Hydra -e ...` loads Electron Framework successfully. | Verified by release artifact dogfood |
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Packaged screenshot plan | Current gallery and splash media come from packaged Electron only and stay redacted; final interactive human visual review remains manual. The superseded Remotion lane is out of scope. | Partially verified |
-| Docker runtime smoke | GitHub Actions run `26723122021` passed both `Runtime Smoke` and `Build & Push` for the `v1.3.0` release trigger. Earlier run `26196262336` also proved `npm run docker:smoke -- --start` can build/start the compose service, receive a health response, and clean up compose resources. | Verified by CI runtime smoke |
+| Docker runtime smoke | GitHub Actions run `26724119196` passed both `Runtime Smoke` and `Build & Push` for the `v1.4.0` release trigger. Earlier run `26196262336` also proved `npm run docker:smoke -- --start` can build/start the compose service, receive a health response, and clean up compose resources. | Verified by CI runtime smoke |
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
 | Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 | Idle backend performance pass | PR #18 merged as master f74c195 and v1.0.9 includes delayed session/request-log startup sweeps, opt-in session-lifetime probe, relaxed task-supervisor sweep interval, and removed eager renderer live-probe fan-out from dashboard/vault/account-detail page load. CI, Electron package smoke, Docker, and release automation passed after merge. | Verified by CI/release |
@@ -903,3 +903,31 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   explicit-resource `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`,
   strict deep codesign, and nested-release-output exclusion without replacing
   the installed exact-public `v1.3.0` app.
+- 2026-05-31 public `v1.4.0` renderer/media publication: auto-version run
+  `26724119200`, master CI run `26724119194`, Docker workflow run
+  `26724119196`, and desktop release run `26724123318` passed. The desktop
+  release published macOS arm64 zip/blockmap, macOS Intel zip/blockmap,
+  Windows x64 NSIS installer/blockmap, Linux x64 AppImage, merged
+  `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`.
+  Windows also passed the hosted unpacked-executable launch-and-cleanup gate.
+  All ten downloaded public assets matched GitHub SHA-256 digests, and the
+  released arm64 Mac, Intel Mac, Windows, and Linux binaries matched their
+  updater-manifest SHA-512 values.
+  Docker workflow run `26724119196` passed both runtime smoke and registry image push.
+- 2026-05-31 canonical exact-public `v1.4.0` install and native launch: the
+  previous canonical app moved reversibly to Trash, the downloaded arm64 zip
+  installed at `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`, and
+  strict deep codesign plus explicit-resource package smoke passed. Spotlight
+  returns only that canonical `Hydra.app`, which reports version `1.4.0`.
+  `/private/tmp/hydra-v140-public-native-launch-20260531T140421` records a
+  normal no-debug LaunchServices launch: four Hydra-owned processes, no
+  listeners on `9333` or `9334`, and one CoreGraphics
+  `Hydra — Dashboard` window at `1440x900`. A settled follow-up doctor snapshot
+  reported four Hydra-owned processes at `0.0%` CPU, `591.00 MB` RSS, and zero
+  stale Hydra Playwright profiles.
+- 2026-05-31 conservative public `v1.4.0` dogfood evidence refresh:
+  `docs/DOGFOOD_EVIDENCE.json` was regenerated against the downloaded public
+  distributables and sanitized before check-in. Only `packaged-gui-launch`
+  remains checked. Interactive route review, account-grid magnetic-response
+  review, live OTP/redemption/proxy flows, Touch ID fingerprint approval, and
+  real Windows NSIS install/open UX remain explicit manual boundaries.

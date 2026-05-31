@@ -898,3 +898,31 @@ This evidence file is not release-complete by itself. The release remains not co
   with `6443` colors; Tesseract OCR found zero credential-shaped or
   endpoint-shaped hits. This is packaged-app provenance proof only. It does not
   promote the deferred interactive route-review checkbox.
+
+## v1.4.0 Public Desktop Release
+
+- Public release `v1.4.0` is live from release commit
+  `700999bcb0a54afa7e8f9379fb01d69c6b49e10d`. Auto-version run
+  `26724119200`, master CI run `26724119194`, Docker run `26724119196`, and
+  desktop release run `26724123318` passed.
+- The release contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap,
+  Windows x64 NSIS installer/blockmap, Linux x64 AppImage, Windows
+  `latest.yml`, Linux `latest-linux.yml`, and merged multi-architecture
+  `latest-mac.yml`. All ten downloaded public assets matched GitHub SHA-256
+  digests. Both Mac archives, the Windows installer, and the Linux AppImage
+  matched their updater SHA-512 entries.
+- The downloaded public arm64 archive passed deep strict codesign and
+  explicit-resource `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`.
+  The prior canonical app moved reversibly to Trash; the exact public bundle is
+  installed at `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`.
+  Spotlight returns only that canonical bundle at version `1.4.0`.
+- `/private/tmp/hydra-v140-public-native-launch-20260531T140421` records a
+  normal no-debug LaunchServices launch. CoreGraphics exposed one on-screen
+  `Hydra — Dashboard` window at `1440x900`; no listener existed on debug ports
+  `9333` or `9334`. A settled doctor snapshot reported four owned processes,
+  `0.0%` CPU, `591.00 MB` RSS, and zero stale profiles.
+- `docs/DOGFOOD_EVIDENCE.json` was regenerated against the public `1.4.0`
+  artifacts and sanitized before check-in. Only `packaged-gui-launch` is
+  checked. Interactive route review, account-grid magnetic-response review,
+  live OTP/redemption/proxy flows, Touch ID fingerprint approval, and real
+  Windows NSIS install/open UX remain explicit manual boundaries.
