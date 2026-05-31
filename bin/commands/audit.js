@@ -209,6 +209,7 @@ function buildAudit() {
   const vaultPage = safeRead('src/pages/Vault.jsx');
   const generatorPage = safeRead('src/pages/Generator.jsx');
   const codeRedemptionPage = safeRead('src/pages/CodeRedemption.jsx');
+  const accountDetailPage = safeRead('src/pages/AccountDetail.jsx');
   const nativeBridge = safeRead('src/lib/native.js');
   const electronIpcContract = safeRead('server/tests/electron-ipc-contract.test.mjs');
   const cleanupAuxProcesses = safeRead('electron/utils/cleanupAuxProcesses.js');
@@ -609,6 +610,24 @@ function buildAudit() {
         && codeRedemptionPage.includes('api.preflightRedeemAccounts(ids, signal)')
         && codeRedemptionPage.includes('api.preflightRedeemAccounts(accountIdsToRun, signal)')
         && codeRedemptionPage.includes('api.bulkMatrixRedeem(assignments, signal)')
+        && accountDetailPage.includes('const initialFetchAccountIdRef = useRef(null)')
+        && accountDetailPage.includes('const accountAbortRef = useRef(null)')
+        && accountDetailPage.includes('initialFetchAccountIdRef.current !== resolvedAccountId')
+        && accountDetailPage.includes('for (const timer of transientTimersRef.current) clearTrackedTimeout(timer)')
+        && accountDetailPage.includes('setMgmtKeyFull(null)')
+        && accountDetailPage.includes('setTestKeyStatus({})')
+        && accountDetailPage.includes('api.getAccounts(signal)')
+        && accountDetailPage.includes('api.getAccountSnapshot(resolvedAccountId, signal)')
+        && accountDetailPage.includes('api.getManagementKeys(resolvedAccountId, signal)')
+        && accountDetailPage.includes('api.checkSessionLive(resolvedAccountId, signal)')
+        && accountDetailPage.includes('api.getAccountManagementKey(resolvedAccountId, signal)')
+        && accountDetailPage.includes('api.testKey(resolvedAccountId, hash, signal)')
+        && accountDetailPage.includes('fetchSnapshot(signal)')
+        && accountDetailPage.includes('fetchManagementKeys(signal)')
+        && accountDetailPage.includes('const renderedAccountSignal = accountAbortRef.current?.signal')
+        && accountDetailPage.includes('isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)')
+        && accountDetailPage.includes('fetchMeta(renderedAccountSignal)')
+        && accountDetailPage.includes('fetchSnapshot(renderedAccountSignal)')
         && cliMain.includes('inspectHydraPlaywrightProfiles')
         && cliMain.includes('inspectHydraProcesses')
         && cliMain.includes('--clean-stale-profiles')

@@ -79,6 +79,30 @@ test('code redeemer aborts route-owned work and superseded preflights', () => {
   assert.match(source, /api\.bulkMatrixRedeem\(assignments, signal\)/);
 });
 
+test('account detail aborts account-scoped reads and reloads when route id changes', () => {
+  const source = readRepoFile('src/pages/AccountDetail.jsx');
+
+  assert.match(source, /const initialFetchAccountIdRef = useRef\(null\)/);
+  assert.match(source, /const accountAbortRef = useRef\(null\)/);
+  assert.match(source, /controller\.abort\(\)/);
+  assert.match(source, /initialFetchAccountIdRef\.current !== resolvedAccountId/);
+  assert.match(source, /for \(const timer of transientTimersRef\.current\) clearTrackedTimeout\(timer\)/);
+  assert.match(source, /setMgmtKeyFull\(null\)/);
+  assert.match(source, /setTestKeyStatus\(\{\}\)/);
+  assert.match(source, /api\.getAccounts\(signal\)/);
+  assert.match(source, /api\.getAccountSnapshot\(resolvedAccountId, signal\)/);
+  assert.match(source, /api\.getManagementKeys\(resolvedAccountId, signal\)/);
+  assert.match(source, /api\.checkSessionLive\(resolvedAccountId, signal\)/);
+  assert.match(source, /api\.getAccountManagementKey\(resolvedAccountId, signal\)/);
+  assert.match(source, /api\.testKey\(resolvedAccountId, hash, signal\)/);
+  assert.match(source, /fetchSnapshot\(signal\)/);
+  assert.match(source, /fetchManagementKeys\(signal\)/);
+  assert.match(source, /const renderedAccountSignal = accountAbortRef\.current\?\.signal/);
+  assert.match(source, /isCurrentRouteSignal\(accountAbortRef, renderedAccountSignal\)/);
+  assert.match(source, /fetchMeta\(renderedAccountSignal\)/);
+  assert.match(source, /fetchSnapshot\(renderedAccountSignal\)/);
+});
+
 test('account dedup and silent-refresh fallbacks are logged', () => {
   const source = readRepoFile('server/controllers/AccountController.js');
 

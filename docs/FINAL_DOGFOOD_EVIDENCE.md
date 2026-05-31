@@ -652,3 +652,50 @@ This evidence file is not release-complete by itself. The release remains not co
   30-second samples. CPU stayed between `0.0%` and `0.3%` (`0.045%` average);
   RSS moved from `457.22 MiB` to `460.89 MiB` (`+3.67 MiB`) while source
   verification ran.
+- Account Detail reads now belong to the resolved account route: route cleanup
+  or an account-ID switch aborts account metadata, snapshot, management-key
+  list, live-session probe, reveal, and key-test reads. The old mount-only
+  initial-load guard is account-ID scoped so a reused detail route reloads the
+  selected account. The same boundary clears account-specific modal, reveal,
+  copied, transient-timer, and key-test UI state while suppressing late UI
+  writes from server-completing mutations and login/create-key modal callbacks
+  after navigation. A 200-route synthetic switch probe at
+  `/private/tmp/hydra-account-detail-route-switch-benchmark-20260531T161135Z`
+  recorded one old-shape account load with `1200` detached request timeout
+  resources versus all `200` account loads, `0` pending timeout resources, and
+  `1200` aborts for the route-owned shape. This proves lifecycle ownership and
+  the reload guard, not a live API outcome.
+- The Account Detail lifecycle patch passed focused background lifecycle
+  (`30/30`), UI static (`35/35`), lint, full test, build, OpenAPI (`83
+  operations`), serial gate (`12/12`), and diff checks. A temporary arm64
+  package at
+  `/private/tmp/hydra-package-account-detail-abort-final-modal-20260531T183457Z`
+  passed
+  packaged resource smoke, strict deep signature verification, and bundled
+  renderer inspection. It was moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-account-detail-abort-final-modal-20260531T183457Z`;
+  Spotlight continues to resolve only the canonical public app.
+- An eleventh exact-public `v1.1.5` profile at
+  `/private/tmp/hydra-v115-eleventh-untouched-idle-reprofile-20260531T161135Z`
+  preserved two bounded perturbations while isolated packaging continued:
+  first-sample Hydra CPU was `41.6%`, one packaging-time sample reached `13.0%`
+  with five processes, and the other nine samples stayed between `0.0%` and
+  `0.1%`. The run ended with four Hydra-owned processes, zero stale profiles,
+  and RSS moving from `468.95 MiB` to `464.53 MiB` (`-4.42 MiB`). A quiet
+  follow-up profile is required before treating this run as an idle baseline.
+- A twelfth exact-public `v1.1.5` profile at
+  `/private/tmp/hydra-v115-twelfth-untouched-idle-reprofile-20260531T161844Z`
+  became a hibernate/resume profile when the host slept between
+  `2026-05-31T16:21:14Z` and `2026-05-31T18:25:39Z`; `pmset -g log` confirmed
+  `hibernate user wake`. Four Hydra-owned processes and zero stale profiles
+  remained bounded through all 11 samples. Pre-sleep CPU stayed between
+  `0.0%` and `0.2%`, the first resume sample measured `42.9%`, and subsequent
+  samples returned to `0.0-0.1%`. RSS dropped from `461.38 MiB` to
+  `247.06 MiB` across hibernation. This is resume evidence, not a continuous
+  idle baseline; a fresh post-package profile remains required.
+- A thirteenth uninterrupted exact-public `v1.1.5` post-wake idle reprofile at
+  `/private/tmp/hydra-v115-thirteenth-untouched-idle-reprofile-20260531T182947Z`
+  kept four Hydra-owned processes and zero stale profiles through all 11
+  30-second samples after packaging stopped. CPU stayed between `0.0%` and
+  `0.3%` (`0.036%` average); RSS moved from `249.00 MiB` to `261.56 MiB`
+  (`+12.58 MiB`). This is the quiet post-wake baseline.

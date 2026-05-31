@@ -329,6 +329,17 @@ closed-app CLI commands, tests, and repo-local documentation.
   toasts after navigation. A 200-route synthetic teardown probe recorded
   `1400` pending request timeout resources for the old detached shape versus
   `0` for the owned-abort path, which raised all `1400` simulated aborts.
+- Account Detail reads are account-route scoped end to end: navigating away or
+  switching account IDs aborts account metadata, snapshot, management-key list,
+  live-session probe, reveal, and key-test reads; the account-ID reload guard
+  replaces the old mount-only guard so a reused route cannot keep showing the
+  previous account. The same boundary clears account-specific modal, reveal,
+  copy, transient-timer, and key-test UI state and suppresses late UI writes
+  from server-completing mutations and modal callbacks after navigation. A
+  200-route synthetic switch probe recorded one old-shape account load with
+  `1200` detached request timeout resources versus `200` account loads, `0`
+  pending timeout resources, and `1200` raised aborts for the route-owned
+  shape.
 
 ---
 

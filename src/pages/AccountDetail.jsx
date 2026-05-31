@@ -180,6 +180,14 @@ function formatDate(dateStr) {
   });
 }
 
+function isAborted(signal, err) {
+  return signal?.aborted || err?.name === 'AbortError';
+}
+
+function isCurrentRouteSignal(accountAbortRef, signal) {
+  return !!signal && !signal.aborted && accountAbortRef.current?.signal === signal;
+}
+
 export default function AccountDetail({ accountId, onBack, addToast }) {
   const params = useParams();
   const resolvedAccountId = accountId || params.accountId;
@@ -189,7 +197,8 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const [loadError, setLoadError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
-  const initialFetchDone = useRef(false);
+  const initialFetchAccountIdRef = useRef(null);
+  const accountAbortRef = useRef(null);
   const transientTimersRef = useRef(new Set());
 
   // Live Clerk session probe — overrides stale heuristic from getAccounts()
@@ -241,38 +250,84 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   const [deleteKeyConfirm, setDeleteKeyConfirm] = useState(null); // { hash, name }
   const [deleteAccountConfirm, setDeleteAccountConfirm] = useState(false);
 
-  const fetchSnapshot = useCallback(async () => {
-    if (!resolvedAccountId) return;
+  useEffect(() => {
+    const controller = new AbortController();
+    accountAbortRef.current = controller;
+    for (const timer of transientTimersRef.current) clearTrackedTimeout(timer);
+    transientTimersRef.current.clear();
+    setLoading(true);
+    setLoadError('');
+    setSnapshot(null);
+    setAccountMeta(null);
+    setShowCreateModal(false);
+    setActionLoading({});
+    setEditingAlias(false);
+    setAliasInput('');
+    setAliasSaving(false);
+    setRevealedKeys(new Set());
+    setCopiedKey(null);
+    setTestKeyStatus({});
+    setLoginModalOpen(false);
+    setMgmtKeyFull(null);
+    setRevealedMgmt(false);
+    setLoadingMgmtReveal(false);
+    setManagementKeys([]);
+    setManagementKeysLoaded(false);
+    setManagementKeysLoadError('');
+    setLoadingMgmtKeys(false);
+    setLiveSessionStatus(null);
+    setLiveSessionObservedAt(null);
+    setSessionProbing(false);
+    setShowImport(false);
+    setImportKey('');
+    setImportName('');
+    setImportLoading(false);
+    setImportError('');
+    setDeleteKeyConfirm(null);
+    setDeleteAccountConfirm(false);
+    return () => {
+      controller.abort();
+      if (accountAbortRef.current === controller) accountAbortRef.current = null;
+    };
+  }, [resolvedAccountId]);
+
+  const fetchSnapshot = useCallback(async (signal = accountAbortRef.current?.signal) => {
+    if (!resolvedAccountId || !signal || signal.aborted) return;
     try {
       setLoadError('');
-      const res = await api.getAccountSnapshot(resolvedAccountId);
+      const res = await api.getAccountSnapshot(resolvedAccountId, signal);
+      if (signal.aborted) return;
       setSnapshot(res.data);
     } catch (err) {
+      if (isAborted(signal, err)) return;
       setSnapshot(null);
       setLoadError(err.message || 'Failed to load account');
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   }, [resolvedAccountId]);
 
-  const fetchMeta = useCallback(async () => {
-    if (!resolvedAccountId) return;
+  const fetchMeta = useCallback(async (signal = accountAbortRef.current?.signal) => {
+    if (!resolvedAccountId || !signal || signal.aborted) return;
     try {
-      const res = await api.getAccounts();
+      const res = await api.getAccounts(signal);
+      if (signal.aborted) return;
       const found = (res.data || []).find((a) => a.id === resolvedAccountId) || null;
       setAccountMeta(found);
     } catch (err) {
+      if (isAborted(signal, err)) return;
       // Non-fatal; snapshot call will still provide most info when available.
       console.error('[ACCOUNT_DETAIL] Failed to fetch meta:', err.message);
     }
   }, [resolvedAccountId]);
 
-  const fetchManagementKeys = useCallback(async () => {
-    if (!resolvedAccountId) return;
+  const fetchManagementKeys = useCallback(async (signal = accountAbortRef.current?.signal) => {
+    if (!resolvedAccountId || !signal || signal.aborted) return;
     setLoadingMgmtKeys(true);
     setManagementKeysLoadError('');
     try {
-      const res = await api.getManagementKeys(resolvedAccountId);
+      const res = await api.getManagementKeys(resolvedAccountId, signal);
+      if (signal.aborted) return;
       const raw = res.data?.keys || [];
       // Canonical identity is row id from backend; do not assume hash is present.
       const seen = new Set();
@@ -284,19 +339,21 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
       }));
       setManagementKeysLoaded(true);
     } catch (err) {
+      if (isAborted(signal, err)) return;
       console.error('[ACCOUNT_DETAIL] Failed to fetch management keys:', err.message);
       setManagementKeysLoadError(err.message || 'Failed to load management keys');
       setManagementKeysLoaded(true);
     } finally {
-      setLoadingMgmtKeys(false);
+      if (!signal.aborted) setLoadingMgmtKeys(false);
     }
   }, [resolvedAccountId]);
 
-  const probeSession = useCallback(async () => {
-    if (!resolvedAccountId) return;
+  const probeSession = useCallback(async (signal = accountAbortRef.current?.signal) => {
+    if (!resolvedAccountId || !signal || signal.aborted) return;
     setSessionProbing(true);
     try {
-      const res = await api.checkSessionLive(resolvedAccountId);
+      const res = await api.checkSessionLive(resolvedAccountId, signal);
+      if (signal.aborted) return;
       setLiveSessionStatus(res.data?.status ?? null);
       setLiveSessionObservedAt(res.data?.observedAt ?? new Date().toISOString());
       setAccountMeta((previous) => previous ? {
@@ -305,10 +362,11 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         ...('sessionRefreshedAt' in (res.data || {}) ? { sessionRefreshedAt: res.data.sessionRefreshedAt } : {}),
       } : previous);
     } catch (err) {
+      if (isAborted(signal, err)) return;
       console.warn(`[ACCOUNT_DETAIL] Live session probe failed for ${resolvedAccountId}:`, err.message);
       addToast?.('Live session check failed. Showing cached session state.', 'warning');
     } finally {
-      setSessionProbing(false);
+      if (!signal.aborted) setSessionProbing(false);
     }
   }, [addToast, resolvedAccountId]);
 
@@ -319,16 +377,19 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
       onBack();
       return;
     }
-    if (!initialFetchDone.current) {
+    if (initialFetchAccountIdRef.current !== resolvedAccountId) {
+      const signal = accountAbortRef.current?.signal;
+      if (!signal || signal.aborted) return;
       void (async () => {
-        await fetchMeta();
+        await fetchMeta(signal);
+        if (signal.aborted) return;
         // If we already know there's no management key, don't spam snapshot.
         // Otherwise try snapshot; it will set a user-friendly error if it fails.
-        fetchSnapshot();
+        fetchSnapshot(signal);
         // Also fetch stored management keys (new)
-        fetchManagementKeys();
+        fetchManagementKeys(signal);
       })();
-      initialFetchDone.current = true;
+      initialFetchAccountIdRef.current = resolvedAccountId;
     }
   // accountMeta intentionally not a dependency: we only want the initial decision once.
   }, [resolvedAccountId, fetchSnapshot, fetchMeta, fetchManagementKeys, probeSession, addToast, onBack]);
@@ -339,15 +400,19 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   }, []);
 
   async function handleToggleKey(hash, currentDisabled) {
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     setActionLoading((p) => ({ ...p, [hash]: true }));
     try {
       await api.updateKey(resolvedAccountId, hash, { disabled: !currentDisabled });
+      if (signal.aborted) return;
       addToast(`Key ${currentDisabled ? 'enabled' : 'disabled'}`, 'success');
-      fetchSnapshot();
+      fetchSnapshot(signal);
     } catch (err) {
+      if (signal.aborted) return;
       addToast(err.message, 'error');
     }
-    setActionLoading((p) => ({ ...p, [hash]: false }));
+    if (!signal.aborted) setActionLoading((p) => ({ ...p, [hash]: false }));
   }
 
   async function handleDeleteKey(hash, name) {
@@ -356,31 +421,39 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
 
   async function handleDeleteKeyConfirmed() {
     const { hash, name } = deleteKeyConfirm;
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     setDeleteKeyConfirm(null);
     setActionLoading((p) => ({ ...p, [hash]: true }));
     try {
       await api.deleteKey(resolvedAccountId, hash);
+      if (signal.aborted) return;
       addToast(`Key "${name}" deleted`, 'success');
-      fetchSnapshot();
+      fetchSnapshot(signal);
     } catch (err) {
+      if (signal.aborted) return;
       addToast(err.message, 'error');
     }
-    setActionLoading((p) => ({ ...p, [hash]: false }));
+    if (!signal.aborted) setActionLoading((p) => ({ ...p, [hash]: false }));
   }
 
   async function handleSaveAlias() {
     const trimmed = aliasInput.trim();
     if (!trimmed || trimmed === snapshot.alias) { setEditingAlias(false); return; }
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     setAliasSaving(true);
     try {
       await api.updateAccount(resolvedAccountId, { alias: trimmed });
+      if (signal.aborted) return;
       setSnapshot((prev) => ({ ...prev, alias: trimmed }));
       addToast('Account name updated', 'success');
       setEditingAlias(false);
     } catch (err) {
+      if (signal.aborted) return;
       addToast(err.message, 'error');
     }
-    setAliasSaving(false);
+    if (!signal.aborted) setAliasSaving(false);
   }
 
   function toggleReveal(hash) {
@@ -393,35 +466,47 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
 
   async function handleRevealMgmtKey() {
     if (mgmtKeyFull) { setRevealedMgmt(v => !v); return; }
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     setLoadingMgmtReveal(true);
     try {
-      const res = await api.getAccountManagementKey(resolvedAccountId);
+      const res = await api.getAccountManagementKey(resolvedAccountId, signal);
+      if (signal.aborted) return;
       setMgmtKeyFull(res.data.managementKey);
       setRevealedMgmt(true);
     } catch (err) {
+      if (isAborted(signal, err)) return;
       addToast('Could not retrieve management key: ' + err.message, 'error');
     }
-    setLoadingMgmtReveal(false);
+    if (!signal.aborted) setLoadingMgmtReveal(false);
   }
 
   async function copyKey(hash, value) {
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     try {
       await navigator.clipboard.writeText(value || hash);
+      if (signal.aborted) return;
       setCopiedKey(hash);
       addToast?.('Copied key to clipboard', 'success');
       scheduleTransientTimeout(() => setCopiedKey(null), 2000);
     } catch (err) {
+      if (signal.aborted) return;
       addToast?.(`Clipboard copy failed: ${err.message || 'permission denied'}`, 'error');
     }
   }
 
   async function handleTestKey(hash) {
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     setTestKeyStatus((p) => ({ ...p, [hash]: { loading: true } }));
     try {
-      const res = await api.testKey(resolvedAccountId, hash);
+      const res = await api.testKey(resolvedAccountId, hash, signal);
+      if (signal.aborted) return;
       setTestKeyStatus((p) => ({ ...p, [hash]: { loading: false, valid: true, data: res.data } }));
       scheduleTransientTimeout(() => setTestKeyStatus((p) => { const n = { ...p }; delete n[hash]; return n; }), 6000);
     } catch (err) {
+      if (isAborted(signal, err)) return;
       setTestKeyStatus((p) => ({ ...p, [hash]: { loading: false, valid: false, error: err.message } }));
       scheduleTransientTimeout(() => setTestKeyStatus((p) => { const n = { ...p }; delete n[hash]; return n; }), 6000);
     }
@@ -432,32 +517,40 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
   }
 
   async function handleDeleteAccountConfirmed() {
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     setDeleteAccountConfirm(false);
     try {
       await api.deleteAccount(resolvedAccountId);
+      if (signal.aborted) return;
       addToast('Account removed from Hydra', 'success');
       onBack();
     } catch (err) {
+      if (signal.aborted) return;
       addToast(err.message, 'error');
     }
   }
 
   async function handleProvisionKey() {
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     setActionLoading((p) => ({ ...p, __provision: true }));
     try {
       const res = await api.provisionManagementKey(resolvedAccountId);
+      if (signal.aborted) return;
       if (!res?.data?.key) {
         throw new Error(res?.data?.message || 'Provisioning did not return a management key');
       }
       const source = res.data.source;
       const via = source ? api.formatProvisionSourceForUi(source) : '';
       addToast(`Management key provisioned${via ? ` via ${via}` : ''}`, 'success');
-      await fetchMeta();
-      await fetchSnapshot();
+      await fetchMeta(signal);
+      await fetchSnapshot(signal);
     } catch (err) {
+      if (signal.aborted) return;
       addToast(`Provision failed: ${api.formatApiErrorMessage(err)}`, 'error');
     }
-    setActionLoading((p) => ({ ...p, __provision: false }));
+    if (!signal.aborted) setActionLoading((p) => ({ ...p, __provision: false }));
   }
 
   async function handleImportKey(e) {
@@ -466,30 +559,40 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
       setImportError('Key must start with sk-or-v1-');
       return;
     }
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     setImportLoading(true);
     setImportError('');
     try {
       await api.importManagementKey(resolvedAccountId, importKey.trim(), importName.trim() || 'Imported Key');
+      if (signal.aborted) return;
       addToast('Management key imported', 'success');
       setShowImport(false);
       setImportKey('');
       setImportName('');
-      await fetchManagementKeys();
+      await fetchManagementKeys(signal);
     } catch (err) {
+      if (signal.aborted) return;
       setImportError(api.formatApiErrorMessage ? api.formatApiErrorMessage(err) : (err?.response?.data?.error || err.message || 'Import failed'));
     }
-    setImportLoading(false);
+    if (!signal.aborted) setImportLoading(false);
   }
 
   async function handleRevokeKey(keyId) {
+    const signal = accountAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
     try {
       await api.revokeManagementKey(resolvedAccountId, keyId);
+      if (signal.aborted) return;
       addToast('Management key revoked', 'success');
-      await fetchManagementKeys();
+      await fetchManagementKeys(signal);
     } catch (err) {
+      if (signal.aborted) return;
       addToast(api.formatApiErrorMessage ? api.formatApiErrorMessage(err) : 'Revoke failed', 'error');
     }
   }
+
+  const renderedAccountSignal = accountAbortRef.current?.signal;
 
   if (loading && !snapshot) {
     return (
@@ -709,12 +812,15 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         {loginModalOpen && accountMeta && (
           <LoginAccountModal
             account={accountMeta}
-            onClose={() => setLoginModalOpen(false)}
+            onClose={() => {
+              if (isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) setLoginModalOpen(false);
+            }}
             onDone={async (msg) => {
+              if (!isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) return;
               addToast(msg, 'success');
               setLoginModalOpen(false);
-              await fetchMeta();
-              await fetchSnapshot();
+              await fetchMeta(renderedAccountSignal);
+              await fetchSnapshot(renderedAccountSignal);
             }}
           />
         )}
@@ -834,12 +940,15 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
         {loginModalOpen && accountMeta && (
           <LoginAccountModal
             account={accountMeta}
-            onClose={() => setLoginModalOpen(false)}
+            onClose={() => {
+              if (isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) setLoginModalOpen(false);
+            }}
             onDone={async (msg) => {
+              if (!isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) return;
               addToast(msg, 'success');
               setLoginModalOpen(false);
-              await fetchMeta();
-              await fetchSnapshot();
+              await fetchMeta(renderedAccountSignal);
+              await fetchSnapshot(renderedAccountSignal);
             }}
           />
         )}
@@ -1361,23 +1470,32 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
       {showCreateModal && (
         <CreateKeyModal
           accountId={resolvedAccountId}
-          onClose={() => setShowCreateModal(false)}
-          onCreated={() => {
-            addToast('API key created!', 'success');
-            fetchSnapshot();
+          onClose={() => {
+            if (isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) setShowCreateModal(false);
           }}
-          onCopyError={(err) => addToast(`Clipboard copy failed: ${err.message || 'permission denied'}`, 'error')}
+          onCreated={() => {
+            if (!isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) return;
+            addToast('API key created!', 'success');
+            fetchSnapshot(renderedAccountSignal);
+          }}
+          onCopyError={(err) => {
+            if (!isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) return;
+            addToast(`Clipboard copy failed: ${err.message || 'permission denied'}`, 'error');
+          }}
         />
       )}
 
       {loginModalOpen && accountMeta && (
         <LoginAccountModal
           account={accountMeta}
-          onClose={() => setLoginModalOpen(false)}
+          onClose={() => {
+            if (isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) setLoginModalOpen(false);
+          }}
           onDone={async (msg) => {
+            if (!isCurrentRouteSignal(accountAbortRef, renderedAccountSignal)) return;
             addToast(msg, 'success');
             setLoginModalOpen(false);
-            await fetchSnapshot();
+            await fetchSnapshot(renderedAccountSignal);
           }}
         />
       )}

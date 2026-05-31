@@ -306,8 +306,8 @@ export const bulkOtpStubs = (emails, signal) =>
 export const updateAccount = (id, updates) =>
   request(`/accounts/${id}`, { method: 'PATCH', body: updates });
 export const deleteAccount = (id) => request(`/accounts/${id}`, { method: 'DELETE' });
-export const getAccountSnapshot = (id) => request(`/accounts/${id}/snapshot`);
-export const getAccountManagementKey = (id) => request(`/accounts/${id}/management-key`);
+export const getAccountSnapshot = (id, signal) => request(`/accounts/${id}/snapshot`, { signal });
+export const getAccountManagementKey = (id, signal) => request(`/accounts/${id}/management-key`, { signal });
 
 // Auth flows
 export const detectAuthMethod = (id) =>
@@ -410,11 +410,11 @@ export const getAccountProxies = () => request('/system/account-proxies');
 export const setAccountProxies = (proxies) => request('/system/account-proxies', { method: 'POST', body: { proxies } });
 
 // Test a stored key against OpenRouter /auth/key
-export const testKey = (accountId, hash) =>
-  request(`/accounts/${accountId}/keys/${hash}/test`, { method: 'POST' });
+export const testKey = (accountId, hash, signal) =>
+  request(`/accounts/${accountId}/keys/${hash}/test`, { method: 'POST', signal });
 
 // Management Key Storage (New)
-export const getManagementKeys = (accountId) => request(`/accounts/${accountId}/management-keys`);
+export const getManagementKeys = (accountId, signal) => request(`/accounts/${accountId}/management-keys`, { signal });
 export const getBestManagementKey = (accountId) => request(`/accounts/${accountId}/management-keys/best`);
 export const storeManagementKey = (accountId, key, name, metadata) =>
   request(`/accounts/${accountId}/management-keys/store`, { method: 'POST', body: { key, name, metadata } });
