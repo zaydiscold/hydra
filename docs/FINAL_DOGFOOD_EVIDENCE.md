@@ -499,3 +499,11 @@ This evidence file is not release-complete by itself. The release remains not co
   path, `85/85` unique corpus labels, a `72`-entry no-repeat launch queue, and
   the one-shot parent `kind="shattered"` guard before glyph creation. The UI
   contract now rejects corpus-label duplication as well as a refill regression.
+- A fourth untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-public-idle-reprofile-20260531T140919Z` sampled the
+  already-settled canonical app every 30 seconds for five minutes with zero UI
+  interaction. All 11 samples reported four Hydra-owned processes and zero
+  stale profiles. Sampled CPU stayed at `0.000%` throughout; RSS moved from
+  `577.23 MiB` to `579.20 MiB` (`+1.97 MiB`). Raw before/after inventories
+  contain only the expected main, GPU, network-utility, and renderer
+  processes.

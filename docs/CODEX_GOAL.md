@@ -54,7 +54,9 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
 - Keep the README professional and navigable: add better grouping, top navigation links, and separation for quickstart, hardening scripts, CLI/API usage, router/runtime hardening, and deep reference material.
 - Screenshot plan, after the current source hardening/dogfood pass: refresh media from the packaged Electron app only, not a browser target. Do not expose full API keys, cookies, tokens, personal secrets, or private account data.
 - Required screenshot set: Vault setup first-run password screen, Dashboard fleet overview with seeded/redacted balances and health, Pool proxy/router status with local base URL and pooled-key health, Traffic request-log panel with bounded activity and latency/status rows, and CLI terminal captures for `hydra status`, `hydra doctor --json`, and `hydra proxy status`.
-- Remotion plan: use refreshed Electron screenshots as assets under `videos/`, create a short 20-30 second product-facing composition covering vault setup, dashboard, proxy pool, traffic, CLI automation, and local API router. Render a still first with `npx remotion still <composition-id> --scale=0.25 --frame=30`, then render final MP4/GIF only if artifact size is GitHub-friendly and reference it from README.
+- Current media scope: keep the packaged splash GIF in the README and leave the
+  existing packaged Electron gallery captures alone. The superseded Remotion
+  showreel workspace is not part of the current release lane.
 - Continue the optimization/code-health pass for the long-running API router: reduce RAM and allocations, avoid redundant objects/buffers/I/O/API calls/database queries, cache where appropriate, improve concurrency without races, remove blocking paths, DRY duplicated logic, split deeply nested/monolithic functions, replace magic numbers/strings with constants/config, remove dead code/obsolete comments, and keep modern syntax/type-safety discipline.
 
 ---
@@ -307,9 +309,14 @@ closed-app CLI commands, tests, and repo-local documentation.
 
 ## Cleanup — Pull the Weeds
 
-- `server/scripts/`, `scratch/`, and `videos/` audited on 2026-05-16: `scratch/` and `.scratch/` are absent; `server/scripts/` is down to the documented session lifetime probe after removing the dead `verify-fix.js`; `videos/` is tracked showreel/Remotion source and is retained
+- `server/scripts/`, `scratch/`, and `videos/` audited on 2026-05-31: `scratch/`
+  and `.scratch/` are absent; `server/scripts/` is down to the documented
+  session lifetime probe after removing the dead `verify-fix.js`; `videos/`
+  retains the packaged splash GIF and current packaged Electron gallery
+  captures, while the superseded Remotion showreel workspace was moved
+  reversibly to Trash
 - `data/dev.db` was moved out of the runtime data directory to `/private/tmp/hydra-cleanup/data-dev.db-20260516`
-- `.gitignore` covers generated/temp files including local DBs, build outputs, scratchpads, Playwright MCP captures, temp/quarantine files, local secrets temps, and DB backups
+- `.gitignore` covers generated/temp files including local DBs, build outputs, scratchpads, Playwright MCP captures, temp/quarantine files, local secrets temps, DB backups, and the root-scoped `.hydra-ci-data/` directory written by the isolated local CI runner
 - Stale doc references were cleaned: `PROJECT_STRUCTURE.md` points at `desktop/entitlements.mac.plist`, and `ELECTRON_TROUBLESHOOTING.md` now describes the real packaged/dev port behavior
 - Dependency audit is clean again as of 2026-05-18 19:52 PDT: a fresh `npm_config_cache=/private/tmp/hydra-npm-cache npm audit --json` found 0 vulnerabilities after the earlier moderate `brace-expansion@5.0.5` advisory under `@sentry/electron -> @sentry/node -> minimatch` was fixed by updating the nested lockfile entry to `brace-expansion@5.0.6`
 - `scripts/free-dev-ports.mjs` now covers the default preview port 4173 and `HYDRA_EXTRA_DEV_PORTS`, and logs Unix/Windows inspect/kill failures with port/PID/error details instead of silently ignoring failed cleanup; `node --check scripts/free-dev-ports.mjs` and `npm run test:workflow-contract` passed on 2026-05-18

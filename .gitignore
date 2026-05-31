@@ -29,6 +29,7 @@ release/
 # Local Data Storage
 data/
 data/local-secrets.json
+/.hydra-ci-data/
 vault.json
 auth.json
 
@@ -79,7 +80,3 @@ scratch/
 *.sw?
 
 /src/generated/prisma
-
-# Heavy local media/build workspaces
-videos/remotion-project/node_modules/
-videos/remotion-project/out/

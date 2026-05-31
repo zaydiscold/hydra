@@ -28,6 +28,14 @@ test('CI and Docker workflows run on the supported Node 24 action runtime', () =
   assert.match(docker, /cache-to:\s*type=registry/, 'Docker publish workflow must refresh registry cache');
 });
 
+test('local CI runtime secrets stay isolated and ignored', () => {
+  const gitignore = read('.gitignore');
+  const runner = read('scripts/run-ci-tests.mjs');
+
+  assert.match(runner, /HYDRA_DATA_DIR:\s*'\.hydra-ci-data'/, 'local CI tests must isolate runtime data from the normal app data dir');
+  assert.match(gitignore, /^\/\.hydra-ci-data\/$/m, 'generated local CI runtime secrets must stay ignored at repo root');
+});
+
 test('electron package smoke workflow covers macOS and Linux packages on PRs', () => {
   const workflow = read('.github/workflows/electron-smoke.yml');
 

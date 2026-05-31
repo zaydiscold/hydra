@@ -123,6 +123,14 @@ Hydra-owned processes and zero stale Playwright profiles through all 11
 RSS moved from `569.73 MiB` to `575.33 MiB` (`+5.59 MiB`). A follow-up
 `hydra doctor --json` sampled `0.0%` Hydra CPU.
 
+A fourth untouched exact-public follow-up at
+`/private/tmp/hydra-v115-public-idle-reprofile-20260531T140919Z` sampled the
+same already-settled canonical app every 30 seconds for five minutes with zero
+UI interaction. All 11 samples reported four Hydra-owned processes and zero
+stale profiles. Sampled CPU stayed at `0.000%` throughout; RSS moved from
+`577.23 MiB` to `579.20 MiB` (`+1.97 MiB`). Raw before/after inventories
+contain only the expected main, GPU, network-utility, and renderer processes.
+
 ## Public v1.1.5 Route Recheck
 
 A second packaged-only CDP pass against the installed public app is preserved
