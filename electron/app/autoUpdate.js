@@ -1,5 +1,6 @@
 import { app, dialog } from 'electron';
 import electronUpdater from 'electron-updater';
+import { recordPendingUpdate } from './updateHandoff.js';
 
 let updateCheckStarted = false;
 let latestUpdateVersion = null;
@@ -20,6 +21,24 @@ function sendSplashUpdateProgress(getSplashWindow, payload) {
   if (!splash || splash.isDestroyed()) return false;
   splash.webContents?.send?.(SPLASH_UPDATE_PROGRESS_EVENT, payload);
   return true;
+}
+
+async function installDownloadedUpdate(autoUpdater, version, owner, log) {
+  try {
+    const handoff = recordPendingUpdate(version);
+    log.info?.(`[electron-updater] recorded update handoff ${handoff.fromVersion} -> ${handoff.targetVersion}`);
+    autoUpdater.quitAndInstall(false, true);
+    return true;
+  } catch (err) {
+    log.warn?.(`[electron-updater] update handoff write failed: ${err?.message || err}`);
+    await dialog.showMessageBox(owner && !owner.isDestroyed() ? owner : undefined, {
+      type: 'error',
+      buttons: ['OK'],
+      message: `Hydra ${version} was downloaded but could not be installed safely.`,
+      detail: 'Hydra could not record the required update-maintenance handoff. Check the logs and retry after fixing the local data-folder permissions.',
+    });
+    return false;
+  }
 }
 
 export function setupAutoUpdates({ isDev, getMainWindow, getSplashWindow, log = console } = {}) {
@@ -76,7 +95,7 @@ export function setupAutoUpdates({ isDev, getMainWindow, getSplashWindow, log = 
       percent: 100,
     });
     if (splashStillVisible) {
-      autoUpdater.quitAndInstall(false, true);
+      await installDownloadedUpdate(autoUpdater, version, getMainWindow?.(), log);
       return;
     }
 
@@ -90,7 +109,7 @@ export function setupAutoUpdates({ isDev, getMainWindow, getSplashWindow, log = 
       detail: 'Restart Hydra to switch to the newest packaged version.',
     });
     if (response === 0) {
-      autoUpdater.quitAndInstall(false, true);
+      await installDownloadedUpdate(autoUpdater, version, owner, log);
     }
   });
 

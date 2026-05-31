@@ -78,6 +78,7 @@ const AccountCard = memo(function AccountCard({
   return (
     <div
       ref={cardRef}
+      data-proximity-target
       className={`card card-clickable account-card ${compact ? 'account-card--compact' : ''} ${isVisible ? 'animate-spring' : ''}`}
       style={{
         animationDelay: `${Math.min(index * 30, 500)}ms`,
@@ -96,7 +97,7 @@ const AccountCard = memo(function AccountCard({
           <span className="account-card-alias" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{account.alias}</span>
         </div>
         {account.lastLoginAt && sessionStatus !== 'none' && sessionStatus !== 'expired' && (
-          <span style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', opacity: 0.6, whiteSpace: 'nowrap', flexShrink: 0 }}>{timeAgo(account.lastLoginAt)}</span>
+          <span style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', opacity: 0.6, whiteSpace: 'nowrap', flexShrink: 0 }}>login {timeAgo(account.lastLoginAt)}</span>
         )}
       </div>
 

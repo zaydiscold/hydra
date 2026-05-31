@@ -20,17 +20,27 @@ Matter.js pass:
 - `SPLASH_MIN_VISIBLE_MS = 16000` in `electron/main.js`.
 - `HYDRA_SPLASH_DURATION_MS=16000` in `electron/app/windows.js`.
 - `HYDRA_SPLASH_EXIT_MS=13000`, so the pile gets about 13 seconds to fall and
-  pack before the staged upward exit starts.
-- `HYDRA_SPLASH_EXIT_FLIGHT_MS=3000`, so the exit gravity ramps upward over
-  three seconds while the card lifts/fades and the canvas fades only near the
-  end of the flight.
-- `HYDRA_SPLASH_TARGET=120`, preserving the prior 10-word-per-second trickle
-  while extending the downward animation by about 30%.
+  pack before the staged portal exit starts.
+- `HYDRA_SPLASH_PORTAL_MS=3000`, so settled glyph bodies tighten into an
+  accelerating center orbit over three seconds while the greeting stays
+  layered above the canvas and the field fades only near the end.
+- `HYDRA_SPLASH_TARGET=72`, reducing the final glyph-body budget after
+  packaged frame review while preserving a unique irregular shower.
+- `shatter()` marks each parent before adding glyphs. Matter may report one
+  word in several collision pairs during one event; the guard prevents that
+  event batch from cloning the same letters and colors repeatedly.
+- The viewport keeps floor and side walls but no top wall. Words spawn just
+  above the visible edge, so a ceiling collider would overlap fresh bodies and
+  make gravity appear to pause near the top quarter of the screen.
+- Portal entry clears each dynamic body's collision mask and marks it as a
+  sensor. Individual glyphs still orbit, but Matter skips dense collision-pair
+  response during the spin.
 - `HYDRA_SPLASH_DISPOSE_MS=18500`, so the splash has a bounded cleanup window
   after the main transition and cannot leave Matter/RAF/timer work alive.
 
-This is why the next release notes should treat the splash change as part of
-the minor `1.1.0` performance/UX tranche, not as a tiny patch note.
+The original density work shipped with the minor `1.1.0` performance/UX
+tranche. The final portal composition ships in the `1.1.3` desktop polish
+patch.
 
 ## How The Lean Works
 
@@ -62,7 +72,7 @@ Current constants and their intent:
 | --- | --- | --- |
 | Visible splash | `16000ms` | Extends the prior 12-second sequence by 33% without letting graphics run forever. |
 | Exit flight | `13000ms` start, `3000ms` ramp | Lets the pile settle, then stages the upward whoosh instead of applying a hard final flip. |
-| Word target | `120` | Preserves the 10-per-second trickle while extending the downward animation by about 30%. |
+| Word target | `72` unique entries | Keeps the varied shower while reducing glyph-body and collision-pair pressure. |
 | Sensor clamp | `+/-0.65` | Prevents a noisy sensor or extreme reading from pinning every word into a wall. |
 | Fallback lean | `+/-0.035` | Adds a visible but subtle side bias when no real sensor is exposed. |
 | Spawn x bias | `tilt * W() * 0.18` | Makes new words enter closer to the lower side instead of only drifting after spawn. |

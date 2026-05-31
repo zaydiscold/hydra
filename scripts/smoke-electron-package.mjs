@@ -412,6 +412,7 @@ console.log(`[electron-smoke] -> assert Prisma schema/migrations/empty-db`);
 assertExists(join(resourcesDir, 'prisma/schema.prisma'), 'Prisma schema resource');
 assertExists(join(resourcesDir, 'prisma/migrations'), 'Prisma migrations resource');
 assertExists(join(resourcesDir, 'data/empty-hydra.db'), 'Empty packaged DB');
+assertExists(join(resourcesDir, 'app/electron/app/updateHandoff.js'), 'Updater maintenance handoff module');
 console.log(`[electron-smoke] -> assertPackagedServerConfigImports`);
 assertPackagedServerConfigImports(resourcesDir);
 console.log(`[electron-smoke] -> findPrismaEngine`);

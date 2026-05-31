@@ -11,7 +11,8 @@ Stored login state is encrypted locally:
 - `sessionToken`: the current short-lived Clerk session proof token.
 - `clientCookie`: legacy scalar compatibility field for the newest device snapshot.
 - `clientCookies[]`: newest-first Clerk device identity snapshots used for refresh.
-- `sessionExpiry`: stored refresh-window estimate, not a live-health guarantee.
+- `sessionExpiry`: next local renewal checkpoint, not the total login lifetime
+  and not a live-health guarantee.
 - `lastLoginAt`: when interactive login completed.
 - `sessionRefreshedAt`: when Hydra last stored refreshed session material.
 
@@ -24,6 +25,27 @@ copy.
 Use `hydra session <account-id> --refresh --json` or the Account Detail
 `Check Session` action for current truth. Cached/local metadata is useful for
 display, but only a forced Clerk probe confirms that a login still works now.
+Forced probes return `observedAt` so CLI and renderer surfaces can distinguish
+the time of the live Clerk check from historical `lastLoginAt`. Compact fleet
+labels say `login 5w ago` rather than showing an unlabeled age. A login that
+started 1,000 hours ago is not dropped solely because it is old: Hydra keeps
+the useful historical age, but action gates require current live-probe truth.
+
+When a forced Clerk probe renews stored material, Hydra waits for that local
+write and reloads the account row before returning the response. The detail and
+Vault surfaces merge the returned `sessionExpiry` and `sessionRefreshedAt`
+immediately. This prevents a successful live result from rendering beside a
+stale pre-probe checkpoint.
+
+The detail copy intentionally separates four clocks:
+
+- `Live Clerk check`: whether the login works now.
+- `Interactive sign-in`: when the operator last completed a login flow.
+- `Last silent renewal`: when Hydra last stored renewed session material.
+- `Next local renewal checkpoint`: Hydra's next estimated maintenance boundary.
+
+A login can be seven weeks old, renew silently today, and remain active. The
+checkpoint must never be presented as the login's total remaining lifetime.
 
 ## Cookie Snapshot Policy
 

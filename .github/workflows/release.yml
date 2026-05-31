@@ -84,12 +84,6 @@ jobs:
               release/Hydra-*-win-x64.exe
               release/*.blockmap
             release_glob: "release/Hydra-*-win-x64.exe release/*.blockmap release/latest.yml"
-          - name: Linux x64 AppImage
-            os: ubuntu-22.04
-            build_target: linux-x64
-            target: --linux AppImage --x64
-            artifact: release/Hydra-*.AppImage
-            release_glob: "release/Hydra-*-linux-x64.AppImage release/latest-linux.yml"
 
     steps:
       - uses: actions/checkout@v6

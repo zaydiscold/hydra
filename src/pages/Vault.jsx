@@ -227,6 +227,11 @@ export default function Vault({ addToast }) {
       const result = res?.data ?? {};
       setCheckResults((prev) => ({ ...prev, [acc.id]: result }));
       setActionSessionTruth((prev) => ({ ...prev, [acc.id]: result.status ?? 'unknown' }));
+      setAccounts((previous) => previous.map((account) => account.id === acc.id ? {
+        ...account,
+        ...('sessionExpiry' in result ? { sessionExpiry: result.sessionExpiry } : {}),
+        ...('sessionRefreshedAt' in result ? { sessionRefreshedAt: result.sessionRefreshedAt } : {}),
+      } : account));
     } catch (err) {
       setCheckResults((prev) => ({ ...prev, [acc.id]: { status: 'error', error: err.message } }));
       setActionSessionTruth((prev) => ({ ...prev, [acc.id]: 'unknown' }));
@@ -444,7 +449,7 @@ export default function Vault({ addToast }) {
                         </div>
                         {acc.lastLoginAt && sessionStatus !== 'none' && sessionStatus !== 'unknown' && (
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
-                            {timeAgo(acc.lastLoginAt)}
+                            login {timeAgo(acc.lastLoginAt)}
                           </div>
                         )}
                       </div>
@@ -521,7 +526,10 @@ export default function Vault({ addToast }) {
                             borderRadius: 3,
                             cursor: 'default',
                           }}
-                          title={checkResults[acc.id].sessionExpiry ? `Expiry: ${checkResults[acc.id].sessionExpiry}` : undefined}
+                          title={[
+                            checkResults[acc.id].observedAt ? `Live probe: ${checkResults[acc.id].observedAt}` : null,
+                            checkResults[acc.id].sessionExpiry ? `Next local renewal checkpoint: ${checkResults[acc.id].sessionExpiry}` : null,
+                          ].filter(Boolean).join(' · ') || undefined}
                         >
                           {checkResults[acc.id].status}
                         </span>

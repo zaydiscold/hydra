@@ -149,6 +149,10 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(updater, /SPLASH_UPDATE_PROGRESS_EVENT = 'hydra-update-progress'/);
     assert.match(updater, /sendSplashUpdateProgress\(getSplashWindow/);
     assert.match(updater, /autoUpdater\.quitAndInstall\(false, true\)/);
+    assert.match(updater, /recordPendingUpdate\(version\)/);
+    assert.match(main, /pendingUpdate\?\.targetVersion === app\.getVersion\(\)/);
+    assert.match(main, /await firstLaunchSetup\(trackedChildren\)/);
+    assert.match(main, /completePendingUpdate\(pendingUpdate\)/);
     assert.match(windows, /SPLASH_PRELOAD_PATH/);
     assert.match(windows, /update-strip/);
     assert.match(windows, /hydraSplash\.onUpdateProgress/);
@@ -227,6 +231,19 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(main.includes('tray open ${location} folder failed:'), 'tray folder-open failures must be logged');
   });
 
+  it('embeds Frostbyte Technology and Zayd / Cold product attribution', () => {
+    const menu = readFileSync(resolve(ELECTRON_DIR, 'menus', 'appMenu.js'), 'utf-8');
+    const builder = readFileSync(resolve(ROOT, 'electron-builder.yml'), 'utf-8');
+    const pkg = readFileSync(resolve(ROOT, 'package.json'), 'utf-8');
+
+    assert.match(menu, /Developer: Frostbyte Technology/);
+    assert.match(menu, /Developed by Zayd \/ Cold/);
+    assert.match(menu, /Built by:\s+Zayd \/ Cold/);
+    assert.match(builder, /Copyright © 2026 Frostbyte Technology\. Developed by Zayd \/ Cold\./);
+    assert.match(builder, /legalTrademarks: Hydra by Frostbyte Technology\. Developed by Zayd \/ Cold\./);
+    assert.match(pkg, /"author": "Frostbyte Technology — Developed by Zayd \/ Cold"/);
+  });
+
   it('startup failure dialog reports Open Logs and Copy Details action failures', () => {
     const startup = readFileSync(STARTUP_ERROR_JS, 'utf-8');
 
@@ -276,9 +293,28 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /function disposeHydraSplash\(reason="manual"\)/);
     assert.match(windows, /HYDRA_SPLASH_DURATION_MS=16000/);
     assert.match(windows, /HYDRA_SPLASH_EXIT_MS=13000/);
-    assert.match(windows, /HYDRA_SPLASH_EXIT_FLIGHT_MS=3000/);
+    assert.match(windows, /HYDRA_SPLASH_PORTAL_MS=3000/);
     assert.match(windows, /HYDRA_SPLASH_DISPOSE_MS=18500/);
-    assert.match(windows, /HYDRA_SPLASH_TARGET=120/);
+    assert.match(windows, /HYDRA_SPLASH_TARGET=72/);
+    assert.doesNotMatch(windows, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
+    assert.match(windows, /m\.kind="shattered";hydraSplashDiagnostics\.shatteredWordCount\+\+/);
+    assert.match(windows, /shuffle\(items\)\.slice\(0,Math\.min\(n,items\.length\)\)/);
+    assert.match(windows, /dial-cell dial-cell--cross dial-cell--center/);
+    assert.match(windows, /baseFontSize\*\(0\.86\+Math\.random\(\)\*1\.04\)/);
+    assert.match(windows, /const delay=34\+Math\.random\(\)\*112\+\(Math\.random\(\)<0\.16\?Math\.random\(\)\*150:0\)/);
+    assert.match(windows, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
+    assert.match(windows, /Welcome, /);
+    assert.match(windows, /portalRadius=Math\.min\(W\(\),H\(\)\)\*\(0\.46-0\.27\*easedExit\)/);
+    assert.match(windows, /portalSpeed=4\.4\+18\.6\*easedExit/);
+    assert.match(windows, /liftBoost=\(1-exitRatio\)\*10/);
+    assert.match(windows, /targetX=-ny\*portalSpeed-nx\*radial,targetY=nx\*portalSpeed-ny\*radial/);
+    assert.match(windows, /b\.collisionFilter\.mask=0;b\.isSensor=true/);
+    assert.match(windows, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
+    assert.match(windows, /if\(i%5===0\)\{ctx\.shadowColor=m\.color;ctx\.shadowBlur=4\+portalRatio\*8;\}/);
+    assert.match(windows, /function drawHydraPortal\(now,ratio\)/);
+    assert.match(windows, /ctx\.globalCompositeOperation="lighter"/);
+    assert.match(windows, /ctx\.createRadialGradient\(cx,cy,short\*0\.045,cx,cy,base\*1\.36\)/);
+    assert.match(windows, /drawHydraPortal\(now,portalRatio\)/);
     assert.match(windows, /tiltBias=hydraSplashTiltGravityX\*\(W\(\)\*0\.18\)/);
     assert.match(windows, /hydraSplashTiltGravityX\*2\.2/);
     assert.match(windows, /hydraSplashLeanX\+= \(hydraSplashTiltGravityX-hydraSplashLeanX\)\*0\.08/);

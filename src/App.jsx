@@ -6,6 +6,7 @@ import { logger } from './lib/client-logger.js';
 import { isElectron, native as nativeBridge, tryNative, useNativeInfo } from './lib/native';
 import { useOwnedTimeouts } from './hooks/useOwnedTimeouts';
 import { useVisibleRecurringTask } from './hooks/useVisibleRecurringTask.js';
+import { useProximityField } from './hooks/useProximityField.js';
 import {
   cancelTrackedAnimationFrame,
   clearTrackedTimeout,
@@ -613,6 +614,13 @@ export default function App() {
   // titleBarStyle: 'hiddenInset' so the OS bar is gone — see
   // electron/app/windows.js). The layout pad accounts for our own 38px strip.
   const rendererChrome = electronMode;
+  const sidebarProximity = useProximityField({
+    owner: 'App.sidebarNav',
+    radius: 105,
+    maxScale: 0.035,
+    maxLift: 0,
+    maxShiftX: 3,
+  });
 
   // #70: Keep Electron/Finder window titles aligned with the current route.
   useEffect(() => {
@@ -953,7 +961,13 @@ export default function App() {
               Skip to main content
             </a>
         <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}${rendererChrome ? ' app-layout--with-chrome' : ''}`}>
-          <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`} role="navigation" aria-label="Main navigation">
+          <aside
+            className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}
+            role="navigation"
+            aria-label="Main navigation"
+            data-studio="frostbyte-zayd-cold"
+            {...sidebarProximity}
+          >
             <button type="button" className="sidebar-logo"
               onClick={() => navigate('/')}
               title="Go to Dashboard"
@@ -988,6 +1002,7 @@ export default function App() {
                   : location.pathname.startsWith(item.path);
                 return (
                   <button type="button" key={item.id}
+                    data-proximity-target
                     className={`nav-link ${isActive ? 'active' : ''}`}
                     aria-current={isActive ? 'page' : undefined}
                     onClick={() => navigate(item.path)}

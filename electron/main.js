@@ -26,6 +26,7 @@ import { shutdownEverything } from './app/shutdown.js';
 import { showStartupErrorDialog } from './app/startupError.js';
 import { initTelemetry, captureError } from './app/telemetry.js';
 import { setupAutoUpdates } from './app/autoUpdate.js';
+import { completePendingUpdate, readPendingUpdate } from './app/updateHandoff.js';
 import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -220,6 +221,9 @@ app.whenReady().then(async () => {
     await Promise.allSettled([startupSweep, profileSweep]);
     performance.mark('hydra:startup:runtime-ready');
 
+    const pendingUpdate = readPendingUpdate();
+    const completingUpdate = pendingUpdate?.targetVersion === app.getVersion();
+
     // shouldSyncSchema now returns { shouldSync, hash, mtimeFingerprint }.
     // We only need the boolean here; firstLaunchSetup recomputes its own
     // decision (the schema may have been touched between this check and
@@ -228,6 +232,13 @@ app.whenReady().then(async () => {
     const schemaDecision = await shouldSyncSchema();
     const needsSync = schemaDecision.shouldSync;
     performance.mark('hydra:startup:schema-check');
+
+    if (completingUpdate) {
+      console.log(`[electron-updater] completing update maintenance ${pendingUpdate.fromVersion} -> ${pendingUpdate.targetVersion}`);
+      await firstLaunchSetup(trackedChildren);
+      completePendingUpdate(pendingUpdate);
+      console.log(`[electron-updater] completed update maintenance for ${pendingUpdate.targetVersion}`);
+    }
 
     const server = await import('../server/index.js');
     setGracefulShutdown(server.gracefulShutdown);
@@ -327,9 +338,9 @@ app.whenReady().then(async () => {
     //  12000 ms — +2s density pass (2026-05-26). User feedback: the new
     //             falling animation looks good; let it breathe longer and
     //             fill more of the screen before the main window takes over.
-    //  16000 ms — +33% elegance pass (2026-05-30). The upward flight now
-    //             ramps over its final three seconds instead of disappearing
-    //             behind a hard two-second gravity flip.
+    //  16000 ms — +33% elegance pass (2026-05-30). The final three seconds
+    //             now pull settled glyphs into an accelerating center portal
+    //             instead of disappearing behind a hard gravity flip.
     //
     // PROGRESS-BAR LOCKSTEP: the splash canvas physics is self-contained,
     // but the `fillbar` keyframe in windows.js still measures perceived
@@ -407,7 +418,7 @@ app.whenReady().then(async () => {
     }
     performance.mark('hydra:startup:loadurl-done');
 
-    if (needsSync) {
+    if (needsSync && !completingUpdate) {
       firstLaunchSetup(trackedChildren).catch(async e => {
         console.error('[electron] background firstLaunchSetup failed:', e);
         const w = getMainWindow();

@@ -43,11 +43,15 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   Playwright isolation tests now clean their own temp profiles.
 - Renderer timers, intervals, animation frames, and Anime.js effects are routed
   through `window.__HYDRA_RENDERER_DIAGNOSTICS__()` ownership tracking.
-- The splash now lasts 16 seconds with 120 falling words, then uses a staged
-  three-second upward flight with a gentler initial impulse, eased gravity
-  ramp, card lift/fade, and delayed canvas fade. Matter.js, RAF, timers,
-  listeners, bodies, and optional sensor instances remain bounded by the
-  deterministic splash-disposal contract.
+- The splash now lasts 16 seconds with a bounded 72-word unique irregular shower,
+  then uses a staged three-second accelerating portal orbit with an initial
+  inward lift, delayed welcome-card reveal, and delayed canvas fade. The
+  falling phase keeps floor and side-wall collision, but removes the top wall
+  that overlapped new spawns. One-shot parent shattering prevents repeated
+  letter clones inside a single collision event. Portal entry disables glyph
+  collision response while retaining independent bodies. Matter.js, RAF, timers, listeners,
+  bodies, and optional sensor instances remain bounded by the deterministic
+  splash-disposal contract.
 - Tilt support is source-verified as opportunistic device tilt: sensor/fallback
   x input affects horizontal gravity, spawn-position bias, and initial x
   velocity. Exact MacBook hinge-angle support remains a future native HID bridge,
@@ -122,7 +126,7 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   persisted from `25` equivalent snapshots to `1`.
 - The rebuilt and published `v1.1.0` macOS arm64 package passes packaged-resource smoke
   and strict codesign verification. Packaged-source inspection confirms the
-  `16000ms` splash, 120-word target, staged `3000ms` upward flight, and bounded
+  `16000ms` splash, 72-word unique target, staged `3000ms` non-colliding portal orbit, and bounded
   `18500ms` self-disposal. Docker image smoke also passed after redirecting
   sandbox-blocked Buildx activity state to `/private/tmp/hydra-buildx`.
 - `v1.1.0` is now published with macOS arm64, macOS Intel, Windows x64, Linux,
@@ -211,3 +215,20 @@ The evidence records checklist status, artifact presence, `hydra audit` summary,
 Do not paste API keys, cookies, tokens, real account data, or private screenshots into this file. It is a status artifact, not a log dump.
 
 This evidence file is not release-complete by itself. The release remains not complete while `hydra audit` has missing/blocker evidence or any required manual check is absent. Existing audit deferred items are expected before this file is written; `hydra audit` reads the completed evidence file afterward to clear the manual dogfood items.
+
+## v1.1.3 Packaged Splash Evidence
+
+- The rebuilt macOS arm64 app was launched for a direct Electron CDP capture of
+  the splash renderer. This avoids the macOS transparent-window compositor
+  edge case and keeps Desktop contents out of the artifact.
+- `videos/hydra_splash.gif` is the reviewed capture: `15.6s`, `156` frames,
+  `960x583`, approximately `12 MB`.
+- Packaged runtime diagnostics reported `target=72`, `queueLength=72`,
+  `shatteredWordCount=72`, `duplicateShatterSkips=0`,
+  `peakDynamicBodyCount=556`, `portalCollisionDisabled=true`,
+  `renderFrames=408`, `physicsSteps=716`, `timers=0`, `rafActive=false`,
+  `matterCleared=true`, and `disposed=true`.
+- The randomized final run stayed `84.5%` below the pathological pre-guard
+  `3582` dynamic-body peak. The unique queue, one-shot shatter guard, removed
+  ceiling collider, and collision-free portal phase remain in source even
+  when a healthy run does not reproduce the protected failure paths.

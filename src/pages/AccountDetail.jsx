@@ -194,6 +194,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
 
   // Live Clerk session probe — overrides stale heuristic from getAccounts()
   const [liveSessionStatus, setLiveSessionStatus] = useState(null);
+  const [liveSessionObservedAt, setLiveSessionObservedAt] = useState(null);
   const [sessionProbing, setSessionProbing] = useState(false);
 
   // Edit alias
@@ -297,6 +298,12 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
     try {
       const res = await api.checkSessionLive(resolvedAccountId);
       setLiveSessionStatus(res.data?.status ?? null);
+      setLiveSessionObservedAt(res.data?.observedAt ?? new Date().toISOString());
+      setAccountMeta((previous) => previous ? {
+        ...previous,
+        ...('sessionExpiry' in (res.data || {}) ? { sessionExpiry: res.data.sessionExpiry } : {}),
+        ...('sessionRefreshedAt' in (res.data || {}) ? { sessionRefreshedAt: res.data.sessionRefreshedAt } : {}),
+      } : previous);
     } catch (err) {
       console.warn(`[ACCOUNT_DETAIL] Live session probe failed for ${resolvedAccountId}:`, err.message);
       addToast?.('Live session check failed. Showing cached session state.', 'warning');
@@ -974,10 +981,10 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             {liveSessionStatus && (
               <div style={{ marginBottom: 2 }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Observed by live probe
+                  Live Clerk check {liveSessionObservedAt ? timeAgo(liveSessionObservedAt) : ''}
                 </span>
                 <span style={{ marginLeft: 6, color: 'var(--text-primary)' }}>
-                  Clerk login is <strong style={{ color: 'var(--text-secondary)' }}>{liveSessionStatus}</strong> now
+                  Login works <strong style={{ color: 'var(--text-secondary)' }}>{liveSessionStatus === 'active' ? 'now' : `as ${liveSessionStatus}`}</strong>
                 </span>
               </div>
             )}
@@ -990,7 +997,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
                 ) : (
                   <span style={{ fontSize: '0.8rem', fontWeight: 700,
                     color: remainMs < msPerDay * 2 ? 'var(--status-warning)' : 'var(--status-success)' }}>
-                    Stored refresh window: {remainDays}d remaining
+                    Next local renewal checkpoint: {remainDays}d
                   </span>
                 )}
                 <span style={{ marginLeft: 6 }}>
@@ -999,14 +1006,14 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               </div>
             )}
             {loginAt && (
-              <div>Signed in <strong style={{ color: 'var(--text-secondary)' }}>{timeAgo(accountMeta.lastLoginAt)}</strong>
+              <div>Interactive sign-in <strong style={{ color: 'var(--text-secondary)' }}>{timeAgo(accountMeta.lastLoginAt)}</strong>
                 {refreshedAt && refreshedAt.getTime() !== loginAt?.getTime() && (
-                  <span> · refreshed {timeAgo(accountMeta.sessionRefreshedAt)}</span>
+                  <span> · last silent renewal {timeAgo(accountMeta.sessionRefreshedAt)}</span>
                 )}
               </div>
             )}
             <div style={{ color: 'var(--text-tertiary)', marginTop: 2 }}>
-              The stored window is a refresh estimate. Use the probe button for current login truth.
+              The checkpoint is Hydra's next stored renewal estimate, not the login's total lifetime. The live Clerk check is current truth.
             </div>
           </div>
         );

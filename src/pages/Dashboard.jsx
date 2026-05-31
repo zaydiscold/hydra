@@ -8,6 +8,7 @@ import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
 import { formatCurrency } from '../utils/format';
 import { getCardHealth } from '../utils/cardHealth';
 import { PlusIcon } from '../components/Icons';
+import { useProximityField } from '../hooks/useProximityField.js';
 
 export default function Dashboard({ onSelectAccount, addToast }) {
   const navigate = useNavigate();
@@ -24,6 +25,12 @@ export default function Dashboard({ onSelectAccount, addToast }) {
   } = useMetrics({ addToast });
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const accountProximity = useProximityField({
+    owner: 'Dashboard.accountGrid',
+    radius: 250,
+    maxScale: 0.04,
+    maxLift: 5,
+  });
 
   // UI Handlers
   const handleAccountAdded = useCallback((msg) => {
@@ -148,7 +155,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
               </div>
             </div>
           ) : (
-            <div className="accounts-grid dashboard-mini-grid">
+            <div className="accounts-grid dashboard-mini-grid proximity-field" {...accountProximity}>
               {accounts.map((account, index) => (
                 <AccountCard
                   key={account.id}

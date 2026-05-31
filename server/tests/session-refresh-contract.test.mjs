@@ -48,6 +48,22 @@ test('session status probes persist fresh Clerk client cookies after live refres
   );
 });
 
+test('forced live session probes expose an observation timestamp separately from historical login age', () => {
+  const storeSrc = read('server/services/store.js');
+  const accountController = read('server/controllers/AccountController.js');
+  const sessionCli = read('bin/commands/session.js');
+
+  assert.match(storeSrc, /observedAt:\s*new Date\(\)\.toISOString\(\)/);
+  assert.match(storeSrc, /await updateAccountSession\(/);
+  assert.match(storeSrc, /const refreshedAccount = await prisma\.account\.findFirst/);
+  assert.match(storeSrc, /sessionRefreshedAt:\s*refreshedConfig\.sessionRefreshedAt/);
+  assert.match(accountController, /observedAt:\s*payload\.observedAt/);
+  assert.match(accountController, /sessionRefreshedAt:\s*payload\.sessionRefreshedAt/);
+  assert.match(sessionCli, /report\.observedAt = live\.observedAt \?\? new Date\(\)\.toISOString\(\)/);
+  assert.match(sessionCli, /report\.sessionRefreshedAt = live\.sessionRefreshedAt \|\| report\.sessionRefreshedAt/);
+  assert.match(sessionCli, /Observed at:/);
+});
+
 test('cookie stack helpers keep newest device identities first and cap stored history', () => {
   const storeSrc = read('server/services/store.js');
 

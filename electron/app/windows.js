@@ -206,12 +206,12 @@ export function createSplashWindow() {
   //
   // Reference: ~/Desktop/pica-teardown/05-falling-letters-animation.md
   //
-  // Performance: 120 word bodies entering over ~12 s, shattering into glyph
+  // Performance: 72 unique word bodies enter over ~8 s, shattering once into glyph
   // bodies on contact. Physics is fixed at 45 Hz, paint is capped at 30 fps,
   // and the canvas backing store is pixel-capped for Retina. Canvas paint is
-  // one compositor layer total. The list is
-  // intentionally repeated (with reshuffles) to fill the screen — same
-  // density trick Pica uses by reusing characters from a name.
+  // one compositor layer total. Entries do not repeat within one splash, and
+  // each parent has a one-shot shatter guard so overlapping collision pairs
+  // cannot clone the same glyph set.
   const itemsJson = JSON.stringify(items);
 
   const splashHTML = '<!doctype html><html><head><meta charset="utf-8">'
@@ -344,35 +344,37 @@ export function createSplashWindow() {
     // so the brand reveal materializes on top of the falling letters.
     + 'canvas#field{position:fixed;inset:0;width:100vw;height:100vh;'
     + 'pointer-events:none;z-index:3;display:block;opacity:1;transition:opacity 1000ms cubic-bezier(.22,.61,.36,1)}'
-    + 'body.is-exiting .card{opacity:0!important;transform:translate(-50%,-54%) scale(.985)!important;transition:opacity 1400ms ease,transform 1800ms cubic-bezier(.22,.61,.36,1)}'
+    + 'body.is-exiting .card{opacity:1!important;transform:translate(-50%,-50%) scale(1.025)!important;transition:opacity 720ms ease 220ms,transform 1100ms cubic-bezier(.22,.61,.36,1) 220ms,box-shadow 1100ms ease 220ms;box-shadow:0 38px 110px rgba(0,0,0,.62),0 0 74px rgba(168,85,247,.24),inset 0 1px 0 rgba(255,255,255,.12)}'
     + 'body.is-settling canvas#field{opacity:0}'
-    // Inner card stays the same size, centered inside the outer-card.
-    // (Was position:fixed against viewport — now position:absolute against
-    // .outer so they always stay co-centered if the user resizes.)
-    // Inner card is HIDDEN for the first ~5.5 s of the splash. The
-    // falling-letters animation owns the screen alone during that
-    // window — building visual presence before the brand panel
-    // materializes on top. cardIn fades + scales the card in over
-    // 800 ms so it doesn\'t pop. Translucency ~85% (was 62%) per the
-    // user\'s "less translucent but still translucent" request.
-    + '.card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.94);'
+    // Inner card stays the same size, centered against the viewport. It is a
+    // root sibling instead of an .outer child so its z-index can genuinely
+    // sit above the canvas. A nested child cannot escape .outer's stacking
+    // context when the sibling canvas paints later in document order.
+    // Inner card is hidden until the portal begins. The falling-letter
+    // shower owns the intro; the welcome rectangle enters only after the
+    // settled glyph bodies start spiraling around viewport center.
+    + '.card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.94);'
     + 'width:540px;height:400px;border-radius:16px;'
-    + 'background:rgba(8,4,18,.85);'
-    + 'backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);'
+    + 'background:rgba(8,4,18,.24);'
+    + 'backdrop-filter:blur(12px) saturate(145%);-webkit-backdrop-filter:blur(12px) saturate(145%);'
     + 'border:1px solid rgba(255,255,255,.12);'
     + 'box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.10);'
-    + 'overflow:hidden;z-index:4;opacity:0;'
-    + 'animation:cardIn 1000ms 6800ms cubic-bezier(.22,.61,.36,1) forwards}'
-    + '@keyframes cardIn{'
-    +   '0%{opacity:0;transform:translate(-50%,-50%) scale(.94)}'
-    +   '60%{opacity:1;transform:translate(-50%,-50%) scale(1.01)}'
-    +   '100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}'
+    + 'overflow:hidden;z-index:4;opacity:0}'
+    // Nine-cell dial-pad glass: the center cross forms the stable launch
+    // surface while the corners stay translucent enough for the portal to
+    // remain visible underneath.
+    + '.dial-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);z-index:1;pointer-events:none}'
+    + '.dial-cell{border-right:1px solid rgba(190,242,255,.08);border-bottom:1px solid rgba(190,242,255,.08);background:rgba(8,4,18,.18)}'
+    + '.dial-cell:nth-child(3n){border-right:0}.dial-cell:nth-child(n+7){border-bottom:0}'
+    + '.dial-cell--corner{background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(8,4,18,.20));}'
+    + '.dial-cell--cross{background:linear-gradient(145deg,rgba(12,7,28,.84),rgba(8,4,18,.74));box-shadow:inset 0 0 0 1px rgba(255,255,255,.025),inset 0 0 34px rgba(168,85,247,.08)}'
+    + '.dial-cell--center{background:linear-gradient(145deg,rgba(18,8,38,.96),rgba(8,4,18,.92));box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),inset 0 0 44px rgba(168,85,247,.18),0 0 30px rgba(168,85,247,.14)}'
     // ── Geometric solid decoration — TOP QUARTER (0–25 %) ───────────────
     // Solid dark block with diagonal accent stripes + horizontal line.
     // Frames the "Hydra" title from above, reads as a fixed UI chrome
     // rather than a pure transparent layer.
     + '.deco-top{position:absolute;left:0;right:0;top:0;height:25%;'
-    + 'background:linear-gradient(180deg,rgba(8,4,18,.92) 0%,rgba(8,4,18,.86) 80%,rgba(8,4,18,.0) 100%),'
+    + 'background:linear-gradient(180deg,rgba(8,4,18,.36) 0%,rgba(8,4,18,.16) 80%,rgba(8,4,18,.0) 100%),'
     +   'repeating-linear-gradient(-30deg,rgba(168,85,247,.08) 0,rgba(168,85,247,.08) 1px,transparent 1px,transparent 14px);'
     + 'border-bottom:1px solid rgba(168,85,247,.18);'
     + 'pointer-events:none;z-index:1}'
@@ -382,7 +384,7 @@ export function createSplashWindow() {
     // Mirror of the top: solid block + diagonal stripes pointing the
     // opposite way + a row of small "data" rectangles along the inside.
     + '.deco-bot{position:absolute;left:0;right:0;bottom:0;height:25%;'
-    + 'background:linear-gradient(0deg,rgba(8,4,18,.92) 0%,rgba(8,4,18,.86) 80%,rgba(8,4,18,.0) 100%),'
+    + 'background:linear-gradient(0deg,rgba(8,4,18,.36) 0%,rgba(8,4,18,.16) 80%,rgba(8,4,18,.0) 100%),'
     +   'repeating-linear-gradient(30deg,rgba(120,200,255,.07) 0,rgba(120,200,255,.07) 1px,transparent 1px,transparent 14px);'
     + 'border-top:1px solid rgba(120,200,255,.16);'
     + 'pointer-events:none;z-index:1}'
@@ -399,7 +401,7 @@ export function createSplashWindow() {
     + 'mask-image:radial-gradient(ellipse at center,transparent 0 40%,#000 58%,transparent 100%)}'
     + '.hex svg{width:100%;height:100%;display:block}'
     + '.band{position:absolute;left:0;right:0;top:38%;height:24%;'
-    + 'background:linear-gradient(90deg,rgba(18,6,38,.86),rgba(36,10,58,.94) 50%,rgba(18,6,38,.86));'
+    + 'background:linear-gradient(90deg,rgba(18,6,38,.48),rgba(36,10,58,.78) 50%,rgba(18,6,38,.48));'
     + 'border-top:1px solid rgba(255,90,200,.22);border-bottom:1px solid rgba(120,200,255,.18);'
     + 'box-shadow:0 0 36px rgba(168,85,247,.20) inset,0 0 0 .5px rgba(255,255,255,.04) inset;'
     + 'pointer-events:none;z-index:1}'
@@ -408,7 +410,7 @@ export function createSplashWindow() {
     + '.card:before{content:"";position:absolute;inset:0;pointer-events:none;'
     + 'background:radial-gradient(circle at 22% 18%,rgba(120,200,255,.10),transparent 38%),'
     + 'radial-gradient(circle at 80% 22%,rgba(255,90,200,.10),transparent 40%)}'
-    + '.hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 24px;z-index:2}'
+    + '.hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 24px;z-index:3}'
     + 'h1{font-family:inherit;font-size:42px;font-weight:800;letter-spacing:0;'
     + 'background:linear-gradient(180deg,#fff 0%,rgba(255,255,255,.78) 100%);'
     + '-webkit-background-clip:text;background-clip:text;color:transparent;'
@@ -431,7 +433,7 @@ export function createSplashWindow() {
     + '.update-strip__fill{display:block;width:100%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#67e8f9,#a855f7,#ec4899);box-shadow:0 0 12px rgba(103,232,249,.55);transform-origin:left center;transform:scaleX(0);transition:transform 180ms ease}'
     + '.splash-version{position:absolute;right:18px;bottom:14px;z-index:5;font-size:10px;font-weight:700;letter-spacing:.08em;color:rgba(235,225,255,.46);text-transform:uppercase;text-shadow:0 1px 12px rgba(0,0,0,.55);pointer-events:none;user-select:none}'
     + '@media(prefers-reduced-motion:reduce){canvas#field,.hex,.vines{display:none}.bar::after{animation:none;transform:scaleX(1)}.update-strip,.update-strip__fill{transition:none}}'
-    + '</style></head><body>'
+    + '</style></head><body data-studio="frostbyte-zayd-cold">'
     + '<div class="outer">'
     // VINES — runtime fractal generator (user feedback: 'tendrils that grow
     // and spread, more elegant, more natural, more fractal-like, like ivy
@@ -452,6 +454,7 @@ export function createSplashWindow() {
     + '</pattern></defs>'
     + '<rect width="100%" height="100%" fill="url(#hexGrid)"/>'
     + '</svg></div>'
+    + '</div>' // /.outer atmosphere layer
     + '<div class="card">'
     // Corner brackets — single SVG, ONE compositor layer. The four pairs
     // of L-shaped strokes draw the cyberpunk terminal accent at each corner.
@@ -464,13 +467,18 @@ export function createSplashWindow() {
     +     '<path d="M508,386 L526,386 L526,368"/>'        // bottom-right
     +   '</g>'
     + '</svg></div>'
+    + '<div class="dial-grid" aria-hidden="true">'
+    +   '<span class="dial-cell dial-cell--corner"></span><span class="dial-cell dial-cell--cross"></span><span class="dial-cell dial-cell--corner"></span>'
+    +   '<span class="dial-cell dial-cell--cross"></span><span class="dial-cell dial-cell--cross dial-cell--center"></span><span class="dial-cell dial-cell--cross"></span>'
+    +   '<span class="dial-cell dial-cell--corner"></span><span class="dial-cell dial-cell--cross"></span><span class="dial-cell dial-cell--corner"></span>'
+    + '</div>'
     + '<div class="deco-top"></div>'
     + '<div class="band"></div>'
     + '<div class="hero">'
     // Personalized greeting (Pica\'s NSFullUserName trick). Falls back
     // to plain "Hydra" if the OS query came up empty (rare).
     + (greetingSafe
-        ? '<div class="greet">Hello, ' + greetingSafe + '</div><h1>Hydra</h1>'
+        ? '<div class="greet">Welcome, ' + greetingSafe + '</div><h1>Hydra</h1>'
         : '<h1>Hydra</h1>')
     + '<div class="sub" id="startup-phase">Starting local server</div>'
     + '<div class="bar"></div>'
@@ -483,18 +491,18 @@ export function createSplashWindow() {
     +   '</div>'
     + '</div>'
     + '</div>' // /.card
-    + '</div>' // /.outer
     // Canvas is a SIBLING of .outer — pinned to the viewport, stacking above
-    // .outer (z-index:3) but below the brand .card (z-index:4 inside .outer
-    // stacking context). Letters fall in front of background atmosphere
+    // .outer (z-index:3) but below the root-level brand .card (z-index:4).
+    // Letters fall in front of background atmosphere
     // and behind the brand reveal that materializes at t≈5.5 s.
     + '<canvas id="field"></canvas>'
     // ─── PHYSICS SIMULATION — matter-js (Pica-equivalent) ────────────────
     // Vendored matter-js drives the world. Words enter as compound bodies
     // at the top edge, shatter into per-letter bodies on first contact
     // with anything (walls, floor, or another body), then keep colliding
-    // like SpaghettiOs until the eased upward flight starts at t=13s and the pile
-    // whooshes out the top. Hard static walls extend 400 px outside the
+    // like SpaghettiOs until the accelerating portal orbit starts at t=13s and
+    // the pile swirls into a tightening circle behind the greeting card. Hard
+    // static walls extend 400 px outside the
     // viewport so even fast-moving bodies cannot tunnel through.
     //
     // Reference: ~/Desktop/pica-teardown/05-falling-letters-animation.md
@@ -517,7 +525,7 @@ export function createSplashWindow() {
     // 6 primary stems radiating outward at randomized angles. Slight angle
     // jitter from a regular hexagon so the result feels organic, not
     // mechanically symmetric.
-    +   'const stems=6;'
+    +   'const stems=5;'
     +   'for(let i=0;i<stems;i++){'
     +     'const baseAngle=(i/stems)*Math.PI*2+Math.PI*0.5;'
     +     'const angle=baseAngle+(Math.random()-0.5)*0.45;'
@@ -534,7 +542,7 @@ export function createSplashWindow() {
     // Curl: control points offset perpendicular to growth direction so the
     // path curves like a real plant tendril, not a straight line.
     +   'const perpX=-Math.sin(angle),perpY=Math.cos(angle);'
-    +   'const curl=(Math.random()-0.5)*length*0.4;'
+    +   'const curl=(Math.random()-0.5)*length*0.3;'
     +   'const cx1=x+Math.cos(angle)*length*0.35+perpX*curl;'
     +   'const cy1=y+Math.sin(angle)*length*0.35+perpY*curl;'
     +   'const cx2=x+Math.cos(angle)*length*0.7+perpX*curl*0.6;'
@@ -555,7 +563,7 @@ export function createSplashWindow() {
     // Children: 1-3 child branches per node, at random positions along
     // the parent. More children at shallow depths, taper down.
     +   'if(depth<maxDepth){'
-    +     'const numChildren=Math.max(1,Math.floor(2.5-depth*0.5+Math.random()*1.2));'
+    +     'const numChildren=Math.max(1,Math.floor(2.1-depth*0.45+Math.random()*0.9));'
     +     'for(let j=0;j<numChildren;j++){'
     +       'const t=0.45+Math.random()*0.42;'
     +       'const childX=x+(ex-x)*t+perpX*curl*t*0.8;'
@@ -563,8 +571,8 @@ export function createSplashWindow() {
     // Children fork at ±25-60° from the parent direction, alternating
     // sides so the ivy doesn't all bend the same way.
     +       'const sign=j%2===0?1:-1;'
-    +       'const fork=(0.45+Math.random()*0.6)*sign;'
-    +       'const childLength=length*(0.42+Math.random()*0.28);'
+    +       'const fork=(0.38+Math.random()*0.48)*sign;'
+    +       'const childLength=length*(0.44+Math.random()*0.22);'
     +       'growBranch(svg,childX,childY,angle+fork,childLength,depth+1,maxDepth,stroke,baseDelay+0.35);'
     +     '}'
     +   '}'
@@ -575,7 +583,7 @@ export function createSplashWindow() {
     +     'const bud=document.createElementNS(NS,"circle");'
     +     'bud.setAttribute("cx",ex.toFixed(1));'
     +     'bud.setAttribute("cy",ey.toFixed(1));'
-    +     'bud.setAttribute("r",(2.0+Math.random()*1.0).toFixed(2));'
+    +     'bud.setAttribute("r",(1.4+Math.random()*0.8).toFixed(2));'
     +     'bud.setAttribute("class","bud");'
     +     'bud.style.animationDelay=(baseDelay+depth*0.45+1.2).toFixed(2)+"s";'
     +     'svg.appendChild(bud);'
@@ -587,9 +595,9 @@ export function createSplashWindow() {
     + 'const updateStrip=document.getElementById("update-strip");'
     + 'const updateFill=document.getElementById("update-strip-fill");'
     + 'let phaseIndex=0,updateActive=false;'
-    + 'const HYDRA_SPLASH_DURATION_MS=16000,HYDRA_SPLASH_EXIT_MS=13000,HYDRA_SPLASH_EXIT_FLIGHT_MS=3000,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=1900,HYDRA_SPLASH_DISPOSE_MS=18500,HYDRA_SPLASH_TARGET=120;'
+    + 'const HYDRA_SPLASH_DURATION_MS=16000,HYDRA_SPLASH_EXIT_MS=13000,HYDRA_SPLASH_PORTAL_MS=3000,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=2700,HYDRA_SPLASH_DISPOSE_MS=18500,HYDRA_SPLASH_TARGET=72;'
     + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0,hydraSplashExitStartedAt=0;'
-    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,exitFlightMs:HYDRA_SPLASH_EXIT_FLIGHT_MS,target:HYDRA_SPLASH_TARGET,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
+    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,portalMs:HYDRA_SPLASH_PORTAL_MS,target:HYDRA_SPLASH_TARGET,queueLength:0,shatteredWordCount:0,duplicateShatterSkips:0,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,peakDynamicBodyCount:0,portalCollisionDisabled:false,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
     + 'window.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics;'
     + 'function hydraSplashRefreshDiagnostics(){hydraSplashDiagnostics.timers=hydraSplashTimers.length;hydraSplashDiagnostics.rafActive=Boolean(hydraSplashRaf)&&!hydraSplashDisposed;return hydraSplashDiagnostics;}'
     + 'function hydraSplashRemoveTimer(id){const i=hydraSplashTimers.indexOf(id);if(i>=0)hydraSplashTimers.splice(i,1);hydraSplashRefreshDiagnostics();}'
@@ -647,15 +655,18 @@ export function createSplashWindow() {
     + '}'
     + 'startHydraSplashGenericTiltSensor();'
     // ─── HARD WALLS at the viewport edges ────────────────────────────────
-    // Each wall is 400 px thick and extends 3× the viewport dimension along
-    // its length, so even a body integrated past the visible edge during
-    // one frame is still inside a wall and gets resolved correctly. This
+    // The floor and side walls are 400 px thick and extend 3× the viewport
+    // dimension along their long axis, so even a body integrated past the
+    // visible edge during one frame is still inside a wall and gets resolved
+    // correctly. There is intentionally no ceiling wall: word bodies spawn
+    // just above the visible top edge, and a ceiling collider would overlap
+    // their initial position and create a visible pause before gravity wins.
+    // This
     // is the root cure for the user-reported "letters escape the box" bug:
     // visual container and physics container are now the same surface.
     + 'const WT=400;'
     + 'function buildWalls(){const w=W(),h=H(),lx=Math.max(w,1200)*3,ly=Math.max(h,900)*3;return['
     +   'Bod.rectangle(w/2,h+WT/2,lx,WT,{isStatic:true,label:"hwall"}),'   // floor
-    +   'Bod.rectangle(w/2,-WT/2,lx,WT,{isStatic:true,label:"hwall"}),'    // ceiling
     +   'Bod.rectangle(-WT/2,h/2,WT,ly,{isStatic:true,label:"hwall"}),'    // left
     +   'Bod.rectangle(w+WT/2,h/2,WT,ly,{isStatic:true,label:"hwall"})'   // right
     + '];}'
@@ -673,14 +684,15 @@ export function createSplashWindow() {
     +   'const bw=ctx.measureText(text).width+8,bh=fontSize*1.18;'
     +   'const minX=bw/2+28,maxX=Math.max(minX+1,W()-bw/2-28);'
     +   'const tiltBias=hydraSplashTiltGravityX*(W()*0.18);'
-    +   'const x=Math.max(minX,Math.min(maxX,minX+Math.random()*(maxX-minX)+tiltBias));'
+    +   'const lane=Math.random(),showerRng=lane<.32?Math.pow(Math.random(),1.8):lane>.68?1-Math.pow(Math.random(),1.8):Math.random();'
+    +   'const x=Math.max(minX,Math.min(maxX,minX+showerRng*(maxX-minX)+tiltBias));'
     +   'const body=Bod.rectangle(x,-bh*0.6,bw,bh,{'
     +     'restitution:0.16,friction:0.62,frictionAir:0.012,density:0.0014,chamfer:{radius:5},'
     +     'label:"hword",'
     +     'plugin:{hydra:{kind:"word",text:text,color:color,fontSize:fontSize,weight:weight}}'
     +   '});'
     +   'Body.setAngularVelocity(body,(Math.random()-0.5)*0.08);'
-    +   'Body.setVelocity(body,{x:(Math.random()-0.5)*1.5+hydraSplashTiltGravityX*2.2,y:0});'
+    +   'Body.setVelocity(body,{x:(Math.random()-0.5)*3.4+hydraSplashTiltGravityX*2.2,y:Math.random()*0.45});'
     +   'Wld.add(engine.world,body);'
     + '}'
     // ─── shatter — replace the word body with one rectangle body per glyph.
@@ -689,7 +701,9 @@ export function createSplashWindow() {
     // word was, now as individuals colliding like SpaghettiOs.
     + 'function shatter(wb){'
     +   'const m=wb.plugin&&wb.plugin.hydra;'
-    +   'if(!m||m.kind!=="word")return;'
+    +   'if(!m)return;'
+    +   'if(m.kind!=="word"){if(m.kind==="shattered")hydraSplashDiagnostics.duplicateShatterSkips++;return;}'
+    +   'm.kind="shattered";hydraSplashDiagnostics.shatteredWordCount++;'
     +   'const text=m.text,color=m.color,fontSize=m.fontSize,weight=m.weight;'
     +   'const pv=wb.velocity,pav=wb.angularVelocity,pa=wb.angle;'
     +   'const cos=Math.cos(pa),sin=Math.sin(pa);'
@@ -716,7 +730,7 @@ export function createSplashWindow() {
     +   '}'
     + '}'
     // ─── Shatter trigger: ANY collision involving a word body. Words burst
-    // on first contact — wall, floor, ceiling, or another body — exactly
+    // on first contact — floor, side wall, or another body — exactly
     // the "SpaghettiOs" behavior the user asked for.
     + 'Evt.on(engine,"collisionStart",function(evt){'
     +   'for(let i=0;i<evt.pairs.length;i++){'
@@ -725,34 +739,44 @@ export function createSplashWindow() {
     +     'if(B.plugin&&B.plugin.hydra&&B.plugin.hydra.kind==="word")shatter(B);'
     +   '}'
     + '});'
-    // ─── Spawn queue — shuffle items + repeat to fill the trickle window.
+    // ─── Spawn queue — shuffle unique items for the trickle window.
     + 'function shuffle(a){return a.slice().sort(function(){return Math.random()-0.5;});}'
-    + 'function buildQueue(n){const out=[];while(out.length<n){const s=shuffle(items);for(let k=0;k<s.length&&out.length<n;k++)out.push(s[k]);}return out;}'
-    // 120 words over ~12 s = 30% more time than the prior 92-word splash
-    // while keeping the same 10/sec trickle, not a burst.
-    + 'const queue=buildQueue(HYDRA_SPLASH_TARGET);'
+    + 'function buildQueue(n){return shuffle(items).slice(0,Math.min(n,items.length));}'
+    // Keep the body budget bounded at 72 unique words. Recursive randomized
+    // scheduling makes the shower arrive in uneven clusters without adding
+    // another long-lived interval, repetition, or duplicate physics work.
+    + 'const queue=buildQueue(HYDRA_SPLASH_TARGET);hydraSplashDiagnostics.queueLength=queue.length;'
     + 'let spawnIdx=0;'
-    + 'const spawnTimer=hydraSplashSetInterval(function(){'
-    +   'if(spawnIdx>=queue.length){hydraSplashClearTimer(spawnTimer);return;}'
+    + 'function scheduleNextWord(){'
+    +   'if(spawnIdx>=queue.length)return;'
     +   'const it=queue[spawnIdx++];'
     +   'const isBrand=it.tag==="brand";'
-    +   'const fontSize=isBrand?(30+Math.floor(Math.random()*10)):(20+Math.floor(Math.random()*8));'
+    +   'const baseFontSize=isBrand?(30+Math.floor(Math.random()*10)):(20+Math.floor(Math.random()*8));'
+    +   'const fontSize=Math.max(16,Math.round(baseFontSize*(0.86+Math.random()*1.04)));'
     +   'const weight=isBrand?"800":"600";'
     +   'const color=it.color||PALETTE[hashStr(it.text)%PALETTE.length];'
     +   'spawnWord(it.text,color,fontSize,weight);'
-    + '},100);'
-    // ─── Eased exit flight — begin at t=13s. Apply a modest initial lift,
-    // then ramp gravity upward over three seconds so the settled pile visibly
-    // rises and clears the viewport instead of disappearing behind a hard flip.
+    +   'const delay=34+Math.random()*112+(Math.random()<0.16?Math.random()*150:0);'
+    +   'hydraSplashSetTimeout(scheduleNextWord,delay);'
+    + '}'
+    + 'scheduleNextWord();'
+    // ─── Accelerating portal orbit — begin at t=13s. The settled pile keeps
+    // its individual glyph bodies, but each frame bends their velocities into
+    // a tightening clockwise orbit around the screen center. Collision masks
+    // are cleared once orbit starts: the glyphs stay independently animated
+    // while Matter skips the dense collision-pair workload. The greeting card
+    // remains above the canvas while the portal accelerates underneath it.
     + 'hydraSplashSetTimeout(function(){'
     +   'hydraSplashExitStartedAt=performance.now();document.body.classList.add("is-exiting");'
     +   'hydraSplashSetTimeout(function(){document.body.classList.add("is-settling");},HYDRA_SPLASH_EXIT_FADE_DELAY_MS);'
     +   'const all=Comp.allBodies(engine.world);'
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
     +     'if(b.isStatic)continue;'
-    +     'Body.setVelocity(b,{x:b.velocity.x+(Math.random()-0.5)*1.2,y:b.velocity.y-1.1-Math.random()*0.6});'
-    +     'Body.setAngularVelocity(b,b.angularVelocity+(Math.random()-0.5)*0.04);'
+    +     'b.collisionFilter.mask=0;b.isSensor=true;'
+    +     'Body.setVelocity(b,{x:b.velocity.x+(Math.random()-0.5)*1.4,y:b.velocity.y+(Math.random()-0.5)*1.4});'
+    +     'Body.setAngularVelocity(b,b.angularVelocity+0.08+(Math.random()-0.5)*0.04);'
     +   '}'
+    +   'hydraSplashDiagnostics.portalCollisionDisabled=true;'
     + '},HYDRA_SPLASH_EXIT_MS);'
     // One owned requestAnimationFrame loop steps Matter and paints the canvas.
     // Matter.Runner is intentionally not used here: it schedules its own
@@ -774,6 +798,16 @@ export function createSplashWindow() {
     // ─── Render — draw each body as a rotated glyph at its world transform.
     + 'const HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45,HYDRA_SPLASH_RENDER_FRAME_MS=1000/30;'
     + 'let hydraSplashLastFrame=0,hydraSplashPhysicsCarry=0,hydraSplashLastRender=0;'
+    + 'function hydraSplashPortalRatio(now){return hydraSplashExitStartedAt?Math.min(1,(now-hydraSplashExitStartedAt)/HYDRA_SPLASH_PORTAL_MS):0;}'
+    + 'function drawHydraPortal(now,ratio){'
+    +   'if(!ratio)return;const cx=W()/2,cy=H()/2,short=Math.min(W(),H()),base=short*(0.46-0.27*ratio),spin=(now-hydraSplashExitStartedAt)*(0.00055+ratio*0.0034);'
+    +   'ctx.save();ctx.globalCompositeOperation="lighter";'
+    +   'const glow=ctx.createRadialGradient(cx,cy,short*0.045,cx,cy,base*1.36);glow.addColorStop(0,"rgba(12,7,30,0)");glow.addColorStop(.48,"rgba(34,211,238,"+(0.035+ratio*.075)+")");glow.addColorStop(.72,"rgba(168,85,247,"+(0.06+ratio*.14)+")");glow.addColorStop(1,"rgba(236,72,153,0)");ctx.fillStyle=glow;ctx.beginPath();ctx.arc(cx,cy,base*1.42,0,Math.PI*2);ctx.fill();'
+    +   'const ringColors=["rgba(34,211,238,.64)","rgba(168,85,247,.72)","rgba(236,72,153,.58)","rgba(251,191,36,.34)"];'
+    +   'for(let r=0;r<4;r++){const radius=base*(0.74+r*.12+Math.sin(spin*2+r)*.018),dash=10+r*7;ctx.save();ctx.translate(cx,cy);ctx.rotate(spin*(r%2?1:-1)*(1+r*.28));ctx.strokeStyle=ringColors[r];ctx.lineWidth=1.1+r*.72;ctx.setLineDash([dash,12+r*5]);ctx.lineDashOffset=-spin*80*(r+1);ctx.beginPath();ctx.ellipse(0,0,radius,radius*(.78+r*.045),0,0,Math.PI*2);ctx.stroke();ctx.restore();}'
+    +   'for(let a=0;a<18;a++){const angle=spin*(1.4+a*.045)+(a/18)*Math.PI*2,rad=base*(.67+(a%5)*.075);ctx.fillStyle=ringColors[a%ringColors.length];ctx.beginPath();ctx.arc(cx+Math.cos(angle)*rad,cy+Math.sin(angle)*rad*.82,1.2+(a%3)*.75,0,Math.PI*2);ctx.fill();}'
+    +   'ctx.restore();'
+    + '}'
     + 'function render(now){'
     +   'if(hydraSplashDisposed)return;'
     +   'hydraSplashRaf=requestAnimationFrame(render);'
@@ -783,21 +817,35 @@ export function createSplashWindow() {
     +   'let steps=0;'
     +   'hydraSplashLeanX+= (hydraSplashTiltGravityX-hydraSplashLeanX)*0.08;'
     +   'engine.world.gravity.x=hydraSplashLeanX;hydraSplashDiagnostics.tilt.gravityX=hydraSplashLeanX;'
-    +   'if(hydraSplashExitStartedAt){const exitRatio=Math.min(1,(now-hydraSplashExitStartedAt)/HYDRA_SPLASH_EXIT_FLIGHT_MS);const easedExit=exitRatio*exitRatio*(3-2*exitRatio);engine.world.gravity.y=1+(-2.1-1)*easedExit;}'
+    +   'if(hydraSplashExitStartedAt){'
+    +     'const exitRatio=hydraSplashPortalRatio(now);const easedExit=exitRatio*exitRatio*(3-2*exitRatio);'
+    +     'engine.world.gravity.x=0;engine.world.gravity.y=0;'
+    +     'const portalX=W()/2,portalY=H()/2,portalRadius=Math.min(W(),H())*(0.46-0.27*easedExit),portalSpeed=4.4+18.6*easedExit;'
+    +     'const portalBodies=Comp.allBodies(engine.world);'
+    +     'for(let p=0;p<portalBodies.length;p++){const b=portalBodies[p];if(b.isStatic)continue;'
+    +       'const dx=b.position.x-portalX,dy=b.position.y-portalY,dist=Math.max(1,Math.sqrt(dx*dx+dy*dy)),nx=dx/dist,ny=dy/dist;'
+    +       'const liftBoost=(1-exitRatio)*10,radial=Math.max(-8,Math.min(30,(dist-portalRadius)*0.09+liftBoost));'
+    +       'const targetX=-ny*portalSpeed-nx*radial,targetY=nx*portalSpeed-ny*radial,blend=0.28+0.34*easedExit;'
+    +       'Body.setVelocity(b,{x:b.velocity.x+(targetX-b.velocity.x)*blend,y:b.velocity.y+(targetY-b.velocity.y)*blend});'
+    +       'Body.setAngularVelocity(b,b.angularVelocity+(0.18+0.34*easedExit-b.angularVelocity)*0.22);'
+    +     '}'
+    +   '}'
     +   'while(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2){Eng.update(engine,HYDRA_SPLASH_PHYSICS_STEP_MS);hydraSplashPhysicsCarry-=HYDRA_SPLASH_PHYSICS_STEP_MS;steps++;}'
     +   'hydraSplashDiagnostics.physicsSteps+=steps;'
     +   'if(steps>=2)hydraSplashPhysicsCarry=0;'
     +   'if(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS)return;'
     +   'hydraSplashLastRender=now;'
     +   'ctx.clearRect(0,0,W(),H());'
+    +   'const portalRatio=hydraSplashPortalRatio(now);drawHydraPortal(now,portalRatio);'
     +   'const all=Comp.allBodies(engine.world);'
-    +   'let dynamicCount=0;for(let c=0;c<all.length;c++){if(!all[c].isStatic)dynamicCount++;}hydraSplashDiagnostics.bodyCount=all.length;hydraSplashDiagnostics.dynamicBodyCount=dynamicCount;hydraSplashDiagnostics.renderFrames++;'
+    +   'let dynamicCount=0;for(let c=0;c<all.length;c++){if(!all[c].isStatic)dynamicCount++;}hydraSplashDiagnostics.bodyCount=all.length;hydraSplashDiagnostics.dynamicBodyCount=dynamicCount;hydraSplashDiagnostics.peakDynamicBodyCount=Math.max(hydraSplashDiagnostics.peakDynamicBodyCount,dynamicCount);hydraSplashDiagnostics.renderFrames++;'
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
     +     'if(b.isStatic||!b.plugin||!b.plugin.hydra)continue;'
     +     'const m=b.plugin.hydra;'
     +     'ctx.save();'
     +     'ctx.translate(b.position.x,b.position.y);'
     +     'ctx.rotate(b.angle);'
+    +     'if(portalRatio){const pulse=.82+Math.sin(now*.012+b.position.x*.018+b.position.y*.014)*.18;ctx.globalAlpha=.66+pulse*.30;const depthScale=.86+pulse*.24;ctx.scale(depthScale,depthScale);if(i%5===0){ctx.shadowColor=m.color;ctx.shadowBlur=4+portalRatio*8;}}'
     +     'ctx.fillStyle=m.color;'
     +     'ctx.font=fontFor(m.fontSize,m.weight);'
     +     'ctx.textAlign="center";ctx.textBaseline="middle";'

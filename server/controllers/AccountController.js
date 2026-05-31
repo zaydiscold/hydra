@@ -536,6 +536,7 @@ export class AccountController extends BaseController {
       return this.success(res, {
         status: payload.status,
         sessionExpiry: payload.sessionExpiry,
+        sessionRefreshedAt: payload.sessionRefreshedAt,
         sessionDecryptFailed: payload.sessionDecryptFailed,
       });
     } catch (err) {
@@ -899,8 +900,10 @@ export class AccountController extends BaseController {
       return this.success(res, {
         status: payload.status,
         sessionExpiry: payload.sessionExpiry,
+        sessionRefreshedAt: payload.sessionRefreshedAt,
         sessionDecryptFailed: payload.sessionDecryptFailed,
         live: payload.live,
+        observedAt: payload.observedAt,
       });
     } catch (err) {
       return this.error(res, err.message, err.status || 500);

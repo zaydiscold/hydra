@@ -105,10 +105,14 @@ test('splash owns one throttled physics and render loop', () => {
 
   assert.match(windowsJs, /HYDRA_SPLASH_DURATION_MS=16000/);
   assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=13000/);
-  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FLIGHT_MS=3000/);
-  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FADE_DELAY_MS=1900/);
+  assert.match(windowsJs, /HYDRA_SPLASH_PORTAL_MS=3000/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FADE_DELAY_MS=2700/);
   assert.match(windowsJs, /HYDRA_SPLASH_DISPOSE_MS=18500/);
-  assert.match(windowsJs, /HYDRA_SPLASH_TARGET=120/);
+  assert.match(windowsJs, /HYDRA_SPLASH_TARGET=72/);
+  assert.doesNotMatch(windowsJs, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
+  assert.match(windowsJs, /m\.kind="shattered";hydraSplashDiagnostics\.shatteredWordCount\+\+/);
+  assert.match(windowsJs, /shuffle\(items\)\.slice\(0,Math\.min\(n,items\.length\)\)/);
+  assert.match(windowsJs, /dial-cell dial-cell--cross dial-cell--center/);
   assert.match(windowsJs, /const maxPixels=2800000/);
   assert.match(windowsJs, /Math\.sqrt\(maxPixels\/\(w\*h\)\)/);
   assert.match(windowsJs, /tiltBias=hydraSplashTiltGravityX\*\(W\(\)\*0\.18\)/);
@@ -124,7 +128,17 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /hydraSplashTiltSensor\.start\(\)/);
   assert.match(windowsJs, /hydraSplashTiltSensor\.stop\(\)/);
   assert.match(windowsJs, /engine\.world\.gravity\.x=hydraSplashLeanX/);
-  assert.match(windowsJs, /engine\.world\.gravity\.y=1\+\(-2\.1-1\)\*easedExit/);
+  assert.match(windowsJs, /portalRadius=Math\.min\(W\(\),H\(\)\)\*\(0\.46-0\.27\*easedExit\)/);
+  assert.match(windowsJs, /portalSpeed=4\.4\+18\.6\*easedExit/);
+  assert.match(windowsJs, /liftBoost=\(1-exitRatio\)\*10/);
+  assert.match(windowsJs, /b\.collisionFilter\.mask=0;b\.isSensor=true/);
+  assert.match(windowsJs, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
+  assert.match(windowsJs, /baseFontSize\*\(0\.86\+Math\.random\(\)\*1\.04\)/);
+  assert.match(windowsJs, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
+  assert.match(windowsJs, /Welcome, /);
+  assert.match(windowsJs, /function drawHydraPortal\(now,ratio\)/);
+  assert.match(windowsJs, /ctx\.globalCompositeOperation="lighter"/);
+  assert.match(windowsJs, /drawHydraPortal\(now,portalRatio\)/);
   assert.match(windowsJs, /document\.body\.classList\.add\("is-settling"\)/);
   assert.match(windowsJs, /hydraSplashDiagnostics\.physicsSteps\+=steps/);
   assert.doesNotMatch(windowsJs, /Run\.create/);
@@ -311,7 +325,7 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(dashboard, /data-testid="fleet-health-donut"/);
   assert.match(dashboard, /strokeDasharray=\{`\$\{healthyLen\} \$\{circumference\}`\}/);
   assert.match(dashboard, /<ActivityPanel events=\{activity\} \/>/);
-  assert.match(dashboard, /className="accounts-grid dashboard-mini-grid"/);
+  assert.match(dashboard, /className="accounts-grid dashboard-mini-grid proximity-field"/);
   assert.match(dashboard, /<AccountCard[\s\S]*compact\s*\/>/);
   assert.match(dashboard, /className="dashboard-view-toggle"/);
   assert.match(dashboard, /<span className="active">GRID<\/span>/);
@@ -712,4 +726,39 @@ test('active renderer UI does not ship obvious dead-button placeholders', () => 
     assert.doesNotMatch(source, /alert\(/, `${file} uses alert() instead of app feedback`);
     assert.doesNotMatch(source, /coming soon|not implemented/i, `${file} exposes placeholder copy`);
   }
+});
+
+test('session ages are labeled as historical context while live probes show observation time', () => {
+  const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
+  const accountCard = readRepoFile('src/components/AccountCard.jsx');
+  const vault = readRepoFile('src/pages/Vault.jsx');
+
+  assert.match(accountDetail, /Live Clerk check \{liveSessionObservedAt \? timeAgo\(liveSessionObservedAt\) : ''\}/);
+  assert.match(accountDetail, /Interactive sign-in/);
+  assert.match(accountDetail, /last silent renewal/);
+  assert.match(accountDetail, /Next local renewal checkpoint/);
+  assert.match(accountDetail, /not the login's total lifetime/);
+  assert.match(accountCard, />login \{timeAgo\(account\.lastLoginAt\)\}</);
+  assert.match(vault, /login \{timeAgo\(acc\.lastLoginAt\)\}/);
+  assert.match(vault, /Live probe: \$\{checkResults\[acc\.id\]\.observedAt\}/);
+});
+
+test('dashboard cards and sidebar navigation use bounded reduced-motion-safe proximity fields', () => {
+  const hook = readRepoFile('src/hooks/useProximityField.js');
+  const app = readRepoFile('src/App.jsx');
+  const dashboard = readRepoFile('src/pages/Dashboard.jsx');
+  const accountCard = readRepoFile('src/components/AccountCard.jsx');
+  const css = readRepoFile('src/index.css');
+
+  assert.match(hook, /requestTrackedAnimationFrame\(owner, paint\)/);
+  assert.match(hook, /Math\.hypot\(dx, dy\) \/ radius/);
+  assert.match(hook, /prefers-reduced-motion: reduce/);
+  assert.match(hook, /querySelectorAll\(TARGET_SELECTOR\)\.forEach\(resetTarget\)/);
+  assert.match(app, /owner: 'App\.sidebarNav'/);
+  assert.match(app, /data-studio="frostbyte-zayd-cold"/);
+  assert.match(dashboard, /owner: 'Dashboard\.accountGrid'/);
+  assert.match(accountCard, /data-proximity-target/);
+  assert.match(css, /\.dashboard-mini-grid \.account-card\[data-proximity-target\]/);
+  assert.match(css, /\.sidebar \.nav-link\[data-proximity-target\]/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.proximity-field \[data-proximity-target\]/);
 });

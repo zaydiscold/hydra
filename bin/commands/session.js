@@ -76,6 +76,7 @@ function summarize(account, session) {
     redeemReadiness,
     hint,
     live: false,
+    observedAt: null,
   };
 }
 
@@ -118,8 +119,10 @@ export async function run(argv) {
       const live = await store.probeSessionLive(user.id, account.id);
       report.sessionStatus = live.status;
       report.sessionExpiry = live.sessionExpiry || report.sessionExpiry;
+      report.sessionRefreshedAt = live.sessionRefreshedAt || report.sessionRefreshedAt;
       report.sessionDecryptFailed = Boolean(live.sessionDecryptFailed);
       report.live = true;
+      report.observedAt = live.observedAt ?? new Date().toISOString();
       if (live.status === 'active') {
         report.redeemReadiness = 'ready';
         report.hint = 'Live Clerk probe succeeded.';
@@ -145,8 +148,9 @@ export async function run(argv) {
     process.stdout.write(`  ${c.dim('Account:')}        ${account.email || account.alias || account.id}\n`);
     process.stdout.write(`  ${c.dim('Status:')}         ${fmtHealth(report.sessionStatus)} ${report.sessionStatus || 'unknown'}\n`);
     process.stdout.write(`  ${c.dim('Probe:')}          ${report.live ? 'live Clerk probe' : 'cached/local metadata'}\n`);
+    if (report.observedAt) process.stdout.write(`  ${c.dim('Observed at:')}    ${report.observedAt}\n`);
     process.stdout.write(`  ${c.dim('Readiness:')}      ${report.redeemReadiness}\n`);
-    process.stdout.write(`  ${c.dim('Session expiry:')} ${report.sessionExpiry || 'unknown'}\n`);
+    process.stdout.write(`  ${c.dim('Renewal checkpoint:')} ${report.sessionExpiry || 'unknown'}\n`);
     process.stdout.write(`  ${c.dim('Client cookies:')} ${report.clientCookieCount}\n`);
     process.stdout.write(`  ${c.dim('Password auth:')}  ${report.canPasswordReauth ? 'available' : 'not available'}\n`);
     process.stdout.write(`  ${c.dim('Management key:')} ${report.hasManagementKey ? 'stored' : 'missing'}\n\n`);

@@ -1,6 +1,6 @@
 appId: com.zayd.hydra
 productName: Hydra
-copyright: Copyright © 2026
+copyright: Copyright © 2026 Frostbyte Technology. Developed by Zayd / Cold.
 artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 publish:
   provider: github
@@ -106,7 +106,7 @@ win:
         - x64
         - arm64
   icon: desktop/icons/icon.ico
-  legalTrademarks: Hydra
+  legalTrademarks: Hydra by Frostbyte Technology. Developed by Zayd / Cold.
   # Code signing — uncomment and set these env vars to avoid SmartScreen warnings:
   #   CSC_LINK            = path/to/certificate.pfx
   #   CSC_KEY_PASSWORD    = password for the certificate

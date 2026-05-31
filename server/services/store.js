@@ -83,17 +83,20 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
       status = 'error';
     }
 
-    // Persist the fresh __client cookie Clerk returned — prevents false 'expired' on next probe.
-    // Fire-and-forget: don't block the status response on a DB write.
+    // Persist the fresh __client cookie Clerk returned before reporting success.
+    // A live probe is an operator-facing truth boundary: returning before the
+    // write lands can pair a fresh Clerk result with stale renewal metadata.
     if (result && userId && accountId) {
-      updateAccountSession(
-        userId, accountId,
-        result.sessionToken || result.sessionCookie || undefined,
-        result.clientCookie || undefined,
-        result.sessionExpiry || undefined,
-      ).catch((err) => {
+      try {
+        await updateAccountSession(
+          userId, accountId,
+          result.sessionToken || result.sessionCookie || undefined,
+          result.clientCookie || undefined,
+          result.sessionExpiry || undefined,
+        );
+      } catch (err) {
         logger.warn(`[SESSION] Failed to persist refreshed session probe result for account=${accountId}: ${err.message}`);
-      });
+      }
     }
 
     if (accountId) {
@@ -341,6 +344,7 @@ export async function getStoredSessionStatusPayload(userId, id) {
   return {
     status,
     sessionExpiry: config.sessionExpiry ?? null,
+    sessionRefreshedAt: config.sessionRefreshedAt ?? null,
     sessionDecryptFailed: decryptFailed,
   };
 }
@@ -357,11 +361,16 @@ export async function probeSessionLive(userId, id) {
   const { plain, decryptFailed } = readSessionPlainResult(account);
   // bypassCache: true — skip the in-memory TTL so Clerk is always queried
   const status = await getSessionStatusAsync(config, plain, decryptFailed, id, userId, { bypassCache: true });
+  const refreshedAccount = await prisma.account.findFirst({ where: { id, userId } });
+  if (!refreshedAccount) throw new Error('Account not found');
+  const refreshedConfig = readConfig(refreshedAccount);
   return {
     status,
-    sessionExpiry: config.sessionExpiry ?? null,
+    sessionExpiry: refreshedConfig.sessionExpiry ?? null,
+    sessionRefreshedAt: refreshedConfig.sessionRefreshedAt ?? null,
     sessionDecryptFailed: decryptFailed,
     live: true, // signal to the client that this was a real probe
+    observedAt: new Date().toISOString(),
   };
 }
 

@@ -519,8 +519,15 @@ function buildAudit() {
         && !electronWindows.includes('Run.run')
         && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
         && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=16000')
-        && electronWindows.includes('HYDRA_SPLASH_EXIT_FLIGHT_MS=3000')
-        && electronWindows.includes('HYDRA_SPLASH_TARGET=120')
+        && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=3000')
+        && electronWindows.includes('function drawHydraPortal')
+        && electronWindows.includes('ctx.globalCompositeOperation="lighter"')
+        && electronWindows.includes('HYDRA_SPLASH_TARGET=72')
+        && !electronWindows.includes('Bod.rectangle(w/2,-WT/2,lx,WT')
+        && electronWindows.includes('m.kind="shattered";hydraSplashDiagnostics.shatteredWordCount++')
+        && electronWindows.includes('shuffle(items).slice(0,Math.min(n,items.length))')
+        && electronWindows.includes('b.collisionFilter.mask=0;b.isSensor=true')
+        && electronWindows.includes('hydraSplashDiagnostics.portalCollisionDisabled=true')
         && electronWindows.includes('tiltBias=hydraSplashTiltGravityX*(W()*0.18)')
         && electronWindows.includes('hydraSplashLeanX+= (hydraSplashTiltGravityX-hydraSplashLeanX)*0.08')
         && electronWindows.includes('disposeHydraSplash')
@@ -593,7 +600,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 16s with 120 words, a staged 3s exit flight, and stronger sensor/fallback side lean; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 16s with a unique 72-word shower, shattering is one-shot per parent, the top-edge spawn no longer overlaps a ceiling collider, and the staged 3s accelerating portal orbit disables collision response while preserving individual glyph motion; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',

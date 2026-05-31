@@ -12,6 +12,15 @@ Tracked `package.json` and `package-lock.json` now stay aligned with the
 published `v1.1.0` release. New patches advance from the active `1.1.x` lane:
 the next normal patch release is `1.1.1`, not another `1.0.x` release.
 
+The 2026-05-31 desktop cleanup, live-session metadata repair, session-truth
+copy, splash portal, proximity fields, product signature, README splash
+capture, updater handoff, and Windows lane hardening are shipping together as
+the `1.1.3` patch. The next normal patch after this tranche is `1.1.4`.
+
+The active desktop updater matrix for `1.1.3` publishes macOS arm64, macOS
+Intel, and Windows x64 NSIS artifacts. Historical Linux AppImage releases stay
+available, but Linux is not refreshed in this patch lane.
+
 The minor release, rather than another patch-only release, was intentional:
 
 This is intentional release-train behavior:

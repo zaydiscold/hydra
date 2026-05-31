@@ -28,7 +28,7 @@ Hydra is a packaged Electron app for running an OpenRouter account fleet from on
 It is designed for operators who want a native control plane without shipping account secrets to a hosted service.
 
 <p align="center">
-  <img src="videos/hydra_showreel.gif" alt="Hydra showreel — Vault, Command, One router, Every request, Terminal-native" width="720" />
+  <img src="videos/hydra_splash.gif" alt="Hydra v1.1.3 packaged desktop splash animation" width="720" />
 </p>
 
 ## Navigation
@@ -65,7 +65,7 @@ Use the packaged release artifact for your platform:
 | --- | --- | --- |
 | macOS | `Hydra.app` / zip | Boots the embedded server and native desktop window. |
 | Windows | `Hydra Setup.exe` | Uses `%APPDATA%\\Hydra\\` for app data. |
-| Linux | `Hydra.AppImage` | Uses `~/.config/Hydra/` for app data. |
+| Linux | Historical `Hydra.AppImage` | Existing builds remain available, but the active desktop update lane is macOS and Windows. |
 
 On first launch, Hydra creates an encrypted local vault and an empty SQLite database in the platform user-data directory. Closing the app window does not have to kill the router; quit from the tray/menu when you want the server fully stopped.
 
@@ -184,8 +184,10 @@ Current release-train docs:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
   checkpoints, and the completed `v1.1.0` release path.
+- [Design Engineering](docs/DESIGN_ENGINEERING.md): splash portal composition,
+  restrained proximity fields, session-truth copy, and embedded product credit.
 - [Splash Tilt Research](docs/SPLASH_TILT_RESEARCH.md): how the 16 second,
-  120-word splash uses opportunistic device tilt, fallback lean, staged exit, and bounded
+  72-word unique splash uses opportunistic device tilt, fallback lean, staged exit, and bounded
   Matter.js/RAF/sensor cleanup.
 - [Session Truth](docs/SESSION_TRUTH.md): login-session versus management-key
   state, live Clerk probes, bounded device-cookie identity memory, and OTP aliases.

@@ -48,7 +48,7 @@ test('electron package smoke workflow covers macOS and Linux packages on PRs', (
   assert.doesNotMatch(workflow, /-\s*os:\s*windows-latest/, 'Windows is not in PR smoke matrix; release.yml still builds Windows installers on tag pushes');
 });
 
-test('release workflow uploads desktop artifacts for every release target', () => {
+test('release workflow uploads current macOS and Windows artifacts while Linux stays frozen', () => {
   const workflow = read('.github/workflows/release.yml');
 
   assert.match(workflow, /tags:\s*\n\s*-\s*'v\*\.\*\.\*'/, 'release workflow must run on version tags');
@@ -79,7 +79,7 @@ test('release workflow uploads desktop artifacts for every release target', () =
   assert.match(workflow, /name:\s*macOS arm64 zip[\s\S]*artifact:\s*\|[\s\S]*release\/Hydra-\*-mac-arm64\.zip[\s\S]*release\/latest-mac\.yml/, 'must upload macOS arm64 zip and update metadata');
   assert.match(workflow, /name:\s*macOS Intel x64 zip[\s\S]*artifact:\s*\|[\s\S]*release\/Hydra-\*-mac-x64\.zip[\s\S]*release\/latest-mac\.yml/, 'must upload macOS Intel zip and update metadata');
   assert.match(workflow, /name:\s*Windows x64 NSIS[\s\S]*artifact:\s*\|\s*\n\s*release\/Hydra-\*-win-x64\.exe/, 'must upload Windows x64 installer');
-  assert.match(workflow, /name:\s*Linux x64 AppImage[\s\S]*artifact:\s*release\/Hydra-\*\.AppImage/, 'must upload Linux AppImage');
+  assert.doesNotMatch(workflow, /name:\s*Linux x64 AppImage/, 'tag releases intentionally leave the historical Linux AppImage lane frozen');
 });
 
 test('auto-version dispatches the release workflow after creating tags', () => {
@@ -218,6 +218,7 @@ test('electron package smoke validates distributable release artifacts', () => {
   assert.match(script, /macOS Intel zip artifact/, 'smoke must require the macOS Intel zip artifact');
   assert.match(script, /Windows x64 installer artifact/, 'smoke must require the Windows installer artifact');
   assert.match(script, /Windows x64 installer blockmap/, 'smoke must require the Windows installer blockmap');
+  assert.match(script, /Updater maintenance handoff module/, 'smoke must require updater maintenance handoff code in packaged apps');
   assert.match(script, /Linux x64 AppImage artifact/, 'smoke must require the Linux AppImage artifact');
   assert.match(script, /query_engine-windows\.dll\.node/, 'smoke must require the Windows Prisma engine for Windows packages');
   assert.match(script, /macOS ARM package must contain darwin-arm64 Prisma engine/, 'smoke must reject wrong macOS ARM Prisma engines');
@@ -225,6 +226,17 @@ test('electron package smoke validates distributable release artifacts', () => {
   assert.match(script, /zip artifact does not contain Hydra\.app executable/, 'smoke must inspect macOS zip contents for the app executable');
   assert.match(script, /release artifact is empty/, 'smoke must reject empty artifacts');
   assert.match(builderConfig, /!\s*release\/\*\*/, 'packaged app must not embed stale release output when output is redirected');
+});
+
+test('Windows packaging carries the multi-resolution Hydra artwork and Frostbyte attribution', () => {
+  const builderConfig = read('electron-builder.yml');
+  const pkg = read('package.json');
+
+  assert.match(builderConfig, /win:[\s\S]*icon:\s*desktop\/icons\/icon\.ico/, 'Windows executable must use the generated ICO');
+  assert.match(builderConfig, /nsis:[\s\S]*installerIcon:\s*desktop\/icons\/icon\.ico/, 'Windows installer must use the generated ICO');
+  assert.match(builderConfig, /nsis:[\s\S]*uninstallerIcon:\s*desktop\/icons\/icon\.ico/, 'Windows uninstaller must use the generated ICO');
+  assert.match(builderConfig, /legalTrademarks:\s*Hydra by Frostbyte Technology\. Developed by Zayd \/ Cold\./, 'Windows metadata must carry product attribution');
+  assert.match(pkg, /"author": "Frostbyte Technology — Developed by Zayd \/ Cold"/, 'packaged npm metadata must carry developer attribution');
 });
 
 test('packaged app dogfood launcher uses LaunchServices instead of direct executable spawn', () => {

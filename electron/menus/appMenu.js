@@ -54,6 +54,8 @@ export function setupAppMenu({
               `Node.js: ${process.versions.node}`,
               `Platform: ${process.platform} ${process.arch}`,
               '',
+              'Developer: Frostbyte Technology',
+              'Developed by Zayd / Cold',
               'License: MIT',
               'https://github.com/zaydiscold/hydra',
             ].join('\n');
@@ -190,6 +192,8 @@ export function setupAppMenu({
               `V8:          ${process.versions.v8}`,
               `Platform:    ${process.platform} ${process.arch}`,
               `Packaged:    ${app.isPackaged}`,
+              'Developer:   Frostbyte Technology',
+              'Built by:    Zayd / Cold',
               `User Data:   ${app.getPath('userData')}`,
               `Logs:        ${app.getPath('logs')}`,
             ].join('\n');
