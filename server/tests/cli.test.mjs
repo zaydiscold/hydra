@@ -367,6 +367,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.equal(typeof report.summary.blockers, 'number');
   assert.ok(report.summary.deferred >= 3);
   assert.ok(report.items.some((item) => item.id === 'mac-arm-artifact' && ['ok', 'missing'].includes(item.state)));
+  assert.ok(report.items.some((item) => item.id === 'mac-arm-artifact' && /local-manifest workspace artifact|GitHub release v1\.1\.0 macOS arm64|GitHub Actions macOS arm64/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'packaged-dogfood-runbook' && item.state === 'ok' && /redacted user-run evidence capture/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'mac-intel-artifact' && ['ok', 'missing'].includes(item.state)));
   assert.ok(report.items.some((item) => item.id === 'mac-intel-current' && ['ok', 'missing'].includes(item.state)));
@@ -377,7 +378,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'touch-id-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'windows-launch-dogfood' && item.state === 'deferred'));
-  assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence)));
+  assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence) && /newest recorded checkpoint run/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'session-probe-redaction' && item.state === 'ok' && /masking account aliases/.test(item.evidence)));
   for (const item of report.items.filter((entry) => entry.state === 'deferred')) {
     assert.match(item.evidence, /not release-complete evidence/);

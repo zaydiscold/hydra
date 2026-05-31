@@ -8,6 +8,10 @@ The coherent performance, splash, auth/session, and packaging tranche shipped
 as `v1.1.0` on 2026-05-31. GitHub release assets now include macOS arm64, macOS
 Intel, Windows x64, Linux, and merged updater metadata.
 
+Tracked `package.json` and `package-lock.json` now stay aligned with the
+published `v1.1.0` release. New patches advance from the active `1.1.x` lane:
+the next normal patch release is `1.1.1`, not another `1.0.x` release.
+
 The minor release, rather than another patch-only release, was intentional:
 
 This is intentional release-train behavior:
@@ -50,9 +54,9 @@ triggered auto-version, created `chore(release): v1.1.0 [skip-bump]`, pushed tag
 
 | Bump | Use when | Example |
 | --- | --- | --- |
-| Patch | Narrow bug fix, docs correction, packaging contract fix, or tiny hardening with no meaningful operator-facing behavior change. | `1.0.20 -> 1.0.21` |
-| Minor | Coherent feature, UX, performance, or operator-workflow release that users should notice but that preserves compatibility. | `1.0.20 -> 1.1.0` |
-| Major | Breaking local data, API, CLI, config, updater, or operator-contract change. | `1.0.20 -> 2.0.0` |
+| Patch | Narrow bug fix, docs correction, packaging contract fix, or tiny hardening with no meaningful operator-facing behavior change. | `1.1.0 -> 1.1.1` |
+| Minor | Coherent feature, UX, performance, or operator-workflow release that users should notice but that preserves compatibility. | `1.1.0 -> 1.2.0` |
+| Major | Breaking local data, API, CLI, config, updater, or operator-contract change. | `1.1.0 -> 2.0.0` |
 
 For Hydra, a minor bump is appropriate when several adjacent changes ship as one
 noticeable desktop improvement. The current tranche qualifies because it combines
@@ -103,9 +107,8 @@ Operationally:
 4. Use a normal patch bump only when an additional source fix must ship.
 5. Keep the existing `v1.1.0` tag pinned to its tested release commit.
 
-If the final tranche changes backward compatibility before release, replace
-`[bump:minor]` with `[bump:major]` and document the migration. No current change
-requires that.
+If a future tranche changes backward compatibility, use `[bump:major]` and
+document the migration. No current change requires a `2.0.0` release.
 
 ## Exact Release Commit Shape
 
@@ -126,8 +129,9 @@ git push origin master
 
 The final commit message should not include `[skip-bump]`. Auto-version reads
 the latest commit message, sees `[bump:minor]`, bumps the middle component, and
-tags the resulting version. If the current package metadata is still `1.0.20`,
-that produces `1.1.0`, not `1.0.21`.
+tags the resulting version. From the active `1.1.0` lane, a normal patch bump
+produces `1.1.1`, a minor bump produces `1.2.0`, and a major bump produces
+`2.0.0`.
 
 The release trigger is deliberately commit-message based so no one has to edit
 the workflow by hand for patch/minor/major releases. The only manual choice is

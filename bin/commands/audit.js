@@ -6,6 +6,7 @@
  * stable CLI artifact so release gaps are visible while Hydra is closed.
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { c, json, status, table } from '../lib/output.js';
@@ -54,6 +55,27 @@ function sizeMb(relPath) {
   } catch {
     return null;
   }
+}
+
+function macBundleVersion(relPath) {
+  const plistPath = join(ROOT, relPath, 'Contents/Info.plist');
+  if (!existsSync(plistPath)) return null;
+  if (process.platform === 'darwin') {
+    try {
+      return execFileSync('plutil', [
+        '-extract',
+        'CFBundleShortVersionString',
+        'raw',
+        '-o',
+        '-',
+        plistPath,
+      ], { encoding: 'utf-8' }).trim() || null;
+    } catch {
+      // Fall through to XML parsing for portable source/test environments.
+    }
+  }
+  const plist = safeRead(`${relPath}/Contents/Info.plist`);
+  return plist.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/)?.[1] ?? null;
 }
 
 function check(id, label, ok, evidence, stateWhenOk = 'ok') {
@@ -157,11 +179,19 @@ function buildAudit() {
   const readme = safeRead('README.md');
   const ciWorkflow = safeRead('.github/workflows/ci.yml');
   const dockerWorkflow = safeRead('.github/workflows/docker.yml');
-  const dockerRuntimeCiRecorded = releaseAudit.includes('GitHub Actions run 26196262336')
+  const dockerRuntimeBaselineRun = '26196262336';
+  const dockerRuntimeCiRecorded = releaseAudit.includes(`GitHub Actions run ${dockerRuntimeBaselineRun}`)
     && releaseAudit.includes('Runtime Smoke')
     && releaseAudit.includes('npm run docker:smoke -- --start')
     && releaseAudit.includes('health endpoint response')
     && releaseAudit.includes('Build & Push');
+  const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker workflow run `(\d+)` passed both runtime smoke and (?:the )?registry image push/g)]
+    .map((match) => match[1]);
+  const latestDockerCheckpointRun = dockerCheckpointRuns.at(-1) ?? null;
+  const v110ReleaseRecorded = releaseAudit.includes('Final release run `26702889329` passed')
+    && releaseAudit.includes('Public release `v1.1.0` contains')
+    && releaseAudit.includes('Hydra-1.1.0-mac-arm64.zip')
+    && releaseAudit.includes('Hydra-1.1.0-mac-x64.zip');
   const smokeWorkflow = safeRead('.github/workflows/electron-smoke.yml');
   const releaseWorkflow = safeRead('.github/workflows/release.yml');
   const autoVersionWorkflow = safeRead('.github/workflows/auto-version.yml');
@@ -247,6 +277,7 @@ function buildAudit() {
     winX64Blockmap: `release/Hydra-${version}-win-x64.exe.blockmap`,
   };
   const macArmSize = sizeMb(artifactPaths.macArmZip);
+  const installedMacArmVersion = macBundleVersion('release/mac-arm64/Hydra.app');
   const macX64Size = sizeMb(artifactPaths.macX64Zip);
   const winX64Size = sizeMb(artifactPaths.winX64Exe);
   const macArmCiRecorded = releaseAudit.includes('GitHub Actions run 26193855786')
@@ -308,10 +339,15 @@ function buildAudit() {
     check(
       'mac-arm-artifact',
       'macOS ARM artifact',
-      (macArmSize != null && existsSync(join(ROOT, artifactPaths.macArmBlockmap))) || macArmCiRecorded,
-      macArmSize == null
-        ? 'GitHub Actions macOS arm64 electron:smoke artifact evidence recorded in docs/RELEASE_AUDIT.md'
-        : artifactPaths.macArmZip + ' (' + macArmSize + ' MB) + blockmap',
+      (macArmSize != null && existsSync(join(ROOT, artifactPaths.macArmBlockmap))) || v110ReleaseRecorded || macArmCiRecorded,
+      (macArmSize == null
+        ? v110ReleaseRecorded
+          ? 'GitHub release v1.1.0 macOS arm64 artifact and release-matrix smoke evidence are recorded in docs/RELEASE_AUDIT.md'
+          : 'GitHub Actions macOS arm64 electron:smoke artifact evidence recorded in docs/RELEASE_AUDIT.md'
+        : `${artifactPaths.macArmZip} (${macArmSize} MB) + blockmap is the local-manifest workspace artifact`)
+        + (installedMacArmVersion
+          ? `; installed release/mac-arm64/Hydra.app reports ${installedMacArmVersion}`
+          : '; no extracted installed bundle version was readable'),
     ),
     check(
       'mac-intel-artifact',
@@ -457,7 +493,7 @@ function buildAudit() {
         && !/Remotion|remotion/.test(readme)
         && readme.includes('[docs/VERSIONING.md](docs/VERSIONING.md)')
         && versioningDoc.includes('[bump:minor]')
-        && versioningDoc.includes('1.0.20 -> 1.1.0')
+        && versioningDoc.includes('1.1.0 -> 1.1.1')
         && versioningDoc.includes('Splash Density And Tilt In The Version Notes')
         && versioningDoc.includes('x-axis value affects horizontal gravity, spawn')
         && versioningDoc.includes('Exact MacBook lid-angle tilt is not exposed through a standard Electron API')
@@ -796,7 +832,10 @@ function buildAudit() {
       'docker-runtime',
       'Docker runtime smoke',
       dockerRuntimeCiRecorded,
-      'GitHub Actions run 26196262336 Runtime Smoke ran npm run docker:smoke -- --start, started the Docker container, received a local health endpoint response, cleaned up compose resources, and Build & Push also passed',
+      `GitHub Actions run ${dockerRuntimeBaselineRun} Runtime Smoke ran npm run docker:smoke -- --start, started the Docker container, received a local health endpoint response, cleaned up compose resources, and Build & Push also passed`
+        + (latestDockerCheckpointRun
+          ? `; newest recorded checkpoint run ${latestDockerCheckpointRun} also passed runtime smoke and registry image push`
+          : ''),
     ),
     check(
       'windows-aux-cleanup',

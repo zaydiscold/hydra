@@ -107,6 +107,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   upstream health, Dashboard metrics, Traffic logs, and Vault refresh moved to
   `useVisibleRecurringTask`; a deterministic 30-minute hidden-window count
   drops those refresh timer wakeups from `129` to `0`.
+- Docker build context now excludes `release/`. After the public `v1.1.0` ARM
+  archive was downloaded locally, the measured `docker compose build` context
+  dropped from `304.28 MB` to `2.02 MB` (`99.3%`) once desktop archives and
+  extracted app resources stopped entering container builds.
 - Targeted Desktop cleanup left one launchable Hydra bundle under `~/Desktop`:
   `release/mac-arm64/Hydra.app`. Extra/stale bundles and superseded installers
   were moved reversibly to
@@ -137,11 +141,15 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
 - A final no-launch local verification pass completed without starting Hydra:
   lint, the full test suite, the `12/12` gate, OpenAPI generation
   (`83 operations`), `git diff --check`, Docker smoke, and Electron smoke
-  against the installed published `v1.1.0` app resources all passed. The stale
-  local checkout still selected its older `Hydra-1.0.20-mac-arm64.zip` archive
-  during Electron smoke because local Git metadata writes remain
-  sandbox-blocked. Tagged release run `26702889329` is the authoritative
-  successful `v1.1.0` archive smoke.
+  against the installed published `v1.1.0` app resources all passed. The
+  resumed checkout initially selected its older
+  `Hydra-1.0.20-mac-arm64.zip` archive during Electron smoke. The source lane
+  was then aligned to `1.1.0`, the stale ARM zip/blockmap and updater metadata
+  were moved reversibly into `/private/tmp`, and the public `v1.1.0` ARM
+  zip/blockmap plus `latest-mac.yml` were downloaded into `release/`.
+  Follow-up `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke` passed
+  directly against `release/Hydra-1.1.0-mac-arm64.zip`. Tagged release run
+  `26702889329` remains the authoritative cross-target release matrix.
 - A full `/Users/zaydk/Desktop` inventory found exactly one installed
   `Hydra.app`: `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`.
   Computer Use did not list Hydra among running apps. The packaged GUI pass

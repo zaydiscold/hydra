@@ -47,3 +47,8 @@ test('package docker:smoke uses the bounded runner', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.equal(pkg.scripts['docker:smoke'], 'node scripts/docker-smoke.mjs');
 });
+
+test('Docker build context excludes desktop release artifacts', () => {
+  const dockerignore = read('.dockerignore');
+  assert.match(dockerignore, /^release$/m, 'release archives and extracted desktop apps must stay out of Docker build context');
+});
