@@ -134,6 +134,14 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   unavailable schema with `reason="spawnSync ps EPERM"` and still reported
   `hydraPlaywrightProfiles.count: 0`. Treat this as a measurement boundary, not
   as packaged-GUI evidence for the newly installed release.
+- A final no-launch local verification pass completed without starting Hydra:
+  lint, the full test suite, the `12/12` gate, OpenAPI generation
+  (`83 operations`), `git diff --check`, Docker smoke, and Electron smoke
+  against the installed published `v1.1.0` app resources all passed. The stale
+  local checkout still selected its older `Hydra-1.0.20-mac-arm64.zip` archive
+  during Electron smoke because local Git metadata writes remain
+  sandbox-blocked. Tagged release run `26702889329` is the authoritative
+  successful `v1.1.0` archive smoke.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
