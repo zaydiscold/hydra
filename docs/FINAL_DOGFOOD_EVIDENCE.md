@@ -142,6 +142,10 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   during Electron smoke because local Git metadata writes remain
   sandbox-blocked. Tagged release run `26702889329` is the authoritative
   successful `v1.1.0` archive smoke.
+- A full `/Users/zaydk/Desktop` inventory found exactly one installed
+  `Hydra.app`: `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`.
+  Computer Use did not list Hydra among running apps. The packaged GUI pass
+  therefore remains pending an explicitly authorized launch.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
