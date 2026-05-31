@@ -22,7 +22,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Packaged screenshot plan | Current gallery and splash media come from packaged Electron only and stay redacted; final interactive human visual review remains manual. The superseded Remotion lane is out of scope. | Partially verified |
-| Docker runtime smoke | GitHub Actions run `26725445050` passed both `Runtime Smoke` and `Build & Push` for the first local Docker-hardening checkpoint. A stricter follow-up local `npm run docker:smoke -- --start` pass also built the trimmed image, launched full Chromium through Hydra's own persistent-context resolver, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` reported no missing Chromium libraries. | Verified locally and by CI runtime smoke |
+| Docker runtime smoke | GitHub Actions run `26725827291` passed both `Runtime Smoke` and `Build & Push` for the trimmed Docker-browser hardening checkpoint. A stricter local `npm run docker:smoke -- --start` pass also built the trimmed image, launched full Chromium through Hydra's own persistent-context resolver, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` reported no missing Chromium libraries. | Verified locally and by CI runtime smoke |
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
 | Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 | Idle backend performance pass | PR #18 merged as master f74c195 and v1.0.9 includes delayed session/request-log startup sweeps, opt-in session-lifetime probe, relaxed task-supervisor sweep interval, and removed eager renderer live-probe fan-out from dashboard/vault/account-detail page load. CI, Electron package smoke, Docker, and release automation passed after merge. | Verified by CI/release |
@@ -1034,3 +1034,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   no missing shared libraries. The inspected image changed from
   `1,151,831,905` to `1,021,264,136` bytes, removing `130,567,769` bytes
   (`11.3%`) after layer compression.
+- 2026-05-31 trimmed Docker-browser checkpoint publication: commit
+  `c3a3636809329781e6064b2751fee3623d1dff3f` used `[skip-bump]`;
+  Auto-version run `26725827316` skipped as intended, CI run `26725827309`
+  passed, and Docker workflow run `26725827291` passed both runtime smoke and
+  registry image push.

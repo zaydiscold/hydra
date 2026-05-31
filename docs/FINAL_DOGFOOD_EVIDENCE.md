@@ -984,3 +984,7 @@ This evidence file is not release-complete by itself. The release remains not co
   browser, started Hydra, received HTTP `200`, and tore compose down. Direct
   inspection reported no missing Chromium libraries and an image reduction
   from `1,151,831,905` to `1,021,264,136` bytes (`11.3%`).
+- Trimmed Docker-browser checkpoint `c3a3636809329781e6064b2751fee3623d1dff3f`
+  used `[skip-bump]`; Auto-version run `26725827316` skipped, CI run
+  `26725827309` passed, and Docker workflow run `26725827291` passed runtime
+  smoke plus registry image push.
