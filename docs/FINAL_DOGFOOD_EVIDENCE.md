@@ -511,3 +511,16 @@ This evidence file is not release-complete by itself. The release remains not co
   `v1.1.5`. Auto-version run `26715063086` skipped as intended, CI run
   `26715063087` passed, and Docker workflow run `26715063084` passed both
   runtime smoke and the registry image push.
+- Windows manual evidence is now explicitly fail-closed. The generator,
+  checked-in redacted manifest, and packaged-app runbook require a real Windows
+  desktop OS version plus NSIS installer install/open result before
+  `--manual=windows-launch` can be claimed. Hosted unpacked-app startup and
+  cleanup smoke remains useful narrower evidence.
+- A post-audit-parser untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-post-audit-parser-idle-reprofile-20260531T1429XX.Bb0Hqz`
+  sampled the already-settled canonical app every 30 seconds for five minutes
+  with zero UI interaction. All 11 samples reported four Hydra-owned processes
+  and zero stale profiles. Sampled CPU stayed between `0.0%` and `0.1%`
+  (`0.009%` average); RSS fell from `585.61 MiB` to `483.14 MiB`
+  (`-102.47 MiB`). Raw before/after inventories contain only the expected main,
+  GPU, network-utility, and renderer processes.

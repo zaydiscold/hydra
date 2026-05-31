@@ -14,7 +14,7 @@ const manualChecks = [
   { id: 'touch-id', label: 'Touch ID', detail: 'On Touch ID hardware, enable, test, disable, and unlock with biometric gating.' },
   { id: 'live-account-flows', label: 'Live account flows', detail: 'Run at least one live OTP login, bulk OTP isolation pass, code redemption, and proxy/SSE request with real keys.' },
   { id: 'screenshots-redacted', label: 'Screenshots', detail: 'Only after functional dogfood, capture packaged Electron screenshots with secrets redacted.' },
-  { id: 'windows-launch', label: 'Windows launch', detail: 'Install and launch the current Windows NSIS artifact on a Windows host or runner.' },
+  { id: 'windows-launch', label: 'Windows launch', detail: 'Install and launch the current Windows NSIS artifact on a real Windows desktop; record OS version and install/open result.' },
 ];
 
 function run(command, args, options = {}) {

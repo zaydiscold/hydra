@@ -108,7 +108,7 @@
     {
       "id": "windows-launch",
       "label": "Windows launch",
-      "detail": "Install and launch the current Windows NSIS artifact on a Windows host or runner.",
+      "detail": "Install and launch the current Windows NSIS artifact on a real Windows desktop; record OS version and install/open result.",
       "verified": false
     }
   ],

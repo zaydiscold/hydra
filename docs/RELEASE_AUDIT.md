@@ -338,3 +338,21 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   passed, and Docker workflow run `26715063084` passed both runtime smoke and
   the registry image push. This is a `[skip-bump]` documentation and hygiene
   checkpoint; public desktop release remains `v1.1.5`.
+- 2026-05-31 Windows manual-evidence fail-closed follow-up:
+  `scripts/final-dogfood-check.mjs`, `docs/DOGFOOD_EVIDENCE.json`, and
+  `docs/PACKAGED_ELECTRON_DOGFOOD.md` now require a real Windows desktop OS
+  version plus NSIS installer install/open result before
+  `--manual=windows-launch` can be claimed. Hosted unpacked-app smoke remains
+  useful narrower evidence, but it no longer reads as an interchangeable
+  manual Windows runner pass. The runbook also records current public
+  `v1.1.5` Windows release run `26712864469` and parser-fix Docker workflow run
+  `26715233046`; `server/tests/final-dogfood-evidence.test.mjs` rejects stale
+  `Windows host or runner` wording in the checked-in manifest.
+- 2026-05-31 exact-public-`v1.1.5` post-audit-parser idle reprofile:
+  `/private/tmp/hydra-v115-post-audit-parser-idle-reprofile-20260531T1429XX.Bb0Hqz`
+  sampled the already-settled canonical app every 30 seconds for five minutes
+  with zero UI interaction. All 11 samples reported four Hydra-owned
+  processes and zero stale profiles. Sampled CPU stayed between `0.0%` and
+  `0.1%` (`0.009%` average); RSS fell from `585.61 MiB` to `483.14 MiB`
+  (`-102.47 MiB`). Raw before/after inventories contain only the expected main,
+  GPU, network-utility, and renderer processes.

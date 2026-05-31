@@ -15,6 +15,7 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   const source = readRepoFile('scripts/final-dogfood-check.mjs');
   const docs = readRepoFile('docs/FINAL_DOGFOOD_EVIDENCE.md');
   const runbook = readRepoFile('docs/PACKAGED_ELECTRON_DOGFOOD.md');
+  const checkedInEvidence = readRepoFile('docs/DOGFOOD_EVIDENCE.json');
   const pkg = readRepoFile('package.json');
 
   assert.match(source, /schema: 'hydra\.final-dogfood-evidence\.v1'/);
@@ -23,6 +24,7 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   assert.match(source, /--artifact-dir=/);
   assert.match(source, /--app=/);
   assert.match(source, /--manual=/);
+  assert.match(source, /current Windows NSIS artifact on a real Windows desktop/);
   assert.match(source, /const manualCheckIds = new Set\(manualChecks\.map\(\(item\) => item\.id\)\)/);
   assert.match(source, /const unknownManualIds = \[\.\.\.manualVerified\]\.filter\(\(id\) => !manualCheckIds\.has\(id\)\)/);
   assert.match(source, /Unknown manual check id\(s\)/);
@@ -62,5 +64,8 @@ test('final dogfood evidence capture is redacted and manually explicit', () => {
   assert.match(runbook, /--version=<version>/);
   assert.match(runbook, /--artifact-dir=\/path\/to\/downloaded\/release-assets/);
   assert.match(runbook, /--app=\/path\/to\/extracted\/Hydra\.app/);
+  assert.match(runbook, /real Windows desktop/);
+  assert.match(checkedInEvidence, /current Windows NSIS artifact on a real Windows desktop/);
+  assert.doesNotMatch(checkedInEvidence, /Windows host or runner/);
   assert.match(pkg, /"dogfood:final": "node scripts\/final-dogfood-check\.mjs"/);
 });
