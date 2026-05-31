@@ -153,8 +153,10 @@ are not just a patch:
 
 - The visible splash duration is 16 seconds, 33% longer than the prior 12-second
   sequence.
-- The falling-word target is 120 words, preserving the 10-per-second trickle
-  while giving the downward animation 30% more time than the prior 92-word pass.
+- The falling-word target is a bounded 72-word unique irregular shower. It
+  supersedes the denser 120-word pass after packaged profiling showed the
+  tighter queue preserves the visual effect with less physics and compositor
+  pressure.
 - The exit begins at 13 seconds and ramps upward for three seconds with a
   delayed fade, replacing the earlier abrupt two-second gravity flip.
 - Matter.js physics still runs through one owned `requestAnimationFrame` loop,

@@ -21,9 +21,12 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
     Anime.js, requestAnimationFrame, interval, timeout, or Matter.js physics
     tasks should survive past their visual purpose.
   - Keep the front splash feeling rich: the current target is a 16 second
-    visible splash with 120 falling random words, a staged 3 second upward
-    exit, and a pile that visibly biases left or right when real laptop/device
-    tilt data is exposed, with a tiny fallback side lean when no sensor exists.
+    visible splash with a bounded 72-word unique irregular shower, a staged 3
+    second portal exit, and a pile that visibly biases left or right when real
+    laptop/device tilt data is exposed, with a tiny fallback side lean when no
+    sensor exists. The lower queue replaces the superseded 120-word pass after
+    packaged profiling showed the tighter density preserves the visual effect
+    with less physics and compositor pressure.
   - Look broadly for CPU/RAM wins and smoother perceived performance in the
     Electron main process, renderer, embedded API server, proxy/router,
     account automation, request logging, health polling, and dashboard refresh

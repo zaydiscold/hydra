@@ -408,3 +408,22 @@ This evidence file is not release-complete by itself. The release remains not co
 - Local Docker smoke could not rerun because Docker Desktop's daemon is
   stopped. Hosted Docker runtime smoke and registry push are green in run
   `26712858933`.
+- An independent exact-public five-minute reprofile at
+  `/private/tmp/hydra-v115-public-idle-reprofile-20260531T130940Z` again kept
+  four Hydra-owned processes and zero stale profiles through all 11 samples.
+  CPU stayed between `0.0%` and `0.3%` (`0.036%` average); RSS reclaimed
+  `42.09 MiB`.
+- A controlled LaunchServices cycle at
+  `/private/tmp/hydra-v115-public-splash-teardown-20260531T131517Z` captured
+  raw `ps -ax | grep -iE 'chrome|chromium|playwright|electron|hydra'`
+  inventories plus anchored Hydra-owned subsets. The owned process count moved
+  `4 -> 0 -> 4 -> 4` across settled app, quit, splash-active, and
+  post-transition states. Splash renderer PID `54141` was replaced by main
+  renderer PID `54169`; after the bounded startup window, the replacement tree
+  settled to `0.0%` CPU with zero stale profiles.
+- `docs/DOGFOOD_EVIDENCE.json` was regenerated against all six public `v1.1.5`
+  desktop distributables. It preserves only the three empirically verified
+  manual flags: `packaged-gui-launch`, `splash-unlock-dashboard`, and
+  `screenshots-redacted`. Machine-specific paths were sanitized before
+  check-in. Window controls, interactive dead-button review, Touch ID hardware,
+  live account flows, and real Windows NSIS install/open UX remain false.
