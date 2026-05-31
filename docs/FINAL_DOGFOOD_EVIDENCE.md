@@ -232,3 +232,13 @@ This evidence file is not release-complete by itself. The release remains not co
   `3582` dynamic-body peak. The unique queue, one-shot shatter guard, removed
   ceiling collider, and collision-free portal phase remain in source even
   when a healthy run does not reproduce the protected failure paths.
+- Public `v1.1.3` verification passed through Auto-version run `26709320831`,
+  CI run `26709320818`, Docker run `26709320837`, and desktop release run
+  `26709323849`. The release publishes macOS arm64, macOS Intel x64, and
+  Windows x64 NSIS artifacts plus updater metadata; Linux remains frozen.
+- The downloaded public ARM zip passed packaged Electron smoke and SHA-512
+  verification against `latest-mac.yml`. Its app bundle was installed
+  reversibly at the sole canonical Desktop path, force-registered through
+  LaunchServices, and launched. Follow-up `hydra doctor --json` reported
+  `version=1.1.3`, four Hydra-owned processes, `0.4%` sampled Hydra CPU, and
+  zero stale Hydra Playwright profiles after splash teardown.
