@@ -263,3 +263,32 @@ This evidence file is not release-complete by itself. The release remains not co
 - Hardware Touch ID approval, lock/unlock, public patch artifact verification,
   full redacted screenshots, live account flows, and Windows-host launch
   remain explicit manual boundaries.
+
+## v1.1.4 Public Bridge Verification
+
+- Auto-version run `26710107156`, CI run `26710107146`, Docker run
+  `26710107166`, and desktop release run `26710112876` passed. The desktop
+  release publishes macOS arm64, macOS Intel x64, and Windows x64 NSIS
+  artifacts plus merged updater metadata; Linux remains intentionally frozen.
+- The exact downloaded public ARM zip passed strict deep codesign, packaged
+  Electron smoke, GitHub SHA-256 digest verification, and SHA-512 verification
+  against merged `latest-mac.yml`. Its app bundle reports `1.1.4`.
+- The prior local rebuilt app, stale local ARM archives, stale updater
+  metadata, and obsolete local unpacked Windows folder were moved reversibly
+  to `/Users/zaydk/.Trash/hydra-pre-public-v114-20260531T103957Z`. The public
+  app is installed at the sole Spotlight path:
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`.
+- Temporary packaged Electron CDP instrumentation verified splash
+  `window.hydraSplash`, the complete replacement-renderer `window.hydraNative`
+  bridge, packaged `appVersion() === "1.1.4"`, and visible Settings controls
+  for `AVAILABLE`, the enabled Touch ID vault-unlock checkbox, and
+  `Test Prompt`.
+- A public-artifact route walk across Dashboard, Pool, Traffic, Settings, and
+  Dashboard again reported zero intervals, zero active RAFs, zero active
+  Anime effects, and only bounded route-owned timeouts. The temporary debug
+  launch quit cleanly and Hydra was reopened normally. Settled
+  `hydra doctor --json` reported four Hydra-owned processes, `0.0%` sampled
+  Hydra CPU, and zero stale Hydra Playwright profiles.
+- Fingerprint approval, Touch ID lock/unlock, duplicate-keychain-prompt
+  observation, full redacted screenshots, live account flows, and a real
+  Windows-host installer launch remain explicit manual boundaries.
