@@ -949,3 +949,8 @@ This evidence file is not release-complete by itself. The release remains not co
   already SHA-verified public zip, and `hydra audit` (`31 ok / 5 deferred /
   0 missing / 0 blockers`). Local Docker Desktop is stopped; hosted Docker run
   `26724119196` remains the current runtime-smoke and registry-push evidence.
+- Evidence-checkpoint commit `dea4c5ff8969cd033084ad30c5976faba87c0b95`
+  used `[skip-bump]`; Auto-version run `26724970520` skipped as intended, CI
+  run `26724970519` passed, and Docker run `26724970530` passed both image push
+  and hosted runtime smoke. This supersedes `26724119196` as the latest hosted
+  Docker evidence.

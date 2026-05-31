@@ -963,3 +963,9 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   symlink reversibly to Trash. Local `docker info` remains unavailable because
   Docker Desktop is stopped; hosted Docker run `26724119196` remains the
   current runtime-smoke and registry-push evidence.
+- 2026-05-31 exact-public `v1.4.0` evidence-checkpoint push: commit
+  `dea4c5ff8969cd033084ad30c5976faba87c0b95` used `[skip-bump]`;
+  Auto-version run `26724970520` skipped as intended, CI run `26724970519`
+  passed, and Docker run `26724970530` passed both image push and hosted
+  runtime smoke. The newer hosted Docker run supersedes `26724119196` as the
+  latest runtime-smoke and registry-push evidence.

@@ -538,6 +538,11 @@ closed-app CLI commands, tests, and repo-local documentation.
   already SHA-verified public zip, and `hydra audit` (`31 ok / 5 deferred /
   0 missing / 0 blockers`). Local Docker Desktop is stopped; hosted Docker run
   `26724119196` remains the current runtime-smoke and registry-push evidence.
+- Evidence-checkpoint commit `dea4c5ff8969cd033084ad30c5976faba87c0b95`
+  used `[skip-bump]`; Auto-version run `26724970520` skipped as intended, CI
+  run `26724970519` passed, and Docker run `26724970530` passed both image push
+  and hosted runtime smoke. This supersedes `26724119196` as the latest hosted
+  Docker evidence.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
