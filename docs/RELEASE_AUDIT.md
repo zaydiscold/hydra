@@ -17,12 +17,12 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Multi-arch macOS updater metadata | Release workflow includes `mac-update-metadata` and `scripts/merge-mac-update-yml.mjs`; workflow contract requires merged `latest-mac.yml` with arm64 and x64 files. v1.0.17 release artifact inspection verified `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` were published with macOS arm64/x64 and Windows artifacts. | Verified by release |
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
-| Release artifacts | GitHub release v1.1.5 is latest and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, merged `latest-mac.yml`, and Windows `latest.yml`. Linux remains intentionally frozen. The earlier v1.0.17 macOS arm64 GUI startup failure exposed a missing packaged `dotenv` dependency; later local package smoke reproduced the old failure and passed on rebuilt packages after the dependency fix. Local Intel/Windows GUI launch remains target-runner or user-run evidence only. | Asset presence verified; startup fix released |
+| Release artifacts | GitHub release v1.3.0 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26723127043` passed shared gates, package smoke on every target, the hosted Windows unpacked-executable launch-and-cleanup gate, artifact uploads, and macOS updater-metadata merge. The earlier v1.0.17 macOS arm64 GUI startup failure exposed a missing packaged `dotenv` dependency; later package smoke reproduced the old failure and passed after the dependency fix. Real Intel GUI and Windows NSIS install/open UX remain target-runner or user-run evidence only. | Asset presence verified; startup fix released |
 | macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The latest locally dogfooded v1.0.11 macOS arm64 release artifact verifies with `codesign --verify --deep --strict`, includes the vendored splash physics runtime, and `ELECTRON_RUN_AS_NODE=1 Hydra.app/Contents/MacOS/Hydra -e ...` loads Electron Framework successfully. | Verified by release artifact dogfood |
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Packaged screenshot plan | Current gallery and splash media come from packaged Electron only and stay redacted; final interactive human visual review remains manual. The superseded Remotion lane is out of scope. | Partially verified |
-| Docker runtime smoke | GitHub Actions run 26715063084 passed both `Runtime Smoke` and `Build & Push` for checkpoint `86efec9`. Earlier run 26196262336 also proved `npm run docker:smoke -- --start` can build/start the compose service, receive a health response, and clean up compose resources. | Verified by CI runtime smoke |
+| Docker runtime smoke | GitHub Actions run `26723122021` passed both `Runtime Smoke` and `Build & Push` for the `v1.3.0` release trigger. Earlier run `26196262336` also proved `npm run docker:smoke -- --start` can build/start the compose service, receive a health response, and clean up compose resources. | Verified by CI runtime smoke |
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
 | Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 | Idle backend performance pass | PR #18 merged as master f74c195 and v1.0.9 includes delayed session/request-log startup sweeps, opt-in session-lifetime probe, relaxed task-supervisor sweep interval, and removed eager renderer live-probe fan-out from dashboard/vault/account-detail page load. CI, Electron package smoke, Docker, and release automation passed after merge. | Verified by CI/release |
@@ -825,3 +825,47 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `portalCollisionDisabled=true`, `portalLiftApplied=true`,
   `renderFrames=409`, `physicsSteps=672`, `timers=0`, `rafActive=false`, and
   `matterCleared=true`.
+- 2026-05-31 public `v1.3.0` desktop publication: auto-version run
+  `26723122013`, master CI run `26723122028`, Docker run `26723122021`, and
+  desktop release run `26723127043` passed. The release published macOS arm64
+  zip/blockmap, macOS Intel zip/blockmap, Windows x64 NSIS installer/blockmap,
+  Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux
+  `latest-linux.yml`. Windows also passed the hosted unpacked-executable
+  launch-and-cleanup gate before upload. All ten downloaded public assets
+  matched their GitHub SHA-256 digests; both macOS archives matched the merged
+  updater manifest SHA-512 values.
+  Docker workflow run `26723122021` passed both runtime smoke and registry image push.
+- 2026-05-31 canonical exact-public `v1.3.0` install: the source-built arm64
+  bundle moved reversibly to
+  `/Users/zaydk/.Trash/hydra-local-mac-arm64-before-public-v130-20260531T131638`.
+  The downloaded public arm64 zip was extracted into
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`, deep strict
+  codesign and explicit-resource package smoke passed, and the installed bundle
+  reports version `1.3.0`. Spotlight returns only that one `Hydra.app`, and
+  LaunchServices is registered to the same canonical path.
+- 2026-05-31 exact-public `v1.3.0` native launch:
+  `/private/tmp/hydra-v130-public-native-launch-20260531T131731` records a
+  normal no-debug LaunchServices launch. CoreGraphics reported one on-screen
+  `Hydra - Dashboard` window at `1440x900`; the settled package held four
+  Hydra-owned processes at `0.0%` CPU and `604.50 MB` RSS with zero stale Hydra
+  Playwright profiles. Debug ports `9333` and `9334` had no listener. Computer
+  Use listed the canonical Hydra bundle as running but could not attach to its
+  CoreGraphics window (`cgWindowNotFound`), so this is exact-public native
+  launch evidence, not a replacement for the deferred interactive screenshot
+  and account-grid magnetic-response review.
+- 2026-05-31 exact-public `v1.3.0` splash teardown diagnostics remained finite:
+  `target=72`, `queueLength=72`, `shatteredWordCount=72`,
+  `duplicateShatterSkips=0`, `peakDynamicBodyCount=547`,
+  `portalCollisionDisabled=true`, `portalLiftApplied=true`,
+  `renderFrames=416`, `physicsSteps=668`, `timers=0`, `rafActive=false`, and
+  `matterCleared=true`.
+- 2026-05-31 conservative public `v1.3.0` dogfood evidence refresh: all public
+  desktop distributables were downloaded into a temporary verification
+  directory and `npm run dogfood:final -- --write-evidence=docs/DOGFOOD_EVIDENCE.json
+  --version=1.3.0 --artifact-dir=<temporary-public-release-download>
+  --app=release/mac-arm64/Hydra.app --manual=packaged-gui-launch` regenerated
+  the checked-in redacted manifest. Machine-specific paths were sanitized
+  before check-in. The manifest intentionally preserves only the empirically
+  verified exact-public GUI-launch checkbox; splash/dashboard screenshots,
+  full navigation, live account flows, Touch ID fingerprint approval, and real
+  Windows NSIS install/open UX remain explicit manual boundaries.

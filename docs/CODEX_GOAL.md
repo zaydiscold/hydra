@@ -476,6 +476,17 @@ closed-app CLI commands, tests, and repo-local documentation.
   captured the versioned splash and exposed the replacement Dashboard title
   plus native controls after handoff. Exact-local raw evidence is under
   `/private/tmp/hydra-130-versioned-native-launch-20260531T130322`.
+- Public `v1.3.0` is published from release commit
+  `a00d9c298eb9d31641f80f82d95df84f16d1079d`. Auto-version run
+  `26723122013`, master CI run `26723122028`, hosted Docker run
+  `26723122021`, and desktop matrix run `26723127043` passed. The downloaded
+  public asset matrix matches GitHub SHA-256 digests, both macOS archives match
+  merged updater SHA-512 values, and the exact-public arm64 zip is installed as
+  the sole Spotlight/LaunchServices Hydra bundle. Its no-debug native launch
+  settled to four owned processes at `0.0%` CPU with zero stale profiles.
+  Computer Use could list the canonical app but could not attach to the public
+  Dashboard CoreGraphics window, so interactive screenshot and magnetic-grid
+  acceptance remain explicit user-facing boundaries.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

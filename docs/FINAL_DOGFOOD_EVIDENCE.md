@@ -834,3 +834,43 @@ This evidence file is not release-complete by itself. The release remains not co
   `renderFrames=409`, `physicsSteps=672`, `timers=0`, `rafActive=false`, and
   `matterCleared=true`. Settled doctor output reported four owned processes,
   `0.0%` CPU, `535.14 MB` RSS, and zero stale profiles.
+
+## v1.3.0 Public Desktop Release
+
+- Public release `v1.3.0` is live from commit
+  `a00d9c298eb9d31641f80f82d95df84f16d1079d`. Auto-version run
+  `26723122013`, master CI run `26723122028`, Docker run `26723122021`, and
+  desktop release run `26723127043` all passed.
+- The release contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap,
+  Windows x64 NSIS installer/blockmap, Linux x64 AppImage, Windows
+  `latest.yml`, Linux `latest-linux.yml`, and merged multi-architecture
+  `latest-mac.yml`. All ten downloaded public assets matched their GitHub
+  SHA-256 digests. Both public macOS archives matched the SHA-512 values in the
+  merged updater manifest.
+- The downloaded public arm64 archive passed deep strict codesign and
+  explicit-resource `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`.
+  The prior source-built bundle moved reversibly to
+  `/Users/zaydk/.Trash/hydra-local-mac-arm64-before-public-v130-20260531T131638`;
+  the exact public bundle is now installed at
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`. Spotlight and
+  LaunchServices return only that canonical bundle at version `1.3.0`.
+- `/private/tmp/hydra-v130-public-native-launch-20260531T131731` records a
+  normal no-debug LaunchServices launch. CoreGraphics exposed one on-screen
+  `Hydra - Dashboard` window at `1440x900`; settled doctor output reported four
+  owned processes, `0.0%` CPU, `604.50 MB` RSS, and zero stale profiles. No
+  listener existed on debug ports `9333` or `9334`.
+- The exact-public splash logged finite disposal:
+  `target=72`, `queueLength=72`, `shatteredWordCount=72`,
+  `duplicateShatterSkips=0`, `peakDynamicBodyCount=547`,
+  `portalCollisionDisabled=true`, `portalLiftApplied=true`,
+  `renderFrames=416`, `physicsSteps=668`, `timers=0`, `rafActive=false`, and
+  `matterCleared=true`.
+- `docs/DOGFOOD_EVIDENCE.json` was regenerated against the public `1.3.0`
+  artifacts and sanitized before check-in. Only `packaged-gui-launch` is
+  checked: Computer Use listed the exact-public app but could not attach to its
+  CoreGraphics Dashboard window (`cgWindowNotFound`). The earlier exact-local
+  Computer Use splash capture remains useful implementation evidence, but it is
+  not promoted into public screenshot acceptance. Interactive screenshot
+  review, account-grid magnetic-response review, full navigation, live
+  OTP/redemption/proxy flows, Touch ID fingerprint approval, and real Windows
+  NSIS install/open UX remain explicit manual boundaries.
