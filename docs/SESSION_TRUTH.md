@@ -119,3 +119,47 @@ Redacted artifacts live under:
 ```
 
 Do not commit those artifacts. They are local verification evidence.
+
+## 2026-05-31 Exact-Public v1.1.5 Recheck
+
+A fresh sequential `hydra session <id> --refresh --json` sweep exercised the
+same production `store.probeSessionLive()` path used by Account Detail. The
+redacted local artifact lives at:
+
+```text
+/private/tmp/hydra-live-session-recheck-20260531T134828Z/redacted-summary.json
+```
+
+The artifact is owner-only (`0600`) and contains no account IDs, aliases,
+emails, cookies, session tokens, or management keys. Results:
+
+- `12` stored rows checked.
+- `4` logins confirmed active by live Clerk refresh.
+- `0` expired and `0` errored live probes.
+- `8` rows had no active stored login and remained explicit re-auth candidates.
+- All `4` live logins were redeem-ready.
+- One live login had no management key, reconfirming that login truth and
+  management-key truth are intentionally independent.
+- Each active row persisted a one-entry Clerk identity stack, a just-now silent
+  renewal timestamp, and a `7.0d` next local renewal checkpoint.
+
+A temporary packaged-only CDP pass then opened a redacted Account Detail route
+and clicked the read-only `Re-probe session status from Clerk` action. The exact
+public `v1.1.5` renderer displayed:
+
+```text
+LIVE CLERK CHECK JUST NOW
+Login works now
+Next local renewal checkpoint: 7.0d
+Interactive sign-in 7w ago · last silent renewal just now
+The checkpoint is Hydra's next stored renewal estimate, not the login's total lifetime. The live Clerk check is current truth.
+```
+
+The temporary debug session closed, port `9333` closed, and a normal no-debug
+LaunchServices relaunch settled to four owned processes, `0.0%` sampled CPU,
+and zero stale Hydra Playwright profiles. Raw redacted packaged evidence lives
+under:
+
+```text
+/private/tmp/hydra-v115-public-session-ui-20260531T134932Z
+```

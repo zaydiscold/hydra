@@ -462,3 +462,21 @@ This evidence file is not release-complete by itself. The release remains not co
   stale profiles. Chromium startup remains isolated through
   `password-store=basic` and macOS `use-mock-keychain`; biometric auth-token
   release remains independently fail-closed.
+- A sanitized production-path session recheck at
+  `/private/tmp/hydra-live-session-recheck-20260531T134828Z` ran
+  `hydra session <id> --refresh --json` sequentially over all `12` stored rows.
+  Owner-only redacted evidence reports `4` live-active Clerk logins, `0`
+  expired, `0` errors, `8` rows with no active stored login, and `4`
+  redeem-ready rows without storing account identities, cookies, tokens, or
+  key material. One active login has no management key, preserving the
+  login-truth versus key-storage distinction.
+- A temporary packaged-only CDP pass at
+  `/private/tmp/hydra-v115-public-session-ui-20260531T134932Z` clicked Account
+  Detail's read-only Clerk re-probe action and rendered coherent current copy:
+  `LIVE CLERK CHECK JUST NOW`, `Login works now`,
+  `Next local renewal checkpoint: 7.0d`,
+  `Interactive sign-in 7w ago · last silent renewal just now`, and the
+  explanatory sentence that the checkpoint is a stored renewal estimate, not
+  total login lifetime. The debug session closed, port `9333` closed, and the
+  normal LaunchServices reopen settled to four owned processes, `0.0%` sampled
+  CPU, and zero stale profiles.
