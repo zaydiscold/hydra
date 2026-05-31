@@ -699,3 +699,34 @@ This evidence file is not release-complete by itself. The release remains not co
   30-second samples after packaging stopped. CPU stayed between `0.0%` and
   `0.3%` (`0.036%` average); RSS moved from `249.00 MiB` to `261.56 MiB`
   (`+12.58 MiB`). This is the quiet post-wake baseline.
+- Generator task cleanup now covers the route-exit race where
+  `/generator/start` resolves after its owning screen has unmounted. The late
+  task is released with keepalive cleanup, an on-screen returned task is
+  claimed before React effects run, rapid Start clicks are gated, and late OTP
+  responses cannot mutate a replaced screen. A 200-surface synthetic teardown
+  probe at
+  `/private/tmp/hydra-generator-start-unmount-benchmark-20260531T184541Z`
+  recorded `400` old-shape orphan tasks after two rapid Start clicks per
+  surface versus `0` owned-path orphan tasks, with `200` duplicate starts
+  prevented, `200` late cleanup requests, and `200` stale writes suppressed.
+  This proves renderer lifecycle ownership, not a live browser-signup outcome.
+- The Generator late-start patch passed focused lifecycle (`31/31`), UI static
+  (`35/35`), lint, full test, build, OpenAPI (`83 operations`), serial gate
+  (`12/12`), audit (`31 ok / 5 deferred / 0 missing / 0 blockers`), and diff
+  checks. A temporary arm64 package at
+  `/private/tmp/hydra-package-generator-late-start-20260531T184800Z` passed
+  explicit-resource package smoke, strict deep signature verification, and
+  bundled renderer inspection. It moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-generator-late-start-20260531T184800Z`.
+- A fourteenth uninterrupted exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-fourteenth-untouched-idle-reprofile-20260531T184117Z`
+  kept four Hydra-owned processes and zero stale profiles through all 11
+  30-second samples. CPU stayed between `0.0%` and `0.2%` (`0.018%` average);
+  RSS stayed exactly `261.75 MiB` from first to last sample (`0 KiB` drift).
+- A fifteenth uninterrupted exact-public `v1.1.5` post-package idle reprofile
+  at
+  `/private/tmp/hydra-v115-fifteenth-untouched-idle-reprofile-20260531T185018Z`
+  kept four Hydra-owned processes and zero stale profiles through all 11
+  30-second samples after the isolated Generator package build stopped.
+  Sampled CPU stayed exactly `0.0%` (`0.000%` average and maximum); RSS moved
+  from `261.77 MiB` to `261.73 MiB` (`-32 KiB`).

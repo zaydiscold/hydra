@@ -340,6 +340,18 @@ closed-app CLI commands, tests, and repo-local documentation.
   `1200` detached request timeout resources versus `200` account loads, `0`
   pending timeout resources, and `1200` raised aborts for the route-owned
   shape.
+- Generator task ownership now survives the Start-response race: route exit or
+  page hide marks the owning surface closed before cleanup, a late
+  `/generator/start` response is immediately released with keepalive cleanup,
+  and an on-screen response claims its task ref before React effects run.
+  Duplicate Start and OTP submissions are gated while their requests are in
+  flight, and late OTP responses cannot write into a replaced surface. A
+  200-surface synthetic teardown probe at
+  `/private/tmp/hydra-generator-start-unmount-benchmark-20260531T184541Z`
+  modeled two rapid Start clicks per surface. The old shape left `400` orphan
+  tasks after unmount; the owned path started `200`, prevented `200` duplicate
+  starts, issued `200` late-response cleanups, suppressed `200` stale writes,
+  and left `0` orphan tasks.
 
 ---
 

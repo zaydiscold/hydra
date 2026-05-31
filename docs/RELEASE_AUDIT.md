@@ -641,3 +641,45 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `261.56 MiB` (`+12.58 MiB`). This is the quiet post-wake idle baseline that
   the packaging-overlapped eleventh run and hibernate-interrupted twelfth run
   could not honestly provide.
+- 2026-05-31 Generator late-start lifecycle cleanup: `src/pages/Generator.jsx`
+  now marks its surface closed before route-exit or page-hide cleanup, releases
+  a task returned by `/generator/start` after that boundary with keepalive
+  cleanup, and claims an on-screen returned task ref immediately before React
+  effects run. Start and OTP requests each have an in-flight gate, so rapid
+  clicks cannot create duplicate browser jobs or submit the same OTP twice.
+  OTP responses arriving after route replacement do not write stale UI state
+  or toasts. A 200-surface synthetic teardown probe at
+  `/private/tmp/hydra-generator-start-unmount-benchmark-20260531T184541Z`
+  modeled two rapid Start clicks per surface. The old detached shape left
+  `400` orphan tasks after unmount; the owned path started `200`, prevented
+  `200` duplicate starts, issued `200` late cleanup requests, suppressed `200`
+  late writes, and left `0` orphan tasks. This proves renderer lifecycle
+  ownership and duplicate-click gating, not a live browser-signup outcome.
+- 2026-05-31 Generator late-start package proof: focused background lifecycle
+  (`31/31`), UI static (`35/35`), lint, full `npm test`, build, OpenAPI
+  generation (`83 operations`), serial gate (`12/12`), audit
+  (`31 ok / 5 deferred / 0 missing / 0 blockers`), and diff checks passed. A
+  temporary arm64 package at
+  `/private/tmp/hydra-package-generator-late-start-20260531T184800Z` passed
+  packaged resource smoke against its explicit unpacked resources, strict deep
+  codesign, and bundled renderer inspection for `Late-start cleanup failed`,
+  `client_disconnect`, `Starting...`, `[VERIFYING]`, and `/generator/start`.
+  Its zip and blockmap were generated before the directory moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-generator-late-start-20260531T184800Z`.
+- 2026-05-31 exact-public-`v1.1.5` fourteenth untouched idle reprofile:
+  `/private/tmp/hydra-v115-fourteenth-untouched-idle-reprofile-20260531T184117Z`
+  sampled the already-settled canonical app every 30 seconds for five
+  uninterrupted minutes while source verification continued. All 11 samples
+  reported four Hydra-owned processes and zero stale profiles. Sampled CPU
+  stayed between `0.0%` and `0.2%` (`0.018%` average); RSS stayed exactly
+  `261.75 MiB` from first to last sample (`0 KiB` drift). The raw before/after
+  inventories remain in the profile directory.
+- 2026-05-31 exact-public-`v1.1.5` fifteenth untouched post-package idle
+  reprofile:
+  `/private/tmp/hydra-v115-fifteenth-untouched-idle-reprofile-20260531T185018Z`
+  sampled the already-settled canonical app every 30 seconds for five
+  uninterrupted minutes after the isolated Generator package build stopped.
+  All 11 samples reported four Hydra-owned processes and zero stale profiles.
+  Sampled CPU stayed exactly `0.0%` (`0.000%` average and maximum); RSS moved
+  from `261.77 MiB` to `261.73 MiB` (`-32 KiB`). The raw before/after process
+  inventories remain in the profile directory.

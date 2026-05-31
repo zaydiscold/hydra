@@ -24,11 +24,16 @@ export default function Generator({ addToast }) {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState(null);
   const [createdAccount, setCreatedAccount] = useState(null);
+  const [starting, setStarting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   const activeTaskRef = useRef(null);
   const completedToastRef = useRef(false);
   const statusPollInFlightRef = useRef(false);
   const heartbeatInFlightRef = useRef(false);
+  const lifecycleClosedRef = useRef(false);
+  const startInFlightRef = useRef(false);
+  const verifyInFlightRef = useRef(false);
 
   useEffect(() => {
     activeTaskRef.current = taskId && !isTerminalStatus(status) ? taskId : null;
@@ -53,6 +58,13 @@ export default function Generator({ addToast }) {
       if (!options.keepalive) addToast?.(message, 'warning');
     });
   }, [addToast]);
+
+  const cleanupLateStartedTask = useCallback((lateTaskId) => {
+    if (!lateTaskId) return;
+    void api.cleanupGeneratorJob(lateTaskId, 'client_disconnect', { keepalive: true }).catch((err) => {
+      console.warn('[GENERATOR] Late-start cleanup failed:', err.message || 'Generator cleanup failed');
+    });
+  }, []);
 
   useEffect(() => {
     if (!taskId || isTerminalStatus(status)) return undefined;
@@ -132,7 +144,10 @@ export default function Generator({ addToast }) {
   }, [status, taskId]);
 
   useEffect(() => {
+    lifecycleClosedRef.current = false;
+
     const handlePageHide = () => {
+      lifecycleClosedRef.current = true;
       const currentTaskId = activeTaskRef.current;
       if (!currentTaskId) return;
       void api.cleanupGeneratorJob(currentTaskId, 'client_disconnect', { keepalive: true }).catch((err) => {
@@ -144,6 +159,7 @@ export default function Generator({ addToast }) {
     window.addEventListener('beforeunload', handlePageHide);
 
     return () => {
+      lifecycleClosedRef.current = true;
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('beforeunload', handlePageHide);
       void cleanupActiveTask('client_disconnect');
@@ -154,6 +170,7 @@ export default function Generator({ addToast }) {
     setTaskId(null);
     setStatus('idle');
     setOtp('');
+    setVerifying(false);
   }, []);
 
   useEffect(() => {
@@ -168,6 +185,9 @@ export default function Generator({ addToast }) {
   }, [status, createdAccount, addToast, emailTemplate]);
 
   const handleStart = async () => {
+    if (startInFlightRef.current) return;
+    startInFlightRef.current = true;
+    setStarting(true);
     try {
       setError(null);
       setOtp('');
@@ -175,23 +195,41 @@ export default function Generator({ addToast }) {
       completedToastRef.current = false;
       const res = await api.startGeneratorJob(emailTemplate, password, 1);
       const payload = res?.data ?? res ?? {};
-      setTaskId(payload.taskId ?? payload.jobId ?? null);
+      const startedTaskId = payload.taskId ?? payload.jobId ?? null;
+      if (lifecycleClosedRef.current) {
+        cleanupLateStartedTask(startedTaskId);
+        return;
+      }
+      activeTaskRef.current = startedTaskId;
+      setTaskId(startedTaskId);
       setStatus(payload.status ?? 'initializing');
     } catch (err) {
+      if (lifecycleClosedRef.current) return;
       setError(err.message);
       addToast?.(err.message, 'error');
+    } finally {
+      startInFlightRef.current = false;
+      if (!lifecycleClosedRef.current) setStarting(false);
     }
   };
 
   const handleVerify = async () => {
-    if (!otp || !taskId) return;
+    if (!otp || !taskId || verifyInFlightRef.current) return;
+    const renderedTaskId = taskId;
+    verifyInFlightRef.current = true;
+    setVerifying(true);
     try {
       setError(null);
-      await api.submitGeneratorOtp(taskId, otp);
+      await api.submitGeneratorOtp(renderedTaskId, otp);
+      if (lifecycleClosedRef.current || activeTaskRef.current !== renderedTaskId) return;
       setStatus('submitting_otp');
     } catch (err) {
+      if (lifecycleClosedRef.current) return;
       setError(err.message);
       addToast?.(err.message, 'error');
+    } finally {
+      verifyInFlightRef.current = false;
+      if (!lifecycleClosedRef.current) setVerifying(false);
     }
   };
 
@@ -253,11 +291,11 @@ export default function Generator({ addToast }) {
 
             <button type="button" className="btn btn-primary generator-start-btn"
               onClick={handleStart}
-              disabled={!emailTemplate}
+              disabled={!emailTemplate || starting}
             >
               <span className="btn-icon" style={{ justifyContent: 'center' }}>
                 <PlusIcon size={20} />
-                <span>Start Generation</span>
+                <span>{starting ? 'Starting...' : 'Start Generation'}</span>
               </span>
             </button>
 
@@ -315,8 +353,8 @@ export default function Generator({ addToast }) {
                     style={{ fontSize: '2rem', letterSpacing: '0.4em', width: '240px' }}
                     spellCheck={false}
                   />
-                  <button type="button" className="btn btn-primary" onClick={handleVerify} disabled={otp.length !== 6}>
-                    [VERIFY]
+                  <button type="button" className="btn btn-primary" onClick={handleVerify} disabled={otp.length !== 6 || verifying}>
+                    {verifying ? '[VERIFYING]' : '[VERIFY]'}
                   </button>
                 </div>
               </div>

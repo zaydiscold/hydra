@@ -32,6 +32,23 @@ test('generator resource cleanup failures are visible', () => {
   assert.doesNotMatch(source, /page\.click\('button\[type="submit"\], button:has-text\("Continue"\)'\)\.catch\(\(\) => \{\}\)/);
 });
 
+test('generator owns late start responses and gates duplicate submissions', () => {
+  const source = readRepoFile('src/pages/Generator.jsx');
+
+  assert.match(source, /const lifecycleClosedRef = useRef\(false\)/);
+  assert.match(source, /const startInFlightRef = useRef\(false\)/);
+  assert.match(source, /const verifyInFlightRef = useRef\(false\)/);
+  assert.match(source, /if \(startInFlightRef\.current\) return/);
+  assert.match(source, /const startedTaskId = payload\.taskId \?\? payload\.jobId \?\? null/);
+  assert.match(source, /if \(lifecycleClosedRef\.current\) \{[\s\S]*cleanupLateStartedTask\(startedTaskId\)/);
+  assert.match(source, /activeTaskRef\.current = startedTaskId/);
+  assert.match(source, /api\.cleanupGeneratorJob\(lateTaskId, 'client_disconnect', \{ keepalive: true \}\)/);
+  assert.match(source, /if \(!otp \|\| !taskId \|\| verifyInFlightRef\.current\) return/);
+  assert.match(source, /if \(lifecycleClosedRef\.current \|\| activeTaskRef\.current !== renderedTaskId\) return/);
+  assert.match(source, /disabled=\{!emailTemplate \|\| starting\}/);
+  assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying\}/);
+});
+
 test('request-log retention shutdown wait failures are logged', () => {
   const source = readRepoFile('server/services/request-log-retention.js');
 

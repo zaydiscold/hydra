@@ -593,6 +593,12 @@ function buildAudit() {
         && generatorPage.includes('heartbeatInFlightRef.current')
         && generatorPage.includes("setTrackedTimeout('Generator.statusPoll'")
         && generatorPage.includes("setTrackedTimeout('Generator.heartbeat'")
+        && generatorPage.includes('const lifecycleClosedRef = useRef(false)')
+        && generatorPage.includes('const startInFlightRef = useRef(false)')
+        && generatorPage.includes('const verifyInFlightRef = useRef(false)')
+        && generatorPage.includes('cleanupLateStartedTask(startedTaskId)')
+        && generatorPage.includes('activeTaskRef.current = startedTaskId')
+        && generatorPage.includes("api.cleanupGeneratorJob(lateTaskId, 'client_disconnect', { keepalive: true })")
         && bulkAuthHook.includes('pollTimerRef.current')
         && bulkAuthHook.includes('poll.inFlight')
         && bulkAuthHook.includes('const lifecycleAbortRef = useRef(null)')
@@ -637,7 +643,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 16s with a unique 72-word shower, shattering is one-shot per parent, the top-edge spawn no longer overlaps a ceiling collider, and the staged 3s accelerating portal orbit disables collision response while preserving individual glyph motion; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 16s with a unique 72-word shower, shattering is one-shot per parent, the top-edge spawn no longer overlaps a ceiling collider, and the staged 3s accelerating portal orbit disables collision response while preserving individual glyph motion; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit and duplicate start/OTP submissions are gated; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',
