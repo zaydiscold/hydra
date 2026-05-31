@@ -730,3 +730,22 @@ This evidence file is not release-complete by itself. The release remains not co
   30-second samples after the isolated Generator package build stopped.
   Sampled CPU stayed exactly `0.0%` (`0.000%` average and maximum); RSS moved
   from `261.77 MiB` to `261.73 MiB` (`-32 KiB`).
+- Ordinary `/v1` proxy requests now abort active OpenRouter work when their
+  client disconnects, stop before selecting another retry key, and clear
+  unref'd connect/body timeout handles. SSE close handling now aborts the
+  fetch controller as well as canceling the response body. A 200-client
+  synthetic teardown probe at
+  `/private/tmp/hydra-proxy-client-disconnect-benchmark-20260531T185826Z`
+  modeled disconnects during pending upstream work. The old shape left `200`
+  upstream requests and `200` timeout handles pending and could reach `600`
+  attempts after failures; the owned path aborted all `200`, left `0` pending
+  upstreams and timeout handles, and issued `0` retries after disconnect. This
+  proves request-lifecycle ownership, not a live OpenRouter traffic outcome.
+- The ordinary proxy disconnect patch passed focused background lifecycle
+  (`32/32`), lint, full test, build, OpenAPI (`83 operations`), serial gate
+  (`12/12`), audit (`31 ok / 5 deferred / 0 missing / 0 blockers`), and diff
+  checks. A temporary arm64 package at
+  `/private/tmp/hydra-package-proxy-client-disconnect-20260531T190432Z` passed
+  explicit-resource package smoke, strict deep signature verification, and
+  bundled proxy-source inspection, then moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-proxy-client-disconnect-20260531T190432Z`.

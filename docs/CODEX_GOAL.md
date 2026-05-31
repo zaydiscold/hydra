@@ -352,6 +352,17 @@ closed-app CLI commands, tests, and repo-local documentation.
   tasks after unmount; the owned path started `200`, prevented `200` duplicate
   starts, issued `200` late-response cleanups, suppressed `200` stale writes,
   and left `0` orphan tasks.
+- Ordinary `/v1` proxy requests now own their upstream fetch lifecycle: client
+  abort or response close aborts the active OpenRouter controller, the retry
+  loop stops before choosing another key after disconnect, and connect/body
+  timeout handles are unref'd and cleared. SSE close handling now aborts the
+  fetch controller as well as canceling its response body. A 200-client
+  synthetic teardown probe at
+  `/private/tmp/hydra-proxy-client-disconnect-benchmark-20260531T185826Z`
+  modeled disconnects during an upstream request. The old shape left `200`
+  pending upstreams and `200` pending timeout handles and could reach `600`
+  attempts after failures; the owned path aborted all `200`, left `0` pending
+  upstreams and timeout handles, and issued `0` retries after disconnect.
 
 ---
 

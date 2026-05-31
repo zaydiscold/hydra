@@ -683,3 +683,24 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Sampled CPU stayed exactly `0.0%` (`0.000%` average and maximum); RSS moved
   from `261.77 MiB` to `261.73 MiB` (`-32 KiB`). The raw before/after process
   inventories remain in the profile directory.
+- 2026-05-31 ordinary `/v1` proxy disconnect lifecycle cleanup:
+  `server/routes/proxy.js` now aborts its active OpenRouter controller when the
+  client request aborts or response closes, stops before selecting another key
+  after disconnect, unrefs and clears connect/body timeout handles, and
+  strengthens SSE close handling by aborting the fetch controller as well as
+  canceling its response body. A 200-client synthetic teardown probe at
+  `/private/tmp/hydra-proxy-client-disconnect-benchmark-20260531T185826Z`
+  modeled disconnects while upstream work remained pending. The old shape left
+  `200` upstream requests and `200` timeout handles pending and could reach
+  `600` attempts after disconnected failures; the owned path aborted all
+  `200`, left `0` pending upstreams and timeout handles, and issued `0` retries
+  after disconnect. This proves request-lifecycle ownership, not a live
+  OpenRouter traffic outcome.
+- The ordinary proxy disconnect patch passed focused background lifecycle
+  (`32/32`), lint, full test, build, OpenAPI (`83 operations`), serial gate
+  (`12/12`), audit (`31 ok / 5 deferred / 0 missing / 0 blockers`), and diff
+  checks. A temporary arm64 package at
+  `/private/tmp/hydra-package-proxy-client-disconnect-20260531T190432Z` passed
+  explicit-resource package smoke, strict deep signature verification, and
+  bundled proxy-source inspection. It moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-proxy-client-disconnect-20260531T190432Z`.

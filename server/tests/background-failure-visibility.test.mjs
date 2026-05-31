@@ -487,6 +487,27 @@ test('proxy request body encoding is cached across retries', () => {
   assert.doesNotMatch(buildBody, /JSON\.parse\(JSON\.stringify/);
 });
 
+test('proxy aborts ordinary upstream work when its client disconnects', () => {
+  const source = readRepoFile('server/routes/proxy.js');
+  const proxyHandler = source.slice(
+    source.indexOf('router.use(async (req, res) =>'),
+    source.indexOf('// ─── /v1/models handler'),
+  );
+
+  assert.match(proxyHandler, /let clientDisconnected = req\.aborted \|\| res\.destroyed/);
+  assert.match(proxyHandler, /let activeUpstreamController = null/);
+  assert.match(proxyHandler, /req\.once\('aborted', stopDisconnectedUpstreamWork\)/);
+  assert.match(proxyHandler, /res\.once\('close', stopDisconnectedUpstreamWork\)/);
+  assert.match(proxyHandler, /activeUpstreamController\?\.abort\(\)/);
+  assert.match(proxyHandler, /if \(clientDisconnected\) return;\s*const keyEntry = await rotationManager\.getNextKey\(attempted\)/);
+  assert.match(proxyHandler, /activeUpstreamController = ctrl/);
+  assert.match(proxyHandler, /connectTimeoutId\.unref\?\.\(\)/);
+  assert.match(proxyHandler, /streamTimeoutId\.unref\?\.\(\)/);
+  assert.match(proxyHandler, /Client disconnected; stopped upstream work on attempt/);
+  assert.match(proxyHandler, /activeUpstreamController = null/);
+  assert.match(proxyHandler, /abortUpstream: \(\) => \{\s*ctrl\.abort\(\);\s*return upstreamRes\.body\?\.cancel\?\.\(\)/);
+});
+
 test('traffic backend runs independent request-log reads in parallel', () => {
   const source = readRepoFile('server/controllers/PoolController.js');
   const handler = source.slice(

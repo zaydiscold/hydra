@@ -189,6 +189,26 @@ router.use(async (req, res) => {
   res.once('finish', releaseProxySlot);
   res.once('close', releaseProxySlot);
 
+  let clientDisconnected = req.aborted || res.destroyed;
+  let activeUpstreamController = null;
+  const stopDisconnectedUpstreamWork = () => {
+    clientDisconnected = true;
+    activeUpstreamController?.abort();
+  };
+  const detachClientDisconnectListeners = () => {
+    req.removeListener('aborted', stopDisconnectedUpstreamWork);
+    res.removeListener('close', stopDisconnectedUpstreamWork);
+  };
+  req.once('aborted', stopDisconnectedUpstreamWork);
+  res.once('close', stopDisconnectedUpstreamWork);
+  res.once('finish', detachClientDisconnectListeners);
+  res.once('close', detachClientDisconnectListeners);
+  if (clientDisconnected) {
+    detachClientDisconnectListeners();
+    releaseProxySlot();
+    return;
+  }
+
   const path = req.path; // e.g. /chat/completions, /models
   const startTime = Date.now();
   const isFreeRoute = path.startsWith('/free');
@@ -199,6 +219,7 @@ router.use(async (req, res) => {
 
   // ── Auth ──
   const isValid = await validateMasterKey(req.headers.authorization);
+  if (clientDisconnected) return;
   if (!isValid) {
     return res.status(401).json({
       error: {
@@ -225,6 +246,7 @@ router.use(async (req, res) => {
   let forcedFreeModel = null;
   if (req.method === 'POST' && path === '/free/chat/completions') {
     forcedFreeModel = await resolveFreeModel(baseBody?.model);
+    if (clientDisconnected) return;
     if (!forcedFreeModel) {
       return sendHydraError(
         res,
@@ -273,10 +295,13 @@ router.use(async (req, res) => {
 
   // ── Failover loop ──
   for (let attempt = 0; attempt < MAX_RETRIES;) {
+    if (clientDisconnected) return;
     const keyEntry = await rotationManager.getNextKey(attempted);
+    if (clientDisconnected) return;
 
     if (!keyEntry) {
       const status = await rotationManager.getStatusAsync();
+      if (clientDisconnected) return;
       if (status.totalPooled > 0 && status.available === 0) {
         return sendHydraError(
           res,
@@ -308,7 +333,10 @@ router.use(async (req, res) => {
       const CONNECT_TIMEOUT_MS = 10000;
       const NON_STREAM_TIMEOUT_MS = 5 * 60000;
       const ctrl = new AbortController();
+      activeUpstreamController = ctrl;
+      if (clientDisconnected) ctrl.abort();
       connectTimeoutId = setTimeout(() => ctrl.abort(), CONNECT_TIMEOUT_MS);
+      connectTimeoutId.unref?.();
 
       const upstreamRes = await fetch(`${OR_BASE}/api/v1${upstreamPathWithQuery}`, {
         method: req.method,
@@ -331,6 +359,7 @@ router.use(async (req, res) => {
       // SSE streams intentionally have no stream timeout — they end when upstream ends.
       if (!isStream) {
         streamTimeoutId = setTimeout(() => ctrl.abort(), NON_STREAM_TIMEOUT_MS);
+        streamTimeoutId.unref?.();
       }
 
       // ── Error status handling ──
@@ -436,7 +465,10 @@ router.use(async (req, res) => {
           upstreamBody: upstreamRes.body,
           res,
           observer: sseObserver,
-          abortUpstream: () => upstreamRes.body?.cancel?.(),
+          abortUpstream: () => {
+            ctrl.abort();
+            return upstreamRes.body?.cancel?.();
+          },
         }).then(({ interrupted, reason }) => {
           const finalModel = sseObserver.extractedModel || currentModel();
           const finalUsage = sseObserver.usage || {};
@@ -473,6 +505,10 @@ router.use(async (req, res) => {
       return res.send(text);
     } catch (err) {
       if (err.name === 'AbortError') {
+        if (clientDisconnected) {
+          logger.debug(`[PROXY] Client disconnected; stopped upstream work on attempt ${attempt}`);
+          return;
+        }
         const phase = connectTimeoutId ? 'connect' : 'stream';
         logger.error(`[PROXY] Upstream fetch ${phase} timeout on attempt ${attempt}`);
         lastError = { status: 504, message: `Upstream ${phase} timeout` };
@@ -483,13 +519,16 @@ router.use(async (req, res) => {
       lastError = { status: 502, message: err.message };
       // network error — try next key
     } finally {
+      activeUpstreamController = null;
       if (connectTimeoutId) clearTimeout(connectTimeoutId);
       if (streamTimeoutId) clearTimeout(streamTimeoutId);
     }
   }
 
+  if (clientDisconnected) return;
   if (evicted.size > 0) {
     const status = await rotationManager.getStatusAsync();
+    if (clientDisconnected) return;
     if (status.totalPooled === 0) {
       return sendHydraError(
         res,

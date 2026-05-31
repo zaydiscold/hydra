@@ -543,6 +543,14 @@ function buildAudit() {
         && proxyRoute.includes('const requestLogPromise = createRequestLog(')
         && proxyRoute.includes('requestLogPromise.then')
         && !proxyRoute.includes('const requestLog = await createRequestLog(')
+        && proxyRoute.includes('let clientDisconnected = req.aborted || res.destroyed')
+        && proxyRoute.includes("req.once('aborted', stopDisconnectedUpstreamWork)")
+        && proxyRoute.includes("res.once('close', stopDisconnectedUpstreamWork)")
+        && proxyRoute.includes('activeUpstreamController?.abort()')
+        && proxyRoute.includes('if (clientDisconnected) return;\n    const keyEntry = await rotationManager.getNextKey(attempted)')
+        && proxyRoute.includes('connectTimeoutId.unref?.()')
+        && proxyRoute.includes('streamTimeoutId.unref?.()')
+        && proxyRoute.includes('Client disconnected; stopped upstream work on attempt')
         && modelCache.includes('CLIENT_MODEL_CACHE_TTL_MS')
         && modelCache.includes('export async function getCachedClientModels')
         && modelCache.includes('clearClientModelCache();')
@@ -643,7 +651,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 16s with a unique 72-word shower, shattering is one-shot per parent, the top-edge spawn no longer overlaps a ceiling collider, and the staged 3s accelerating portal orbit disables collision response while preserving individual glyph motion; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit and duplicate start/OTP submissions are gated; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 16s with a unique 72-word shower, shattering is one-shot per parent, the top-edge spawn no longer overlaps a ceiling collider, and the staged 3s accelerating portal orbit disables collision response while preserving individual glyph motion; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit and duplicate start/OTP submissions are gated; ordinary proxy fetches abort and stop retrying when their clients disconnect; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',
