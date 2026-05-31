@@ -1006,3 +1006,8 @@ This evidence file is not release-complete by itself. The release remains not co
   has nonzero ImageMagick variance, and returned zero Tesseract OCR matches
   for credential-shaped or endpoint-shaped text. This is packaged provenance
   proof only; interactive route review and Touch ID approval remain manual.
+- Native-capture evidence checkpoint
+  `8ef60095487bc6f45e3573ad52a11c8a8378ba87` used `[skip-bump]`;
+  Auto-version run `26726418555` skipped, CI run `26726418554` passed, and
+  Docker workflow run `26726418536` passed both runtime smoke and registry
+  image push.

@@ -1063,3 +1063,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Tesseract OCR found zero credential-shaped or endpoint-shaped hits. This is
   packaged-app provenance evidence, not a replacement for the deferred
   interactive route review.
+- 2026-05-31 native-capture evidence-checkpoint publication: commit
+  `8ef60095487bc6f45e3573ad52a11c8a8378ba87` used `[skip-bump]`;
+  Auto-version run `26726418555` skipped as intended, CI run `26726418554`
+  passed, and Docker workflow run `26726418536` passed both runtime smoke and
+  registry image push.
