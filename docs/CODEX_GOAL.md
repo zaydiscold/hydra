@@ -322,6 +322,13 @@ closed-app CLI commands, tests, and repo-local documentation.
   delays clear their tracked timeout when canceled. A 200-surface synthetic
   probe recorded `800` pending requests and `800` timeout resources after hide
   for the old timer-only shape versus `0` and `0` for the owned-abort shape.
+- Code Redeemer route work is abort-linked end to end: route unmount aborts
+  account load, redemption-history load, session preflight, and bulk-matrix
+  redemption requests; account-selection changes abort the superseded
+  debounced preflight request; and canceled work does not write stale state or
+  toasts after navigation. A 200-route synthetic teardown probe recorded
+  `1400` pending request timeout resources for the old detached shape versus
+  `0` for the owned-abort path, which raised all `1400` simulated aborts.
 
 ---
 

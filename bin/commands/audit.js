@@ -208,6 +208,7 @@ function buildAudit() {
   const visibleRecurringHook = safeRead('src/hooks/useVisibleRecurringTask.js');
   const vaultPage = safeRead('src/pages/Vault.jsx');
   const generatorPage = safeRead('src/pages/Generator.jsx');
+  const codeRedemptionPage = safeRead('src/pages/CodeRedemption.jsx');
   const nativeBridge = safeRead('src/lib/native.js');
   const electronIpcContract = safeRead('server/tests/electron-ipc-contract.test.mjs');
   const cleanupAuxProcesses = safeRead('electron/utils/cleanupAuxProcesses.js');
@@ -601,6 +602,13 @@ function buildAudit() {
         && bulkAuthHook.includes('api.checkSessionLive(poll.accountId, signal)')
         && bulkAuthHook.includes("setTrackedTimeout('useBulkAuth.magicLinkSendDelay'")
         && !bulkAuthHook.includes('pollRefs.current[email] = setInterval')
+        && codeRedemptionPage.includes('const lifecycleAbortRef = useRef(null)')
+        && codeRedemptionPage.includes("lifecycleSignal.addEventListener('abort', abort, { once: true })")
+        && codeRedemptionPage.includes('api.getAccounts(signal)')
+        && codeRedemptionPage.includes('api.getRedemptionLogs(signal)')
+        && codeRedemptionPage.includes('api.preflightRedeemAccounts(ids, signal)')
+        && codeRedemptionPage.includes('api.preflightRedeemAccounts(accountIdsToRun, signal)')
+        && codeRedemptionPage.includes('api.bulkMatrixRedeem(assignments, signal)')
         && cliMain.includes('inspectHydraPlaywrightProfiles')
         && cliMain.includes('inspectHydraProcesses')
         && cliMain.includes('--clean-stale-profiles')

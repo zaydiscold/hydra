@@ -629,3 +629,26 @@ This evidence file is not release-complete by itself. The release remains not co
   kept four Hydra-owned processes through all 11 30-second samples. CPU
   stayed between `0.0%` and `0.2%` (`0.045%` average); RSS moved from
   `448.22 MiB` to `453.06 MiB` (`+4.84 MiB`) while source verification ran.
+- Code Redeemer route exit now aborts account load, redemption-history load,
+  session preflight, and bulk-matrix redemption requests. Account-selection
+  changes also abort superseded debounced preflights. A 200-route synthetic
+  teardown probe at
+  `/private/tmp/hydra-code-redeemer-unmount-benchmark-20260531T155946Z`
+  recorded `1400` pending request timeout resources after old-shape unmount
+  versus `0` after owned cleanup; all `1400` simulated requests were aborted.
+  This proves lifecycle teardown ownership, not a live redemption outcome.
+- The Code Redeemer lifecycle patch passed focused background lifecycle
+  (`29/29`), UI static (`35/35`), lint, full test, build, OpenAPI (`83
+  operations`), serial gate (`12/12`), and diff checks. A temporary arm64
+  package at
+  `/private/tmp/hydra-package-code-redeemer-abort-20260531T160131Z` passed
+  packaged resource smoke, strict deep signature verification, and bundled
+  renderer inspection. It was moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-code-redeemer-abort-20260531T160131Z`;
+  Spotlight continues to resolve only the canonical public app.
+- A tenth untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-tenth-untouched-idle-reprofile-20260531T155621Z`
+  kept four Hydra-owned processes and zero stale profiles through all 11
+  30-second samples. CPU stayed between `0.0%` and `0.3%` (`0.045%` average);
+  RSS moved from `457.22 MiB` to `460.89 MiB` (`+3.67 MiB`) while source
+  verification ran.

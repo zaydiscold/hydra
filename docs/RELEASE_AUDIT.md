@@ -535,3 +535,39 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `0.0%` and `0.2%` (`0.045%` average); RSS moved from `448.22 MiB` to
   `453.06 MiB` (`+4.84 MiB`). Raw before/after inventories preserve the
   Hydra-owned subset and unrelated machine-global browser-tooling context.
+- 2026-05-31 Code Redeemer route-lifecycle cleanup: `src/pages/CodeRedemption.jsx`
+  now owns an abort controller for its mounted lifetime and passes the signal
+  through account load, redemption-history load, run-time session preflight,
+  and bulk-matrix redemption. Account-selection changes also abort the
+  superseded debounced preflight request instead of only suppressing its late
+  write. Aborted work does not update route state, log a false history error,
+  or emit stale toasts after navigation. `src/api.js` passes optional abort
+  signals through `/accounts`, `/codes/history`, `/codes/preflight`, and
+  `/codes/bulk-matrix`.
+- 2026-05-31 Code Redeemer lifecycle benchmark and package proof: a 200-route
+  synthetic teardown probe at
+  `/private/tmp/hydra-code-redeemer-unmount-benchmark-20260531T155946Z`
+  modeled four route-owned requests and three superseded preflight requests
+  per mounted route. The old detached shape left `1400` pending requests and
+  `1400` timeout resources after unmount; the owned-abort path left `0` and
+  `0`, aborting all `1400` simulated requests. This proves teardown ownership,
+  not a live redemption outcome. Focused background lifecycle (`29/29`), UI
+  static (`35/35`), lint, full `npm test`, build, OpenAPI generation (`83
+  operations`), serial gate (`12/12`), and diff checks passed. A temporary
+  arm64 package at
+  `/private/tmp/hydra-package-code-redeemer-abort-20260531T160131Z` passed
+  packaged resource smoke, strict deep codesign, and bundled renderer
+  inspection for the abort marker, both Code Redeemer timer owners, and all
+  three code endpoint markers. It was moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-code-redeemer-abort-20260531T160131Z`;
+  Spotlight still resolves only
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`.
+- 2026-05-31 exact-public-`v1.1.5` tenth untouched idle reprofile:
+  `/private/tmp/hydra-v115-tenth-untouched-idle-reprofile-20260531T155621Z`
+  sampled the already-settled canonical app every 30 seconds for five minutes
+  with zero UI interaction while source verification continued. All 11
+  samples reported four Hydra-owned processes and zero stale profiles. Sampled
+  CPU stayed between `0.0%` and `0.3%` (`0.045%` average); RSS moved from
+  `457.22 MiB` to `460.89 MiB` (`+3.67 MiB`). Raw before/after inventories
+  preserve the Hydra-owned subset and unrelated machine-global
+  browser-tooling context.

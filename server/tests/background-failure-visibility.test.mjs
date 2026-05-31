@@ -66,6 +66,19 @@ test('redemption history file read/write failures are logged', () => {
   assert.doesNotMatch(source, /catch \{\s*return \[\];\s*\}/);
 });
 
+test('code redeemer aborts route-owned work and superseded preflights', () => {
+  const source = readRepoFile('src/pages/CodeRedemption.jsx');
+
+  assert.match(source, /const lifecycleAbortRef = useRef\(null\)/);
+  assert.match(source, /controller\.abort\(\)/);
+  assert.match(source, /lifecycleSignal\.addEventListener\('abort', abort, \{ once: true \}\)/);
+  assert.match(source, /api\.getAccounts\(signal\)/);
+  assert.match(source, /api\.getRedemptionLogs\(signal\)/);
+  assert.match(source, /api\.preflightRedeemAccounts\(ids, signal\)/);
+  assert.match(source, /api\.preflightRedeemAccounts\(accountIdsToRun, signal\)/);
+  assert.match(source, /api\.bulkMatrixRedeem\(assignments, signal\)/);
+});
+
 test('account dedup and silent-refresh fallbacks are logged', () => {
   const source = readRepoFile('server/controllers/AccountController.js');
 

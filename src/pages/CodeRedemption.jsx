@@ -77,14 +77,29 @@ export default function CodeRedemption({ addToast }) {
   });
   const didInitialLoadRef = useRef(false);
   const historyRefreshTimerRef = useRef(null);
+  const lifecycleAbortRef = useRef(null);
   const [historyLogs, setHistoryLogs] = useState([]);
   const [historyError, setHistoryError] = useState('');
 
-  function fetchHistory() {
+  useEffect(() => {
+    const controller = new AbortController();
+    lifecycleAbortRef.current = controller;
+    return () => {
+      controller.abort();
+      if (lifecycleAbortRef.current === controller) lifecycleAbortRef.current = null;
+    };
+  }, []);
+
+  function fetchHistory(signal = lifecycleAbortRef.current?.signal) {
+    if (!signal || signal.aborted) return;
     setHistoryError('');
-    api.getRedemptionLogs()
-      .then(res => setHistoryLogs(Array.isArray(res?.data) ? res.data : []))
+    api.getRedemptionLogs(signal)
+      .then(res => {
+        if (signal.aborted) return;
+        setHistoryLogs(Array.isArray(res?.data) ? res.data : []);
+      })
       .catch((err) => {
+        if (signal.aborted || err?.name === 'AbortError') return;
         const message = err.message || 'Failed to load redemption history';
         setHistoryError(message);
         console.warn('[CODES] Redemption history failed:', message);
@@ -99,16 +114,22 @@ export default function CodeRedemption({ addToast }) {
   useEffect(() => {
     if (didInitialLoadRef.current) return;
     didInitialLoadRef.current = true;
-    api.getAccounts()
+    const signal = lifecycleAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
+    api.getAccounts(signal)
       .then(res => {
+        if (signal.aborted) return;
         const accs = Array.isArray(res.data) ? res.data : [];
         setAccounts(accs);
         // Default select all
         setSelectedAccountIds(accs.map(a => a.id));
         setSelectAll(true);
       })
-      .catch(err => addToast(err.message, 'error'));
-    fetchHistory();
+      .catch(err => {
+        if (signal.aborted || err?.name === 'AbortError') return;
+        addToast(err.message, 'error');
+      });
+    fetchHistory(signal);
   }, [addToast]);
 
   useEffect(() => () => {
@@ -127,13 +148,19 @@ export default function CodeRedemption({ addToast }) {
       return;
     }
     let cancelled = false;
+    const lifecycleSignal = lifecycleAbortRef.current?.signal;
+    if (!lifecycleSignal || lifecycleSignal.aborted) return;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const abort = () => controller.abort();
+    lifecycleSignal.addEventListener('abort', abort, { once: true });
     const t = setTrackedTimeout('CodeRedemption.preflightDebounce', () => {
+      if (signal.aborted) return;
       setSessionPreflight((p) => ({ ...p, loading: true, error: null }));
       const ids = [...selectedAccountIds];
-      api
-        .preflightRedeemAccounts(ids)
+      api.preflightRedeemAccounts(ids, signal)
         .then((res) => {
-          if (cancelled) return;
+          if (cancelled || signal.aborted) return;
           const d = res.data;
           setSessionPreflight({
             loading: false,
@@ -144,7 +171,7 @@ export default function CodeRedemption({ addToast }) {
           });
         })
         .catch((err) => {
-          if (cancelled) return;
+          if (cancelled || signal.aborted || err?.name === 'AbortError') return;
           setSessionPreflight({
             loading: false,
             allReady: true,
@@ -156,6 +183,8 @@ export default function CodeRedemption({ addToast }) {
     }, 280);
     return () => {
       cancelled = true;
+      lifecycleSignal.removeEventListener('abort', abort);
+      controller.abort();
       clearTrackedTimeout(t);
     };
   }, [selectedAccountIds]);
@@ -187,12 +216,15 @@ export default function CodeRedemption({ addToast }) {
   async function handleRun() {
     if (codeList.length === 0) return addToast('Enter at least one code', 'error');
     if (selectedAccountIds.length === 0) return addToast('Select at least one account', 'error');
+    const signal = lifecycleAbortRef.current?.signal;
+    if (!signal || signal.aborted) return;
 
     const codesToRun = [...codeList];
     const accountIdsToRun = [...selectedAccountIds];
 
     try {
-      const pfRes = await api.preflightRedeemAccounts(accountIdsToRun);
+      const pfRes = await api.preflightRedeemAccounts(accountIdsToRun, signal);
+      if (signal.aborted) return;
       const pf = pfRes.data;
       if (!pf?.allReady) {
         const blocked = pf?.blocked || [];
@@ -204,6 +236,7 @@ export default function CodeRedemption({ addToast }) {
         return;
       }
     } catch (err) {
+      if (signal.aborted || err?.name === 'AbortError') return;
       addToast(err.message || 'Session check failed', 'error');
       return;
     }
@@ -231,7 +264,8 @@ export default function CodeRedemption({ addToast }) {
     setResults(newResults);
 
     try {
-      const res = await api.bulkMatrixRedeem(assignments);
+      const res = await api.bulkMatrixRedeem(assignments, signal);
+      if (signal.aborted) return;
       const payload = res?.data ?? res ?? [];
       const batch = Array.isArray(payload) ? payload : (payload?.data ?? payload?.results ?? []);
       if (!batch.length && payload?.error) addToast(payload.error, 'error');
@@ -260,6 +294,7 @@ export default function CodeRedemption({ addToast }) {
         }
       }
     } catch (err) {
+      if (signal.aborted || err?.name === 'AbortError') return;
       const errorMessage = err.message || 'Bulk redeem failed';
       for (const assignment of assignments) {
         const key = resultKey(assignment.code, assignment.accountId);
@@ -268,6 +303,7 @@ export default function CodeRedemption({ addToast }) {
       addToast(errorMessage, 'error');
     }
 
+    if (signal.aborted) return;
     setResults({ ...newResults });
     setRunning(false);
     const successCount = Object.values(newResults).filter(v => v.status === STATUS.success).length;
@@ -277,7 +313,7 @@ export default function CodeRedemption({ addToast }) {
     if (historyRefreshTimerRef.current) clearTrackedTimeout(historyRefreshTimerRef.current);
     historyRefreshTimerRef.current = setTrackedTimeout('CodeRedemption.historyRefresh', () => {
       historyRefreshTimerRef.current = null;
-      fetchHistory();
+      fetchHistory(signal);
     }, 400);
   }
 

@@ -293,7 +293,7 @@ export function hasToken() {
 export const getDashboard = (signal) => request('/dashboard', { signal });
 
 // Accounts
-export const getAccounts = () => request('/accounts');
+export const getAccounts = (signal) => request('/accounts', { signal });
 export const addAccount = (alias, managementKey) =>
   request('/accounts', { method: 'POST', body: { alias, managementKey } });
 export const addAccountWithCredentials = (alias, email, password, authMethod) =>
@@ -355,12 +355,12 @@ export const redeemCode = (accountId, code) =>
   request('/codes/redeem', { method: 'POST', body: { accountId, code } });
 export const bulkRedeemCode = (accountIds, code) =>
   request('/codes/bulk', { method: 'POST', body: { accountIds, code } });
-export const bulkMatrixRedeem = (assignments) =>
-  request('/codes/bulk-matrix', { method: 'POST', body: { assignments } });
-export const preflightRedeemAccounts = (accountIds) =>
-  request('/codes/preflight', { method: 'POST', body: { accountIds } });
+export const bulkMatrixRedeem = (assignments, signal) =>
+  request('/codes/bulk-matrix', { method: 'POST', body: { assignments }, signal });
+export const preflightRedeemAccounts = (accountIds, signal) =>
+  request('/codes/preflight', { method: 'POST', body: { accountIds }, signal });
 export const getDiscoveredEndpoints = () => request('/codes/endpoints');
-export const getRedemptionLogs = () => request('/codes/history');
+export const getRedemptionLogs = (signal) => request('/codes/history', { signal });
 
 // Generator
 export const startGeneratorJob = (emailTemplate, password, count) => 
