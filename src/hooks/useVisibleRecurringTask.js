@@ -8,11 +8,17 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
     let cancelled = false;
     let running = false;
     let timer = null;
+    let controller = null;
 
     const clear = () => {
       if (!timer) return;
       clearTrackedTimeout(timer);
       timer = null;
+    };
+
+    const abort = () => {
+      controller?.abort();
+      controller = null;
     };
 
     const schedule = () => {
@@ -26,11 +32,16 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
         }
 
         running = true;
+        const taskController = new AbortController();
+        controller = taskController;
         try {
-          await task();
+          await task(taskController.signal);
         } catch (err) {
-          console.warn(`[${owner}] visible recurring task failed:`, err?.message || err);
+          if (err?.name !== 'AbortError') {
+            console.warn(`[${owner}] visible recurring task failed:`, err?.message || err);
+          }
         } finally {
+          if (controller === taskController) controller = null;
           running = false;
           schedule();
         }
@@ -38,7 +49,10 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
     };
 
     const handleVisibility = () => {
-      if (document.hidden) clear();
+      if (document.hidden) {
+        clear();
+        abort();
+      }
       else schedule();
     };
 
@@ -48,6 +62,7 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
     return () => {
       cancelled = true;
       clear();
+      abort();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [delayMs, enabled, owner, task]);

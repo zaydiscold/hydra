@@ -735,15 +735,16 @@ export default function App() {
     authStateRef.current = authState;
   }, [authState]);
 
-  const refreshUpstreamHealth = useCallback(async () => {
+  const refreshUpstreamHealth = useCallback(async (signal) => {
     if (authState !== 'app' || authStateRef.current !== 'app' || upstreamHealthInFlightRef.current) return;
     upstreamHealthInFlightRef.current = true;
     try {
-      const res = await api.getSystemHealth();
+      const res = await api.getSystemHealth(signal);
       if (authStateRef.current !== 'app') return;
       const payload = res?.data ?? res ?? {};
       setUpstreamHealth(payload.upstream ?? null);
     } catch (err) {
+      if (signal?.aborted || err?.name === 'AbortError') return;
       logger.warn('Upstream health refresh failed:', err.message);
       if (authStateRef.current !== 'app') return;
       setUpstreamHealth(null);
@@ -757,7 +758,9 @@ export default function App() {
       setUpstreamHealth(null);
       return;
     }
-    void refreshUpstreamHealth();
+    const controller = new AbortController();
+    void refreshUpstreamHealth(controller.signal);
+    return () => controller.abort();
   }, [authState, refreshUpstreamHealth]);
 
   useVisibleRecurringTask('App.upstreamHealth', refreshUpstreamHealth, 30_000, { enabled: authState === 'app' });

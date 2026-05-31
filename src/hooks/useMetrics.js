@@ -17,31 +17,57 @@ export function useMetrics({ addToast }) {
   const warnedExpiryRef = useRef(false);
   const didInitialLoadRef = useRef(false);
   const inFlightRef = useRef(false);
+  const requestAbortRef = useRef(null);
+  const unmountedRef = useRef(false);
 
-  const fetchDashboard = useCallback(async (silent = false) => {
-    if (inFlightRef.current) return;
+  const fetchDashboard = useCallback(async (silent = false, externalSignal) => {
+    if (inFlightRef.current || unmountedRef.current) return;
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', forwardAbort, { once: true });
+    requestAbortRef.current = controller;
     inFlightRef.current = true;
     if (silent) setRefreshing(true);
     else setLoading(true);
 
     try {
       const [res, syncRes] = await Promise.all([
-        api.getDashboard(),
-        api.getPoolSyncStatus().catch((err) => {
+        api.getDashboard(controller.signal),
+        api.getPoolSyncStatus(controller.signal).catch((err) => {
+          if (controller.signal.aborted) return { data: {} };
           console.warn('[METRICS] Pool sync status unavailable:', err.message);
           return { data: {} };
         }),
       ]);
+      if (unmountedRef.current || controller.signal.aborted) return;
       setData(res.data);
       setCooldownMap(syncRes.data?.cooldownMap ?? {});
     } catch (err) {
+      if (unmountedRef.current || controller.signal.aborted) return;
       addToast(err.message, 'error');
     } finally {
-      inFlightRef.current = false;
-      setLoading(false);
-      setRefreshing(false);
+      externalSignal?.removeEventListener('abort', forwardAbort);
+      if (requestAbortRef.current === controller) {
+        requestAbortRef.current = null;
+        inFlightRef.current = false;
+        if (!unmountedRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
     }
   }, [addToast]);
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      didInitialLoadRef.current = false;
+      requestAbortRef.current?.abort();
+      requestAbortRef.current = null;
+      inFlightRef.current = false;
+    };
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -66,6 +92,7 @@ export function useMetrics({ addToast }) {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
 
     async function probeAll() {
       const CONCURRENCY = 3;
@@ -75,19 +102,20 @@ export function useMetrics({ addToast }) {
 
       await new Promise((resolve) => {
         function next() {
-          while (active < CONCURRENCY && idx < accounts.length) {
+          while (!cancelled && !controller.signal.aborted && active < CONCURRENCY && idx < accounts.length) {
             const acct = accounts[idx++];
             active++;
-            api.getSessionStatus(acct.id)
+            api.getSessionStatus(acct.id, controller.signal)
               .then((res) => {
                 if (!cancelled) results[acct.id] = res?.data?.status || res?.data;
               })
               .catch((err) => {
+                if (controller.signal.aborted) return;
                 console.warn(`[METRICS] Display session probe failed for ${acct.id}:`, err.message);
               })
               .finally(() => {
                 active--;
-                if (idx < accounts.length) next();
+                if (!cancelled && idx < accounts.length) next();
                 else if (active === 0) resolve();
               });
           }
@@ -100,7 +128,10 @@ export function useMetrics({ addToast }) {
     }
 
     probeAll();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [data?.accounts, data?.displaySessionStatuses, data?.liveStatuses]);
 
   // Session expiry warning
@@ -116,7 +147,7 @@ export function useMetrics({ addToast }) {
     }
   }, [data?.accounts, liveStatuses, addToast]);
 
-  const refreshVisibleDashboard = useCallback(() => fetchDashboard(true), [fetchDashboard]);
+  const refreshVisibleDashboard = useCallback((signal) => fetchDashboard(true, signal), [fetchDashboard]);
   useVisibleRecurringTask('useMetrics.autoRefresh', refreshVisibleDashboard, 5 * 60 * 1000);
 
   const handleProvision = useCallback(async (accountId) => {

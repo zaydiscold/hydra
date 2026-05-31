@@ -203,7 +203,7 @@ test('short-lived renderer feedback timers are cleared on unmount', () => {
   assert.match(ownedTimeouts, /clearTrackedTimeout\(timer\)/);
   assert.match(ownedTimeouts, /timersRef\.current\.delete\(timer\)/);
   assert.match(visibleRecurring, /document\.addEventListener\('visibilitychange', handleVisibility\)/);
-  assert.match(visibleRecurring, /if \(document\.hidden\) clear\(\)/);
+  assert.match(visibleRecurring, /if \(document\.hidden\) \{[\s\S]*clear\(\);[\s\S]*abort\(\);/);
   assert.match(visibleRecurring, /if \(cancelled \|\| document\.hidden\) return/);
   assert.match(app, /useOwnedTimeouts/);
   assert.doesNotMatch(app, /setTimeout\(\(\) => setToasts/);
@@ -237,6 +237,38 @@ test('renderer auto-refresh timers pause instead of waking while hidden', () => 
   assert.doesNotMatch(useMetrics, /if \(!document\.hidden\) await fetchDashboard/);
   assert.doesNotMatch(useTraffic, /if \(!document\.hidden\) await fetchTraffic/);
   assert.doesNotMatch(vault, /if \(!document\.hidden\) await loadAccounts/);
+});
+
+test('renderer visible refresh work aborts when hidden or unmounted', () => {
+  const app = readRepoFile('src/App.jsx');
+  const api = readRepoFile('src/api.js');
+  const visibleRecurring = readRepoFile('src/hooks/useVisibleRecurringTask.js');
+  const metrics = readRepoFile('src/hooks/useMetrics.js');
+  const traffic = readRepoFile('src/hooks/useTraffic.js');
+  const vault = readRepoFile('src/pages/Vault.jsx');
+
+  assert.match(visibleRecurring, /const taskController = new AbortController\(\)/);
+  assert.match(visibleRecurring, /await task\(taskController\.signal\)/);
+  assert.match(visibleRecurring, /if \(document\.hidden\) \{[\s\S]*clear\(\);[\s\S]*abort\(\);/);
+  assert.match(visibleRecurring, /cancelled = true;[\s\S]*clear\(\);[\s\S]*abort\(\);/);
+
+  assert.match(api, /function wait\(ms, signal\)/);
+  assert.match(api, /clearTrackedTimeout\(timer\)/);
+  assert.match(api, /getDashboard = \(signal\) => request\('\/dashboard', \{ signal \}\)/);
+  assert.match(api, /getSessionStatus = \(id, signal\) => request\(`\/accounts\/\$\{id\}\/session-status`, \{ signal \}\)/);
+  assert.match(api, /getTraffic = \(signal\) => request\('\/pool\/traffic', \{ signal \}\)/);
+  assert.match(api, /getSystemHealth = \(signal\) => request\('\/system\/health', \{ signal \}\)/);
+
+  assert.match(app, /api\.getSystemHealth\(signal\)/);
+  assert.match(metrics, /requestAbortRef\.current\?\.abort\(\)/);
+  assert.match(metrics, /api\.getDashboard\(controller\.signal\)/);
+  assert.match(metrics, /api\.getSessionStatus\(acct\.id, controller\.signal\)/);
+  assert.match(traffic, /requestAbortRef\.current\?\.abort\(\)/);
+  assert.match(traffic, /api\.getTraffic\(controller\.signal\)/);
+  assert.match(vault, /loadAbortRef\.current\?\.abort\(\)/);
+  assert.match(vault, /probeAbortRef\.current\?\.abort\(\)/);
+  assert.match(vault, /api\.getDashboard\(controller\.signal\)/);
+  assert.match(vault, /api\.getSessionStatus\(acct\.id, controller\.signal\)/);
 });
 
 test('Pool Manager aborts status probes on refresh and unmount', () => {
@@ -603,7 +635,7 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   const api = readRepoFile('src/api.js');
   const visibleRecurring = readRepoFile('src/hooks/useVisibleRecurringTask.js');
 
-  assert.match(api, /export const getSystemHealth = \(\) => request\('\/system\/health'\)/);
+  assert.match(api, /export const getSystemHealth = \(signal\) => request\('\/system\/health', \{ signal \}\)/);
   assert.match(app, /function UpstreamStatusBanner\(\{ upstream \}\)/);
   assert.match(app, /OPENROUTER OFFLINE/);
   assert.match(app, /OPENROUTER STATUS UNKNOWN/);
@@ -612,9 +644,9 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   assert.match(app, /const \[upstreamHealth, setUpstreamHealth\] = useState\(null\)/);
   assert.match(app, /if \(authState !== 'app'\)/);
   assert.match(app, /authStateRef\.current !== 'app'/);
-  assert.match(app, /api\.getSystemHealth\(\)/);
+  assert.match(app, /api\.getSystemHealth\(signal\)/);
   assert.match(app, /useVisibleRecurringTask\('App\.upstreamHealth', refreshUpstreamHealth, 30_000, \{ enabled: authState === 'app' \}\)/);
-  assert.match(visibleRecurring, /if \(document\.hidden\) clear\(\)/);
+  assert.match(visibleRecurring, /if \(document\.hidden\) \{[\s\S]*clear\(\);[\s\S]*abort\(\);/);
   assert.match(visibleRecurring, /clearTrackedTimeout\(timer\)/);
   assert.match(app, /<UpstreamStatusBanner upstream=\{upstreamHealth\} \/>/);
 

@@ -315,6 +315,13 @@ closed-app CLI commands, tests, and repo-local documentation.
   delayed updater check is also unref'd. A 200-round synthetic resource probe
   recorded `200` pending timeout resources for the old fast-winner shape and
   `0` for the cleared shape.
+- Renderer visible-refresh work is abort-linked end to end: hiding or
+  unmounting a surface now aborts the shared scheduler's in-flight task,
+  dashboard/traffic/vault page loads suppress late state updates, vault and
+  dashboard session-status fan-outs stop dequeuing after abort, and API retry
+  delays clear their tracked timeout when canceled. A 200-surface synthetic
+  probe recorded `800` pending requests and `800` timeout resources after hide
+  for the old timer-only shape versus `0` and `0` for the owned-abort shape.
 
 ---
 

@@ -8,22 +8,47 @@ export function useTraffic({ addToast }) {
   const [refreshing, setRefreshing] = useState(false);
   const didInitialLoadRef = useRef(false);
   const inFlightRef = useRef(false);
+  const requestAbortRef = useRef(null);
+  const unmountedRef = useRef(false);
 
-  const fetchTraffic = useCallback(async (silent = false) => {
-    if (inFlightRef.current) return;
+  const fetchTraffic = useCallback(async (silent = false, externalSignal) => {
+    if (inFlightRef.current || unmountedRef.current) return;
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', forwardAbort, { once: true });
+    requestAbortRef.current = controller;
     inFlightRef.current = true;
     if (silent) setRefreshing(true);
     try {
-      const res = await api.getTraffic();
+      const res = await api.getTraffic(controller.signal);
+      if (unmountedRef.current || controller.signal.aborted) return;
       setData(res.data);
     } catch (err) {
+      if (unmountedRef.current || controller.signal.aborted) return;
       if (addToast) addToast(err.message, 'error');
     } finally {
-      inFlightRef.current = false;
-      setLoading(false);
-      setRefreshing(false);
+      externalSignal?.removeEventListener('abort', forwardAbort);
+      if (requestAbortRef.current === controller) {
+        requestAbortRef.current = null;
+        inFlightRef.current = false;
+        if (!unmountedRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
     }
   }, [addToast]);
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      didInitialLoadRef.current = false;
+      requestAbortRef.current?.abort();
+      requestAbortRef.current = null;
+      inFlightRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (didInitialLoadRef.current) return;
@@ -31,7 +56,7 @@ export function useTraffic({ addToast }) {
     fetchTraffic();
   }, [fetchTraffic]);
 
-  const refreshVisibleTraffic = useCallback(() => fetchTraffic(true), [fetchTraffic]);
+  const refreshVisibleTraffic = useCallback((signal) => fetchTraffic(true, signal), [fetchTraffic]);
   useVisibleRecurringTask('useTraffic.autoRefresh', refreshVisibleTraffic, 30000);
 
   return {

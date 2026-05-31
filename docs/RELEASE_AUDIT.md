@@ -458,3 +458,45 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   RSS moved from `470.03 MiB` to `477.84 MiB` (`+7.81 MiB`). Raw
   before/after inventories preserve the Hydra-owned subset and unrelated
   machine-global browser-tooling context.
+- 2026-05-31 renderer visible-refresh lifecycle cleanup:
+  `src/hooks/useVisibleRecurringTask.js` now gives each scheduled task an
+  abort signal and aborts in-flight work when its document becomes hidden or
+  its owner unmounts. `src/api.js` propagates optional signals through
+  `/dashboard`, `/accounts/:id/session-status`, `/pool/traffic`, and
+  `/system/health`; its tracked retry delay now clears immediately when
+  canceled. Dashboard, Traffic, Vault, and app-shell upstream-health reads
+  suppress late writes after unmount or abort. Vault and Dashboard
+  session-status fan-outs stop dequeuing new accounts after cancellation.
+  A 200-surface synthetic hide probe at
+  `/private/tmp/hydra-visible-refresh-abort-benchmark-20260531T152945Z`
+  recorded `800` pending requests and `800` timeout resources for the old
+  timer-only shape versus `0` pending requests and `0` timeout resources for
+  the abort-linked shape; the owned path canceled all `800` simulated
+  requests.
+- 2026-05-31 renderer visible-refresh lifecycle verification: `npm run
+  test:ui-static` passed (`35/35`), the focused background lifecycle suite
+  passed (`28/28`), `npm run lint`, full `npm test`, `npm run build`, `npm run
+  openapi:hydra`, serial `npm run gate` (`12/12`), and `git diff --check`
+  passed. A temporary patched arm64 package at
+  `/private/tmp/hydra-package-visible-refresh-abort-final-20260531T153523Z`
+  passed
+  `ELECTRON_APP_RESOURCES=<temp-app>/Contents/Resources
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  `codesign --verify`, and bundled renderer inspection for the scheduler,
+  abort refs, abort-aware retry marker, and signal-aware endpoints. It was
+  moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-visible-refresh-abort-final-20260531T153523Z`;
+  Spotlight still resolves only the canonical public app. `bin/commands/audit.js`
+  now recognizes the stronger hidden-branch `clear(); abort();` contract and
+  requires scheduled task signal propagation; `node --check
+  bin/commands/audit.js`, `npm run test:cli` (`46/46`), and `hydra audit
+  --json` (`31 ok / 5 deferred / 0 missing / 0 blockers`) passed after the
+  verifier alignment update.
+- 2026-05-31 exact-public-`v1.1.5` eighth untouched idle reprofile:
+  `/private/tmp/hydra-v115-eighth-untouched-idle-reprofile-20260531T152450Z`
+  sampled the already-settled canonical app every 30 seconds for five minutes
+  with zero UI interaction while source verification continued. All 11
+  samples reported four Hydra-owned processes. Sampled CPU stayed between
+  `0.0%` and `0.1%` (`0.009%` average); RSS moved from `483.89 MiB` to
+  `478.02 MiB` (`-5.88 MiB`). Raw before/after inventories preserve the
+  Hydra-owned subset and unrelated machine-global browser-tooling context.

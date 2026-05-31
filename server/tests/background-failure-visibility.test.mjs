@@ -255,7 +255,7 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(app, /upstreamHealthInFlightRef\.current/);
   assert.match(app, /authStateRef\.current !== 'app'/);
   assert.match(app, /useVisibleRecurringTask\('App\.upstreamHealth', refreshUpstreamHealth, 30_000, \{ enabled: authState === 'app' \}\)/);
-  assert.match(visibleRecurring, /if \(document\.hidden\) clear\(\)/);
+  assert.match(visibleRecurring, /if \(document\.hidden\) \{[\s\S]*clear\(\);[\s\S]*abort\(\);/);
   assert.match(visibleRecurring, /if \(cancelled \|\| document\.hidden\) return/);
   assert.match(metrics, /inFlightRef\.current/);
   assert.match(traffic, /inFlightRef\.current/);

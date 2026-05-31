@@ -1,5 +1,5 @@
 import { invokeNative, NotInElectronError } from './lib/native';
-import { setTrackedTimeout } from './lib/runtimeDiagnostics.js';
+import { clearTrackedTimeout, setTrackedTimeout } from './lib/runtimeDiagnostics.js';
 
 const API = '/api';
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -111,8 +111,30 @@ function isAbortError(err) {
   return err?.name === 'AbortError';
 }
 
-function wait(ms) {
-  return new Promise((resolve) => setTrackedTimeout('api.retryDelay', resolve, ms));
+function createAbortError() {
+  const err = new Error('Request aborted');
+  err.name = 'AbortError';
+  return err;
+}
+
+function wait(ms, signal) {
+  if (signal?.aborted) return Promise.reject(createAbortError());
+
+  return new Promise((resolve, reject) => {
+    let timer = null;
+    const cleanup = () => signal?.removeEventListener('abort', handleAbort);
+    const handleAbort = () => {
+      clearTrackedTimeout(timer);
+      cleanup();
+      reject(createAbortError());
+    };
+
+    timer = setTrackedTimeout('api.retryDelay', () => {
+      cleanup();
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', handleAbort, { once: true });
+  });
 }
 
 async function readAuthErrorPayload(res, path) {
@@ -155,7 +177,7 @@ async function request(path, options = {}) {
         res = await fetch(`${API}${path}`, fetchOptions);
       } catch (fetchErr) {
         if (attempt < attempts && !isAbortError(fetchErr)) {
-          await wait(RETRY_DELAY_MS * attempt);
+          await wait(RETRY_DELAY_MS * attempt, signal);
           continue;
         }
         const dev = import.meta.env.DEV;
@@ -186,7 +208,7 @@ async function request(path, options = {}) {
       }
 
       if (!res.ok && attempt < attempts && isRetryableResponseStatus(res.status)) {
-        await wait(RETRY_DELAY_MS * attempt);
+        await wait(RETRY_DELAY_MS * attempt, signal);
         continue;
       }
 
@@ -195,7 +217,7 @@ async function request(path, options = {}) {
         data = await res.json();
       } catch (parseErr) {
         if (attempt < attempts && isRetryableResponseStatus(res.status)) {
-          await wait(RETRY_DELAY_MS * attempt);
+          await wait(RETRY_DELAY_MS * attempt, signal);
           continue;
         }
         const err = new Error(`Hydra API returned an invalid response from ${path} (${res.status}).`);
@@ -268,7 +290,7 @@ export function hasToken() {
 }
 
 // Dashboard
-export const getDashboard = () => request('/dashboard');
+export const getDashboard = (signal) => request('/dashboard', { signal });
 
 // Accounts
 export const getAccounts = () => request('/accounts');
@@ -303,7 +325,7 @@ export const refreshAccountLogin = (id) =>
   request(`/accounts/${id}/refresh-login`, { method: 'POST' });
 export const silentRefreshSession = (id) =>
   request(`/accounts/${id}/refresh`, { method: 'POST' });
-export const getSessionStatus = (id) => request(`/accounts/${id}/session-status`);
+export const getSessionStatus = (id, signal) => request(`/accounts/${id}/session-status`, { signal });
 export const checkSessionLive = (id) => request(`/accounts/${id}/session-check`);
 export const silentRefreshOnly = (id) => request(`/accounts/${id}/silent-refresh`, { method: 'POST' });
 
@@ -373,7 +395,7 @@ export const disablePoolKey = (hash, disabled) =>
   request(`/pool/key/${hash}/disable`, { method: 'PATCH', body: { disabled } });
 export const deletePoolKey = (hash) =>
   request(`/pool/key/${hash}`, { method: 'DELETE' });
-export const getTraffic = () => request('/pool/traffic');
+export const getTraffic = (signal) => request('/pool/traffic', { signal });
 export const getPoolModels = (signal) => request('/pool/models', { signal });
 export const getPoolSyncStatus = (signal) => request('/pool/sync-status', { signal });
 export const rotateMasterKey = () => request('/pool/rotate-master-key', { method: 'POST' });
@@ -381,7 +403,7 @@ export const rotateMasterKey = () => request('/pool/rotate-master-key', { method
 // System
 export const getSystemTasks = () => request('/system/tasks');
 export const cancelSystemTask = (taskId, reason = 'operator_cancelled') => request(`/system/tasks/${taskId}/cancel`, { method: 'POST', body: { reason } });
-export const getSystemHealth = () => request('/system/health');
+export const getSystemHealth = (signal) => request('/system/health', { signal });
 export const getProxyStatus = (signal) => request('/system/proxy-status', { signal });
 export const toggleProxy = (enabled) => request('/system/proxy-toggle', { method: 'POST', body: { enabled } });
 export const getAccountProxies = () => request('/system/account-proxies');

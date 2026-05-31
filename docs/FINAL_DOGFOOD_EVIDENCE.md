@@ -585,3 +585,27 @@ This evidence file is not release-complete by itself. The release remains not co
   30-second samples. CPU stayed between `0.0%` and `0.2%` (`0.036%` average);
   RSS moved from `470.03 MiB` to `477.84 MiB` (`+7.81 MiB`) while isolated
   package verification also ran.
+- Renderer visible-refresh work now aborts end to end on hide or unmount:
+  shared scheduled tasks receive an abort signal, dashboard/traffic/vault and
+  app-shell health reads propagate it, canceled API retry delays clear their
+  tracked timeout, late writes are ignored, and Vault/Dashboard status
+  fan-outs stop dequeuing accounts after cancellation. A 200-surface
+  synthetic hide probe at
+  `/private/tmp/hydra-visible-refresh-abort-benchmark-20260531T152945Z`
+  recorded `800` pending requests and `800` timeout resources for the old
+  timer-only shape versus `0` and `0` for the abort-linked path; all `800`
+  simulated requests were canceled.
+- The visible-refresh lifecycle patch passed UI static (`35/35`), focused
+  background lifecycle (`28/28`), lint, full test, build, OpenAPI, serial gate
+  (`12/12`), and diff checks. A temporary arm64 package at
+  `/private/tmp/hydra-package-visible-refresh-abort-final-20260531T153523Z`
+  passed
+  packaged resource smoke, strict deep signature verification, and bundled
+  renderer inspection. It was moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-visible-refresh-abort-final-20260531T153523Z`;
+  Spotlight continues to resolve only the canonical public app.
+- An eighth untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-eighth-untouched-idle-reprofile-20260531T152450Z`
+  kept four Hydra-owned processes through all 11 30-second samples. CPU
+  stayed between `0.0%` and `0.1%` (`0.009%` average); RSS moved from
+  `483.89 MiB` to `478.02 MiB` (`-5.88 MiB`) while source verification ran.

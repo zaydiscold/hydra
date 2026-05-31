@@ -50,51 +50,74 @@ export default function Vault({ addToast }) {
   const [modalErrors, setModalErrors] = useState({});
   const warnedRef = useRef(false);
   const loadInFlightRef = useRef(false);
+  const loadAbortRef = useRef(null);
+  const probeAbortRef = useRef(null);
+  const unmountedRef = useRef(false);
 
   // ── Concurrency-limited session probe ──
-  const probeStatuses = useCallback(async (accts) => {
+  const probeStatuses = useCallback(async (accts, externalSignal) => {
+    probeAbortRef.current?.abort();
     if (!accts.length) return;
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', forwardAbort, { once: true });
+    probeAbortRef.current = controller;
     setProbing(true);
     const results = {};
     let failed = 0;
     const queue = [...accts];
     const CONCURRENCY = 3;
     const workers = Array.from({ length: CONCURRENCY }, async () => {
-      while (queue.length) {
+      while (!controller.signal.aborted && queue.length) {
         const acct = queue.shift();
         try {
-          const r = await api.getSessionStatus(acct.id);
+          const r = await api.getSessionStatus(acct.id, controller.signal);
           results[acct.id] = r?.data?.status ?? r?.status ?? 'unknown';
         } catch (err) {
+          if (controller.signal.aborted) return;
           failed += 1;
           console.warn('[VAULT] Session status probe failed:', acct.id, err.message);
           results[acct.id] = 'unknown';
         }
       }
     });
-    await Promise.all(workers);
-    setLiveStatuses((prev) => ({ ...prev, ...results }));
-    if (failed > 0) addToast?.(`${failed} session status probe(s) failed; showing unknown until refresh.`, 'warning');
-    setProbing(false);
+    try {
+      await Promise.all(workers);
+      if (unmountedRef.current || controller.signal.aborted) return;
+      setLiveStatuses((prev) => ({ ...prev, ...results }));
+      if (failed > 0) addToast?.(`${failed} session status probe(s) failed; showing unknown until refresh.`, 'warning');
+    } finally {
+      externalSignal?.removeEventListener('abort', forwardAbort);
+      if (probeAbortRef.current === controller) {
+        probeAbortRef.current = null;
+        if (!unmountedRef.current) setProbing(false);
+      }
+    }
   }, [addToast]);
 
   // ── Load accounts from dashboard endpoint ──
-  const loadAccounts = useCallback(async (silent = false) => {
-    if (loadInFlightRef.current) return;
+  const loadAccounts = useCallback(async (silent = false, externalSignal) => {
+    if (loadInFlightRef.current || unmountedRef.current) return;
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', forwardAbort, { once: true });
+    loadAbortRef.current = controller;
     loadInFlightRef.current = true;
     if (!silent) setLoading(true);
     try {
-      const res = await api.getDashboard();
+      const res = await api.getDashboard(controller.signal);
+      if (unmountedRef.current || controller.signal.aborted) return;
       const accts = res?.data?.accounts ?? [];
       setAccounts(accts);
 
       // Use server-provided display statuses if present (cheap/cached path).
       const serverDisplay = res?.data?.displaySessionStatuses || res?.data?.liveStatuses;
       if (serverDisplay && Object.keys(serverDisplay).length > 0) {
+        probeAbortRef.current?.abort();
         setLiveStatuses(serverDisplay);
       } else {
         // Kick off client-side probe
-        probeStatuses(accts);
+        void probeStatuses(accts, externalSignal);
       }
 
       // P21 — expiry warning toast (once per load)
@@ -114,16 +137,33 @@ export default function Vault({ addToast }) {
         }
       }
     } catch (err) {
+      if (unmountedRef.current || controller.signal.aborted) return;
       if (addToast) addToast(err.message || 'Failed to load vault', 'error');
     } finally {
-      loadInFlightRef.current = false;
-      setLoading(false);
+      externalSignal?.removeEventListener('abort', forwardAbort);
+      if (loadAbortRef.current === controller) {
+        loadAbortRef.current = null;
+        loadInFlightRef.current = false;
+        if (!unmountedRef.current) setLoading(false);
+      }
     }
   }, [addToast, probeStatuses]);
 
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      loadAbortRef.current?.abort();
+      loadAbortRef.current = null;
+      probeAbortRef.current?.abort();
+      probeAbortRef.current = null;
+      loadInFlightRef.current = false;
+    };
+  }, []);
+
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
-  const refreshVisibleVault = useCallback(() => loadAccounts(true), [loadAccounts]);
+  const refreshVisibleVault = useCallback((signal) => loadAccounts(true, signal), [loadAccounts]);
   useVisibleRecurringTask('Vault.autoRefresh', refreshVisibleVault, 10 * 60 * 1000);
 
   // ── Provision management key ──
