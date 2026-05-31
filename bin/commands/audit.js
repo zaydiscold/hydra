@@ -185,7 +185,7 @@ function buildAudit() {
     && releaseAudit.includes('npm run docker:smoke -- --start')
     && releaseAudit.includes('health endpoint response')
     && releaseAudit.includes('Build & Push');
-  const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker workflow run `(\d+)` passed both runtime smoke and\s+(?:the )?registry image push/g)]
+  const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker workflow run\s+`(\d+)`\s+passed both runtime smoke and\s+(?:the )?registry image push/g)]
     .map((match) => match[1]);
   const latestDockerCheckpointRun = dockerCheckpointRuns.at(-1) ?? null;
   const v110ReleaseRecorded = releaseAudit.includes('Final release run `26702889329` passed')

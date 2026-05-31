@@ -388,4 +388,37 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `codesign --verify` passed, and direct bundled-source inspection found
   `waitWithClearedTimeout()`, `withStatementTimeout()`, and
   `updateCheckTimer.unref?.()`. The canonical public Spotlight app was not
-  replaced or relaunched.
+  replaced or relaunched. After verification, the temporary package was moved
+  reversibly to
+  `/Users/zaydk/.Trash/hydra-package-timeout-cleanup-20260531T144838Z`;
+  Spotlight still resolves only
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`.
+- 2026-05-31 fast-winner-timeout checkpoint hosted verification: checkpoint
+  `0e01a0a404c18a79dcb9d7fb341758e523a033ce` passed local lint, full
+  `npm test`, `npm run gate`, patched temporary-package
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, `npm run
+  openapi:hydra`, strict deep temp-package codesign, staged credential/local
+  artifact scans, and `git diff --check`. Auto-version run `26715823083`
+  skipped as intended, CI run `26715823077` passed, and Docker workflow run
+  `26715823067` passed both runtime smoke and the registry image push. This is
+  a `[skip-bump]` performance checkpoint; public desktop release remains
+  `v1.1.5`.
+- 2026-05-31 Docker-checkpoint parser whitespace follow-up: after hosted proof
+  wrapped the newest Docker run ID onto the next Markdown line, `hydra audit`
+  remained pinned to older run `26715063084`. `bin/commands/audit.js` now
+  accepts Markdown whitespace between `run`, the backticked ID, and `passed`;
+  `server/tests/cli.test.mjs` requires newest recorded checkpoint run
+  `26715823067`. Verification passed: `node --check bin/commands/audit.js`,
+  `npm run test:cli` (`46/46`), `npm run lint`, full `npm test`, `npm run
+  gate`, `npm run openapi:hydra`, canonical
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, and `git diff
+  --check`.
+- 2026-05-31 exact-public-`v1.1.5` sixth untouched idle reprofile:
+  `/private/tmp/hydra-v115-sixth-untouched-idle-reprofile-20260531T145521Z`
+  sampled the already-settled canonical app every 30 seconds for five minutes
+  with zero UI interaction after the parser follow-up. All 11 samples reported
+  four Hydra-owned processes and zero stale profiles. Sampled CPU stayed
+  between `0.0%` and `0.1%` (`0.018%` average); RSS moved from `479.42 MiB`
+  to `480.66 MiB` (`+1.23 MiB`). Raw before/after inventories preserve the
+  expected Hydra main, GPU, network-utility, and renderer process subset plus
+  unrelated machine-global browser tooling for honest workstation context.

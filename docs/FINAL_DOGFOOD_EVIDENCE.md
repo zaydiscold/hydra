@@ -543,4 +543,22 @@ This evidence file is not release-complete by itself. The release remains not co
   `/private/tmp/hydra-package-timeout-cleanup-20260531T144838Z` passed packaged
   resource smoke, strict deep signature verification, and bundled-source
   inspection for all three cleanup contracts without replacing or launching
-  the canonical Spotlight app.
+  the canonical Spotlight app. It was then moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-timeout-cleanup-20260531T144838Z`;
+  Spotlight continues to resolve only the canonical public app.
+- Performance checkpoint `0e01a0a` preserved public desktop release `v1.1.5`.
+  Auto-version run `26715823083` skipped as intended, CI run `26715823077`
+  passed, and Docker workflow run `26715823067` passed both runtime smoke and
+  registry image push.
+- The Docker-checkpoint parser now tolerates wrapped Markdown whitespace after
+  `hydra audit` stayed pinned to older run `26715063084` when the newest run ID
+  wrapped onto the next line. Its CLI contract now requires newest recorded
+  checkpoint run `26715823067`; syntax, CLI (`46/46`), lint, full test, gate,
+  OpenAPI, canonical arm64 Electron smoke, and diff checks passed.
+- A sixth untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-sixth-untouched-idle-reprofile-20260531T145521Z`
+  again kept four Hydra-owned processes and zero stale profiles through all 11
+  30-second samples. CPU stayed between `0.0%` and `0.1%` (`0.018%` average);
+  RSS moved from `479.42 MiB` to `480.66 MiB` (`+1.23 MiB`). Raw before/after
+  inventories preserve the expected Hydra subset and the unrelated
+  machine-global browser-tooling context.
