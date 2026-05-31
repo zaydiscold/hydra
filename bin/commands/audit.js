@@ -176,6 +176,9 @@ function buildAudit() {
   const finalDogfoodScript = safeRead('scripts/final-dogfood-check.mjs');
   const finalDogfoodTest = safeRead('server/tests/final-dogfood-evidence.test.mjs');
   const dockerDoc = safeRead('docs/DOCKER.md');
+  const dockerfile = safeRead('Dockerfile');
+  const dockerIgnore = safeRead('.dockerignore');
+  const dockerSmokeTest = safeRead('server/tests/docker-smoke-script.test.mjs');
   const readme = safeRead('README.md');
   const ciWorkflow = safeRead('.github/workflows/ci.yml');
   const dockerWorkflow = safeRead('.github/workflows/docker.yml');
@@ -512,8 +515,12 @@ function buildAudit() {
       'Dependency audit',
       packageLock.includes('"node_modules/@fastify/otel/node_modules/brace-expansion"')
         && packageLock.includes('"version": "5.0.6"')
-        && !packageLock.includes('"node_modules/@fastify/otel/node_modules/brace-expansion": {\n      "version": "5.0.5"'),
-      'Sentry/@fastify/otel nested brace-expansion lockfile entry is patched to 5.0.6',
+        && !packageLock.includes('"node_modules/@fastify/otel/node_modules/brace-expansion": {\n      "version": "5.0.5"')
+        && pkg.overrides?.qs === '6.15.2'
+        && pkg.overrides?.tmp === '0.2.7'
+        && packageLock.includes('"node_modules/qs": {\n      "version": "6.15.2"')
+        && packageLock.includes('"node_modules/tmp": {\n      "version": "0.2.7"'),
+      'brace-expansion is patched to 5.0.6 and explicit transitive overrides pin qs 6.15.2 plus tmp 0.2.7',
     ),
     check(
       'performance-efficiency-pass',
@@ -908,8 +915,14 @@ function buildAudit() {
       'docker-docs',
       'Docker runtime docs',
       dockerDoc.includes('docker compose down --remove-orphans')
-        && dockerDoc.includes('HYDRA_DOCKER_BUILD_TIMEOUT_MS'),
-      'docs/DOCKER.md documents bounded smoke timeouts and failed-start cleanup',
+        && dockerDoc.includes('HYDRA_DOCKER_BUILD_TIMEOUT_MS')
+        && dockerDoc.includes('npx playwright install --with-deps chromium')
+        && dockerfile.includes('RUN npx playwright install --with-deps chromium')
+        && dockerIgnore.includes('\nbuild\n')
+        && dockerIgnore.includes('\nvideos\n')
+        && dockerIgnore.includes('\nsplash-previews\n')
+        && dockerSmokeTest.includes('custom Docker runtime installs Playwright Chromium system dependencies'),
+      'docs/DOCKER.md and the Docker regression contract require bounded smoke cleanup, a reduced desktop-artifact context, and launchable Playwright Chromium dependencies',
     ),
     check(
       'docker-runtime',

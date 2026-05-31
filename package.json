@@ -147,6 +147,10 @@
   "optionalDependencies": {
     "playwright": "^1.58.2"
   },
+  "overrides": {
+    "qs": "6.15.2",
+    "tmp": "0.2.7"
+  },
   "description": "Hydra is a professional, high-intensity local management dashboard for OpenRouter account fleets. It provides a single, locally-secured interface to manage balances, rotate API keys, and perform bulk operations across dozens of accounts simultaneously.",
   "repository": {
     "type": "git",

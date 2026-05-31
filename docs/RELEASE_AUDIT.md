@@ -22,7 +22,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Packaged screenshot plan | Current gallery and splash media come from packaged Electron only and stay redacted; final interactive human visual review remains manual. The superseded Remotion lane is out of scope. | Partially verified |
-| Docker runtime smoke | GitHub Actions run `26724119196` passed both `Runtime Smoke` and `Build & Push` for the `v1.4.0` release trigger. Earlier run `26196262336` also proved `npm run docker:smoke -- --start` can build/start the compose service, receive a health response, and clean up compose resources. | Verified by CI runtime smoke |
+| Docker runtime smoke | GitHub Actions run `26725031856` passed both `Runtime Smoke` and `Build & Push` for the latest `v1.4.0` docs checkpoint. A fresh local hardened-image `npm run docker:smoke -- --start` pass also built the image, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` and Playwright probes reported no missing Chromium libraries and `playwright-launch=ok`. | Verified locally and by CI runtime smoke |
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
 | Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 | Idle backend performance pass | PR #18 merged as master f74c195 and v1.0.9 includes delayed session/request-log startup sweeps, opt-in session-lifetime probe, relaxed task-supervisor sweep interval, and removed eager renderer live-probe fan-out from dashboard/vault/account-detail page load. CI, Electron package smoke, Docker, and release automation passed after merge. | Verified by CI/release |
@@ -43,7 +43,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | 8 | Per-task encrypted random account-proxy rotation | Settings/API encrypted storage, empty-list fallback, signup, browser redemption, HTTP redemption, and shared route reuse are covered by integration/contracts and measured dispatcher reuse. | Verified |
 | 9 | README clean, navigable, no Remotion references; audit anchors match | README navigation and release docs are reconciled; `rg -n "Remotion\|remotion" README.md` returns no matches; CLI audit remains `31 ok / 5 deferred / 0 missing / 0 blockers`. | Verified |
 | 10 | Every named long-running path measured or justified | Embedded server, proxy/router, automation, request-log buffering, health polling, and dashboard refresh are mapped with measurements below. | Verified |
-| 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | The steady-dot repair passed local lint, full `npm test`, gate (`12/12`), ARM rebuild, strict deep codesign, ARM archive smoke, OpenAPI generation (`83 operations`), audit (`31 ok / 5 deferred / 0 missing / 0 blockers`), and `git diff --check`. Public `v1.1.5` CI run `26712858931`, Docker run `26712858933`, and desktop release run `26712864469` passed. Follow-up hygiene checkpoint `86efec9` passed local lint, full `npm test`, gate, ARM package smoke, OpenAPI generation, and `git diff --check`; Auto-version run `26715063086` skipped as intended, CI run `26715063087` passed, and Docker run `26715063084` passed both hosted runtime smoke and registry push. The downloaded public ARM zip also passed strict deep codesign, GitHub SHA-256 and updater SHA-512 verification, and packaged smoke after installation. Local Docker rerun remained unavailable because Docker Desktop's daemon was stopped; hosted Docker runtime smoke and registry push are green. | Verified |
+| 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | The steady-dot repair passed local lint, full `npm test`, gate (`12/12`), ARM rebuild, strict deep codesign, ARM archive smoke, OpenAPI generation (`83 operations`), audit (`31 ok / 5 deferred / 0 missing / 0 blockers`), and `git diff --check`. Public `v1.1.5` CI run `26712858931`, Docker run `26712858933`, and desktop release run `26712864469` passed. Follow-up hygiene checkpoint `86efec9` passed local lint, full `npm test`, gate, ARM package smoke, OpenAPI generation, and `git diff --check`; Auto-version run `26715063086` skipped as intended, CI run `26715063087` passed, and Docker run `26715063084` passed both hosted runtime smoke and registry push. The downloaded public ARM zip also passed strict deep codesign, GitHub SHA-256 and updater SHA-512 verification, and packaged smoke after installation. Docker Desktop was started on 2026-05-31 and a fresh local hardened-image `npm run docker:smoke -- --start` pass built, started, probed, and cleaned the compose service successfully. | Verified |
 | 12 | Final dogfood evidence refreshed with packaged-app screenshots | The exact public `v1.1.4` package has native-window captures for first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a synthetic-data Traffic console, plus rendered privacy-safe CLI captures for `hydra status`, `hydra proxy status`, and a compact `hydra doctor --json` excerpt. The exact-public `v1.3.0` canonical app adds a native CoreGraphics Dashboard privacy proof with all content below the titlebar pixelated before check-in. OCR found zero credential-shaped or endpoint-shaped hits and ImageMagick reported nonblank color variance. Computer Use still could not attach to Hydra, so the full interactive visual review remains explicit. | Partial — interactive human visual review required |
 
 ## Current Verified Evidence
@@ -969,3 +969,33 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   passed, and Docker run `26724970530` passed both image push and hosted
   runtime smoke. The newer hosted Docker run supersedes `26724119196` as the
   latest runtime-smoke and registry-push evidence.
+- 2026-05-31 local Docker hardening follow-up: starting Docker Desktop exposed
+  a seven-week-old local compose service, which was removed with
+  `docker compose down --remove-orphans`. The initial image rebuild also
+  exposed a real browser-fallback gap: Chromium downloaded successfully but
+  `ldd` reported 16 missing Linux shared libraries, and Playwright warned that
+  the host dependencies were absent. Current Playwright guidance for custom
+  images uses `npx playwright install --with-deps`; `Dockerfile` now runs
+  `npx playwright install --with-deps chromium`. A rebuilt image passed direct
+  `ldd` (`none` missing), headless Chromium launch (`playwright-launch=ok`),
+  and `npm run docker:smoke -- --start`: compose build, container start,
+  health endpoint HTTP `200`, and teardown all completed. `docker compose ps
+  --all` was empty afterward.
+- 2026-05-31 Docker context and dependency-audit follow-up: the first local
+  rebuild transferred `187.54 MB` because ignored desktop output had expanded
+  beyond the previously excluded `release/` directory. `.dockerignore` now
+  excludes `build/`, `videos/`, and `splash-previews/`, reducing the uncached
+  transfer to `361.39 kB` (`99.8%`). Fresh npm audit surfaced a production
+  `qs` advisory and a dev-only `tmp` advisory; explicit overrides now pin
+  fixed `qs@6.15.2` and `tmp@0.2.7`. Both `npm audit --omit=dev --json` and
+  full `npm audit --json` report zero vulnerabilities. The Docker regression
+  suite now locks the context exclusions and `--with-deps` layer.
+- 2026-05-31 Docker-hardening acceptance-item-11 rerun: with the already
+  SHA-verified public arm64 zip temporarily linked for explicit-resource
+  package smoke, the literal ordered chain `npm run lint && npm test && npm
+  run gate && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run
+  docker:smoke && npm run openapi:hydra` passed. The gate reported `12/12`,
+  package smoke verified the canonical exact-public `v1.4.0` app resources,
+  Docker smoke rebuilt the hardened image with a `78.39 kB` warm context
+  transfer, and OpenAPI regenerated `83 operations`. The temporary zip symlink
+  moved reversibly to Trash after the run.

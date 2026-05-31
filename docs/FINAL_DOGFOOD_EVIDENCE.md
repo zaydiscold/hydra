@@ -954,3 +954,18 @@ This evidence file is not release-complete by itself. The release remains not co
   run `26724970519` passed, and Docker run `26724970530` passed both image push
   and hosted runtime smoke. This supersedes `26724119196` as the latest hosted
   Docker evidence.
+- Local Docker Desktop was started for a fresh hardened-image pass. The first
+  rebuild exposed 16 missing Chromium shared libraries and a `187.54 MB`
+  context transfer. `Dockerfile` now uses `npx playwright install --with-deps
+  chromium`; `.dockerignore` excludes `build/`, `videos/`, and
+  `splash-previews/`; and transitive overrides pin fixed `qs@6.15.2` plus
+  `tmp@0.2.7`. The uncached context fell to `361.39 kB` (`99.8%`), full and
+  production npm audits report zero vulnerabilities, direct `ldd` reports no
+  missing Chromium libraries, headless Playwright Chromium launches, and
+  `npm run docker:smoke -- --start` returns HTTP `200` before cleaning compose
+  resources.
+- The Docker-hardening acceptance-item-11 rerun passed the literal ordered
+  chain: lint, full tests, gate (`12/12`), explicit-resource ARM package smoke,
+  local Docker smoke, and OpenAPI regeneration (`83 operations`). The
+  temporary already-verified public zip symlink used by package smoke moved
+  reversibly to Trash afterward.

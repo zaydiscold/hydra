@@ -2,10 +2,15 @@ node_modules
 dist
 data
 release
+build
+videos
+splash-previews
 
 .git
 .github
 .claude
+.cursor
+.playwright-mcp
 
 .DS_Store
 *.log

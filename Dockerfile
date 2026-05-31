@@ -35,12 +35,9 @@ RUN npm run build
 # bookworm is
 # Debian 12, glibc-based (not Alpine/musl), so native C++ addons link correctly.
 #
-# Why no tini: Node handles SIGTERM fine. Also avoids apt-get which was
-# failing with 403 Forbidden from deb.debian.org behind Docker Desktop proxy.
-#
-# Why no --with-deps: node:22-bookworm already includes most Chromium system
-# libraries. --with-deps runs apt-get which fails in this Docker environment.
-# If Chromium crashes at runtime, install deps manually in the container.
+# Why no tini: Node handles SIGTERM fine. Playwright still installs Chromium's
+# Linux shared-library dependencies explicitly so browser-backed fallbacks are
+# launchable inside the custom Bookworm image.
 #
 # Layer order is load-bearing — npm ci MUST run BEFORE playwright install.
 # ============================================================
@@ -72,12 +69,13 @@ COPY package*.json ./
 # electron-builder lives in devDependencies which --omit=dev strips out.
 RUN npm ci --omit=dev --ignore-scripts
 
-# Install Chromium for Playwright fallback (dashboard-api provisioning path).
+# Install Chromium and Linux libraries for Playwright fallback
+# (dashboard-api provisioning path).
 # Must run AFTER npm ci so the playwright binary exists in node_modules/.bin.
-# node:22-bookworm already includes most Chromium system deps (libglib2.0, libdbus-1-3, etc.)
-# so we skip --with-deps (which runs apt-get and can fail behind Docker Desktop proxy).
-# If you get runtime Chromium errors, add --with-deps back and fix the proxy first.
-RUN npx playwright install chromium
+# `--with-deps` is required for custom Node images; without it Chromium is
+# downloaded but cannot launch because NSS, ATK, X11, GBM, and audio libraries
+# are absent.
+RUN npx playwright install --with-deps chromium
 
 # Generate Prisma client against the runtime OS
 COPY prisma ./prisma

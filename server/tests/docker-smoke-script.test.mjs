@@ -51,4 +51,16 @@ test('package docker:smoke uses the bounded runner', () => {
 test('Docker build context excludes desktop release artifacts', () => {
   const dockerignore = read('.dockerignore');
   assert.match(dockerignore, /^release$/m, 'release archives and extracted desktop apps must stay out of Docker build context');
+  assert.match(dockerignore, /^build$/m, 'Electron build output must stay out of Docker build context');
+  assert.match(dockerignore, /^videos$/m, 'README media must stay out of Docker build context');
+  assert.match(dockerignore, /^splash-previews$/m, 'splash review captures must stay out of Docker build context');
+});
+
+test('custom Docker runtime installs Playwright Chromium system dependencies', () => {
+  const dockerfile = read('Dockerfile');
+  assert.match(
+    dockerfile,
+    /RUN npx playwright install --with-deps chromium/,
+    'custom Node runtime must install Linux shared libraries before browser-backed fallbacks can launch',
+  );
 });
