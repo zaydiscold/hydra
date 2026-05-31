@@ -249,8 +249,10 @@ test('Windows release workflow launches unpacked and NSIS-installed executables 
   assert.match(script, /Hydra\.exe/, 'launch smoke must run the real packaged executable');
   assert.match(script, /Hydra-\$\{PACKAGE_VERSION\}-win-x64\.exe/, 'launch smoke must target the generated NSIS installer');
   assert.match(script, /execFileSync\(INSTALLER_EXE, \['\/S', '\/currentuser', `\/D=\$\{installDir\}`\]/, 'launch smoke must silently install NSIS into an isolated directory with /D last');
+  assert.match(script, /timeout: INSTALL_TIMEOUT_MS/, 'launch smoke must timeout-bound the silent NSIS install');
   assert.match(script, /copyFileSync\(uninstaller, tempUninstaller\)/, 'launch smoke must copy the generated uninstaller outside the install tree');
   assert.match(script, /execFileSync\(tempUninstaller, \['\/S', '\/currentuser', `_\?=\$\{installDir\}`\]/, 'launch smoke must silently uninstall the isolated NSIS installation');
+  assert.match(script, /timeout: UNINSTALL_TIMEOUT_MS/, 'launch smoke must timeout-bound the silent NSIS uninstall');
   assert.match(script, /NSIS uninstall left install-directory residue/, 'launch smoke must reject NSIS uninstall residue');
   assert.match(script, /--user-data-dir=\$\{userDataDir\}/, 'launch smoke must isolate Windows app data');
   assert.match(script, /Get-CimInstance Win32_Process/, 'launch smoke must capture the packaged process tree');

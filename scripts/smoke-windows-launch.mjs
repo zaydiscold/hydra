@@ -16,6 +16,8 @@ const UNINSTALLER_FILENAME = 'Uninstall Hydra.exe';
 const STAY_ALIVE_MS = 25_000;
 const CLEANUP_GRACE_MS = 3_000;
 const UNINSTALL_GRACE_MS = 10_000;
+const INSTALL_TIMEOUT_MS = 5 * 60_000;
+const UNINSTALL_TIMEOUT_MS = 60_000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -174,6 +176,7 @@ async function installLaunchAndUninstallNsis() {
     console.log(`[windows-launch-smoke] isolated NSIS installDir: ${installDir}`);
     execFileSync(INSTALLER_EXE, ['/S', '/currentuser', `/D=${installDir}`], {
       encoding: 'utf8',
+      timeout: INSTALL_TIMEOUT_MS,
       windowsHide: true,
     });
 
@@ -191,6 +194,7 @@ async function installLaunchAndUninstallNsis() {
     copyFileSync(uninstaller, tempUninstaller);
     execFileSync(tempUninstaller, ['/S', '/currentuser', `_?=${installDir}`], {
       encoding: 'utf8',
+      timeout: UNINSTALL_TIMEOUT_MS,
       windowsHide: true,
     });
 
