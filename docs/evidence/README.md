@@ -11,6 +11,8 @@ for Hydra `v1.1.4`.
 - Dashboard, Vault, and Pool sensitive fields were blurred or replaced in the
   packaged renderer before native capture. No unredacted live screenshot was
   written into the repository.
+- Settings machine-specific local and LAN endpoint values were replaced with
+  explicit redaction labels during the repository visual-review pass.
 - First-run setup used an isolated temporary Electron `--user-data-dir`.
 - Traffic used a second isolated temporary profile seeded with six synthetic
   `RequestLog` rows. The rows intentionally cover `200`, `429`, and `502`
@@ -37,7 +39,7 @@ review remains a manual release boundary.
 | `hydra-v114-packaged-dashboard-redacted.png` | Native packaged live window, in-renderer account redaction | `d0555b6ce790b8ac5aace8e4ad92ffeccd17fa3d078f8617d325565efe0b26f9` |
 | `hydra-v114-packaged-vault-redacted.png` | Native packaged live window, in-renderer table redaction | `aebb222ca20946a3f602a66962fa62de82ed9b193d1677b576b93a4b84b47475` |
 | `hydra-v114-packaged-pool-redacted.png` | Native packaged live window, in-renderer account and token redaction | `1a34085153443876659082e5815a1e4d3558c17c695dbf959357e5597face299` |
-| `hydra-v114-packaged-settings-touch-id.png` | Native packaged live Settings window | `340c7c57b8e4a5af9dedb969989819f14a58eceec3d66cfc898b9a196f2fa861` |
+| `hydra-v114-packaged-settings-touch-id.png` | Native packaged live Settings window, machine-specific endpoint redaction | `ede54b6d508f1956f036421e6ce4aeb17c20a0c3ff544707ec141329b621a782` |
 | `hydra-v114-packaged-traffic-demo.png` | Native packaged isolated Traffic window with synthetic rows | `fe2d20c0b5a3f1617f0de00880086e91652dc0863f826d5730f75b8159519e95` |
 | `hydra-v114-cli-status-redacted.png` | Rendered from fresh redacted `hydra status` output | `1026ace5527fac8475c4d023e4b5cad04c1f1bb7e71ba648a46b9880a546fb5b` |
 | `hydra-v114-cli-proxy-status-redacted.png` | Rendered from fresh redacted `hydra proxy status` output | `7b71001415d98785ba2763d67eeff3ebecb6dad0f8fa3de1a4bcb316779464e6` |

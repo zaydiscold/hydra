@@ -164,5 +164,7 @@ profile. Privacy-safe rendered CLI artifacts cover `hydra status`,
 The repository manifest at `docs/evidence/README.md` records capture methods,
 SHA-256 hashes, and the privacy checks. macOS Vision OCR found zero
 credential-shaped hits and ImageMagick found nonblank color variance for all
-nine PNGs. Computer Use still times out against Hydra, so this checkpoint does
-not replace the final human visual review.
+nine PNGs. A direct repository visual-review pass also replaced
+machine-specific local and LAN endpoint values in the Settings image with
+explicit redaction labels. Computer Use still times out against Hydra, so this
+checkpoint does not replace the final interactive route review.

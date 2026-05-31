@@ -301,6 +301,11 @@ This evidence file is not release-complete by itself. The release remains not co
   `0.0%` and `0.3%` (`0.03%` average, ending at `0.0%`); RSS moved from
   `575.92 MB` to `577.41 MB` (`+1.48 MiB`). Raw local samples are in
   `/private/tmp/hydra-v114-idle-profile-20260531T9PltYn`.
+- An independent five-minute recheck after repository screenshot review again
+  kept four Hydra-owned processes and zero Hydra Playwright profiles across all
+  11 samples. CPU stayed between `0.0%` and `0.7%` (`0.082%` average, ending at
+  `0.0%`); RSS fell from `592.53 MiB` to `553.19 MiB` (`-39.34 MiB`). Raw
+  local samples are in `/private/tmp/hydra-v114-idle-recheck-20260531T113620Z`.
 - Native packaged Electron screenshots now cover first-run Vault setup,
   Dashboard, Vault, Pool, Settings Touch ID, and a Traffic console populated
   with six synthetic rows in a disposable isolated profile. The Traffic rows
@@ -308,8 +313,10 @@ This evidence file is not release-complete by itself. The release remains not co
   touching the live database.
 - Dashboard, Vault, and Pool private fields were blurred or replaced in the
   renderer before `/usr/sbin/screencapture -l <CGWindowID>` wrote the native
-  packaged-window PNG. The isolated setup and Traffic profiles were moved
-  reversibly to `~/.Trash`.
+  packaged-window PNG. A repository visual-review pass also replaced the
+  Settings image's machine-specific local and LAN endpoint values with
+  explicit redaction labels. The isolated setup and Traffic profiles plus the
+  pre-redaction Settings image were moved reversibly to `~/.Trash`.
 - Repository CLI images cover `hydra status`, `hydra proxy status`, and a
   compact `hydra doctor --json` excerpt. They were rendered from fresh
   privacy-safe command output because Terminal AppleEvents, Computer Use
@@ -325,7 +332,7 @@ This evidence file is not release-complete by itself. The release remains not co
   `screenshots-redacted`. `hydra audit --json` remains honestly incomplete at
   `31 ok / 5 deferred / 0 missing / 0 blockers` because its conservative gate
   waits for the complete manual checklist before promoting any manual item.
-- Final human visual review, native window-control interaction, full
-  dead-button navigation, live account flows, Touch ID fingerprint approval
-  and unlock, and Windows-host installer launch remain explicit manual
-  boundaries.
+- The repository screenshot set received a direct visual integrity review.
+  Native window-control interaction, full interactive route/dead-button
+  review, live account flows, Touch ID fingerprint approval and unlock, and
+  Windows-host installer launch remain explicit manual boundaries.
