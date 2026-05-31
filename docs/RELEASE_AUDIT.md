@@ -1125,3 +1125,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   temporary public-zip symlink moved reversibly to Trash afterward. Docker
   Desktop was restored to its prior stopped state through `docker desktop
   stop`.
+- 2026-05-31 exact-final-chain evidence-checkpoint publication: commit
+  `c0bce57a814b9e3cf066959f5cce68c2ea6ac198` used `[skip-bump]`;
+  Auto-version run `26727636115` skipped as intended, CI run `26727636112`
+  passed, and Docker workflow run `26727636121` passed both runtime smoke and
+  registry image push.

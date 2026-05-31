@@ -1056,3 +1056,8 @@ This evidence file is not release-complete by itself. The release remains not co
   `docker compose ps --all` returned no residual services, and the temporary
   public-zip symlink moved reversibly to Trash afterward. Docker Desktop was
   restored to its prior stopped state through `docker desktop stop`.
+- Exact-final-chain evidence checkpoint
+  `c0bce57a814b9e3cf066959f5cce68c2ea6ac198` used `[skip-bump]`;
+  Auto-version run `26727636115` skipped, CI run `26727636112` passed, and
+  Docker workflow run `26727636121` passed runtime smoke plus registry image
+  push.
