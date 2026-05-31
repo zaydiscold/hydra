@@ -243,7 +243,7 @@ catalog sync. Those are explicitly out of scope for this private app. The only
 kept piece is the methodology: source-derived API mapping, local OpenAPI output,
 closed-app CLI commands, tests, and repo-local documentation.
 
-- Generate an OpenAPI spec from Hydra's Express routes (reference `docs/API_REFERENCE.md`): `npm run openapi:hydra` writes `docs/hydra-api.openapi.json`.
+- Generate an OpenAPI spec from Hydra's Express routes (reference `docs/API_REFERENCE.md`): `npm run openapi:hydra` writes `openapi/hydra-api.openapi.json`.
 - Cover local routes: auth, accounts, keys, codes, generator, pool, proxy, dashboard, system, debug, webhooks, shutdown.
 - Keep the private API inventory usable while Hydra is closed: `hydra api-map`, `hydra api-map --json`, and `hydra api-map --tag accounts`.
 - Use Printing Press as a methodology only. Do not upload/register Hydra, do not add it to the public library, and do not run public ship/publish flows for this private app.
