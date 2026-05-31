@@ -145,6 +145,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(updater, /if \(isDev \|\| !app\.isPackaged\) return false;/);
     assert.match(updater, /autoUpdater\.checkForUpdates\(\)/);
     assert.match(updater, /UPDATE_CHECK_DELAY_MS = 500/);
+    assert.match(updater, /const updateCheckTimer = setTimeout\(\(\) => \{/);
+    assert.match(updater, /updateCheckTimer\.unref\?\.\(\)/);
     assert.match(updater, /download-progress/);
     assert.match(updater, /SPLASH_UPDATE_PROGRESS_EVENT = 'hydra-update-progress'/);
     assert.match(updater, /sendSplashUpdateProgress\(getSplashWindow/);

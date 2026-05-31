@@ -81,6 +81,21 @@ function dashboardError(message, extra) {
   logger.error(`${message}${formatDashboardLogExtra(extra)}`);
 }
 
+async function waitWithClearedTimeout(promise, timeoutMs) {
+  let timeoutHandle = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise(resolve => {
+        timeoutHandle = setTimeout(resolve, timeoutMs);
+        timeoutHandle.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
 /** Management key material in tRPC JSON or page text (OpenRouter prefix).
  * NOTE: OpenRouter management keys use 'sk-or-v1-' prefix, NOT 'sk-or-mgmt-'
  */
@@ -2566,11 +2581,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     // Now check if the network response captured it (may already be resolved)
     if (!capturedKey) {
       // Give the network response a short window — the RSC payload may also carry the key
-      const networkWait = Promise.race([
-        provisionKeyWait,
-        new Promise(r => setTimeout(r, 8000)), // 8s cap — don't block on 50s timeout
-      ]);
-      await networkWait;
+      await waitWithClearedTimeout(provisionKeyWait, 8000); // 8s cap — don't block on 50s timeout
       if (capturedFromWait) {
         capturedKey = capturedFromWait;
         provisionStepLog(accountId, 'Got key from network response');

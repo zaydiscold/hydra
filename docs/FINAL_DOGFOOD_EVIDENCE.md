@@ -524,3 +524,23 @@ This evidence file is not release-complete by itself. The release remains not co
   (`0.009%` average); RSS fell from `585.61 MiB` to `483.14 MiB`
   (`-102.47 MiB`). Raw before/after inventories contain only the expected main,
   GPU, network-utility, and renderer processes.
+- A fifth untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-fifth-untouched-idle-reprofile-20260531T144321Z`
+  again kept four Hydra-owned processes and zero stale profiles through all 11
+  30-second samples. CPU stayed between `0.0%` and `0.2%` (`0.018%` average);
+  RSS moved from `492.86 MiB` to `492.20 MiB` (`-0.66 MiB`). The first attempted
+  sampler was discarded to Trash because its filter counted its own wrapper;
+  this retained run anchors the executable command column and preserves raw
+  before/after inventories.
+- A timeout-race cleanup pass removed avoidable post-operation wakeups from
+  management-key Playwright capture and SQLite schema self-heal, and made the
+  delayed packaged updater check non-pinning. A 200-round synthetic resource
+  probe at
+  `/private/tmp/hydra-timeout-race-cleanup-benchmark-20260531T144529Z`
+  recorded `200` pending timeout resources for the old fast-winner shape and
+  `0` for the cleared shape.
+- A temporary arm64 package built from that patch at
+  `/private/tmp/hydra-package-timeout-cleanup-20260531T144838Z` passed packaged
+  resource smoke, strict deep signature verification, and bundled-source
+  inspection for all three cleanup contracts without replacing or launching
+  the canonical Spotlight app.

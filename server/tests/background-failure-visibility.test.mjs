@@ -204,6 +204,22 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.doesNotMatch(requestLogBuffer, /timer = setInterval/);
 });
 
+test('bounded timeout races clear fast-winner handles instead of leaving wakeups behind', () => {
+  const dashboardApi = readRepoFile('server/services/dashboard-api.js');
+  const dbSelfHeal = readRepoFile('server/lib/db-self-heal.js');
+
+  assert.match(dashboardApi, /async function waitWithClearedTimeout\(promise, timeoutMs\)/);
+  assert.match(dashboardApi, /timeoutHandle\.unref\?\.\(\)/);
+  assert.match(dashboardApi, /if \(timeoutHandle\) clearTimeout\(timeoutHandle\)/);
+  assert.match(dashboardApi, /await waitWithClearedTimeout\(provisionKeyWait, 8000\)/);
+  assert.doesNotMatch(dashboardApi, /new Promise\(r => setTimeout\(r, 8000\)\)/);
+
+  assert.match(dbSelfHeal, /async function withStatementTimeout\(promise, timeoutMs = STATEMENT_TIMEOUT_MS\)/);
+  assert.match(dbSelfHeal, /timeoutHandle\.unref\?\.\(\)/);
+  assert.match(dbSelfHeal, /if \(timeoutHandle\) clearTimeout\(timeoutHandle\)/);
+  assert.match(dbSelfHeal, /await withStatementTimeout\(prisma\.\$executeRawUnsafe\(stmt\)\)/);
+});
+
 test('idle desktop startup avoids expensive live session probe fan-out', () => {
   const refresher = readRepoFile('server/services/session-refresher.js');
   const pinger = readRepoFile('server/services/health-pinger.js');

@@ -161,6 +161,12 @@ Ship a working, polished Electron desktop app that runs on macOS and Windows. Fu
 - OpenRouter account/key requests and model-list cache refreshes are timeout bounded with `AbortSignal.timeout(30000)`; account snapshot fallbacks log when credits or key-list lookups fail before returning safe zero/empty defaults, so account metadata degradation does not look like a real empty account without evidence; `server/tests/background-failure-visibility.test.mjs` covers this contract
 - CLI status/doctor/logs/data-dir/stop degraded paths now stay explicit for closed-app automation: top-level system commands default to the same repo `data/` runtime as service-backed commands unless `HYDRA_DATA_DIR` is set, `hydra doctor --json` recognizes packaged `chromium.zip` resources, separates Hydra-owned app/browser automation processes from unrelated Chrome/Playwright/Electron tooling in `otherBrowserToolProcesses`, `hydra status --json` includes a `warnings` channel for proxy metadata degradation, and `hydra stop` bounds shutdown requests, preserves non-JSON response bodies, and reports timeout/request failures without hanging or hiding endpoint evidence; `server/tests/cli.test.mjs` covers the source contract
 - Test-chain completeness is enforced by `server/tests/test-chain-completeness.test.mjs`, which fails if normal `server/tests/*.test.mjs` or `electron/tests/*.test.mjs` files are not reachable from `npm test`
+- Fast-winner timeout competitors are now cleared instead of remaining pending
+  after their useful work has already finished: management-key Playwright
+  network capture uses `waitWithClearedTimeout()`, SQLite schema self-heal uses
+  `withStatementTimeout()`, and the delayed packaged update check is unref'd.
+  `server/tests/background-failure-visibility.test.mjs` and
+  `electron/tests/main-process.test.mjs` lock down the cleanup contracts.
 
 ---
 
@@ -304,6 +310,11 @@ closed-app CLI commands, tests, and repo-local documentation.
 - `electron-log` was removed from the Electron main path and replaced by the file tee in `electron/app/env.js`
 - Packaged runtime `node:fs` dynamic imports are consolidated in `electron/app/env.js`; `server/tests/electron-data-path.test.mjs` guards against reintroducing nested dynamic fs imports
 - Prisma client runtime pruning is implemented in `electron/builders/afterPack.js`; packaged artifact size/signing evidence remains in `docs/RELEASE_AUDIT.md`
+- Bounded timeout races in management-key automation and SQLite schema
+  self-heal clear and unref their timeout competitors after a fast winner; the
+  delayed updater check is also unref'd. A 200-round synthetic resource probe
+  recorded `200` pending timeout resources for the old fast-winner shape and
+  `0` for the cleared shape.
 
 ---
 

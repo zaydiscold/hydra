@@ -113,10 +113,11 @@ export function setupAutoUpdates({ isDev, getMainWindow, getSplashWindow, log = 
     }
   });
 
-  setTimeout(() => {
+  const updateCheckTimer = setTimeout(() => {
     autoUpdater.checkForUpdates().catch((err) => {
       log.warn?.(`[electron-updater] checkForUpdates failed: ${err?.message || err}`);
     });
   }, UPDATE_CHECK_DELAY_MS);
+  updateCheckTimer.unref?.();
   return true;
 }

@@ -356,3 +356,36 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `0.1%` (`0.009%` average); RSS fell from `585.61 MiB` to `483.14 MiB`
   (`-102.47 MiB`). Raw before/after inventories contain only the expected main,
   GPU, network-utility, and renderer processes.
+- 2026-05-31 fast-winner timeout cleanup follow-up: management-key Playwright
+  network capture and SQLite schema self-heal previously used bare
+  `Promise.race()` timeout competitors. If useful work won quickly, those
+  timeout handles remained pending until their `8s` or `15s` cap elapsed.
+  `server/services/dashboard-api.js` now uses `waitWithClearedTimeout()` and
+  `server/lib/db-self-heal.js` now uses `withStatementTimeout()`; both unref the
+  timeout and clear it in `finally`. The delayed packaged update check in
+  `electron/app/autoUpdate.js` is also unref'd. A 200-round synthetic
+  `process.getActiveResourcesInfo()` probe at
+  `/private/tmp/hydra-timeout-race-cleanup-benchmark-20260531T144529Z`
+  recorded `200` pending timeout resources for the old fast-winner shape and
+  `0` additional pending timeout resources for the cleared shape.
+  `server/tests/background-failure-visibility.test.mjs` and
+  `electron/tests/main-process.test.mjs` lock down the source contracts.
+- 2026-05-31 exact-public-`v1.1.5` fifth untouched idle reprofile:
+  `/private/tmp/hydra-v115-fifth-untouched-idle-reprofile-20260531T144321Z`
+  sampled the already-settled canonical app every 30 seconds for five minutes
+  with zero UI interaction. All 11 samples reported four Hydra-owned processes
+  and zero stale profiles. Sampled CPU stayed between `0.0%` and `0.2%`
+  (`0.018%` average); RSS moved from `492.86 MiB` to `492.20 MiB`
+  (`-0.66 MiB`). Raw before/after inventories contain only the expected main,
+  GPU, network-utility, and renderer processes. The first attempted sampler was
+  moved reversibly to Trash because its unanchored filter counted its own
+  wrapper command; this recorded profile anchors the executable command column.
+- 2026-05-31 temporary patched-package proof: an arm64 build from the timeout
+  cleanup source was written outside the repo at
+  `/private/tmp/hydra-package-timeout-cleanup-20260531T144838Z`.
+  `ELECTRON_APP_RESOURCES=<temp-app>/Contents/Resources
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke` passed, strict deep
+  `codesign --verify` passed, and direct bundled-source inspection found
+  `waitWithClearedTimeout()`, `withStatementTimeout()`, and
+  `updateCheckTimer.unref?.()`. The canonical public Spotlight app was not
+  replaced or relaunched.

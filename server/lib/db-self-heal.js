@@ -19,6 +19,23 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+const STATEMENT_TIMEOUT_MS = 15_000;
+
+async function withStatementTimeout(promise, timeoutMs = STATEMENT_TIMEOUT_MS) {
+  let timeoutHandle = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error('STATEMENT_TIMEOUT')), timeoutMs);
+        timeoutHandle.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
 /** Pull every `ALTER TABLE ... ADD COLUMN ...` and `CREATE INDEX IF NOT EXISTS ...` from a migration. */
 function extractIdempotentStatements(sql) {
   const out = [];
@@ -106,13 +123,7 @@ export async function runSelfHeal({ dbPath, migrationsDir, log = console.log }) 
       try {
         // Bug #36: race against a timeout — a DB-level lock can cause
         // $executeRawUnsafe to hang indefinitely.
-        const STATEMENT_TIMEOUT_MS = 15_000;
-        await Promise.race([
-          prisma.$executeRawUnsafe(stmt),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('STATEMENT_TIMEOUT')), STATEMENT_TIMEOUT_MS),
-          ),
-        ]);
+        await withStatementTimeout(prisma.$executeRawUnsafe(stmt));
         applied++;
         const label = kind === 'alter' ? `ALTER ${table}` : `INDEX ${name} ON ${table}`;
         log(`[DB_HEAL] applied: ${label} (from ${migration})`);
