@@ -151,3 +151,18 @@ Invalid screenshot evidence:
 - localhost browser tabs
 - source-only component screenshots
 - screenshots taken before functional dogfood is attempted
+
+## v1.1.4 Screenshot Checkpoint
+
+The exact public `v1.1.4` arm64 package now has a privacy-checked screenshot
+checkpoint under `docs/evidence/`. Packaged Electron native-window captures
+cover first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a
+Traffic console seeded with synthetic rows inside a disposable isolated
+profile. Privacy-safe rendered CLI artifacts cover `hydra status`,
+`hydra proxy status`, and a compact `hydra doctor --json` excerpt.
+
+The repository manifest at `docs/evidence/README.md` records capture methods,
+SHA-256 hashes, and the privacy checks. macOS Vision OCR found zero
+credential-shaped hits and ImageMagick found nonblank color variance for all
+nine PNGs. Computer Use still times out against Hydra, so this checkpoint does
+not replace the final human visual review.

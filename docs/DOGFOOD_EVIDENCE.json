@@ -1,0 +1,120 @@
+{
+  "schema": "hydra.final-dogfood-evidence.v1",
+  "generatedAt": "2026-05-31T11:25:54.135Z",
+  "version": "1.1.4",
+  "root": "<repo-root>",
+  "checks": {
+    "artifacts": [
+      {
+        "path": "Hydra-1.1.4-mac-arm64.zip",
+        "ok": true,
+        "detail": "285 MB"
+      },
+      {
+        "path": "Hydra-1.1.4-mac-arm64.zip.blockmap",
+        "ok": true,
+        "detail": "0 MB"
+      },
+      {
+        "path": "Hydra-1.1.4-mac-x64.zip",
+        "ok": true,
+        "detail": "297 MB"
+      },
+      {
+        "path": "Hydra-1.1.4-mac-x64.zip.blockmap",
+        "ok": true,
+        "detail": "0 MB"
+      },
+      {
+        "path": "Hydra-1.1.4-win-x64.exe",
+        "ok": true,
+        "detail": "295 MB"
+      },
+      {
+        "path": "Hydra-1.1.4-win-x64.exe.blockmap",
+        "ok": true,
+        "detail": "0 MB"
+      }
+    ],
+    "packagedApp": {
+      "label": "Packaged macOS app path",
+      "path": "release/mac-arm64/Hydra.app",
+      "ok": true,
+      "detail": "directory present"
+    },
+    "unknownManualIds": [],
+    "artifactDir": "<temporary-public-release-download>",
+    "packagedAppPath": "release/mac-arm64/Hydra.app",
+    "audit": {
+      "ok": true,
+      "summary": {
+        "checked": 36,
+        "ok": 31,
+        "deferred": 5,
+        "missing": 0,
+        "blockers": 0
+      },
+      "complete": false,
+      "missingAndBlockersOk": true
+    },
+    "docker": {
+      "ok": false,
+      "detail": "Docker daemon was not running locally during this evidence capture; the recorded GitHub Actions Docker runtime lane remains authoritative."
+    }
+  },
+  "manual": [
+    {
+      "id": "packaged-gui-launch",
+      "label": "Packaged GUI launch",
+      "detail": "Open the packaged app with npm run electron:open:mac-arm64 or Finder and confirm Hydra appears as a running app.",
+      "verified": true
+    },
+    {
+      "id": "window-controls",
+      "label": "Window controls",
+      "detail": "Verify traffic lights, close/minimize/zoom, titlebar drag, tray reopen, and quit behavior.",
+      "verified": false
+    },
+    {
+      "id": "splash-unlock-dashboard",
+      "label": "Splash/unlock/dashboard",
+      "detail": "Verify splash, vault unlock or first-run setup, and Dashboard landing with no blank window.",
+      "verified": true
+    },
+    {
+      "id": "navigation-dead-buttons",
+      "label": "Navigation/dead buttons",
+      "detail": "Visit Dashboard, Vault, Pool, Traffic, Codes, Generator, Settings, Account Detail, and confirm visible actions give feedback.",
+      "verified": false
+    },
+    {
+      "id": "touch-id",
+      "label": "Touch ID",
+      "detail": "On Touch ID hardware, enable, test, disable, and unlock with biometric gating.",
+      "verified": false
+    },
+    {
+      "id": "live-account-flows",
+      "label": "Live account flows",
+      "detail": "Run at least one live OTP login, bulk OTP isolation pass, code redemption, and proxy/SSE request with real keys.",
+      "verified": false
+    },
+    {
+      "id": "screenshots-redacted",
+      "label": "Screenshots",
+      "detail": "Only after functional dogfood, capture packaged Electron screenshots with secrets redacted.",
+      "verified": true
+    },
+    {
+      "id": "windows-launch",
+      "label": "Windows launch",
+      "detail": "Install and launch the current Windows NSIS artifact on a Windows host or runner.",
+      "verified": false
+    }
+  ],
+  "notes": [
+    "This artifact is intentionally redacted. It records checklist status only, not API keys, cookies, account emails, Clerk session IDs, screenshots, or local database contents.",
+    "A checked manual item means the operator explicitly passed --manual=<id> after doing that packaged-app step."
+  ],
+  "complete": false
+}

@@ -290,5 +290,42 @@ This evidence file is not release-complete by itself. The release remains not co
   `hydra doctor --json` reported four Hydra-owned processes, `0.0%` sampled
   Hydra CPU, and zero stale Hydra Playwright profiles.
 - Fingerprint approval, Touch ID lock/unlock, duplicate-keychain-prompt
-  observation, full redacted screenshots, live account flows, and a real
+  observation, live account flows, final human screenshot review, and a real
   Windows-host installer launch remain explicit manual boundaries.
+
+## v1.1.4 Packaged Screenshot And Idle Evidence
+
+- A fresh five-minute idle profile of the exact public app sampled the settled
+  package every 30 seconds with no UI interaction. All 11 samples reported four
+  Hydra-owned processes and zero Hydra Playwright profiles. CPU stayed between
+  `0.0%` and `0.3%` (`0.03%` average, ending at `0.0%`); RSS moved from
+  `575.92 MB` to `577.41 MB` (`+1.48 MiB`). Raw local samples are in
+  `/private/tmp/hydra-v114-idle-profile-20260531T9PltYn`.
+- Native packaged Electron screenshots now cover first-run Vault setup,
+  Dashboard, Vault, Pool, Settings Touch ID, and a Traffic console populated
+  with six synthetic rows in a disposable isolated profile. The Traffic rows
+  cover `200`, `429`, and `502` statuses and visible latency values without
+  touching the live database.
+- Dashboard, Vault, and Pool private fields were blurred or replaced in the
+  renderer before `/usr/sbin/screencapture -l <CGWindowID>` wrote the native
+  packaged-window PNG. The isolated setup and Traffic profiles were moved
+  reversibly to `~/.Trash`.
+- Repository CLI images cover `hydra status`, `hydra proxy status`, and a
+  compact `hydra doctor --json` excerpt. They were rendered from fresh
+  privacy-safe command output because Terminal AppleEvents, Computer Use
+  Terminal access, and post-exit native Terminal capture were
+  permission-constrained.
+- macOS Vision OCR reported zero email markers, key prefixes, credential
+  assignments, or long token-shaped strings across all nine PNGs. ImageMagick
+  reported nonblank color variance for every artifact. The manifest and SHA-256
+  hashes are in `docs/evidence/README.md`.
+- `docs/DOGFOOD_EVIDENCE.json` now records all six downloaded public desktop
+  artifacts and the three empirically verified manual flags:
+  `packaged-gui-launch`, `splash-unlock-dashboard`, and
+  `screenshots-redacted`. `hydra audit --json` remains honestly incomplete at
+  `31 ok / 5 deferred / 0 missing / 0 blockers` because its conservative gate
+  waits for the complete manual checklist before promoting any manual item.
+- Final human visual review, native window-control interaction, full
+  dead-button navigation, live account flows, Touch ID fingerprint approval
+  and unlock, and Windows-host installer launch remain explicit manual
+  boundaries.
