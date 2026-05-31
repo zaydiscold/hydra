@@ -52,10 +52,9 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   x input affects horizontal gravity, spawn-position bias, and initial x
   velocity. Exact MacBook hinge-angle support remains a future native HID bridge,
   not a claimed packaged feature.
-- Versioning for the current tranche is explicitly minor-release scoped:
-  checkpoint commits keep using `[skip-bump]`, and the final release trigger
-  should use `[bump:minor]` so the batched performance/splash/runtime work ships
-  as `1.1.0` if the package is still in the `1.0.x` lane.
+- Versioning for this tranche resolved as intended: checkpoint commits used
+  `[skip-bump]`, the release trigger used `[bump:minor]`, and the batched
+  performance/splash/runtime work shipped as `v1.1.0`.
 - A redirected temp package build found and fixed a packaging hygiene issue where
   stale `release/**` output could be copied into `Resources/app/release/**` when
   output was redirected outside the repo. A follow-up temp package build passed
@@ -117,21 +116,39 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   change confirmed `4/4` selected stored logins active and redeem-ready,
   including one active login without a management key; each active cookie stack
   persisted from `25` equivalent snapshots to `1`.
-- The rebuilt pending-minor macOS arm64 package passes packaged-resource smoke
+- The rebuilt and published `v1.1.0` macOS arm64 package passes packaged-resource smoke
   and strict codesign verification. Packaged-source inspection confirms the
   `16000ms` splash, 120-word target, staged `3000ms` upward flight, and bounded
   `18500ms` self-disposal. Docker image smoke also passed after redirecting
   sandbox-blocked Buildx activity state to `/private/tmp/hydra-buildx`.
+- `v1.1.0` is now published with macOS arm64, macOS Intel, Windows x64, Linux,
+  and merged updater metadata. The published macOS arm64 zip was extracted into
+  `release/mac-arm64/Hydra.app` after reversibly moving the prior bundle aside;
+  it is the only Desktop `Hydra.app`, reports version `1.1.0`, and passes deep
+  strict codesign verification. The existing Hydra process was intentionally
+  not closed or relaunched.
+- A fresh no-relaunch profiling attempt after that on-disk install could not
+  enumerate live processes in the resumed sandbox: direct `ps` returned
+  `operation not permitted`, `pgrep` returned `Cannot get process list`, and
+  `top` could not reach `sysmond`. `hydra doctor --json` preserved the stable
+  unavailable schema with `reason="spawnSync ps EPERM"` and still reported
+  `hydraPlaywrightProfiles.count: 0`. Treat this as a measurement boundary, not
+  as packaged-GUI evidence for the newly installed release.
 
 This is not release-complete evidence. It is the current source/package-resource
 and local idle-performance evidence that should feed the final manual dogfood
 run.
 
 The full operator checklist is in `docs/PACKAGED_ELECTRON_DOGFOOD.md`. For the
-current published release, derive the release version from `package.json`:
+current published release, derive the release version from GitHub. This remains
+correct even when a resumed sandbox cannot refresh local Git metadata and its
+checked-out `package.json` is stale:
 
 ```bash
-HYDRA_RELEASE_VERSION="$(node -p "require('./package.json').version")"
+HYDRA_RELEASE_VERSION="$(
+  gh release view --repo zaydiscold/hydra --json tagName \
+    --jq '.tagName | ltrimstr("v")'
+)"
 HYDRA_RELEASE_SLUG="${HYDRA_RELEASE_VERSION//./}"
 DOGFOOD_DIR="$(mktemp -d "/private/tmp/hydra-v${HYDRA_RELEASE_SLUG}-manual.XXXXXX")"
 gh release download "v$HYDRA_RELEASE_VERSION" --repo zaydiscold/hydra --dir "$DOGFOOD_DIR"

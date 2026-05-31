@@ -4,29 +4,25 @@ Hydra uses semantic version numbers in the shape `MAJOR.MINOR.PATCH`.
 
 ## Current Release Lane
 
-The current working package version is still in the `1.0.x` lane because the
-ongoing performance, splash, auth/session, and dogfood evidence work is being
-committed incrementally with `[skip-bump]`. Those commits keep GitHub and local
-source synchronized without publishing a half-complete desktop release.
+The coherent performance, splash, auth/session, and packaging tranche shipped
+as `v1.1.0` on 2026-05-31. GitHub release assets now include macOS arm64, macOS
+Intel, Windows x64, Linux, and merged updater metadata.
 
-The next complete performance release should be a **minor** release, not another
-patch-only release. If `package.json` is still at `1.0.20` when the final gate is
-ready, the intended release is `1.1.0`.
+The minor release, rather than another patch-only release, was intentional:
 
 This is intentional release-train behavior:
 
-- `1.0.20` is the latest package metadata and tag line at the time of this doc
-  update, not the target size for the next user-visible release.
+- `1.0.20` was the prior package metadata and tag line before the tranche shipped.
 - Every `[skip-bump]` push is still real work on `origin/master`; it is just not
   allowed to auto-publish to users yet.
 - The performance tranche is being batched because the changes are connected:
   splash timing/density/tilt, finite graphics cleanup, renderer timer ownership,
   browser-profile cleanup, request-log/proxy hot-path work, auth/session
   hardening, and measured idle/process evidence.
-- The final release commit for this tranche should carry `[bump:minor]`, which
-  makes auto-version write `1.1.0` from the current `1.0.x` line.
-- Do not cut another patch just because `package.json` currently says `1.0.x`.
-  Patch is for isolated fixes; this is now a coherent performance and UX train.
+- The release trigger carried `[bump:minor]`, which made auto-version write
+  `1.1.0` from the `1.0.x` line.
+- Future isolated fixes can return to patch bumps; future coherent operator-facing
+  batches should select patch/minor/major based on their actual scope.
 
 That means there can be many pushed source commits between public release
 versions. A `[skip-bump]` commit is not "unreleased work floating locally"; it is
@@ -43,12 +39,12 @@ git log --oneline --decorate --max-count=10
 gh run list --branch master --limit 10
 ```
 
-Expected during the tranche: local `master` equals `origin/master`, recent
-commits are visible on GitHub with `[skip-bump]`, Auto-version is skipped for
-those checkpoints, and CI/Docker keep validating the remote state. Expected at
-the end: one non-`[skip-bump]` commit with `[bump:minor]` triggers auto-version,
-creates `chore(release): v1.1.0 [skip-bump]`, pushes tag `v1.1.0`, and dispatches
-the desktop release workflow.
+Expected for post-release checkpoints: local `master` equals `origin/master`,
+recent commits are visible on GitHub with `[skip-bump]`, Auto-version is skipped,
+and CI/Docker keep validating the remote state. The completed `v1.1.0` release
+followed the intended flow: one non-`[skip-bump]` commit with `[bump:minor]`
+triggered auto-version, created `chore(release): v1.1.0 [skip-bump]`, pushed tag
+`v1.1.0`, and dispatched the desktop release workflow.
 
 ## Bump Rules
 
@@ -90,15 +86,12 @@ workflow treats that as a catch-up case and tags the current version as-is. That
 preserves the rescue behavior that fixed the old `package.json` says `1.0.8` but
 GitHub release is still `v1.0.7` failure.
 
-## Current Performance Release Plan
+## Current Performance Release Follow-Up
 
-The final performance release should not be cut until the 12-item acceptance
-list in `docs/CODEX_GOAL.md` is empirically green and `docs/RELEASE_AUDIT.md`
-contains measured evidence.
-
-For this tranche, the final release commit should include `[bump:minor]` and
-should not include `[skip-bump]`. Incremental source/doc/test commits before
-that point should continue using `[skip-bump]`.
+`v1.1.0` is published. Continue using `[skip-bump]` for audit, dogfood, and
+isolated documentation checkpoints while the remaining manual packaged-GUI
+evidence is collected. Do not produce a second minor bump merely to record
+manual evidence.
 
 Operationally:
 
@@ -107,10 +100,8 @@ Operationally:
 3. Keep `docs/RELEASE_AUDIT.md`, `docs/FINAL_DOGFOOD_EVIDENCE.md`, and
    `docs/PACKAGED_ELECTRON_DOGFOOD.md` honest about what is source-verified,
    packaged-verified, user-confirmed, or still deferred.
-4. When the acceptance list is actually complete, make one final release commit
-   with `[bump:minor]` and no `[skip-bump]`.
-5. Let auto-version bump `1.0.x -> 1.1.0`, tag the release, and dispatch the
-   desktop release workflow.
+4. Use a normal patch bump only when an additional source fix must ship.
+5. Keep the existing `v1.1.0` tag pinned to its tested release commit.
 
 If the final tranche changes backward compatibility before release, replace
 `[bump:minor]` with `[bump:major]` and document the migration. No current change
