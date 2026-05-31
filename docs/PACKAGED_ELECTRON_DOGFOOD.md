@@ -116,8 +116,8 @@ Then copy the relevant summary into `docs/RELEASE_AUDIT.md`.
 | Bulk OTP isolation | Multi-account bulk OTP run keeps account states isolated and visible | pending |
 | Code redemption | Single and bulk redemption paths are verified with live or controlled redeemable codes | pending |
 | Proxy rotation/SSE | `/v1/chat/completions` with real pooled keys streams and rotates as expected | pending |
-| Windows installer launch | Install and launch the current `release/Hydra-<version>-win-x64.exe` or CI release artifact on a real Windows desktop; record OS and result. Hosted `windows-2022` unpacked-app startup/cleanup smoke passed for public `v1.1.5` in release run `26712864469`. | pending |
-| Docker runtime | Hosted Docker workflow run `26715233046` passed `Runtime Smoke` and `Build & Push` for parser-fix checkpoint `4795134`. A local `npm run docker:smoke` rerun is optional while Docker Desktop is stopped. | verified by hosted runtime |
+| Windows installer launch | Install and launch the current `release/Hydra-<version>-win-x64.exe` or CI release artifact on a real Windows desktop; record OS and result. Hosted `windows-2022` unpacked-app startup/cleanup smoke passed for public `v1.3.0` in release run `26723127043`. | pending |
+| Docker runtime | Hosted Docker workflow run `26723524082` passed `Runtime Smoke` and `Build & Push` for public-release closeout checkpoint `8945d53`. A local `npm run docker:smoke` rerun is optional while Docker Desktop is stopped. | verified by hosted runtime |
 | Screenshot audit | Last step only: packaged Electron screenshots across representative sizes are reviewed for layout/color/text issues | pending |
 
 Manual flag mapping:
@@ -134,7 +134,7 @@ Manual flag mapping:
 | `--manual=windows-launch` | Current Windows NSIS artifact installed and launched on Windows; OS/version/result recorded. |
 
 Hosted Windows automation is a narrower release gate than the manual flag.
-Public desktop release workflow run `26712864469` built the `v1.1.5` Windows
+Public desktop release workflow run `26723127043` built the `v1.3.0` Windows
 package, passed target-specific filesystem smoke, launched
 `release/win-unpacked/Hydra.exe` with isolated app data, observed the main,
 GPU, network-utility, and renderer processes after `25,000ms`, then verified
@@ -177,6 +177,20 @@ nine PNGs. A direct repository visual-review pass also replaced
 machine-specific local and LAN endpoint values in the Settings image with
 explicit redaction labels. Computer Use still times out against Hydra, so this
 checkpoint does not replace the final interactive route review.
+
+## v1.3.0 Dashboard Privacy Proof
+
+The exact-public `v1.3.0` canonical app adds
+`docs/evidence/hydra-v130-packaged-dashboard-privacy-redacted.png`. The image
+came from native CoreGraphics enumeration plus `/usr/sbin/screencapture -l`,
+not Chrome or a localhost browser. Its raw private image remains outside the
+repository under
+`/private/tmp/hydra-v130-public-post-closeout-idle-profile-20260531T132928`.
+All content below the titlebar was pixelated before check-in. Tesseract OCR
+found zero credential-shaped or endpoint-shaped hits; ImageMagick reported a
+nonblank `3016x1936` image with `6443` colors. This proves current packaged-app
+capture provenance without promoting the deferred interactive visual-review
+checkbox.
 
 ## Native Accessibility Profiling Guardrail
 

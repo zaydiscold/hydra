@@ -5,6 +5,23 @@ import { formatCurrency, getBalanceStatus } from '../utils/format';
 import { getCardHealth, CARD_HEALTH_COLORS } from '../utils/cardHealth';
 import { canProvisionWithSession, isSessionProbePending } from '../utils/accountSession';
 
+function areAccountCardPropsEqual(prevProps, nextProps) {
+  if (prevProps.account !== nextProps.account) return false;
+  if (prevProps.index !== nextProps.index || prevProps.compact !== nextProps.compact) return false;
+  if (prevProps.onSelect !== nextProps.onSelect || prevProps.onProvision !== nextProps.onProvision) return false;
+
+  const accountId = prevProps.account.id;
+  if (prevProps.provisioningIds?.has(accountId) !== nextProps.provisioningIds?.has(accountId)) return false;
+  if (prevProps.liveStatuses?.[accountId] !== nextProps.liveStatuses?.[accountId]) return false;
+  if (prevProps.actionSessionTruth?.[accountId] !== nextProps.actionSessionTruth?.[accountId]) return false;
+
+  for (const key of prevProps.account.keys?.list || []) {
+    if (prevProps.cooldownMap?.[key.hash] !== nextProps.cooldownMap?.[key.hash]) return false;
+  }
+
+  return true;
+}
+
 const AccountCard = memo(function AccountCard({
   account,
   index,
@@ -198,6 +215,6 @@ const AccountCard = memo(function AccountCard({
       )}
     </div>
   );
-});
+}, areAccountCardPropsEqual);
 
 export default AccountCard;

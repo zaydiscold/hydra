@@ -28,6 +28,10 @@ Hydra is a packaged Electron app for running an OpenRouter account fleet from on
 It is designed for operators who want a native control plane without shipping account secrets to a hosted service.
 
 <p align="center">
+  <img src="videos/hydra_showreel.gif" alt="Hydra desktop showreel — Vault, Command, routing, and terminal surfaces" width="720" />
+</p>
+
+<p align="center">
   <img src="videos/hydra_splash.gif" alt="Hydra packaged desktop splash animation" width="720" />
 </p>
 

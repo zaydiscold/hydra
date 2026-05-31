@@ -235,3 +235,37 @@ each `AnimeText` split effect has explicit cleanup and reduced-motion handling.
 The source launcher is desktop-first: `npm start` no longer opens a browser.
 Intentional web-mode development must opt in with `npm start -- --browser`.
 The packaged Electron app remains the acceptance surface.
+
+## README Media Stack
+
+The repository overview intentionally stacks two centered animated assets:
+
+- `videos/hydra_showreel.gif` is the restored Apple-style product reel. It
+  communicates the broader native control-plane experience across Vault,
+  Command, routing, and terminal surfaces.
+- `videos/hydra_splash.gif` is the current packaged-launch capture. It documents
+  the falling individualized glyphs, bounded portal treatment, and launch
+  identity without replacing the broader product reel.
+
+Keep both assets in that order. The showreel establishes product breadth; the
+splash capture follows as a focused implementation detail. Do not replace the
+pair with a browser capture or a localhost recording.
+
+## Render-Budget Refinements
+
+The command surfaces keep motion responsive by avoiding unrelated React work:
+
+- `src/pages/Dashboard.jsx` memoizes its derived fleet view so modal state and
+  other local changes do not rerun account filters, activity shaping, and
+  health calculations.
+- `src/components/AccountCard.jsx` uses an account-scoped memo comparator. A
+  card observes only its own live-session value, action-session value,
+  provisioning membership, and cooldown entries instead of rerendering when an
+  aggregate object changes for another account.
+- `src/hooks/usePools.js` exposes stable `useCallback()` handlers, while
+  `src/pages/PoolManager.jsx` passes stable row callbacks into memoized
+  `AccountRow` and `KeyRow` components.
+
+These optimizations protect the proximity field: nearby cards can react to the
+pointer without competing with avoidable list reconciliation during background
+refreshes or one-account actions.

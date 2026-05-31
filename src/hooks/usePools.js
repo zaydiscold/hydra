@@ -134,7 +134,7 @@ export function usePools({ addToast }) {
     load();
   }, [load]);
 
-  async function handleToggleProxy() {
+  const handleToggleProxy = useCallback(async () => {
     const next = !proxyOn;
     try {
       await api.toggleProxy(next);
@@ -143,9 +143,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(`Proxy toggle failed: ${err.message}`, 'error');
     }
-  }
+  }, [addToast, proxyOn]);
 
-  async function handleToggleKey(hash, isPooled) {
+  const handleToggleKey = useCallback(async (hash, isPooled) => {
     try {
       await api.toggleKeyPooled(hash, isPooled);
       if (addToast) addToast(`Key ${isPooled ? 'added to' : 'removed from'} pool`, 'success');
@@ -153,9 +153,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(err.message, 'error');
     }
-  }
+  }, [addToast, load]);
 
-  async function handleToggleAccount(accountId, isPooled) {
+  const handleToggleAccount = useCallback(async (accountId, isPooled) => {
     try {
       const res = await api.toggleAccountPooled(accountId, isPooled);
       if (addToast) addToast(`${res.data?.updated ?? 0} key(s) ${isPooled ? 'added to' : 'removed from'} pool`, 'success');
@@ -163,9 +163,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(err.message, 'error');
     }
-  }
+  }, [addToast, load]);
 
-  async function handleRegister(hash, keyString) {
+  const handleRegister = useCallback(async (hash, keyString) => {
     try {
       await api.registerKeyString(hash, keyString);
       if (addToast) addToast('Key string saved and encrypted locally', 'success');
@@ -173,9 +173,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(err.message, 'error');
     }
-  }
+  }, [addToast, load]);
 
-  async function handleRefreshModels() {
+  const handleRefreshModels = useCallback(async () => {
     setRefreshingModels(true);
     try {
       await api.refreshModels();
@@ -186,9 +186,9 @@ export function usePools({ addToast }) {
     } finally {
       setRefreshingModels(false);
     }
-  }
+  }, [addToast, loadPoolData]);
 
-  async function handleAutoProvision(accountId) {
+  const handleAutoProvision = useCallback(async (accountId) => {
     try {
       const res = await api.autoProvisionPoolKey(accountId);
       if (addToast) addToast(`Key "${res.data?.name}" created and added to pool`, 'success');
@@ -196,9 +196,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(`Auto-provision failed: ${err.message}`, 'error');
     }
-  }
+  }, [addToast, load]);
 
-  async function handleSyncKeys(accountId) {
+  const handleSyncKeys = useCallback(async (accountId) => {
     try {
       const res = await api.syncPoolKeys(accountId);
       const n = res.data?.synced ?? 0;
@@ -209,9 +209,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(`Sync failed: ${err.message}`, 'error');
     }
-  }
+  }, [addToast, load]);
 
-  async function handleDisableKey(hash, currentlyEnabled) {
+  const handleDisableKey = useCallback(async (hash, currentlyEnabled) => {
     try {
       await api.disablePoolKey(hash, currentlyEnabled);
       if (addToast) addToast(`Key ${currentlyEnabled ? 'disabled' : 're-enabled'}`, 'success');
@@ -219,9 +219,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(`Toggle failed: ${err.message}`, 'error');
     }
-  }
+  }, [addToast, load]);
 
-  async function handleDeleteKey(hash) {
+  const handleDeleteKey = useCallback(async (hash) => {
     try {
       await api.deletePoolKey(hash);
       if (addToast) addToast('Key deleted from OpenRouter and local DB', 'success');
@@ -229,9 +229,9 @@ export function usePools({ addToast }) {
     } catch (err) {
       if (addToast) addToast(`Delete failed: ${err.message}`, 'error');
     }
-  }
+  }, [addToast, load]);
 
-  async function handleReloadPool() {
+  const handleReloadPool = useCallback(async () => {
     setReloadingPool(true);
     try {
       await api.reloadPool();
@@ -243,11 +243,11 @@ export function usePools({ addToast }) {
     } finally {
       setReloadingPool(false);
     }
-  }
+  }, [addToast, load, loadProxyStatus]);
 
   const [rotatingKey, setRotatingKey] = useState(false);
 
-  async function handleRotateMasterKey() {
+  const handleRotateMasterKey = useCallback(async () => {
     setRotatingKey(true);
     try {
       const res = await api.rotateMasterKey();
@@ -258,7 +258,7 @@ export function usePools({ addToast }) {
     } finally {
       setRotatingKey(false);
     }
-  }
+  }, [addToast]);
 
   return {
     accounts,

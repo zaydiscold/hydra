@@ -427,8 +427,9 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(dashboard, /className="dashboard-last-sync"/);
   assert.match(dashboard, /\{refreshing \? 'Syncing\.\.\.' : 'Sync'\}/);
   assert.match(dashboard, />Add Account<\/span>/);
-  assert.match(dashboard, /const fleetHealth = getFleetHealth\(accounts, liveStatuses\)/);
-  assert.match(dashboard, /const activity = getDashboardActivity\(accounts, liveStatuses, cooldownMap\)/);
+  assert.match(dashboard, /const dashboardView = useMemo\(\(\) => \{/);
+  assert.match(dashboard, /fleetHealth: getFleetHealth\(accounts, liveStatuses\)/);
+  assert.match(dashboard, /activity: getDashboardActivity\(accounts, liveStatuses, cooldownMap\)/);
   assert.match(dashboard, /className="dashboard-command-layout"/);
   assert.match(dashboard, /<FleetHealthPanel[\s\S]*fleetHealth=\{fleetHealth\}/);
   assert.match(dashboard, /data-testid="fleet-health-donut"/);
@@ -451,6 +452,9 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(accountCard, /account-card--compact/);
   assert.match(accountCard, /\{!compact && \(/);
   assert.match(accountCard, /<div className="account-card-auth-wrap">/);
+  assert.match(accountCard, /function areAccountCardPropsEqual\(prevProps, nextProps\)/);
+  assert.match(accountCard, /prevProps\.liveStatuses\?\.\[accountId\] !== nextProps\.liveStatuses\?\.\[accountId\]/);
+  assert.match(accountCard, /\}, areAccountCardPropsEqual\);/);
 
   assert.match(css, /\.dashboard-command-layout\s*\{/);
   assert.match(css, /\.dashboard-command-actions\s*\{/);
@@ -465,6 +469,25 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.doesNotMatch(css, /\.dashboard-stats-strip\s*\{/);
   assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.dashboard-command-layout\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.dashboard-mini-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
+});
+
+test('Pool Manager list rows use stable callback props so React memoization remains effective', () => {
+  const pools = readRepoFile('src/hooks/usePools.js');
+  const poolManager = readRepoFile('src/pages/PoolManager.jsx');
+  const accountRow = readRepoFile('src/components/AccountRow.jsx');
+  const keyRow = readRepoFile('src/components/KeyRow.jsx');
+
+  assert.match(pools, /const handleToggleKey = useCallback\(async \(hash, isPooled\) => \{/);
+  assert.match(pools, /const handleAutoProvision = useCallback\(async \(accountId\) => \{/);
+  assert.match(pools, /const handleSyncKeys = useCallback\(async \(accountId\) => \{/);
+  assert.match(pools, /const handleDisableKey = useCallback\(async \(hash, currentlyEnabled\) => \{/);
+  assert.match(pools, /const handleDeleteKey = useCallback\(async \(hash\) => \{/);
+  assert.match(poolManager, /const onRegisterKey = useCallback\(\(hash, name\) => setRegistering\(\{ hash, name \}\), \[\]\)/);
+  assert.match(poolManager, /const onAccountAction = useCallback\(\(id, action\) => \{/);
+  assert.match(poolManager, /onRegisterKey=\{onRegisterKey\}/);
+  assert.match(poolManager, /onAccountAction=\{onAccountAction\}/);
+  assert.match(accountRow, /const AccountRow = memo\(function AccountRow\(/);
+  assert.match(keyRow, /const KeyRow = memo\(function KeyRow\(/);
 });
 
 test('every source JSX button has an executable action or form submit contract', () => {

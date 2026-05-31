@@ -33,7 +33,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 
 | # | Acceptance item | Current evidence | State |
 | --- | --- | --- | --- |
-| 1 | Five-minute idle CPU improvement or honest unmeasurable boundary | Fresh exact-public-`v1.1.4` profiling sampled the already-settled packaged app every 30 seconds for five minutes: four Hydra-owned processes and zero Hydra Playwright profiles throughout, `0.0-0.3%` instantaneous CPU (`0.03%` average, ending at `0.0%`), and `575.92 MB -> 577.41 MB` RSS (`+1.48 MiB`). A later independent recheck again kept four processes and zero profiles across all 11 samples, with `0.0-0.7%` CPU (`0.082%` average) and RSS falling from `592.53 MiB` to `553.19 MiB` (`-39.34 MiB`). The exact-public `v1.1.5` steady-dot repair then repeated the same 11-sample no-interaction profile at `0.0-0.5%` CPU (`0.136%` average) with `+5.59 MiB` RSS drift. | Verified |
+| 1 | Five-minute idle CPU improvement or honest unmeasurable boundary | Fresh exact-public-`v1.1.4` profiling sampled the already-settled packaged app every 30 seconds for five minutes: four Hydra-owned processes and zero Hydra Playwright profiles throughout, `0.0-0.3%` instantaneous CPU (`0.03%` average, ending at `0.0%`), and `575.92 MB -> 577.41 MB` RSS (`+1.48 MiB`). A later independent recheck again kept four processes and zero profiles across all 11 samples, with `0.0-0.7%` CPU (`0.082%` average) and RSS falling from `592.53 MiB` to `553.19 MiB` (`-39.34 MiB`). The exact-public `v1.1.5` steady-dot repair repeated the same 11-sample no-interaction profile at `0.0-0.5%` CPU (`0.136%` average) with `+5.59 MiB` RSS drift. The fresh exact-public `v1.3.0` post-closeout pass retained four processes and zero profiles across all 11 samples at `0.0-0.4%` CPU (`0.091%` average, `33.2%` below the `v1.1.5` calm public baseline) with `604.80 MiB -> 606.66 MiB` RSS (`+1.86 MiB`). | Verified |
 | 2 | No orphan browser/helper processes after owning surface | Exact-public-`v1.1.5` LaunchServices relaunch evidence captured four owned processes before quit, zero after quit, one splash renderer during animation, and one replacement main renderer after teardown. After the bounded startup window, the replacement tree settled to four owned processes at `0.0%` CPU; `hydra doctor --json` reported zero Hydra Playwright profiles. Raw `ps -ax \| grep -iE 'chrome\|chromium\|playwright\|electron\|hydra'` snapshots are preserved locally with the anchored Hydra-owned subsets. | Verified |
 | 3 | No runaway renderer/Matter/Anime/timer loops after unmount | Fresh packaged splash diagnostics report `72/72` unique shatters, `0` duplicate skips, collision-free portal entry, `timers=0`, `rafActive=false`, and Matter cleared after teardown. Exact-public-`v1.1.5` route instrumentation mounted Dashboard, Bulk OTP, Vault, Pool Manager, Redeem, Generator, Traffic, Settings, and Account Detail. Settled Settings and Account Detail each reported `0` intervals, `0` active RAFs, `0` Anime effects, and only the bounded `App.upstreamHealth` timeout. Account Detail's mount-only `ScrambleText.reveal` intervals and `AnimeText.scanline` effect cleared after the visual window. | Verified |
 | 4 | `electron-updater` ESM import crash fixed; packaged smoke green | Default import/destructure source contract passes; `v1.1.0` release matrix run `26702889329` passed smoke on all desktop targets. | Verified |
@@ -44,7 +44,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | 9 | README clean, navigable, no Remotion references; audit anchors match | README navigation and release docs are reconciled; `rg -n "Remotion\|remotion" README.md` returns no matches; CLI audit remains `31 ok / 5 deferred / 0 missing / 0 blockers`. | Verified |
 | 10 | Every named long-running path measured or justified | Embedded server, proxy/router, automation, request-log buffering, health polling, and dashboard refresh are mapped with measurements below. | Verified |
 | 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | The steady-dot repair passed local lint, full `npm test`, gate (`12/12`), ARM rebuild, strict deep codesign, ARM archive smoke, OpenAPI generation (`83 operations`), audit (`31 ok / 5 deferred / 0 missing / 0 blockers`), and `git diff --check`. Public `v1.1.5` CI run `26712858931`, Docker run `26712858933`, and desktop release run `26712864469` passed. Follow-up hygiene checkpoint `86efec9` passed local lint, full `npm test`, gate, ARM package smoke, OpenAPI generation, and `git diff --check`; Auto-version run `26715063086` skipped as intended, CI run `26715063087` passed, and Docker run `26715063084` passed both hosted runtime smoke and registry push. The downloaded public ARM zip also passed strict deep codesign, GitHub SHA-256 and updater SHA-512 verification, and packaged smoke after installation. Local Docker rerun remained unavailable because Docker Desktop's daemon was stopped; hosted Docker runtime smoke and registry push are green. | Verified |
-| 12 | Final dogfood evidence refreshed with packaged-app screenshots | The exact public `v1.1.4` package now has native-window captures for first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a synthetic-data Traffic console, plus rendered privacy-safe CLI captures for `hydra status`, `hydra proxy status`, and a compact `hydra doctor --json` excerpt. macOS Vision OCR found zero credential-shaped hits across all nine repository artifacts and ImageMagick reported nonblank color variance for every file. A repository visual-review pass found and redacted machine-specific endpoint values in the Settings image. Computer Use still timed out on Hydra, so the full interactive visual review remains explicit. | Partial — interactive human visual review required |
+| 12 | Final dogfood evidence refreshed with packaged-app screenshots | The exact public `v1.1.4` package has native-window captures for first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a synthetic-data Traffic console, plus rendered privacy-safe CLI captures for `hydra status`, `hydra proxy status`, and a compact `hydra doctor --json` excerpt. The exact-public `v1.3.0` canonical app adds a native CoreGraphics Dashboard privacy proof with all content below the titlebar pixelated before check-in. OCR found zero credential-shaped or endpoint-shaped hits and ImageMagick reported nonblank color variance. Computer Use still could not attach to Hydra, so the full interactive visual review remains explicit. | Partial — interactive human visual review required |
 
 ## Current Verified Evidence
 
@@ -869,3 +869,37 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   verified exact-public GUI-launch checkbox; splash/dashboard screenshots,
   full navigation, live account flows, Touch ID fingerprint approval, and real
   Windows NSIS install/open UX remain explicit manual boundaries.
+- 2026-05-31 exact-public `v1.3.0` post-closeout idle profile:
+  `/private/tmp/hydra-v130-public-post-closeout-idle-profile-20260531T132928`
+  sampled the untouched canonical package every 30 seconds for five minutes.
+  All 11 samples retained four Hydra-owned processes and zero stale profiles.
+  Aggregate CPU stayed between `0.0%` and `0.4%` (`0.091%` average), which is
+  `33.2%` below the `v1.1.5` calm public baseline. RSS moved from `604.80 MiB`
+  to `606.66 MiB` (`+1.86 MiB`). The directory preserves before/after broad
+  process inventories, Hydra-owned subsets, all doctor snapshots, and
+  `summary.json`; the Hydra-owned PID set was unchanged before and after.
+- 2026-05-31 exact-public `v1.3.0` native Dashboard privacy proof:
+  LaunchServices surfaced the canonical package, CoreGraphics enumerated
+  Dashboard window `2589`, and `/usr/sbin/screencapture -l 2589` produced the
+  raw private capture outside the repository under the post-closeout profile
+  directory. `docs/evidence/hydra-v130-packaged-dashboard-privacy-redacted.png`
+  pixelates all content below the native titlebar. Its SHA-256 is
+  `d09cb79b6c2a819eb3eb7957f6fd33464193d492cfa74bf8aae6badd96e27c6c`;
+  ImageMagick reports `3016x1936` and `6443` colors; Tesseract OCR found zero
+  credential-shaped or endpoint-shaped hits. This is native packaged-app
+  provenance evidence, not a browser substitution and not a replacement for
+  the deferred interactive route review.
+- 2026-05-31 pending-`v1.4.0` renderer/media consolidation: Dashboard derived
+  fleet state now memoizes account filters, activity shaping, and health
+  calculations; each account card compares only its own aggregate-state slices;
+  Pool Manager exports stable callbacks into memoized account/key rows; and the
+  README restores the Apple-style product reel above the focused splash GIF.
+  `docs/DESIGN_ENGINEERING.md` records the render-budget and two-layer media
+  rationale. Local verification passed `npm run lint`, full `npm test`,
+  `npm run build`, gate (`12/12`), OpenAPI generation (`83 operations`),
+  `hydra audit` (`31 ok / 5 deferred / 0 missing / 0 blockers`), and
+  `git diff --check`. A temporary redirected arm64 package under
+  `/private/tmp/hydra-package-v140-preflight-20260531T134810` passed
+  explicit-resource `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`,
+  strict deep codesign, and nested-release-output exclusion without replacing
+  the installed exact-public `v1.3.0` app.

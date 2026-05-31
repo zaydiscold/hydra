@@ -874,3 +874,27 @@ This evidence file is not release-complete by itself. The release remains not co
   review, account-grid magnetic-response review, full navigation, live
   OTP/redemption/proxy flows, Touch ID fingerprint approval, and real Windows
   NSIS install/open UX remain explicit manual boundaries.
+
+## v1.3.0 Post-Closeout Profile
+
+- `/private/tmp/hydra-v130-public-post-closeout-idle-profile-20260531T132928`
+  sampled the untouched exact-public canonical package every 30 seconds for
+  five minutes. All 11 samples retained four Hydra-owned processes and zero
+  stale profiles. Aggregate CPU stayed between `0.0%` and `0.4%` (`0.091%`
+  average), `33.2%` below the exact-public `v1.1.5` calm baseline. RSS moved
+  from `604.80 MiB` to `606.66 MiB` (`+1.86 MiB`). Before/after broad process
+  inventories, Hydra-owned subsets, doctor snapshots, and `summary.json` remain
+  preserved locally; the Hydra-owned PID set was unchanged.
+- The exact-public splash remained bounded after handoff:
+  `target=72`, `queueLength=72`, `shatteredWordCount=72`,
+  `duplicateShatterSkips=0`, `peakDynamicBodyCount=547`,
+  `portalCollisionDisabled=true`, `portalLiftApplied=true`,
+  `renderFrames=416`, `physicsSteps=668`, `timers=0`, `rafActive=false`,
+  `disposed=true`, and `matterCleared=true`.
+- `docs/evidence/hydra-v130-packaged-dashboard-privacy-redacted.png` came from
+  native CoreGraphics enumeration plus `/usr/sbin/screencapture -l 2589`, not
+  Chrome or a localhost browser. All content below the native titlebar was
+  pixelated before check-in. ImageMagick reports a nonblank `3016x1936` image
+  with `6443` colors; Tesseract OCR found zero credential-shaped or
+  endpoint-shaped hits. This is packaged-app provenance proof only. It does not
+  promote the deferred interactive route-review checkbox.
