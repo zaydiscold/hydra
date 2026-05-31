@@ -43,6 +43,14 @@ function ipcHandlerBlocks(source) {
   }));
 }
 
+test('sandboxed preloads use CommonJS electron imports', () => {
+  for (const file of ['electron/preload.js', 'electron/splashPreload.js']) {
+    const src = read(file);
+    assert.match(src, /const \{ contextBridge, ipcRenderer \} = require\(['"]electron['"]\);/);
+    assert.doesNotMatch(src, /import \{ contextBridge, ipcRenderer \} from ['"]electron['"]/);
+  }
+});
+
 test('every native IPC channel is exposed through preload and renderer facade', () => {
   const ipcSrc = read('electron/app/ipc.js');
   const preloadSrc = read('electron/preload.js');

@@ -242,3 +242,24 @@ This evidence file is not release-complete by itself. The release remains not co
   LaunchServices, and launched. Follow-up `hydra doctor --json` reported
   `version=1.1.3`, four Hydra-owned processes, `0.4%` sampled Hydra CPU, and
   zero stale Hydra Playwright profiles after splash teardown.
+
+## v1.1.3 Packaged Bridge Repair Evidence
+
+- A fresh five-minute idle profile of the public app kept four Hydra-owned
+  processes and zero Hydra Playwright profiles for all 11 samples. RSS changed
+  by `+1.72 MB`; instantaneous Hydra CPU ended at `0.0%`. A separate clean
+  quit captured zero owned processes before the LaunchServices relaunch.
+- Direct packaged Electron CDP instrumentation found a real native bridge bug:
+  public `v1.1.3` loaded its localhost renderer without exposing
+  `window.hydraNative`. Both sandboxed preload scripts incorrectly used ESM
+  imports.
+- The local repair converts both preloads to Electron's sandbox-compatible
+  `require('electron')` form and adds a regression contract. See
+  `docs/PRELOAD_BRIDGE.md`.
+- Rebuilt local package dogfood verified `window.hydraSplash` during splash,
+  the full `window.hydraNative` surface after handoff, and visible Settings
+  controls for `Touch ID Unlock`, `AVAILABLE`, the enabled vault-unlock
+  checkbox, and `Test Prompt`.
+- Hardware Touch ID approval, lock/unlock, public patch artifact verification,
+  full redacted screenshots, live account flows, and Windows-host launch
+  remain explicit manual boundaries.

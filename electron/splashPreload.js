@@ -1,4 +1,5 @@
-import { contextBridge, ipcRenderer } from 'electron';
+// Sandboxed Electron preloads run as plain JavaScript, not ESM.
+const { contextBridge, ipcRenderer } = require('electron');
 
 const UPDATE_PROGRESS_CHANNEL = 'hydra-update-progress';
 const DIAGNOSTICS_CHANNEL = 'hydra-splash-diagnostics';

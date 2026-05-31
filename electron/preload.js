@@ -13,7 +13,9 @@
  * Exposes a controlled API via contextBridge — no fs, no child_process,
  * no require() leaks into the renderer.
  */
-import { contextBridge, ipcRenderer } from 'electron';
+// Sandboxed Electron preloads run as plain JavaScript, not ESM. Keep this
+// CommonJS import even though the main-process package uses `"type": "module"`.
+const { contextBridge, ipcRenderer } = require('electron');
 
 const MENU_EVENT_CHANNELS = new Set([
   'native:copied-proxy-url',
