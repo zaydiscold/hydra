@@ -106,3 +106,19 @@ The rebuilt package also passed all eight sidebar routes plus a redacted
 Account Detail reachability check. Settled Account Detail reported zero
 intervals, zero active RAFs, zero Anime.js effects, and `0.7%` sampled Hydra
 CPU.
+
+## Public v1.1.5 Verification
+
+The published `Hydra-1.1.5-mac-arm64.zip` SHA-256 matched GitHub asset digest
+`b64cd8f285d605e80416e4c9a7d4937076672801fe22b61f1a8d904d7454d341`.
+Its SHA-512 matched `latest-mac.yml`, strict deep codesign passed, and
+`HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke` passed after the
+exact-public zip was installed.
+
+The canonical app was opened normally through LaunchServices without CDP or
+Computer Use. After the bounded startup decay, the exact-public sampler at
+`/private/tmp/hydra-v115-public-idle-profile-20260531T125505Z` kept four
+Hydra-owned processes and zero stale Playwright profiles through all 11
+30-second samples. CPU stayed between `0.0%` and `0.5%` (`0.136%` average);
+RSS moved from `569.73 MiB` to `575.33 MiB` (`+5.59 MiB`). A follow-up
+`hydra doctor --json` sampled `0.0%` Hydra CPU.

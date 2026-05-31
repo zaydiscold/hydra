@@ -382,3 +382,29 @@ This evidence file is not release-complete by itself. The release remains not co
   Generator, Traffic, Settings, and a redacted Account Detail reachability
   check. `docs/RENDERER_IDLE_PERFORMANCE.md` records exact reproduction,
   package-local raw evidence paths, the design choice, and verification.
+
+## v1.1.5 Public Steady-Dot Verification
+
+- Auto-version run `26712858914`, CI run `26712858931`, Docker run
+  `26712858933`, and desktop release run `26712864469` passed. The desktop
+  matrix includes macOS arm64, macOS Intel x64, and Windows x64 NSIS; the
+  Windows lane also passed packaged executable launch-and-cleanup smoke.
+- The exact downloaded public ARM zip SHA-256 matched GitHub asset digest
+  `b64cd8f285d605e80416e4c9a7d4937076672801fe22b61f1a8d904d7454d341`.
+  Its SHA-512 matched `latest-mac.yml`, strict deep codesign passed, and
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke` passed after
+  installation.
+- The pre-public local package was moved reversibly to
+  `/Users/zaydk/.Trash/hydra-pre-public-v115-20260531T125225Z`. Desktop scan,
+  Spotlight, and LaunchServices now resolve one canonical bundle:
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`, version `1.1.5`.
+- A normal no-CDP launch settled without intervention. The exact-public
+  five-minute profile at
+  `/private/tmp/hydra-v115-public-idle-profile-20260531T125505Z` kept four
+  Hydra-owned processes and zero stale Hydra Playwright profiles through all
+  11 samples. CPU stayed between `0.0%` and `0.5%` (`0.136%` average); RSS
+  moved from `569.73 MiB` to `575.33 MiB` (`+5.59 MiB`). A follow-up
+  `hydra doctor --json` sampled `0.0%` CPU.
+- Local Docker smoke could not rerun because Docker Desktop's daemon is
+  stopped. Hosted Docker runtime smoke and registry push are green in run
+  `26712858933`.
