@@ -87,6 +87,7 @@ test('auto-version dispatches the release workflow after creating tags', () => {
 
   assert.match(workflow, /permissions:\s*\n\s*contents:\s*write\s*\n\s*actions:\s*write/, 'auto-version must be allowed to dispatch workflows');
   assert.match(workflow, /GH_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/, 'auto-version must authenticate gh workflow dispatch');
+  assert.match(workflow, /Tag and push[\s\S]*git config user\.name 'hydra-bot'[\s\S]*git config user\.email 'hydra-bot@users\.noreply\.github\.com'[\s\S]*git tag -a "\$NEW"/, 'auto-version must configure an annotated-tag committer identity');
   assert.match(workflow, /git push origin "\$NEW"[\s\S]*gh workflow run release\.yml --ref "\$NEW"/, 'auto-version must dispatch release.yml on the tag ref after pushing the tag');
   assert.match(workflow, /Tags pushed by the default[\s\S]*GITHUB_TOKEN[\s\S]*do not reliably trigger another workflow run/, 'auto-version must document why explicit dispatch exists');
   assert.match(workflow, /\[bump:minor\]/, 'auto-version must support deliberate minor releases');

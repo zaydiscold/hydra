@@ -129,6 +129,8 @@ jobs:
         run: |
           set -euo pipefail
           NEW="v${{ steps.nextver.outputs.next }}"
+          git config user.name 'hydra-bot'
+          git config user.email 'hydra-bot@users.noreply.github.com'
           git tag -a "$NEW" -m "Release $NEW"
           git push origin "$NEW"
           gh workflow run release.yml --ref "$NEW"
