@@ -231,3 +231,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 - Live MVP flows need credentials/accounts/codes.
 - Screenshot/Remotion evidence must wait until packaged Electron dogfood and redaction checks are ready.
 - GitHub issue #22 tracks the remaining current-release manual dogfood evidence checklist.
+
+## v1.1.0 Release Packaging Follow-Up
+
+- Release run `26702260689` was canceled on 2026-05-31 after all four desktop target runners stalled in `npm run electron:prepare`. Linux x64, Windows x64, macOS Intel, and macOS arm64 each reached 100% while downloading Playwright Chromium `1208`, then produced no progress until cancellation. Shared `lint`, `test`, and `gate` verification had already passed.
+- Hydra packages the full Playwright Chromium runtime and does not consume the separate Chromium headless-shell payload. `scripts/prepare-electron-resources.mjs` now invokes `playwright install chromium --no-shell`, and the workflow contract asserts that narrower install command. The pre-asset `v1.1.0` tag is republished only after this fix is on `master`, then the desktop release workflow is rerun against the corrected tag.

@@ -124,7 +124,7 @@ if (!chromiumSrc) {
   const cli = existsSync(playwrightCli) ? playwrightCli : playwrightCoreCli;
   console.log(`[prepare-electron-resources] Chromium ${revision} not found in cache: ${browserCacheRoots().join(', ')}`);
   console.log(`[prepare-electron-resources] installing via ${cli}`);
-  execFileSync(process.execPath, [cli, 'install', 'chromium'], {
+  execFileSync(process.execPath, [cli, 'install', 'chromium', '--no-shell'], {
     cwd: ROOT,
     stdio: 'inherit',
   });
@@ -170,7 +170,7 @@ function chromiumCacheGuidance(target, wantedChildren) {
   const host = `${platform()}-${osArch()}`;
   const checked = wantedChildren.join(', ');
   const targetHint = target === host
-    ? `Install Playwright Chromium for this machine with \`npx playwright install chromium\`, then rerun the build.`
+    ? `Install Playwright Chromium for this machine with \`npx playwright install chromium --no-shell\`, then rerun the build.`
     : `This host is ${host}, but HYDRA_BUILD_TARGET=${target} needs ${checked}. Build on the target runner/machine or provide a PLAYWRIGHT_BROWSERS_PATH cache that already contains that target payload.`;
   const runnerHint = [
     'Known release runners:',
