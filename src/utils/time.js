@@ -4,7 +4,9 @@
  */
 export function timeAgo(isoString) {
   if (!isoString) return '';
-  const diffMs = Date.now() - new Date(isoString).getTime();
+  const timestamp = new Date(isoString).getTime();
+  if (!Number.isFinite(timestamp)) return '';
+  const diffMs = Date.now() - timestamp;
   if (diffMs < 0) return 'just now';
   const mins = Math.floor(diffMs / 60000);
   if (mins < 1) return 'just now';

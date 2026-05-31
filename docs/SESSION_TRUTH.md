@@ -15,6 +15,12 @@ Stored login state is encrypted locally:
 - `lastLoginAt`: when interactive login completed.
 - `sessionRefreshedAt`: when Hydra last stored refreshed session material.
 
+UI age labels stay compact so old logins remain readable: minutes become
+hours, then days, weeks, months, and years. The renderer does not surface
+redundant labels such as `900 hours ago` or `1,000 hours ago`; both collapse to
+`5w ago`. Invalid stored timestamps render no age label instead of malformed
+copy.
+
 Use `hydra session <account-id> --refresh --json` or the Account Detail
 `Check Session` action for current truth. Cached/local metadata is useful for
 display, but only a forced Clerk probe confirms that a login still works now.
@@ -72,6 +78,17 @@ After identity-aware normalization and forced live refresh:
 - `4/4` were redeem-ready.
 - `1/4` active logins had no management key, proving login truth is independent.
 - Cookie-stack counts persisted from `25` to `1` for all four active accounts.
+
+Focused renderer contract verification:
+
+```bash
+npm run test:time-utils
+npm run test:test-chain-completeness
+npm run test:session-refresh-contract
+```
+
+The compact-age test covers the `900h` and `1000h` cases, invalid timestamps,
+and the normal minute/hour/day/week/month/year boundaries.
 
 Redacted artifacts live under:
 
