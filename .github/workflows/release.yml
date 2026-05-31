@@ -10,6 +10,7 @@ on:
       - 'scripts/prepare-electron-resources.mjs'
       - 'scripts/build-empty-db.mjs'
       - 'scripts/smoke-electron-package.mjs'
+      - 'scripts/smoke-windows-launch.mjs'
       - 'scripts/merge-mac-update-yml.mjs'
       - 'electron-builder.yml'
       - 'electron/builders/**'
@@ -114,6 +115,9 @@ jobs:
       - run: npm run electron:smoke
         env:
           HYDRA_BUILD_TARGET: ${{ matrix.build_target }}
+      - name: Launch and cleanup Windows packaged executable
+        if: matrix.build_target == 'win32-x64'
+        run: npm run electron:smoke:win-launch
       - name: Upload verified artifacts to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash

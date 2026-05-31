@@ -25,6 +25,7 @@
     "electron:build:win": "npm run build && HYDRA_BUILD_TARGET=win32-x64 npm run electron:prepare && electron-builder --win nsis --x64",
     "electron:build:linux": "npm run build && HYDRA_BUILD_TARGET=linux-x64 npm run electron:prepare && electron-builder --linux AppImage --x64",
     "electron:smoke": "node scripts/smoke-electron-package.mjs",
+    "electron:smoke:win-launch": "node scripts/smoke-windows-launch.mjs",
     "electron:open:mac-arm64": "node scripts/open-packaged-app.mjs release/mac-arm64/Hydra.app",
     "// ─── Testing ───────────────────────────────────────────────────────────": "",
     "pretest": "prisma db push --skip-generate && prisma generate",

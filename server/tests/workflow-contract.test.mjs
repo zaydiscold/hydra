@@ -210,6 +210,31 @@ test('electron package smoke validates the packaged app shell without launching 
   assert.match(script, /Linux main executable/, 'smoke must require the Linux executable');
 });
 
+test('Windows release workflow launches the packaged executable and proves cleanup', () => {
+  const pkg = JSON.parse(read('package.json'));
+  const workflow = read('.github/workflows/release.yml');
+  const script = read('scripts/smoke-windows-launch.mjs');
+
+  assert.equal(pkg.scripts['electron:smoke:win-launch'], 'node scripts/smoke-windows-launch.mjs');
+  assert.match(workflow, /scripts\/smoke-windows-launch\.mjs/, 'Windows launch smoke edits must trigger release workflow checks on pull requests');
+  assert.match(workflow, /name:\s*Launch and cleanup Windows packaged executable[\s\S]*if:\s*matrix\.build_target == 'win32-x64'[\s\S]*run:\s*npm run electron:smoke:win-launch/, 'release workflow must launch only the Windows packaged executable');
+  assert.ok(
+    workflow.indexOf('npm run electron:smoke') < workflow.indexOf('npm run electron:smoke:win-launch'),
+    'Windows packaged launch must run after filesystem package smoke',
+  );
+  assert.ok(
+    workflow.indexOf('npm run electron:smoke:win-launch') < workflow.indexOf('gh release upload "$GITHUB_REF_NAME"'),
+    'Windows packaged launch must pass before release upload',
+  );
+  assert.match(script, /release', 'win-unpacked'/, 'launch smoke must target the unpacked Windows app');
+  assert.match(script, /Hydra\.exe/, 'launch smoke must run the real packaged executable');
+  assert.match(script, /--user-data-dir=\$\{userDataDir\}/, 'launch smoke must isolate Windows app data');
+  assert.match(script, /Get-CimInstance Win32_Process/, 'launch smoke must capture the packaged process tree');
+  assert.match(script, /taskkill\.exe/, 'launch smoke must terminate the packaged process tree');
+  assert.match(script, /const STAY_ALIVE_MS = 25_000/, 'launch smoke must stay alive through splash handoff');
+  assert.match(script, /packaged Hydra processes survived cleanup/, 'launch smoke must reject surviving packaged processes');
+});
+
 test('electron package smoke validates distributable release artifacts', () => {
   const script = read('scripts/smoke-electron-package.mjs');
   const builderConfig = read('electron-builder.yml');
