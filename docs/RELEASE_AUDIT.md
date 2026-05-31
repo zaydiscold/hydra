@@ -422,3 +422,39 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   to `480.66 MiB` (`+1.23 MiB`). Raw before/after inventories preserve the
   expected Hydra main, GPU, network-utility, and renderer process subset plus
   unrelated machine-global browser tooling for honest workstation context.
+- 2026-05-31 Pool Manager route-lifecycle cleanup: `src/hooks/usePools.js`
+  now owns abort controllers for both the five-call Pool Manager data batch
+  and its bounded proxy-status probe. Starting a replacement refresh aborts
+  prior work; route unmount aborts both controllers; late responses are
+  ignored; and the tracked five-second status timeout is cleared in `finally`.
+  `src/api.js` passes optional abort signals through `/pool`, `/pool/status`,
+  `/pool/master-key`, `/pool/models`, `/pool/sync-status`, and
+  `/system/proxy-status`. A 200-route synthetic unmount probe at
+  `/private/tmp/hydra-pool-route-unmount-benchmark-20260531T151453Z`
+  recorded `1200` pending requests and `200` timeout resources after unmount
+  for the old shape versus `0` pending requests and `0` timeout resources for
+  the owned-abort shape; the new cleanup raised `400` abort signals and
+  canceled all `1200` simulated requests.
+- 2026-05-31 Pool Manager route-lifecycle verification: `npm run
+  test:ui-static` passed (`34/34`), `npm run lint`, full `npm test`, `npm run
+  build`, `npm run openapi:hydra`, `git diff --check`, and corrected serial
+  `npm run gate` (`12/12`) passed. The first gate attempt intentionally ran
+  beside Vite build and observed `dist/index.html` during Vite's replacement
+  window; the serial retry passed after build completed. A temporary patched
+  arm64 package at
+  `/private/tmp/hydra-package-pool-route-abort-20260531T151623Z` passed
+  `ELECTRON_APP_RESOURCES=<temp-app>/Contents/Resources
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  `codesign --verify`, and bundled renderer inspection for both abort refs and
+  all six signal-aware endpoints. It was moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-pool-route-abort-20260531T151623Z`;
+  Spotlight still resolves only the canonical public app.
+- 2026-05-31 exact-public-`v1.1.5` seventh untouched idle reprofile:
+  `/private/tmp/hydra-v115-seventh-untouched-idle-reprofile-20260531T151122Z`
+  sampled the already-settled canonical app every 30 seconds for five minutes
+  with zero UI interaction while source verification and isolated packaging
+  continued. All 11 samples reported four Hydra-owned processes and zero stale
+  profiles. Sampled CPU stayed between `0.0%` and `0.2%` (`0.036%` average);
+  RSS moved from `470.03 MiB` to `477.84 MiB` (`+7.81 MiB`). Raw
+  before/after inventories preserve the Hydra-owned subset and unrelated
+  machine-global browser-tooling context.

@@ -562,3 +562,26 @@ This evidence file is not release-complete by itself. The release remains not co
   RSS moved from `479.42 MiB` to `480.66 MiB` (`+1.23 MiB`). Raw before/after
   inventories preserve the expected Hydra subset and the unrelated
   machine-global browser-tooling context.
+- Pool Manager route exit now aborts its five-call data batch and bounded
+  status probe, clears the tracked status timeout in `finally`, ignores late
+  responses, and aborts superseded refreshes. A 200-route synthetic unmount
+  probe at
+  `/private/tmp/hydra-pool-route-unmount-benchmark-20260531T151453Z`
+  recorded `1200` pending requests and `200` timeout resources after old-shape
+  unmount versus `0` and `0` after owned cleanup; the new path raised `400`
+  abort signals and canceled all `1200` simulated requests.
+- The Pool Manager lifecycle patch passed UI static (`34/34`), lint, full test,
+  build, OpenAPI, corrected serial gate (`12/12`), and diff checks. A temporary
+  arm64 package at
+  `/private/tmp/hydra-package-pool-route-abort-20260531T151623Z` passed
+  packaged resource smoke, strict deep signature verification, and bundled
+  inspection for both abort refs and all six signal-aware endpoints. It was
+  moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-pool-route-abort-20260531T151623Z`;
+  Spotlight continues to resolve only the canonical public app.
+- A seventh untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-seventh-untouched-idle-reprofile-20260531T151122Z`
+  kept four Hydra-owned processes and zero stale profiles through all 11
+  30-second samples. CPU stayed between `0.0%` and `0.2%` (`0.036%` average);
+  RSS moved from `470.03 MiB` to `477.84 MiB` (`+7.81 MiB`) while isolated
+  package verification also ran.

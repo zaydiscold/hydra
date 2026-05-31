@@ -25,8 +25,14 @@ export function usePools({ addToast }) {
   const [proxyOn, setProxyOn] = useState(true);
 
   const didInitialLoadRef = useRef(false);
+  const poolDataAbortRef = useRef(null);
+  const proxyStatusAbortRef = useRef(null);
+  const unmountedRef = useRef(false);
 
   const loadPoolData = useCallback(async (quiet = false) => {
+    poolDataAbortRef.current?.abort();
+    const controller = new AbortController();
+    poolDataAbortRef.current = controller;
     if (!quiet) setLoading(true);
     else setRefreshing(true);
     try {
@@ -35,12 +41,13 @@ export function usePools({ addToast }) {
         return null;
       });
       const [poolRes, keyRes, modelsRes, syncRes, proxyRes] = await Promise.all([
-        api.getPoolData(),
-        api.getMasterKey(),
-        optionalPoolCall('model catalog', api.getPoolModels()),
-        optionalPoolCall('sync status', api.getPoolSyncStatus()),
-        optionalPoolCall('proxy toggle status', api.getProxyStatus()),
+        api.getPoolData(controller.signal),
+        api.getMasterKey(controller.signal),
+        optionalPoolCall('model catalog', api.getPoolModels(controller.signal)),
+        optionalPoolCall('sync status', api.getPoolSyncStatus(controller.signal)),
+        optionalPoolCall('proxy toggle status', api.getProxyStatus(controller.signal)),
       ]);
+      if (unmountedRef.current || poolDataAbortRef.current !== controller) return;
       const rawAccounts = poolRes.data?.accounts ?? [];
       setAccounts(rawAccounts.map((a) => {
         const keys = normalizeAccountKeys(a.keys);
@@ -60,20 +67,32 @@ export function usePools({ addToast }) {
       if (syncRes?.data) setSyncStatus(syncRes.data);
       if (proxyRes?.data != null) setProxyOn(proxyRes.data.enabled ?? true);
     } catch (err) {
+      if (unmountedRef.current || controller.signal.aborted) return;
       if (addToast) addToast(err.message, 'error');
+    } finally {
+      if (poolDataAbortRef.current === controller) {
+        poolDataAbortRef.current = null;
+        if (!unmountedRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
     }
-    setLoading(false);
-    setRefreshing(false);
   }, [addToast]);
 
   const loadProxyStatus = useCallback(async () => {
+    proxyStatusAbortRef.current?.abort();
+    const controller = new AbortController();
+    proxyStatusAbortRef.current = controller;
     let timeoutTimer = null;
+    let timedOut = false;
     try {
-      const timeout = new Promise((_, reject) => {
-        timeoutTimer = setTrackedTimeout('usePools.proxyStatusTimeout', () => reject(new Error('timeout')), 5000);
-      });
-      const res = await Promise.race([api.getPoolStatus(), timeout]);
-      clearTrackedTimeout(timeoutTimer);
+      timeoutTimer = setTrackedTimeout('usePools.proxyStatusTimeout', () => {
+        timedOut = true;
+        controller.abort();
+      }, 5000);
+      const res = await api.getPoolStatus(controller.signal);
+      if (unmountedRef.current || proxyStatusAbortRef.current !== controller) return;
       const data = res.data ?? {};
       setProxyStatus(data.proxy === 'online' ? 'online' : 'offline');
       setProxyStatusStats({
@@ -83,16 +102,31 @@ export function usePools({ addToast }) {
         uptime: data.uptime ?? 0,
       });
     } catch (err) {
-      clearTrackedTimeout(timeoutTimer);
-      console.warn('[POOLS] Proxy status probe failed:', err.message);
+      if (unmountedRef.current || (controller.signal.aborted && !timedOut)) return;
+      console.warn('[POOLS] Proxy status probe failed:', timedOut ? 'timeout' : err.message);
       setProxyStatus('offline');
       setProxyStatusStats(null);
+    } finally {
+      clearTrackedTimeout(timeoutTimer);
+      if (proxyStatusAbortRef.current === controller) proxyStatusAbortRef.current = null;
     }
   }, []);
 
   const load = useCallback(async (quiet = false) => {
     await Promise.all([loadPoolData(quiet), loadProxyStatus()]);
   }, [loadPoolData, loadProxyStatus]);
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      didInitialLoadRef.current = false;
+      poolDataAbortRef.current?.abort();
+      poolDataAbortRef.current = null;
+      proxyStatusAbortRef.current?.abort();
+      proxyStatusAbortRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (didInitialLoadRef.current) return;

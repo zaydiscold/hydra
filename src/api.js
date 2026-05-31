@@ -353,9 +353,9 @@ export const cleanupGeneratorJob = (taskId, reason = 'cancelled', options = {}) 
   request(`/generator/${taskId}`, { method: 'DELETE', body: { reason }, ...options });
 
 // Pool Manager
-export const getPoolData = () => request('/pool');
-export const getPoolStatus = () => request('/pool/status');
-export const getMasterKey = () => request('/pool/master-key');
+export const getPoolData = (signal) => request('/pool', { signal });
+export const getPoolStatus = (signal) => request('/pool/status', { signal });
+export const getMasterKey = (signal) => request('/pool/master-key', { signal });
 export const getNetworkInfo = () => request('/pool/network');
 export const reloadPool = () => request('/pool/reload', { method: 'POST' });
 export const toggleKeyPooled = (hash, isPooled) =>
@@ -374,15 +374,15 @@ export const disablePoolKey = (hash, disabled) =>
 export const deletePoolKey = (hash) =>
   request(`/pool/key/${hash}`, { method: 'DELETE' });
 export const getTraffic = () => request('/pool/traffic');
-export const getPoolModels = () => request('/pool/models');
-export const getPoolSyncStatus = () => request('/pool/sync-status');
+export const getPoolModels = (signal) => request('/pool/models', { signal });
+export const getPoolSyncStatus = (signal) => request('/pool/sync-status', { signal });
 export const rotateMasterKey = () => request('/pool/rotate-master-key', { method: 'POST' });
 
 // System
 export const getSystemTasks = () => request('/system/tasks');
 export const cancelSystemTask = (taskId, reason = 'operator_cancelled') => request(`/system/tasks/${taskId}/cancel`, { method: 'POST', body: { reason } });
 export const getSystemHealth = () => request('/system/health');
-export const getProxyStatus = () => request('/system/proxy-status');
+export const getProxyStatus = (signal) => request('/system/proxy-status', { signal });
 export const toggleProxy = (enabled) => request('/system/proxy-toggle', { method: 'POST', body: { enabled } });
 export const getAccountProxies = () => request('/system/account-proxies');
 export const setAccountProxies = (proxies) => request('/system/account-proxies', { method: 'POST', body: { proxies } });

@@ -239,6 +239,31 @@ test('renderer auto-refresh timers pause instead of waking while hidden', () => 
   assert.doesNotMatch(vault, /if \(!document\.hidden\) await loadAccounts/);
 });
 
+test('Pool Manager aborts status probes on refresh and unmount', () => {
+  const pools = readRepoFile('src/hooks/usePools.js');
+  const api = readRepoFile('src/api.js');
+
+  assert.match(pools, /proxyStatusAbortRef\.current\?\.abort\(\)/);
+  assert.match(pools, /poolDataAbortRef\.current\?\.abort\(\)/);
+  assert.match(pools, /const controller = new AbortController\(\)/);
+  assert.match(pools, /api\.getPoolData\(controller\.signal\)/);
+  assert.match(pools, /api\.getMasterKey\(controller\.signal\)/);
+  assert.match(pools, /api\.getPoolModels\(controller\.signal\)/);
+  assert.match(pools, /api\.getPoolSyncStatus\(controller\.signal\)/);
+  assert.match(pools, /api\.getProxyStatus\(controller\.signal\)/);
+  assert.match(pools, /api\.getPoolStatus\(controller\.signal\)/);
+  assert.match(pools, /if \(unmountedRef\.current \|\| proxyStatusAbortRef\.current !== controller\) return/);
+  assert.match(pools, /finally \{[\s\S]*clearTrackedTimeout\(timeoutTimer\)/);
+  assert.match(pools, /return \(\) => \{[\s\S]*unmountedRef\.current = true;[\s\S]*proxyStatusAbortRef\.current\?\.abort\(\)/);
+  assert.doesNotMatch(pools, /Promise\.race\(\[api\.getPoolStatus/);
+  assert.match(api, /getPoolData = \(signal\) => request\('\/pool', \{ signal \}\)/);
+  assert.match(api, /getPoolStatus = \(signal\) => request\('\/pool\/status', \{ signal \}\)/);
+  assert.match(api, /getMasterKey = \(signal\) => request\('\/pool\/master-key', \{ signal \}\)/);
+  assert.match(api, /getPoolModels = \(signal\) => request\('\/pool\/models', \{ signal \}\)/);
+  assert.match(api, /getPoolSyncStatus = \(signal\) => request\('\/pool\/sync-status', \{ signal \}\)/);
+  assert.match(api, /getProxyStatus = \(signal\) => request\('\/system\/proxy-status', \{ signal \}\)/);
+});
+
 test('global form controls cannot fall back to white native browser styling', () => {
   const css = readRepoFile('src/index.css');
 
@@ -656,9 +681,9 @@ test('clipboard actions await write failures instead of failing silently', () =>
   assert.match(metrics, /\[METRICS\] Silent refresh failed for/);
   assert.match(metrics, /silent refresh failed\. Sign in again/);
   assert.match(pools, /console\.warn\(`\[POOLS\] \$\{label\} unavailable:`/);
-  assert.match(pools, /optionalPoolCall\('model catalog', api\.getPoolModels\(\)\)/);
-  assert.match(pools, /optionalPoolCall\('sync status', api\.getPoolSyncStatus\(\)\)/);
-  assert.match(pools, /optionalPoolCall\('proxy toggle status', api\.getProxyStatus\(\)\)/);
+  assert.match(pools, /optionalPoolCall\('model catalog', api\.getPoolModels\(controller\.signal\)\)/);
+  assert.match(pools, /optionalPoolCall\('sync status', api\.getPoolSyncStatus\(controller\.signal\)\)/);
+  assert.match(pools, /optionalPoolCall\('proxy toggle status', api\.getProxyStatus\(controller\.signal\)\)/);
   assert.match(pools, /\[POOLS\] Proxy status probe failed:/);
   assert.match(diagnostics, /Diagnostics refresh incomplete:/);
   assert.match(diagnostics, /Support bundle copy failed/);
