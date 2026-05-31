@@ -116,7 +116,7 @@ Then copy the relevant summary into `docs/RELEASE_AUDIT.md`.
 | Bulk OTP isolation | Multi-account bulk OTP run keeps account states isolated and visible | pending |
 | Code redemption | Single and bulk redemption paths are verified with live or controlled redeemable codes | pending |
 | Proxy rotation/SSE | `/v1/chat/completions` with real pooled keys streams and rotates as expected | pending |
-| Windows installer launch | Install and launch the current `release/Hydra-<version>-win-x64.exe` or CI release artifact on Windows; record OS and result | pending |
+| Windows installer launch | Install and launch the current `release/Hydra-<version>-win-x64.exe` or CI release artifact on a real Windows desktop; record OS and result. Hosted `windows-2022` unpacked-app startup/cleanup smoke passed in run `26711936191`. | pending |
 | Docker runtime | `npm run docker:smoke` passes against a live Docker daemon | pending |
 | Screenshot audit | Last step only: packaged Electron screenshots across representative sizes are reviewed for layout/color/text issues | pending |
 
@@ -132,6 +132,14 @@ Manual flag mapping:
 | `--manual=live-account-flows` | Live OTP/login, bulk OTP isolation, code redemption, and proxy/SSE request paths were exercised with safe test data. |
 | `--manual=screenshots-redacted` | Packaged Electron screenshots were captured after functional dogfood and checked for secrets. |
 | `--manual=windows-launch` | Current Windows NSIS artifact installed and launched on Windows; OS/version/result recorded. |
+
+Hosted Windows automation is a narrower release gate than the manual flag.
+Release workflow run `26711936191` built the `v1.1.4` Windows package, passed
+target-specific filesystem smoke, launched `release/win-unpacked/Hydra.exe`
+with isolated app data, observed the main, GPU, network-utility, and renderer
+processes after `25,000ms`, then verified zero packaged-process survivors after
+cleanup. Keep `--manual=windows-launch` unchecked until the NSIS installer
+itself is installed and opened in a real Windows desktop session.
 
 ## Screenshot Rules
 

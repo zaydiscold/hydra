@@ -336,3 +336,11 @@ This evidence file is not release-complete by itself. The release remains not co
   Native window-control interaction, full interactive route/dead-button
   review, live account flows, Touch ID fingerprint approval and unlock, and
   Windows-host installer launch remain explicit manual boundaries.
+- Hosted Windows release workflow run `26711936191` passed shared verification,
+  macOS arm64 package smoke, macOS Intel x64 package smoke, and Windows x64 NSIS
+  package smoke. Its Windows-only launch gate started the real
+  `release/win-unpacked/Hydra.exe` with isolated app data, observed four owned
+  processes after `25,000ms` (main, GPU, network utility, renderer), and
+  verified zero packaged-process survivors after cleanup. This materially
+  tightens Windows release evidence without claiming the still-manual NSIS
+  install/open UX pass.
