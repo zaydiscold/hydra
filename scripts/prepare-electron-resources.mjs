@@ -6,8 +6,8 @@
  *   - build/electron/chromium.zip containing the platform-specific Playwright
  *     Chromium payload. Runtime extracts it under HYDRA_DATA_DIR/chromium.
  */
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
-import { arch as osArch, homedir, platform } from 'node:os';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { arch as osArch, homedir, platform, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -22,13 +22,17 @@ const EMPTY_DB_SRC = resolve(ROOT, 'data/empty-hydra.db');
 const EMPTY_DB_OUT = resolve(DATA_OUT, 'empty-hydra.db');
 const BROWSERS_JSON = resolve(ROOT, 'node_modules/playwright-core/browsers.json');
 
-function chromiumRevision() {
+function chromiumDescriptor() {
   const json = JSON.parse(readFileSync(BROWSERS_JSON, 'utf-8'));
   const chromium = json.browsers?.find((browser) => browser.name === 'chromium');
-  if (!chromium?.revision) {
-    throw new Error('Could not resolve Playwright Chromium revision from playwright-core/browsers.json');
+  if (!chromium?.revision || !chromium?.browserVersion) {
+    throw new Error('Could not resolve Playwright Chromium revision/version from playwright-core/browsers.json');
   }
-  return chromium.revision;
+  return chromium;
+}
+
+function chromiumRevision() {
+  return chromiumDescriptor().revision;
 }
 
 function browserCacheRoots() {
@@ -54,6 +58,64 @@ function findChromiumSource(revision) {
     if (existsSync(candidate)) return candidate;
   }
   return null;
+}
+
+function chromiumArchiveUrl() {
+  const { browserVersion } = chromiumDescriptor();
+  const host = `${platform()}-${osArch()}`;
+  const suffixes = {
+    'darwin-arm64': 'mac-arm64',
+    'darwin-x64': 'mac-x64',
+    'linux-x64': 'linux64',
+    'win32-x64': 'win64',
+  };
+  const suffix = suffixes[host];
+  if (!suffix) {
+    throw new Error(`[prepare-electron-resources] unsupported Chromium download host: ${host}`);
+  }
+  return `https://cdn.playwright.dev/builds/cft/${browserVersion}/${suffix}/chrome-${suffix}.zip`;
+}
+
+function installChromiumCache(revision) {
+  const cacheRoot = browserCacheRoots()[0];
+  if (!cacheRoot) {
+    throw new Error('[prepare-electron-resources] no Playwright browser cache root is available');
+  }
+  const installDir = resolve(cacheRoot, `chromium-${revision}`);
+  const partialDir = `${installDir}.hydra-partial-${process.pid}`;
+  const scratchDir = mkdtempSync(resolve(tmpdir(), 'hydra-chromium-install-'));
+  const archive = resolve(scratchDir, 'chromium.zip');
+  const url = chromiumArchiveUrl();
+
+  mkdirSync(cacheRoot, { recursive: true });
+  rmSync(partialDir, { recursive: true, force: true });
+  mkdirSync(partialDir, { recursive: true });
+  console.log(`[prepare-electron-resources] downloading Chromium archive: ${url}`);
+  execFileSync(platform() === 'win32' ? 'curl.exe' : 'curl', ['-fL', '--retry', '3', '-o', archive, url], {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
+  console.log(`[prepare-electron-resources] extracting Chromium archive with native tooling`);
+  if (platform() === 'win32') {
+    execFileSync('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      '$ErrorActionPreference = "Stop"; Expand-Archive -Path $env:HYDRA_ZIP_SOURCE -DestinationPath $env:HYDRA_ZIP_OUT -Force',
+    ], {
+      cwd: ROOT,
+      stdio: 'inherit',
+      env: { ...process.env, HYDRA_ZIP_SOURCE: archive, HYDRA_ZIP_OUT: partialDir },
+    });
+  } else {
+    execFileSync('unzip', ['-q', archive, '-d', partialDir], {
+      cwd: ROOT,
+      stdio: 'inherit',
+    });
+  }
+  writeFileSync(resolve(partialDir, 'INSTALLATION_COMPLETE'), '');
+  rmSync(installDir, { recursive: true, force: true });
+  renameSync(partialDir, installDir);
+  rmSync(scratchDir, { recursive: true, force: true });
 }
 
 function walkTree(root, visitor) {
@@ -117,17 +179,8 @@ console.log(`[prepare-electron-resources] copied ${EMPTY_DB_OUT}`);
 const revision = chromiumRevision();
 let chromiumSrc = findChromiumSource(revision);
 if (!chromiumSrc) {
-  // `playwright` is in optionalDependencies; if it failed to install (or was
-  // skipped), fall back to playwright-core's CLI which is always present.
-  const playwrightCli = resolve(ROOT, 'node_modules/playwright/cli.js');
-  const playwrightCoreCli = resolve(ROOT, 'node_modules/playwright-core/cli.js');
-  const cli = existsSync(playwrightCli) ? playwrightCli : playwrightCoreCli;
   console.log(`[prepare-electron-resources] Chromium ${revision} not found in cache: ${browserCacheRoots().join(', ')}`);
-  console.log(`[prepare-electron-resources] installing via ${cli}`);
-  execFileSync(process.execPath, [cli, 'install', 'chromium', '--no-shell'], {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
+  installChromiumCache(revision);
   chromiumSrc = findChromiumSource(revision);
 }
 if (!chromiumSrc) {

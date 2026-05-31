@@ -155,7 +155,10 @@ test('electron package smoke validates target-specific Chromium archives', () =>
   assert.match(script, /Chromium archive target mismatch/, 'smoke must explain wrong-target Chromium archives directly');
   assert.match(script, /unsupported HYDRA_BUILD_TARGET/, 'smoke must reject unknown target names');
   assert.match(prepareScript, /function chromiumCacheGuidance/, 'prepare must explain target-cache misses');
-  assert.match(prepareScript, /[cli, 'install', 'chromium', '--no-shell']/, 'prepare must skip the unused Playwright Chromium headless-shell payload');
+  assert.match(prepareScript, /function installChromiumCache/, 'prepare must use the deterministic cache installer');
+  assert.match(prepareScript, /builds\/cft\/\$\{browserVersion\}/, 'prepare must download the revision-matched Chrome for Testing archive directly');
+  assert.match(prepareScript, /Expand-Archive/, 'prepare must extract Chromium with native Windows tooling');
+  assert.match(prepareScript, /execFileSync\('unzip'/, 'prepare must extract Chromium with native Unix tooling');
   assert.match(prepareScript, /Build on the target runner\/machine/, 'prepare must distinguish cross-target cache misses from local install misses');
   assert.match(prepareScript, /win32-x64\s+-> Windows x64 GitHub runner or Windows machine/, 'prepare must give Windows runner guidance');
   assert.match(prepareScript, /PLAYWRIGHT_BROWSERS_PATH cache/, 'prepare must document the explicit cache escape hatch');
