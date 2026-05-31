@@ -361,6 +361,10 @@ test('hydra audit reports release evidence and deferred manual items without lau
 
   const out = runHydra(['audit', '--json']);
   const report = JSON.parse(out);
+  const releaseAudit = readFileSync(join(ROOT, 'docs/RELEASE_AUDIT.md'), 'utf8');
+  const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker\s+workflow\s+run\s+`(\d+)`\s+passed both runtime smoke and\s+(?:the )?registry image push/g)]
+    .map((match) => match[1]);
+  const latestDockerCheckpointRun = dockerCheckpointRuns.at(-1);
   assert.equal(report.summary.checked, report.items.length);
   assert.equal(typeof report.complete, 'boolean');
   assert.equal(typeof report.summary.missing, 'number');
@@ -378,7 +382,8 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'touch-id-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'windows-launch-dogfood' && item.state === 'deferred' && /hosted Windows workflow covers unpacked-app and silent NSIS install\/startup\/uninstall cleanup/.test(item.evidence) && /interactive NSIS installer install\/open UX/.test(item.evidence)));
-  assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence) && /newest recorded checkpoint run \d+/.test(item.evidence)));
+  assert.ok(latestDockerCheckpointRun);
+  assert.ok(report.items.some((item) => item.id === 'docker-runtime' && item.state === 'ok' && /Runtime Smoke/.test(item.evidence) && item.evidence.includes(`newest recorded checkpoint run ${latestDockerCheckpointRun}`)));
   assert.ok(report.items.some((item) => item.id === 'session-probe-redaction' && item.state === 'ok' && /masking account aliases/.test(item.evidence)));
   for (const item of report.items.filter((entry) => entry.state === 'deferred')) {
     assert.match(item.evidence, /not release-complete evidence/);

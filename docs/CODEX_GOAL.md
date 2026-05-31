@@ -577,6 +577,30 @@ closed-app CLI commands, tests, and repo-local documentation.
   used `[skip-bump]`; Auto-version run `26725827316` skipped, CI run
   `26725827309` passed, and Docker workflow run `26725827291` passed runtime
   smoke plus registry image push.
+- A fresh untouched exact-public `v1.4.0` post-native-capture sampler at
+  `/private/tmp/hydra-v140-post-native-anchor-idle-reprofile-20260531T224017Z`
+  retained four packaged Hydra processes and zero stale Hydra Playwright
+  profiles across 11 samples over five minutes. CPU stayed between `0.0%` and
+  `0.7%` (`0.082%` average, `0.0%` ending); RSS moved from `498.50 MiB` to
+  `499.22 MiB` (`+0.72 MiB`). No Computer Use attach occurred during this
+  valid calm-runtime pass.
+- Hosted Windows lifecycle smoke now covers the generated NSIS artifact
+  instead of only `release/win-unpacked/Hydra.exe`: isolated silent install,
+  installed-app startup, owned-process cleanup, copied-uninstaller execution,
+  and zero-residue verification. Checkpoint
+  `e0a887b02f5da8d20c555022013396213e8732c3` timeout-bounds slow hosted NSIS
+  extraction at five minutes and uninstall at one minute. Timeout-bounded
+  release dispatch `26726921936` passed Linux AppImage, both macOS zips, and
+  Windows x64 NSIS; the Windows log retained each real executable tree for
+  `25,000ms`, cleaned both trees, and removed the temporary install directory.
+  CI run `26726917980` and Docker runtime-smoke/registry run `26726917984`
+  passed. Interactive NSIS installer click-through remains a real Windows
+  desktop manual boundary.
+- `hydra audit` now parses documented `Docker workflow run` checkpoints with
+  whitespace-tolerant matching so normal Markdown wrapping cannot silently
+  leave stale runtime-smoke evidence in CLI output. The CLI regression derives
+  the newest documented checkpoint and requires the reported Docker evidence
+  to match it; current output records `26726917984`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

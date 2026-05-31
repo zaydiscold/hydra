@@ -1011,3 +1011,29 @@ This evidence file is not release-complete by itself. The release remains not co
   Auto-version run `26726418555` skipped, CI run `26726418554` passed, and
   Docker workflow run `26726418536` passed both runtime smoke and registry
   image push.
+- A second untouched calm-runtime pass under
+  `/private/tmp/hydra-v140-post-native-anchor-idle-reprofile-20260531T224017Z`
+  sampled the canonical exact-public package every 30 seconds for five
+  minutes after native capture. All 11 samples retained four Hydra-owned
+  processes and zero stale Hydra Playwright profiles. CPU stayed between
+  `0.0%` and `0.7%` (`0.082%` average, `0.0%` ending); RSS moved from
+  `498.50 MiB` to `499.22 MiB` (`+0.72 MiB`). No Computer Use attach occurred
+  during this pass.
+- Hosted release workflow dispatch `26726712898` then exercised the real
+  Windows NSIS lifecycle on `windows-2022`: unpacked `Hydra.exe` stayed alive
+  for `25,000ms` and left no packaged processes; the generated
+  `Hydra-1.4.0-win-x64.exe` installed silently into an isolated temporary
+  directory; installed `Hydra.exe` stayed alive for `25,000ms` and left no
+  packaged processes; a copied uninstaller removed the install tree with no
+  residue. Because the first silent extraction needed about `102s`,
+  checkpoint `e0a887b02f5da8d20c555022013396213e8732c3` bounded install at
+  five minutes and uninstall at one minute.
+- Timeout-bounded release dispatch `26726921936` passed Linux AppImage,
+  macOS arm64 zip, macOS Intel x64 zip, and the timeout-bounded Windows x64
+  NSIS lane. Its Windows log repeated unpacked startup/cleanup, silent install,
+  installed-app startup/cleanup, copied-uninstaller execution, and zero-residue
+  verification; final silent install completed in about `63s`. Auto-version
+  run `26726917968` skipped, CI run `26726917980` passed, and Docker run
+  `26726917984` passed runtime smoke plus registry push. This closes hosted
+  silent NSIS lifecycle proof without claiming the still-manual interactive
+  Windows installer click-through.

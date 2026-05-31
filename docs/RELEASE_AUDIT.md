@@ -1068,3 +1068,38 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Auto-version run `26726418555` skipped as intended, CI run `26726418554`
   passed, and Docker workflow run `26726418536` passed both runtime smoke and
   registry image push.
+- 2026-05-31 exact-public `v1.4.0` post-capture calm-runtime proof:
+  `/private/tmp/hydra-v140-post-native-anchor-idle-reprofile-20260531T224017Z`
+  sampled the untouched canonical packaged app every 30 seconds for five
+  minutes after the native screenshot checkpoint. All 11 samples retained
+  four Hydra-owned processes and zero stale Hydra Playwright profiles.
+  Aggregate CPU stayed between `0.0%` and `0.7%` (`0.082%` average, `0.0%`
+  ending); RSS moved from `498.50 MiB` to `499.22 MiB` (`+0.72 MiB`). This
+  fresh sample was collected without attaching Computer Use and confirms the
+  prior attach-induced spike was external instrumentation distortion.
+- 2026-05-31 hosted Windows NSIS lifecycle hardening: checkpoint
+  `811b5d6e4269c17097872d7d431edbdd9bdc6351` extended
+  `scripts/smoke-windows-launch.mjs` beyond the unpacked app. Release workflow
+  dispatch `26726712898` passed shared gates, Linux AppImage, both macOS zip
+  lanes, Windows package smoke, unpacked `Hydra.exe` startup/cleanup, silent
+  NSIS install into an isolated temporary directory, installed `Hydra.exe`
+  startup/cleanup, copied-uninstaller execution, and residue rejection. The
+  hosted `windows-2022` log recorded both real executable trees alive for
+  `25,000ms` and the final line `NSIS silent install, installed-app launch,
+  cleanup, and uninstall left no residue`.
+- 2026-05-31 bounded Windows lifecycle follow-up: the first hosted silent NSIS
+  extraction took about `102s`, so checkpoint
+  `e0a887b02f5da8d20c555022013396213e8732c3` added an explicit five-minute
+  install timeout and one-minute uninstall timeout. Timeout-bounded release
+  workflow dispatch `26726921936` passed Linux AppImage, macOS arm64 zip,
+  macOS Intel x64 zip, Windows x64 NSIS package smoke, unpacked startup/cleanup,
+  silent NSIS install, installed-app startup/cleanup, copied-uninstaller
+  execution, and zero-residue verification. Its final Windows install
+  completed in about `63s`, below the new bound. Auto-version run
+  `26726917968` skipped as intended; CI run `26726917980` passed; Docker
+  workflow run `26726917984` passed both runtime smoke and registry image push.
+  The audit parser now tolerates Markdown whitespace inside `Docker workflow
+  run` evidence phrases, and its CLI regression derives the newest documented
+  checkpoint instead of accepting any stale run ID. The actual interactive
+  NSIS installer install/open UX remains a real Windows desktop manual
+  boundary.
