@@ -469,6 +469,13 @@ closed-app CLI commands, tests, and repo-local documentation.
   retained four Hydra-owned processes and zero stale profiles across all 11
   30-second samples. Aggregate Hydra CPU stayed between `0.0%` and `0.1%`
   (`0.018%` average); RSS moved by `+3.11 MiB`.
+- The exact-local `1.3.0` arm64 package rebuilt cleanly after the hosted source
+  checkpoint, passed explicit-resource package smoke, strict deep codesign,
+  restored-icon comparison, manifest/bundle version checks, Spotlight
+  uniqueness, and LaunchServices registration. Native-only Computer Use
+  captured the versioned splash and exposed the replacement Dashboard title
+  plus native controls after handoff. Exact-local raw evidence is under
+  `/private/tmp/hydra-130-versioned-native-launch-20260531T130322`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

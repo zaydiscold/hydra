@@ -795,3 +795,33 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   tuning caps, stable-geometry rule, Anime.js split-text ownership and cleanup,
   falling-glyph/portal invariants, and the reduced-motion contract. These are
   maintained implementation rules, not release-note-only descriptions.
+- 2026-05-31 exact-local-`1.3.0` package verification: after the source
+  checkpoint passed hosted CI run `26722842203` and hosted Docker run
+  `26722842195`, the old generated `1.1.5` local release directory moved
+  reversibly to
+  `/Users/zaydk/.Trash/hydra-pre-v130-local-release-20260531T130106`.
+  `npm version 1.3.0 --no-git-tag-version --allow-same-version` updated both
+  manifests, `npm run electron:build:mac-arm64` rebuilt from a clean output
+  lane, explicit-resource `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`
+  passed, strict deep codesign passed, the packaged ICNS matched the restored
+  source icon byte-for-byte, and the bundle reports `1.3.0`. The old Trash
+  bundle was unregistered explicitly; Spotlight and LaunchServices now return
+  only `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`.
+- 2026-05-31 exact-local-`1.3.0` native LaunchServices verification:
+  `/private/tmp/hydra-130-versioned-native-launch-20260531T130322` records zero
+  Hydra-owned processes before normal `open -n`, four during splash, and four
+  after handoff. No listener existed on debug ports `9333` or `9334`.
+  Computer Use captured the actual packaged splash with individualized letters,
+  nine segmented stems, centered `Welcome, Zayd Khan`, and visible `V1.3.0`.
+  The replacement window title became `Hydra — Dashboard`, native
+  close/full-screen/minimize controls remained exposed, and settled doctor
+  output reported four owned processes, `0.0%` CPU, `535.14 MB` RSS, and zero
+  stale profiles. Computer Use still captured only the background layer after
+  handoff, so interactive nine-card magnetic review remains a user-facing
+  visual acceptance item.
+- 2026-05-31 exact-local-`1.3.0` splash teardown diagnostics:
+  `target=72`, `queueLength=72`, `shatteredWordCount=72`,
+  `duplicateShatterSkips=0`, `peakDynamicBodyCount=551`,
+  `portalCollisionDisabled=true`, `portalLiftApplied=true`,
+  `renderFrames=409`, `physicsSteps=672`, `timers=0`, `rafActive=false`, and
+  `matterCleared=true`.

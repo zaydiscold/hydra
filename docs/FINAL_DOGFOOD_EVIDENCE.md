@@ -811,3 +811,26 @@ This evidence file is not release-complete by itself. The release remains not co
   split-text lifecycle, falling-glyph queue and one-shot shatter guard,
   collision-free portal cadence, disposal diagnostics, and reduced-motion
   contract.
+- The exact-local `1.3.0` package rebuilt from a clean release output after the
+  source checkpoint passed hosted CI run `26722842203` and hosted Docker run
+  `26722842195`. Package smoke, strict deep codesign, restored-icon comparison,
+  manifest/bundle version checks, Spotlight uniqueness, and LaunchServices
+  registration passed. The superseded generated `1.1.5` local release moved
+  reversibly to
+  `/Users/zaydk/.Trash/hydra-pre-v130-local-release-20260531T130106`.
+- `/private/tmp/hydra-130-versioned-native-launch-20260531T130322` records the
+  exact-local `1.3.0` native launch: zero Hydra-owned processes before normal
+  LaunchServices `open -n`, four during splash, and four after handoff. Debug
+  ports `9333` and `9334` had no listeners. Computer Use captured
+  individualized falling letters, nine segmented stems, centered
+  `Welcome, Zayd Khan`, and visible `V1.3.0`. After handoff it exposed the
+  `Hydra — Dashboard` title plus native controls but captured only the
+  background layer, preserving the explicit user-facing nine-card visual
+  acceptance boundary.
+- Exact-local `1.3.0` splash diagnostics remained finite:
+  `target=72`, `queueLength=72`, `shatteredWordCount=72`,
+  `duplicateShatterSkips=0`, `peakDynamicBodyCount=551`,
+  `portalCollisionDisabled=true`, `portalLiftApplied=true`,
+  `renderFrames=409`, `physicsSteps=672`, `timers=0`, `rafActive=false`, and
+  `matterCleared=true`. Settled doctor output reported four owned processes,
+  `0.0%` CPU, `535.14 MB` RSS, and zero stale profiles.
