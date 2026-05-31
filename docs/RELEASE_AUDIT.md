@@ -1130,3 +1130,26 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Auto-version run `26727636115` skipped as intended, CI run `26727636112`
   passed, and Docker workflow run `26727636121` passed both runtime smoke and
   registry image push.
+- 2026-05-31 exact-public `v1.4.0` native route-review retry: Computer Use
+  `get_app_state("com.zayd.hydra")` again timed out after `120s`. The external
+  `SkyComputerUseService` helper held `28.8%` CPU while Hydra's otherwise-idle
+  main process held `66.5%`; GPU, network, and renderer helpers remained
+  effectively idle. A five-second stack sample again traversed HIServices
+  `_AXXMIGCopyMultipleAttributeValues`. Terminating only the external helper
+  returned the unchanged four-process Hydra tree to `0.0%` sampled CPU with
+  zero stale Hydra Playwright profiles. A Computer Use `Cmd+,` fallback was
+  correctly rejected because the timed-out session never became active.
+  AppKit foreground activation plus a Quartz `CGEvent` safe-band click scan
+  (`x=68`, `y=430...580`) also left the native title unchanged, so it cannot
+  close route-review evidence. Owner-only raw retry evidence is under
+  `/private/tmp/hydra-v140-cua-route-review-retry-20260531T233933Z`.
+- 2026-05-31 exact-public `v1.4.0` fresh native screenshot provenance:
+  CoreGraphics enumerated one packaged window (`CGWindowID 2637`, owner
+  `Hydra`, title `Hydra — Dashboard`, bounds `1440x900 @ 36,34`) after the
+  failed accessibility attach was recovered. `/usr/sbin/screencapture -x -o
+  -l 2637` wrote a `2880x1800` Retina frame with SHA-256
+  `a404d421b26765396677c9d0708a3985c942ae0ab778971b0b99abb9db014036`.
+  The raw account-bearing image remains owner-only outside Git under
+  `/private/tmp/hydra-v140-native-dashboard-refresh-20260531T234102Z`. This
+  refresh proves current packaged-app Dashboard provenance without promoting
+  the still-blocked interactive visual-review checkbox.

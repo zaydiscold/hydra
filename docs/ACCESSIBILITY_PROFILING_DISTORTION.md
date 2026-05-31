@@ -121,3 +121,23 @@ moved from `505.36 MiB` to `507.20 MiB` (`+1.84 MiB`).
 The fresh exact-public `v1.4.0` recovery snapshot kept four Hydra-owned
 processes, returned aggregate Hydra CPU from `69.7%` to `0.0%`, kept RSS at
 `493.77 MB`, and kept stale Hydra Playwright profiles at zero.
+
+## v1.4.0 Route-Review Retry
+
+The exact-public `v1.4.0` packaged app reproduced the same boundary on
+2026-05-31. `get_app_state("com.zayd.hydra")` timed out after `120s`;
+external `SkyComputerUseService` held `28.8%` CPU; Hydra's otherwise-idle main
+process held `66.5%`; and the GPU, network, and renderer helpers remained
+effectively idle. A five-second sample again traversed HIServices
+`_AXXMIGCopyMultipleAttributeValues`.
+
+Terminating only the external helper returned the unchanged four-process Hydra
+tree to `0.0%` sampled CPU with zero stale Hydra Playwright profiles. Raw
+owner-only evidence is under
+`/private/tmp/hydra-v140-cua-route-review-retry-20260531T233933Z`.
+
+Follow-up route control remained unavailable: Computer Use rejected `Cmd+,`
+because the timed-out session never became active, and an AppKit-foregrounded
+Quartz `CGEvent` scan across the safe navigation band left the packaged native
+window title unchanged. Keep native interactive route review manual on this
+machine unless the Computer Use accessibility attach is repaired.

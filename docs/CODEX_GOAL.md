@@ -624,6 +624,23 @@ closed-app CLI commands, tests, and repo-local documentation.
   Auto-version run `26727636115` skipped, CI run `26727636112` passed, and
   Docker workflow run `26727636121` passed runtime smoke plus registry image
   push.
+- A final exact-public `v1.4.0` Computer Use route-review retry reproduced the
+  known native accessibility blocker: `get_app_state("com.zayd.hydra")`
+  timed out after `120s`, external `SkyComputerUseService` held `28.8%` CPU,
+  and Hydra's otherwise-idle main process held `66.5%`. Terminating only the
+  external helper returned the unchanged four-process tree to `0.0%` sampled
+  CPU and zero stale profiles. AppKit foreground activation plus Quartz safe
+  clicks could not drive the route, and Computer Use follow-up input was
+  unavailable because the attach never became active. Raw owner-only evidence
+  is under
+  `/private/tmp/hydra-v140-cua-route-review-retry-20260531T233933Z`.
+- Native CoreGraphics screenshot provenance was refreshed after recovery:
+  packaged window `2637` (`Hydra — Dashboard`, `1440x900 @ 36,34`) produced
+  one owner-only `2880x1800` Retina capture outside Git under
+  `/private/tmp/hydra-v140-native-dashboard-refresh-20260531T234102Z`,
+  SHA-256
+  `a404d421b26765396677c9d0708a3985c942ae0ab778971b0b99abb9db014036`.
+  This does not promote the still-manual interactive route review.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

@@ -1061,3 +1061,20 @@ This evidence file is not release-complete by itself. The release remains not co
   Auto-version run `26727636115` skipped, CI run `26727636112` passed, and
   Docker workflow run `26727636121` passed runtime smoke plus registry image
   push.
+- A final exact-public `v1.4.0` Computer Use route-review retry remained
+  blocked: `get_app_state("com.zayd.hydra")` timed out after `120s`, external
+  `SkyComputerUseService` held `28.8%` CPU, and Hydra's otherwise-idle main
+  process held `66.5%`. Terminating only the external helper returned the
+  unchanged four-process Hydra tree to `0.0%` sampled CPU and zero stale
+  profiles. Owner-only raw evidence, including a five-second HIServices stack
+  sample and the rejected follow-up input attempt, is under
+  `/private/tmp/hydra-v140-cua-route-review-retry-20260531T233933Z`.
+- After recovery, native CoreGraphics enumeration selected one packaged
+  Dashboard window (`CGWindowID 2637`, owner `Hydra`, title `Hydra —
+  Dashboard`, bounds `1440x900 @ 36,34`). `/usr/sbin/screencapture -x -o -l
+  2637` wrote an owner-only `2880x1800` Retina frame outside Git at
+  `/private/tmp/hydra-v140-native-dashboard-refresh-20260531T234102Z`; its
+  SHA-256 is
+  `a404d421b26765396677c9d0708a3985c942ae0ab778971b0b99abb9db014036`.
+  This is fresh packaged-app screenshot provenance, not a substitute for the
+  remaining human route review.
