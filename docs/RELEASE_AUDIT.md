@@ -500,3 +500,38 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `0.0%` and `0.1%` (`0.009%` average); RSS moved from `483.89 MiB` to
   `478.02 MiB` (`-5.88 MiB`). Raw before/after inventories preserve the
   Hydra-owned subset and unrelated machine-global browser-tooling context.
+- 2026-05-31 Bulk Auth wizard lifecycle cleanup: `src/hooks/useBulkAuth.js`
+  now owns an abort controller for its mounted lifetime and cancels active
+  Magic Link status probes, live-session confirmation probes, bulk-stub
+  requests, Magic Link send/resend requests, and staggered send delays on
+  unmount. Late responses do not write state or logs after abort, poll
+  in-flight state resets in `finally`, and mount resets the unmounted guard so
+  React remounts do not inherit stale state. `src/api.js` passes optional
+  abort signals through `/accounts/bulk-otp-stubs`,
+  `/accounts/:id/session-check`, `/accounts/:id/magic-link/send`, and
+  `/accounts/:id/magic-link/status/:signInId`.
+- 2026-05-31 Bulk Auth wizard lifecycle benchmark and package proof: a
+  200-wizard synthetic unmount probe at
+  `/private/tmp/hydra-bulk-auth-unmount-benchmark-20260531T154607Z` recorded
+  `2400` timeout resources and `600` pending requests after old-shape unmount
+  versus `0` timeout resources and `0` pending requests after owned cleanup;
+  the new path aborted all `600` simulated requests. Focused background
+  lifecycle (`28/28`), UI static (`35/35`), lint, full `npm test`, build,
+  OpenAPI generation (`83 operations`), serial gate (`12/12`), and diff
+  checks passed. A temporary arm64 package at
+  `/private/tmp/hydra-package-bulk-auth-abort-20260531T154837Z` passed
+  packaged resource smoke, strict deep codesign, and bundled renderer
+  inspection for the lifecycle ref, stagger-delay cancel set, delay helper,
+  abort marker, and all four signal-aware endpoint markers. It was moved
+  reversibly to
+  `/Users/zaydk/.Trash/hydra-package-bulk-auth-abort-20260531T154837Z`;
+  Spotlight still resolves only
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`.
+- 2026-05-31 exact-public-`v1.1.5` ninth untouched idle reprofile:
+  `/private/tmp/hydra-v115-ninth-untouched-idle-reprofile-20260531T154248Z`
+  sampled the already-settled canonical app every 30 seconds for five minutes
+  with zero UI interaction while source verification continued. All 11
+  samples reported four Hydra-owned processes. Sampled CPU stayed between
+  `0.0%` and `0.2%` (`0.045%` average); RSS moved from `448.22 MiB` to
+  `453.06 MiB` (`+4.84 MiB`). Raw before/after inventories preserve the
+  Hydra-owned subset and unrelated machine-global browser-tooling context.

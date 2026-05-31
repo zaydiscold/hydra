@@ -301,8 +301,8 @@ export const addAccountWithCredentials = (alias, email, password, authMethod) =>
 export const bulkAddAccounts = (lines) =>
   request('/accounts/bulk', { method: 'POST', body: { lines } });
 /** Create OTP-only vault rows from emails only (Bulk Auth wizard). */
-export const bulkOtpStubs = (emails) =>
-  request('/accounts/bulk-otp-stubs', { method: 'POST', body: { emails } });
+export const bulkOtpStubs = (emails, signal) =>
+  request('/accounts/bulk-otp-stubs', { method: 'POST', body: { emails }, signal });
 export const updateAccount = (id, updates) =>
   request(`/accounts/${id}`, { method: 'PATCH', body: updates });
 export const deleteAccount = (id) => request(`/accounts/${id}`, { method: 'DELETE' });
@@ -326,14 +326,14 @@ export const refreshAccountLogin = (id) =>
 export const silentRefreshSession = (id) =>
   request(`/accounts/${id}/refresh`, { method: 'POST' });
 export const getSessionStatus = (id, signal) => request(`/accounts/${id}/session-status`, { signal });
-export const checkSessionLive = (id) => request(`/accounts/${id}/session-check`);
+export const checkSessionLive = (id, signal) => request(`/accounts/${id}/session-check`, { signal });
 export const silentRefreshOnly = (id) => request(`/accounts/${id}/silent-refresh`, { method: 'POST' });
 
 // Magic link (email_link strategy)
-export const sendMagicLink = (id, email) =>
-  request(`/accounts/${id}/magic-link/send`, { method: 'POST', body: { email } });
-export const getMagicLinkStatus = (id, signInId) =>
-  request(`/accounts/${id}/magic-link/status/${encodeURIComponent(signInId)}`);
+export const sendMagicLink = (id, email, signal) =>
+  request(`/accounts/${id}/magic-link/send`, { method: 'POST', body: { email }, signal });
+export const getMagicLinkStatus = (id, signInId, signal) =>
+  request(`/accounts/${id}/magic-link/status/${encodeURIComponent(signInId)}`, { signal });
 
 // Provisioning
 export const provisionManagementKey = (id, keyName) =>

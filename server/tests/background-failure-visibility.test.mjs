@@ -264,6 +264,10 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(generator, /heartbeatInFlightRef\.current/);
   assert.match(bulkAuth, /pollTimerRef\.current/);
   assert.match(bulkAuth, /poll\.inFlight/);
+  assert.match(bulkAuth, /const lifecycleAbortRef = useRef\(null\)/);
+  assert.match(bulkAuth, /controller\.abort\(\)/);
+  assert.match(bulkAuth, /clearTrackedTimeout\(timer\)/);
+  assert.match(bulkAuth, /waitForMagicLinkSendDelay\(idx \* 400\)/);
   assert.doesNotMatch(metrics, /setInterval\(\(\) => \{[\s\S]{0,80}fetchDashboard/);
   assert.doesNotMatch(traffic, /setInterval\(\(\) => \{[\s\S]{0,80}fetchTraffic/);
   assert.doesNotMatch(vault, /setInterval\(\(\) => \{[\s\S]{0,80}loadAccounts/);
@@ -453,7 +457,8 @@ test('bulk magic-link polling confirms completed links with a live Clerk session
   assert.match(poller, /await Promise\.all\(pollEntries\.map/);
   assert.match(poller, /await Promise\.all\(completed\.map/);
   assert.match(poller, /completed\.map\(async \(\[email, poll\]\) => \{\s*try \{/);
-  assert.match(poller, /api\.checkSessionLive\(poll\.accountId\)/);
+  assert.match(poller, /api\.getMagicLinkStatus\(poll\.accountId, poll\.signInId, signal\)/);
+  assert.match(poller, /api\.checkSessionLive\(poll\.accountId, signal\)/);
   assert.match(poller, /status === 'active'/);
   assert.match(poller, /Link expired or session was not confirmed/);
   assert.doesNotMatch(poller, /api\.getAccounts\(\)/);

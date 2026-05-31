@@ -609,3 +609,23 @@ This evidence file is not release-complete by itself. The release remains not co
   kept four Hydra-owned processes through all 11 30-second samples. CPU
   stayed between `0.0%` and `0.1%` (`0.009%` average); RSS moved from
   `483.89 MiB` to `478.02 MiB` (`-5.88 MiB`) while source verification ran.
+- Bulk Auth wizard unmount now aborts active Magic Link status probes,
+  live-session confirmation probes, bulk-stub requests, Magic Link send/resend
+  requests, and staggered send delays. A 200-wizard synthetic teardown probe
+  at `/private/tmp/hydra-bulk-auth-unmount-benchmark-20260531T154607Z`
+  recorded `2400` timeout resources and `600` pending requests after old-shape
+  unmount versus `0` and `0` after owned cleanup; the new path aborted all
+  `600` simulated requests.
+- The Bulk Auth lifecycle patch passed focused background lifecycle (`28/28`),
+  UI static (`35/35`), lint, full test, build, OpenAPI (`83 operations`),
+  serial gate (`12/12`), and diff checks. A temporary arm64 package at
+  `/private/tmp/hydra-package-bulk-auth-abort-20260531T154837Z` passed packaged
+  resource smoke, strict deep signature verification, and bundled renderer
+  inspection for the lifecycle cancellation markers. It was moved reversibly
+  to `/Users/zaydk/.Trash/hydra-package-bulk-auth-abort-20260531T154837Z`;
+  Spotlight continues to resolve only the canonical public app.
+- A ninth untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-ninth-untouched-idle-reprofile-20260531T154248Z`
+  kept four Hydra-owned processes through all 11 30-second samples. CPU
+  stayed between `0.0%` and `0.2%` (`0.045%` average); RSS moved from
+  `448.22 MiB` to `453.06 MiB` (`+4.84 MiB`) while source verification ran.

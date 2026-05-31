@@ -358,6 +358,20 @@ closed-app CLI commands, tests, and repo-local documentation.
 - `npm run lint`, `npm run build`, `node --check scripts/free-dev-ports.mjs`, `npm run test:workflow-contract`, `npm run test:electron-main-process`, `npm run test:ui-static`, `ELECTRON_CACHE=/private/tmp/hydra-electron-cache npm run electron:build:mac-arm64`, `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, and `codesign --verify --deep --strict --verbose=2 release/mac-arm64/Hydra.app` passed on 2026-05-18; packaged GUI dogfood and final Electron-only screenshot audit remain tracked in `docs/RELEASE_AUDIT.md`
 - `npm run gate`, full `npm test`, `git diff --check`, and `node bin/hydra.mjs audit --json` passed on 2026-05-18 after the dev-port cleanup hardening, utility/test cleanup visibility pass, package rebuild, native macOS titlebar fix, CLI runtime-diagnostics consistency pass, target-specific Chromium smoke hardening, package-shell smoke hardening, Windows artifact smoke, macOS Intel x64 refresh, final dogfood-runbook wiring, and dependency-audit lockfile fix. Full `npm test` passed again on 2026-05-19 after adding the private `hydra mcp` stdio server and wiring `test:mcp` into the main test chain. `node bin/hydra.mjs audit --json` now reports `complete=false`, `checked=32`, `ok=28`, `deferred=4`, `missing=0`, and `blockers=0`; packaged GUI dogfood, live MVP dogfood, packaged screenshot audit, and Docker runtime smoke remain deferred/manual evidence gaps instead of being treated as finished. Fresh 2026-05-19 probes show LaunchServices failing for both Calculator and Hydra from this shell, and Docker Desktop not running with sandbox-denied log access.
 - Docker image construction passed after moving the builder and runtime images to `node:22-bookworm`; local Docker runtime availability remains an environment dependency tracked in `docs/RELEASE_AUDIT.md`
+- Bulk Auth wizard work now has an owned lifecycle boundary: route unmount aborts
+  active Magic Link status probes, live-session confirmation probes, bulk-stub
+  requests, and send/resend requests; it also cancels staggered Magic Link send
+  delays immediately instead of leaving detached timers behind. The lifecycle
+  ref resets on mount so React remounts do not inherit stale unmounted state.
+  A 200-wizard synthetic unmount probe at
+  `/private/tmp/hydra-bulk-auth-unmount-benchmark-20260531T154607Z` recorded
+  `2400` timeout resources and `600` pending requests after old-shape unmount
+  versus `0` and `0` after owned cleanup; the new path aborted all `600`
+  simulated requests. Focused lifecycle (`28/28`), UI static (`35/35`), lint,
+  full test, build, OpenAPI, serial gate (`12/12`), diff, isolated arm64 package
+  smoke, strict deep codesign, bundled marker inspection, and Spotlight
+  uniqueness checks passed. The temporary package moved reversibly to
+  `/Users/zaydk/.Trash/hydra-package-bulk-auth-abort-20260531T154837Z`.
 
 ---
 

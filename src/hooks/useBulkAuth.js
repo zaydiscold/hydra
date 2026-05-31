@@ -4,6 +4,7 @@ import { accountNeedsSession } from '../utils/accountSession';
 import { isOtpAuthMethod } from '../utils/authMethod';
 import {
   clearTrackedInterval,
+  clearTrackedTimeout,
   setTrackedInterval,
   setTrackedTimeout,
 } from '../lib/runtimeDiagnostics.js';
@@ -36,6 +37,8 @@ export function useBulkAuth(addToast) {
   const pollRefs = useRef({});
   const pollTimerRef = useRef(null);
   const unmountedRef = useRef(false);
+  const lifecycleAbortRef = useRef(null);
+  const magicLinkSendDelayCancelsRef = useRef(new Set());
 
   // OTP Tab State
   const [otpQueue, setOtpQueue] = useState([]);
@@ -65,6 +68,28 @@ export function useBulkAuth(addToast) {
 
   // --- Email Link Logic ---
 
+  const waitForMagicLinkSendDelay = useCallback((delayMs) => {
+    const signal = lifecycleAbortRef.current?.signal;
+    if (!signal || signal.aborted || unmountedRef.current) return Promise.resolve(false);
+
+    return new Promise((resolve) => {
+      let timer = null;
+      let settled = false;
+      const finish = (shouldContinue) => {
+        if (settled) return;
+        settled = true;
+        clearTrackedTimeout(timer);
+        signal.removeEventListener('abort', cancel);
+        magicLinkSendDelayCancelsRef.current.delete(cancel);
+        resolve(shouldContinue);
+      };
+      const cancel = () => finish(false);
+      timer = setTrackedTimeout('useBulkAuth.magicLinkSendDelay', () => finish(true), delayMs);
+      magicLinkSendDelayCancelsRef.current.add(cancel);
+      signal.addEventListener('abort', cancel, { once: true });
+    });
+  }, []);
+
   const updateEmailLinkRow = useCallback((email, patch) => {
     setEmailLinkRows((prev) => prev.map((r) => (r.email === email ? { ...r, ...patch } : r)));
   }, []);
@@ -89,57 +114,63 @@ export function useBulkAuth(addToast) {
 
       const pollEntries = Object.entries(pollRefs.current).filter(([, poll]) => !poll.inFlight);
       if (pollEntries.length === 0) return;
+      const signal = lifecycleAbortRef.current?.signal;
+      if (!signal || signal.aborted) return;
 
       void (async () => {
         const completed = [];
-        await Promise.all(pollEntries.map(async ([email, poll]) => {
-          poll.inFlight = true;
-          try {
-            const res = await api.getMagicLinkStatus(poll.accountId, poll.signInId);
-            poll.consecutiveFailures = 0;
-            const st = res?.data?.status ?? res?.status;
-            if (st === 'completed_or_expired') {
-              completed.push([email, poll]);
+        try {
+          await Promise.all(pollEntries.map(async ([email, poll]) => {
+            poll.inFlight = true;
+            try {
+              const res = await api.getMagicLinkStatus(poll.accountId, poll.signInId, signal);
+              if (signal.aborted || unmountedRef.current) return;
+              poll.consecutiveFailures = 0;
+              const st = res?.data?.status ?? res?.status;
+              if (st === 'completed_or_expired') {
+                completed.push([email, poll]);
+              }
+            } catch (err) {
+              if (signal.aborted || unmountedRef.current) return;
+              poll.consecutiveFailures += 1;
+              if (poll.consecutiveFailures >= 3) {
+                stopMagicLinkPolling(email);
+                updateEmailLinkRow(email, { status: 'error', message: 'Poll failed — check connection' });
+                appendEmailLinkLog(`✗ magic link poll failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
+              }
             }
-          } catch (err) {
-            poll.consecutiveFailures += 1;
-            if (poll.consecutiveFailures >= 3) {
-              stopMagicLinkPolling(email);
-              updateEmailLinkRow(email, { status: 'error', message: 'Poll failed — check connection' });
-              appendEmailLinkLog(`✗ magic link poll failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
-            }
-          }
-        }));
+          }));
 
-        if (completed.length === 0) {
+          if (signal.aborted || unmountedRef.current || completed.length === 0) return;
+
+          await Promise.all(completed.map(async ([email, poll]) => {
+            try {
+              const res = await api.checkSessionLive(poll.accountId, signal);
+              if (signal.aborted || unmountedRef.current) return;
+              const status = res?.data?.status ?? res?.status;
+              if (status === 'active') {
+                stopMagicLinkPolling(email);
+                updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in — live session confirmed' });
+                appendEmailLinkLog(`✓ magic link claimed and live session confirmed → ${email}`);
+                addToast?.(`${email} signed in via magic link`, 'success');
+              } else {
+                stopMagicLinkPolling(email);
+                updateEmailLinkRow(email, { status: 'error', message: 'Link expired or session was not confirmed — resend' });
+                appendEmailLinkLog(`✗ magic link ended without an active Clerk session → ${email} (${status || 'unknown'})`);
+              }
+            } catch (err) {
+              if (signal.aborted || unmountedRef.current) return;
+              poll.consecutiveFailures += 1;
+              if (poll.consecutiveFailures >= 3) {
+                stopMagicLinkPolling(email);
+                updateEmailLinkRow(email, { status: 'error', message: 'Session confirmation failed — check connection' });
+                appendEmailLinkLog(`✗ magic link live confirmation failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
+              }
+            }
+          }));
+        } finally {
           for (const [, poll] of pollEntries) poll.inFlight = false;
-          return;
         }
-
-        await Promise.all(completed.map(async ([email, poll]) => {
-          try {
-            const res = await api.checkSessionLive(poll.accountId);
-            const status = res?.data?.status ?? res?.status;
-            if (status === 'active') {
-              stopMagicLinkPolling(email);
-              updateEmailLinkRow(email, { status: 'done', message: '✓ Signed in — live session confirmed' });
-              appendEmailLinkLog(`✓ magic link claimed and live session confirmed → ${email}`);
-              addToast?.(`${email} signed in via magic link`, 'success');
-            } else {
-              stopMagicLinkPolling(email);
-              updateEmailLinkRow(email, { status: 'error', message: 'Link expired or session was not confirmed — resend' });
-              appendEmailLinkLog(`✗ magic link ended without an active Clerk session → ${email} (${status || 'unknown'})`);
-            }
-          } catch (err) {
-            poll.consecutiveFailures += 1;
-            if (poll.consecutiveFailures >= 3) {
-              stopMagicLinkPolling(email);
-              updateEmailLinkRow(email, { status: 'error', message: 'Session confirmation failed — check connection' });
-              appendEmailLinkLog(`✗ magic link live confirmation failed after 3 errors → ${email}: ${err?.message || 'unknown'}`);
-            }
-          }
-        }));
-        for (const [, poll] of pollEntries) poll.inFlight = false;
       })();
     }, POLL_INTERVAL);
   }, [addToast, appendEmailLinkLog, stopMagicLinkPolling, updateEmailLinkRow]);
@@ -156,7 +187,12 @@ export function useBulkAuth(addToast) {
   }, [ensureMagicLinkPoller]);
 
   useEffect(() => {
+    unmountedRef.current = false;
+    const controller = new AbortController();
+    lifecycleAbortRef.current = controller;
+    const signal = controller.signal;
     const activePolls = pollRefs.current;
+    const delayCancels = magicLinkSendDelayCancelsRef.current;
     const onMessage = (evt) => {
       if (!evt.data || evt.data.type !== 'hydra:magic-link-done') return;
       const { email, signInId: doneSignInId } = evt.data;
@@ -165,8 +201,9 @@ export function useBulkAuth(addToast) {
       if (!poll || (doneSignInId && doneSignInId !== poll.signInId)) return;
 
       updateEmailLinkRow(email, { status: 'sent', message: 'Link clicked — confirming session…' });
-      void api.checkSessionLive(poll.accountId)
+      void api.checkSessionLive(poll.accountId, signal)
         .then((res) => {
+          if (signal.aborted || unmountedRef.current) return;
           const status = res?.data?.status ?? res?.status;
           if (status !== 'active') {
             appendEmailLinkLog(`magic link clicked; Clerk session not active yet → ${email} (${status || 'unknown'})`);
@@ -178,6 +215,7 @@ export function useBulkAuth(addToast) {
           addToast?.(`${email} signed in via magic link`, 'success');
         })
         .catch((err) => {
+          if (signal.aborted || unmountedRef.current) return;
           appendEmailLinkLog(`magic link clicked; live session confirmation failed → ${email}: ${err?.message || 'unknown'}`);
         });
     };
@@ -185,6 +223,10 @@ export function useBulkAuth(addToast) {
     return () => {
       window.removeEventListener('message', onMessage);
       unmountedRef.current = true;
+      controller.abort();
+      if (lifecycleAbortRef.current === controller) lifecycleAbortRef.current = null;
+      for (const cancel of delayCancels) cancel();
+      delayCancels.clear();
       for (const email of Object.keys(activePolls)) delete activePolls[email];
       if (pollTimerRef.current) {
         clearTrackedInterval(pollTimerRef.current);
@@ -195,11 +237,14 @@ export function useBulkAuth(addToast) {
 
   const handleSendMagicLinks = useCallback(async (emails) => {
     if (!emails.length) { setLocalError('Paste at least one email.'); return; }
+    const signal = lifecycleAbortRef.current?.signal;
+    if (!signal || signal.aborted || unmountedRef.current) return;
     resetErrors();
     setCreating(true);
 
     try {
-      const res = await api.bulkOtpStubs(emails);
+      const res = await api.bulkOtpStubs(emails, signal);
+      if (signal.aborted || unmountedRef.current) return;
       const stubResults = normalizeBulkOtpStubResults(res);
       const newRows = stubResults
         .filter(r => r.account)
@@ -216,15 +261,18 @@ export function useBulkAuth(addToast) {
 
       await Promise.all(
         newRows.map((row, idx) =>
-          new Promise((resolve) => setTrackedTimeout('useBulkAuth.magicLinkSendDelay', resolve, idx * 400)).then(async () => {
+          waitForMagicLinkSendDelay(idx * 400).then(async (shouldSend) => {
+            if (!shouldSend || signal.aborted || unmountedRef.current) return;
             updateEmailLinkRow(row.email, { status: 'sending', message: 'Sending…' });
             try {
-              const res = await api.sendMagicLink(row.id, row.email);
+              const res = await api.sendMagicLink(row.id, row.email, signal);
+              if (signal.aborted || unmountedRef.current) return;
               const signInId = res?.data?.signInId ?? res?.signInId;
               updateEmailLinkRow(row.email, { status: 'sent', signInId, message: '📧 Check inbox — click the link' });
               appendEmailLinkLog(`magic link sent → ${row.email}`);
               if (signInId) startMagicLinkPolling(row.email, row.id, signInId);
             } catch (err) {
+              if (signal.aborted || unmountedRef.current) return;
               const errMsg = api.formatApiErrorMessage(err);
               updateEmailLinkRow(row.email, { status: 'error', message: errMsg });
               appendEmailLinkLog(`✗ magic link failed → ${row.email}: ${errMsg}`);
@@ -232,23 +280,29 @@ export function useBulkAuth(addToast) {
           })
         )
       );
+      if (signal.aborted || unmountedRef.current) return;
       addToast?.(`Sent magic links to ${newRows.length} account(s)`, 'info');
     } catch (err) {
+      if (signal.aborted || unmountedRef.current) return;
       setLocalError(api.formatApiErrorMessage(err));
     } finally {
-      setCreating(false);
+      if (!unmountedRef.current) setCreating(false);
     }
-  }, [addToast, appendEmailLinkLog, resetErrors, startMagicLinkPolling, updateEmailLinkRow]);
+  }, [addToast, appendEmailLinkLog, resetErrors, startMagicLinkPolling, updateEmailLinkRow, waitForMagicLinkSendDelay]);
 
   const handleResendMagicLink = useCallback(async (row) => {
+    const signal = lifecycleAbortRef.current?.signal;
+    if (!signal || signal.aborted || unmountedRef.current) return;
     updateEmailLinkRow(row.email, { status: 'sending', message: 'Re-sending…' });
     try {
-      const res = await api.sendMagicLink(row.id, row.email);
+      const res = await api.sendMagicLink(row.id, row.email, signal);
+      if (signal.aborted || unmountedRef.current) return;
       const signInId = res?.data?.signInId ?? res?.signInId;
       updateEmailLinkRow(row.email, { status: 'sent', signInId, message: '📧 Check inbox — click the link' });
       appendEmailLinkLog(`magic link re-sent → ${row.email}`);
       startMagicLinkPolling(row.email, row.id, signInId);
     } catch (err) {
+      if (signal.aborted || unmountedRef.current) return;
       updateEmailLinkRow(row.email, { status: 'error', message: api.formatApiErrorMessage(err) });
     }
   }, [appendEmailLinkLog, startMagicLinkPolling, updateEmailLinkRow]);
@@ -257,13 +311,16 @@ export function useBulkAuth(addToast) {
 
   const handleCreateOtpStubs = useCallback(async (emails) => {
     if (!emails.length) { setLocalError('Add at least one email.'); return; }
+    const signal = lifecycleAbortRef.current?.signal;
+    if (!signal || signal.aborted || unmountedRef.current) return;
     resetErrors();
     setCreating(true);
     setOtpStubSummary(null);
     setOtpSignInId('');
     setOtpCode('');
     try {
-      const res = await api.bulkOtpStubs(emails);
+      const res = await api.bulkOtpStubs(emails, signal);
+      if (signal.aborted || unmountedRef.current) return;
       const results = normalizeBulkOtpStubResults(res);
       let created = 0, reused = 0, dup = 0, failed = 0;
       const nextQueue = [];
@@ -293,10 +350,11 @@ export function useBulkAuth(addToast) {
       appendOtpLog(`Queue built in pasted order: ${created} new, ${reused} reused, ${dup} dup-skip, ${failed} errors`);
       if (nextQueue.length) addToast?.(`Created ${nextQueue.length} OTP row(s)`, 'success');
     } catch (err) {
+      if (signal.aborted || unmountedRef.current) return;
       setLocalError(api.formatApiErrorMessage(err));
       setErrorCopyCommand(err.hydraCopyCommand ?? '');
     } finally {
-      setCreating(false);
+      if (!unmountedRef.current) setCreating(false);
     }
   }, [addToast, appendOtpLog, resetErrors]);
 
