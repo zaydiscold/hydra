@@ -1,0 +1,3 @@
+## 2026-05-31 - React.memo on Dashboard Grid Items
+**Learning:** Dashboard components that receive large Map/Set props (`liveStatuses`, `provisioningIds`, etc) from a parent wrapper (`useMetrics`) will always fail shallow equality checks when one item updates. This causes an O(N) re-render fan-out across the entire grid for every minor background poll or item interaction.
+**Action:** Always write a custom `areEqual` function for `React.memo` when a list item receives an aggregate state object. Compare only the specific keys or slices that apply to that child (e.g. `prevLiveStatuses[id] === nextLiveStatuses[id]`) instead of passing the entire object reference.

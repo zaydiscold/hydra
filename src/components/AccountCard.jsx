@@ -198,6 +198,36 @@ const AccountCard = memo(function AccountCard({
       )}
     </div>
   );
+}, (prevProps, nextProps) => {
+  if (prevProps.account !== nextProps.account) return false;
+  if (prevProps.index !== nextProps.index) return false;
+  if (prevProps.compact !== nextProps.compact) return false;
+
+  if (prevProps.onSelect !== nextProps.onSelect) return false;
+  if (prevProps.onProvision !== nextProps.onProvision) return false;
+
+  const id = prevProps.account.id;
+
+  // Compare properties from the Set/Objects that only concern this specific account
+  if (prevProps.provisioningIds.has(id) !== nextProps.provisioningIds.has(id)) return false;
+
+  const prevLive = prevProps.liveStatuses && prevProps.liveStatuses[id];
+  const nextLive = nextProps.liveStatuses && nextProps.liveStatuses[id];
+  if (prevLive !== nextLive) return false;
+
+  const prevAction = prevProps.actionSessionTruth && prevProps.actionSessionTruth[id];
+  const nextAction = nextProps.actionSessionTruth && nextProps.actionSessionTruth[id];
+  if (prevAction !== nextAction) return false;
+
+  const keys = prevProps.account.keys?.list || [];
+  for (let i = 0; i < keys.length; i++) {
+    const hash = keys[i].hash;
+    const prevCooldown = prevProps.cooldownMap?.[hash];
+    const nextCooldown = nextProps.cooldownMap?.[hash];
+    if (prevCooldown !== nextCooldown) return false;
+  }
+
+  return true;
 });
 
 export default AccountCard;
