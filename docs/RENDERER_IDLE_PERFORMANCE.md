@@ -122,3 +122,28 @@ Hydra-owned processes and zero stale Playwright profiles through all 11
 30-second samples. CPU stayed between `0.0%` and `0.5%` (`0.136%` average);
 RSS moved from `569.73 MiB` to `575.33 MiB` (`+5.59 MiB`). A follow-up
 `hydra doctor --json` sampled `0.0%` Hydra CPU.
+
+## Public v1.1.5 Route Recheck
+
+A second packaged-only CDP pass against the installed public app is preserved
+at:
+
+```text
+/private/tmp/hydra-v115-public-route-walk-20260531T132145Z
+```
+
+The pass mounted Dashboard, Bulk OTP, Vault, Pool Manager, Redeem, Generator,
+Traffic, Settings, and a redacted Account Detail route. Settled Settings
+reported zero intervals, zero active RAFs, zero Anime.js effects, one bounded
+`App.upstreamHealth` timeout, and only a finished one-shot `fadeIn`. Its
+eight-sample CPU decay stayed between `0.0%` and `1.6%`, ending at `0.2%`.
+
+Account Detail intentionally mounted four `ScrambleText.reveal` intervals and
+one `AnimeText.scanline` effect. Six seconds later, diagnostics reported zero
+intervals, zero active RAFs, and zero Anime.js effects. Its eight-sample CPU
+decay stayed between `0.0%` and `0.8%`, ending at `0.0%`.
+
+The temporary packaged-Electron debug session then closed cleanly:
+Hydra-owned processes reached zero, port `9333` closed, and a normal no-debug
+LaunchServices reopen settled to four owned processes, `0.0%` CPU, and zero
+stale profiles.

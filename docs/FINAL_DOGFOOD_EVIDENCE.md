@@ -427,3 +427,19 @@ This evidence file is not release-complete by itself. The release remains not co
   `screenshots-redacted`. Machine-specific paths were sanitized before
   check-in. Window controls, interactive dead-button review, Touch ID hardware,
   live account flows, and real Windows NSIS install/open UX remain false.
+- A packaged-only CDP route pass at
+  `/private/tmp/hydra-v115-public-route-walk-20260531T132145Z` mounted
+  Dashboard, Bulk OTP, Vault, Pool Manager, Redeem, Generator, Traffic,
+  Settings, and a redacted Account Detail route without printing account
+  contents. The exact public bridge reports app version `1.1.5` and available
+  macOS Touch ID.
+- Settled Settings reported zero intervals, zero active RAFs, zero Anime
+  effects, one bounded `App.upstreamHealth` timeout, and only a finished
+  one-shot `fadeIn`; its CPU decay stayed between `0.0%` and `1.6%`, ending at
+  `0.2%`. Account Detail's mount-only four `ScrambleText.reveal` intervals and
+  one `AnimeText.scanline` effect cleared after six seconds; its CPU decay
+  stayed between `0.0%` and `0.8%`, ending at `0.0%`.
+- The temporary packaged-Electron debug session closed cleanly, Hydra-owned
+  processes reached zero, port `9333` closed, and a normal no-debug
+  LaunchServices reopen settled to four processes, `0.0%` CPU, and zero stale
+  profiles.
