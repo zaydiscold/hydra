@@ -252,6 +252,7 @@ function buildAudit() {
   const mcpCommand = safeRead('bin/commands/mcp.js');
   const mcpTest = safeRead('server/tests/mcp-cli.test.mjs');
   const electronSmoke = safeRead('scripts/smoke-electron-package.mjs');
+  const windowsLaunchSmoke = safeRead('scripts/smoke-windows-launch.mjs');
   const electronPrepare = safeRead('scripts/prepare-electron-resources.mjs');
   const electronBuilderConfig = safeRead('electron-builder.yml');
   const packagedOpenScript = safeRead('scripts/open-packaged-app.mjs');
@@ -410,7 +411,7 @@ function buildAudit() {
       'Windows installer launch dogfood',
       windowsLaunchManualOk,
       `redacted dogfood evidence at ${dogfoodEvidence.path} verifies current Windows installer install/launch behavior for ${version}`,
-      'not release-complete evidence; Windows installer install/launch still requires Windows host or runner dogfood',
+      'not release-complete evidence; hosted Windows unpacked-app startup/cleanup passed, but NSIS installer install/open UX still requires real Windows desktop dogfood',
     ),
     check(
       'package-scripts',
@@ -786,6 +787,15 @@ function buildAudit() {
         && smokeWorkflow.includes('windows-latest')
         && releaseWorkflow.includes('windows-2022')
         && releaseWorkflow.includes('--publish never')
+        && pkg.scripts?.['electron:smoke:win-launch'] === 'node scripts/smoke-windows-launch.mjs'
+        && releaseWorkflow.includes('Launch and cleanup Windows packaged executable')
+        && releaseWorkflow.includes("if: matrix.build_target == 'win32-x64'")
+        && releaseWorkflow.includes('npm run electron:smoke:win-launch')
+        && windowsLaunchSmoke.includes("join(ROOT, 'release', 'win-unpacked')")
+        && windowsLaunchSmoke.includes('Hydra.exe')
+        && windowsLaunchSmoke.includes('const STAY_ALIVE_MS = 25_000')
+        && windowsLaunchSmoke.includes('taskkill.exe')
+        && windowsLaunchSmoke.includes('packaged Hydra processes survived cleanup')
         && releaseWorkflow.includes('gh release upload "$GITHUB_REF_NAME"')
         && releaseWorkflow.includes('mac-update-metadata')
         && releaseWorkflow.includes('scripts/merge-mac-update-yml.mjs')
@@ -826,7 +836,7 @@ function buildAudit() {
         && electronPrepare.includes('PLAYWRIGHT_BROWSERS_PATH cache')
         && workflowContract.includes('electron package smoke validates target-specific Chromium archives')
         && workflowContract.includes('electron package smoke validates distributable release artifacts'),
-      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, publish-after-smoke release ordering, patch/minor/major auto-version controls, merged multi-arch latest-mac.yml auto-update metadata, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, stale release-output exclusion, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
+      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, hosted Windows packaged-executable startup/cleanup smoke, publish-after-smoke release ordering, patch/minor/major auto-version controls, merged multi-arch latest-mac.yml auto-update metadata, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, stale release-output exclusion, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
     ),
     check(
       'docker-docs',
