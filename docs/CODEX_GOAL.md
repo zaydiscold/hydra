@@ -363,6 +363,29 @@ closed-app CLI commands, tests, and repo-local documentation.
   pending upstreams and `200` pending timeout handles and could reach `600`
   attempts after failures; the owned path aborted all `200`, left `0` pending
   upstreams and timeout handles, and issued `0` retries after disconnect.
+- The current renderer design source pass restores the curated detailed
+  three-headed Hydra raster for Dock/taskbar platform icons, app chrome, and
+  sidebar branding while keeping the simplified generated H micro-mark
+  separate for tiny surfaces. `npm run icons:generate` now regenerates platform
+  icons from `public/hydra_dragon.png` without overwriting that master.
+  Proximity response expands through dashboard command/empty actions, sidebar
+  footer controls, and Settings action groups while keeping RAF batching,
+  reduced-motion reset, and stable dimensions. Settings top cards align to
+  equal rows and uniform action sizes. Splash branches switch from smooth
+  splines to irregular neuron-like segments with one SVG-level glow; portal
+  physics drops to the existing `30 Hz` paint cadence after collision masks
+  disable and steering reuses the painted body snapshot.
+- The 1.3.0 desktop refinement closes the remaining source-lane packaging and
+  startup gaps: `npm start` no longer opens a browser unless `--browser` is
+  explicitly passed for web-mode development; tag releases once again publish
+  Linux x64 AppImage plus `latest-linux.yml`; Electron globally enables
+  renderer sandboxing before readiness while each BrowserWindow keeps
+  `sandbox:true`; the packaged renderer removes its blocked Google Fonts fetch
+  and CSP-rejected data favicon; Settings names the 24-hour password-unlock
+  window; and portal entry applies a collision-free upward release while nine
+  bounded initial branches fill the neuron-like field. Three.js was reviewed
+  against its manual-disposal guidance and intentionally not added because the
+  finite 2D Matter/canvas scene already owns the correct lifecycle.
 
 ---
 
@@ -436,6 +459,16 @@ closed-app CLI commands, tests, and repo-local documentation.
 - Preload/IPC bridge contract tests are implemented: `server/tests/electron-ipc-contract.test.mjs` verifies every `native:*` handler returns a Result envelope and renderer calls use the wrapper
 - Session-refresh and dashboard-data regression coverage is implemented through `server/tests/session-refresh-contract.test.mjs`, `server/tests/session-expiry-effective.test.mjs`, `server/tests/ensure-session-backfill.test.mjs`, and `server/tests/electron-api-integration.test.mjs`; live OTP dogfood remains tracked in `docs/RELEASE_AUDIT.md`
 - UI static contracts include first-run setup wizard, persisted Settings preference-toggle coverage, dense app-shell polish, and the Anime.js `signal` text treatment using `splitText().addEffect()` plus `splitter.revert()` cleanup; `npm run test:ui-static` passed with 18 tests on 2026-05-18 after the shell polish and Dashboard text-effect update
+- The living design-engineering reference now records the sidebar proximity
+  field, bounded account-grid magnetic response, Settings/action-group motion,
+  Anime.js split-text cleanup, falling-glyph one-shot shatter guard,
+  collision-free portal cadence, deterministic disposal diagnostics, and
+  reduced-motion invariants in `docs/DESIGN_ENGINEERING.md`.
+- A pending-`1.3.0` rebuilt-package idle reprofile at
+  `/private/tmp/hydra-130-second-untouched-idle-reprofile-20260531T124730`
+  retained four Hydra-owned processes and zero stale profiles across all 11
+  30-second samples. Aggregate Hydra CPU stayed between `0.0%` and `0.1%`
+  (`0.018%` average); RSS moved by `+3.11 MiB`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

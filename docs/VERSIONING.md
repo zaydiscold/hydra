@@ -12,14 +12,16 @@ Tracked `package.json` and `package-lock.json` now stay aligned with the
 published `v1.1.0` release. New patches advance from the active `1.1.x` lane:
 the next normal patch release is `1.1.1`, not another `1.0.x` release.
 
-The 2026-05-31 desktop cleanup, live-session metadata repair, session-truth
-copy, splash portal, proximity fields, product signature, README splash
-capture, updater handoff, and Windows lane hardening are shipping together as
-the `1.1.3` patch. The next normal patch after this tranche is `1.1.4`.
+The next coordinated desktop release is `1.3.0`. It groups splash refinement,
+proximity fields, Settings normalization, restored platform artwork, offline
+renderer startup cleanup, global Electron sandbox enforcement, session-truth
+copy, 24-hour desktop unlock clarity, updater handoff, and cross-platform
+packaging work into one operator-visible minor release.
 
-The active desktop updater matrix for `1.1.3` publishes macOS arm64, macOS
-Intel, and Windows x64 NSIS artifacts. Historical Linux AppImage releases stay
-available, but Linux is not refreshed in this patch lane.
+The active `1.3.0` desktop updater matrix publishes macOS arm64, macOS Intel,
+Windows x64 NSIS, and Linux x64 AppImage artifacts. Linux publishing was
+restored because its package preparation and smoke contracts were still
+maintained; keeping the tag lane frozen no longer matched the product surface.
 
 The minor release, rather than another patch-only release, was intentional:
 

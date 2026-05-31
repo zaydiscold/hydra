@@ -56,7 +56,7 @@ test('electron package smoke workflow covers macOS and Linux packages on PRs', (
   assert.doesNotMatch(workflow, /-\s*os:\s*windows-latest/, 'Windows is not in PR smoke matrix; release.yml still builds Windows installers on tag pushes');
 });
 
-test('release workflow uploads current macOS and Windows artifacts while Linux stays frozen', () => {
+test('release workflow uploads current macOS, Windows, and Linux artifacts', () => {
   const workflow = read('.github/workflows/release.yml');
 
   assert.match(workflow, /tags:\s*\n\s*-\s*'v\*\.\*\.\*'/, 'release workflow must run on version tags');
@@ -87,7 +87,18 @@ test('release workflow uploads current macOS and Windows artifacts while Linux s
   assert.match(workflow, /name:\s*macOS arm64 zip[\s\S]*artifact:\s*\|[\s\S]*release\/Hydra-\*-mac-arm64\.zip[\s\S]*release\/latest-mac\.yml/, 'must upload macOS arm64 zip and update metadata');
   assert.match(workflow, /name:\s*macOS Intel x64 zip[\s\S]*artifact:\s*\|[\s\S]*release\/Hydra-\*-mac-x64\.zip[\s\S]*release\/latest-mac\.yml/, 'must upload macOS Intel zip and update metadata');
   assert.match(workflow, /name:\s*Windows x64 NSIS[\s\S]*artifact:\s*\|\s*\n\s*release\/Hydra-\*-win-x64\.exe/, 'must upload Windows x64 installer');
-  assert.doesNotMatch(workflow, /name:\s*Linux x64 AppImage/, 'tag releases intentionally leave the historical Linux AppImage lane frozen');
+  assert.match(workflow, /name:\s*Linux x64 AppImage[\s\S]*build_target:\s*linux-x64[\s\S]*target:\s*--linux AppImage --x64/, 'must package Linux x64 AppImage');
+  assert.match(workflow, /name:\s*Linux x64 AppImage[\s\S]*artifact:\s*\|[\s\S]*release\/Hydra-\*\.AppImage[\s\S]*release\/latest-linux\.yml/, 'must upload Linux x64 AppImage and update metadata');
+});
+
+test('source launcher never auto-opens a browser unless web mode is explicit', () => {
+  const launcher = read('scripts/launch.js');
+
+  assert.match(launcher, /const openWebUi = process\.argv\.slice\(2\)\.includes\('--browser'\)/);
+  assert.equal((launcher.match(/openBrowser\(`http:\/\/localhost:\$\{(?:PORT|port)\}`\)/g) || []).length, 2);
+  assert.equal((launcher.match(/if \(openWebUi\) \{/g) || []).length, 2);
+  assert.match(launcher, /Browser auto-open is disabled\. Use the packaged Electron app for the desktop UI\./);
+  assert.match(launcher, /Pass --browser only for intentional web-mode development\./);
 });
 
 test('auto-version dispatches the release workflow after creating tags', () => {

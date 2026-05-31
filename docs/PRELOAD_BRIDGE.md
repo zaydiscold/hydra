@@ -82,3 +82,11 @@ git diff --check
 
 Packaged runtime verification must continue to inspect the actual Electron
 renderer. Static source checks alone cannot prove that a preload executed.
+
+## Current Acceptance Rule
+
+The temporary debugging reproduction above is historical evidence, not the
+current dogfood path. Current packaged visual checks launch Hydra normally
+through LaunchServices and use native desktop control only. Do not enable a
+remote-debugging port, open a localhost browser tab, or use browser tooling as
+release-acceptance evidence.

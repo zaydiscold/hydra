@@ -5,7 +5,24 @@ import AnimeText from '../components/AnimeText';
 import { LockIcon, NetworkIcon, SettingsIcon, InfoIcon } from '../components/Icons';
 import { isElectron, native, tryNative, useNativeInfo } from '../lib/native';
 import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
+import { useProximityField } from '../hooks/useProximityField.js';
 import { DiagnosticsPanel } from './Diagnostics.jsx';
+
+function SettingsActionGroup({ children, className = '' }) {
+  const proximity = useProximityField({
+    owner: 'Settings.actionGroup',
+    radius: 112,
+    maxScale: 0.05,
+    maxLift: 3,
+    brightnessDelta: 0.09,
+  });
+
+  return (
+    <div className={`settings-action-group action-proximity-group proximity-field ${className}`.trim()} {...proximity}>
+      {children}
+    </div>
+  );
+}
 
 export default function Settings({ addToast }) {
   const location = useLocation();
@@ -231,23 +248,23 @@ export default function Settings({ addToast }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-md)', alignItems: 'start' }}>
+      <div className="settings-grid">
 
         {/* Endpoint */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
+        <div className="card settings-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <NetworkIcon size={15} style={{ color: 'var(--status-success)' }} />
             <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Endpoint</span>
             <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: 'var(--status-success)', fontFamily: 'var(--font-mono)' }}>LAN ACTIVE</span>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SettingsActionGroup className="settings-endpoint-row">
             <code style={{ flex: 1, fontSize: '0.8rem', color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all', background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 4 }}>
               {primaryUrl}
             </code>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={copyUrl} style={{ flexShrink: 0 }}>
+            <button type="button" data-proximity-target className="btn btn-secondary btn-sm settings-action-btn" onClick={copyUrl}>
               {copied ? '✓' : 'Copy'}
             </button>
-          </div>
+          </SettingsActionGroup>
           {lanUrls.length > 1 && (
             <div style={{ marginTop: 8, fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
               {lanUrls.slice(1).map(u => <div key={u}>{u}</div>)}
@@ -256,7 +273,7 @@ export default function Settings({ addToast }) {
         </div>
 
         {/* Account proxy pool */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
+        <div className="card settings-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <NetworkIcon size={15} style={{ color: 'var(--accent-primary)' }} />
             <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Account Proxy Pool</span>
@@ -273,23 +290,23 @@ export default function Settings({ addToast }) {
             spellCheck={false}
             style={{ width: '100%', resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}
           />
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn btn-primary btn-sm" disabled={proxySaving} onClick={saveAccountProxies}>
+          <SettingsActionGroup className="settings-card-footer">
+            <button type="button" data-proximity-target className="btn btn-primary btn-sm settings-action-btn" disabled={proxySaving} onClick={saveAccountProxies}>
               {proxySaving ? <><div className="spinner-sm" /> Saving...</> : 'Save Proxies'}
             </button>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
               Used randomly for new account signup, browser provisioning, and browser code redemption. Stored encrypted.
             </span>
-          </div>
+          </SettingsActionGroup>
         </div>
 
         {/* Password */}
-        <div className="card" style={{ padding: 'var(--space-md)' }}>
+        <div className="card settings-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <LockIcon size={15} style={{ color: 'var(--accent-primary)' }} />
             <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Password</span>
           </div>
-          <form onSubmit={handleChangePassword} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <form onSubmit={handleChangePassword} noValidate className="settings-password-form">
             <div className="form-group-compact">
               <input
                 type="password"
@@ -318,11 +335,13 @@ export default function Settings({ addToast }) {
               />
               {errors.newPassword && <p className="field-error">{errors.newPassword}</p>}
             </div>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={loading} style={{ alignSelf: 'flex-start', marginTop: 2 }}>
-              {loading ? <><div className="spinner-sm" /> Updating…</> : 'Update Password'}
-            </button>
+            <SettingsActionGroup className="settings-card-footer">
+              <button type="submit" data-proximity-target className="btn btn-primary btn-sm settings-action-btn" disabled={loading}>
+                {loading ? <><div className="spinner-sm" /> Updating…</> : 'Update Password'}
+              </button>
+            </SettingsActionGroup>
             <p style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
-              Changing password signs out your current session.
+              Changing password signs out your current session. Successful unlocks persist for up to 24 hours on this device.
             </p>
           </form>
         </div>
@@ -331,7 +350,7 @@ export default function Settings({ addToast }) {
 
       {/* Electron Native Info */}
       {inElectron && !nativeLoading && nativeInfo && (
-        <div className="card" style={{ padding: 'var(--space-md)', marginTop: 'var(--space-md)' }}>
+        <div className="card settings-section-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <NetworkIcon size={15} style={{ color: 'var(--accent-primary)' }} />
             <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>System Info</span>
@@ -347,14 +366,12 @@ export default function Settings({ addToast }) {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--text-tertiary)' }}>Data Dir: </span>
                 <span>redacted</span>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('userData', 'Data Dir')}>Open</button>
               </div>
             )}
             {nativeInfo.paths?.logs && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--text-tertiary)' }}>Logs Dir: </span>
                 <span>redacted</span>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openAppLocation('logs', 'Logs Dir')}>Open</button>
               </div>
             )}
             {authTokenStatus && (
@@ -369,12 +386,20 @@ export default function Settings({ addToast }) {
               </div>
             )}
           </div>
+          <SettingsActionGroup className="settings-card-footer">
+            {nativeInfo.paths?.userData && (
+              <button type="button" data-proximity-target className="btn btn-secondary btn-sm settings-action-btn" onClick={() => void openAppLocation('userData', 'Data Dir')}>Open Data Dir</button>
+            )}
+            {nativeInfo.paths?.logs && (
+              <button type="button" data-proximity-target className="btn btn-secondary btn-sm settings-action-btn" onClick={() => void openAppLocation('logs', 'Logs Dir')}>Open Logs</button>
+            )}
+          </SettingsActionGroup>
         </div>
       )}
 
       {/* ── Biometric Unlock (#11) ──────────────────────────────────── */}
       {inElectron && (
-        <div className="card" style={{ padding: 'var(--space-md)', marginTop: 'var(--space-md)' }}>
+        <div className="card settings-section-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <LockIcon size={15} style={{ color: 'var(--accent-primary)' }} />
             <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -392,7 +417,7 @@ export default function Settings({ addToast }) {
               ? `Use ${resolvedBiometricInfo.label} to unlock the vault on this device. Your password is still required for sensitive operations.`
               : (resolvedBiometricInfo.reason || `${resolvedBiometricInfo.label} is not available on this device.`)}
           </p>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="settings-toggle-row">
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: resolvedBiometricInfo.available ? 'pointer' : 'not-allowed', opacity: resolvedBiometricInfo.available ? 1 : 0.5 }}>
               <input
                 type="checkbox"
@@ -403,9 +428,11 @@ export default function Settings({ addToast }) {
               Require {resolvedBiometricInfo.label} when unlocking the vault
             </label>
             {resolvedBiometricInfo.available && (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={tryBiometricPrompt}>
-                Test Prompt
-              </button>
+              <SettingsActionGroup>
+                <button type="button" data-proximity-target className="btn btn-secondary btn-sm settings-action-btn" onClick={tryBiometricPrompt}>
+                  Test Prompt
+                </button>
+              </SettingsActionGroup>
             )}
           </div>
         </div>
@@ -413,7 +440,7 @@ export default function Settings({ addToast }) {
 
       {/* ── Crash Telemetry (#9) ───────────────────────────────────── */}
       {inElectron && prefs && (
-        <div className="card" style={{ padding: 'var(--space-md)', marginTop: 'var(--space-md)' }}>
+        <div className="card settings-section-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <InfoIcon size={15} style={{ color: 'var(--accent-primary)' }} />
             <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>

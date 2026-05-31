@@ -559,7 +559,9 @@ function AppChrome() {
     return (
       <div className="app-chrome app-chrome--mac" role="banner" aria-hidden="true">
         <div className="app-chrome__brand">
-          <div className="app-chrome__mark">H</div>
+          <div className="app-chrome__mark">
+            <img src="/hydra_dragon.png" alt="" />
+          </div>
           <div className="app-chrome__titles">
             <span className="app-chrome__name">Hydra</span>
           </div>
@@ -575,7 +577,9 @@ function AppChrome() {
   return (
     <div className="app-chrome" role="banner">
       <div className="app-chrome__brand" aria-hidden="true">
-        <div className="app-chrome__mark">H</div>
+        <div className="app-chrome__mark">
+          <img src="/hydra_dragon.png" alt="" />
+        </div>
         <div className="app-chrome__titles">
           <span className="app-chrome__name">Hydra</span>
         </div>
@@ -976,19 +980,8 @@ export default function App() {
               title="Go to Dashboard"
               style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', padding: 0 }}
             >
-              {/* Abstract geometric logo mark */}
               <div className="sidebar-logo-icon">
-                <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
-                  <polygon points="20,4 36,14 36,26 20,36 4,26 4,14" stroke="currentColor" strokeWidth="2" fill="none" opacity="0.9"/>
-                  <polygon points="20,10 30,16 30,24 20,30 10,24 10,16" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.5"/>
-                  <circle cx="20" cy="20" r="4" fill="currentColor" opacity="0.8"/>
-                  <line x1="20" y1="4" x2="20" y2="10" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
-                  <line x1="20" y1="30" x2="20" y2="36" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
-                  <line x1="4" y1="14" x2="10" y2="16" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
-                  <line x1="36" y1="14" x2="30" y2="16" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
-                  <line x1="4" y1="26" x2="10" y2="24" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
-                  <line x1="36" y1="26" x2="30" y2="24" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
-                </svg>
+                <img src="/hydra_dragon.png" alt="" />
               </div>
               {!sidebarCollapsed && (
                 <div>
@@ -1019,7 +1012,7 @@ export default function App() {
             </nav>
 
             <div className="sidebar-bottom">
-              <button type="button" className="nav-link"
+              <button type="button" data-proximity-target className="nav-link"
                 style={{ color: 'var(--text-tertiary)', opacity: 0.7 }}
                 onClick={() => setSidebarCollapsed(v => !v)}
                 title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -1036,22 +1029,22 @@ export default function App() {
               </button>
               {isElectron() ? (
                 <>
-                  <button type="button" className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
+                  <button type="button" data-proximity-target className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
                     <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock Vault</span>}
                   </button>
-                  <button type="button" className="nav-link" style={{ color: 'var(--status-error)' }} onClick={handleQuit} title="Quit">
+                  <button type="button" data-proximity-target className="nav-link" style={{ color: 'var(--status-error)' }} onClick={handleQuit} title="Quit">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Quit</span>}
                   </button>
                 </>
               ) : (
                 <>
-                  <button type="button" className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
+                  <button type="button" data-proximity-target className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
                     <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock</span>}
                   </button>
-                  <button type="button" className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
+                  <button type="button" data-proximity-target className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Shutdown</span>}
                   </button>

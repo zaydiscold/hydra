@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Generate Hydra's source app icon and favicon.
+ * Generate Hydra's compact micro-mark and favicon.
  *
- * The source image feeds scripts/generate-icons.mjs, which then produces the
- * macOS .icns, Windows .ico, and Linux PNG app icons.
+ * The detailed dragon in public/hydra_dragon.png is the curated app-icon
+ * master. Keep this utility separate: its simplified H badge is useful where
+ * a dense raster dragon would become visual noise, but it must not overwrite
+ * the platform-icon source.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -13,7 +15,7 @@ import sharp from 'sharp';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const publicDir = path.join(ROOT, 'public');
-const sourcePng = path.join(publicDir, 'hydra_dragon.png');
+const microBadgePng = path.join(publicDir, 'hydra_micro_badge.png');
 const faviconSvg = path.join(publicDir, 'favicon.svg');
 
 const svg = String.raw`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
@@ -112,6 +114,6 @@ const svg = String.raw`<svg xmlns="http://www.w3.org/2000/svg" width="1024" heig
 
 mkdirSync(publicDir, { recursive: true });
 writeFileSync(faviconSvg, svg);
-await sharp(Buffer.from(svg)).png().toFile(sourcePng);
-console.log(`[generate-hydra-source-icon] wrote ${sourcePng}`);
+await sharp(Buffer.from(svg)).png().toFile(microBadgePng);
+console.log(`[generate-hydra-source-icon] wrote ${microBadgePng}`);
 console.log(`[generate-hydra-source-icon] wrote ${faviconSvg}`);

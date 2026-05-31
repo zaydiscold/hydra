@@ -11,6 +11,8 @@ function resetTarget(target) {
   target.style.removeProperty('--proximity-scale');
   target.style.removeProperty('--proximity-lift');
   target.style.removeProperty('--proximity-shift-x');
+  target.style.removeProperty('--proximity-attract-x');
+  target.style.removeProperty('--proximity-attract-y');
   target.style.removeProperty('--proximity-brightness');
 }
 
@@ -20,6 +22,9 @@ export function useProximityField({
   maxScale = 0.035,
   maxLift = 4,
   maxShiftX = 0,
+  maxAttractX = 0,
+  maxAttractY = 0,
+  brightnessDelta = 0.08,
 } = {}) {
   const fieldRef = useRef(null);
   const pointerRef = useRef(null);
@@ -49,9 +54,11 @@ export function useProximityField({
       target.style.setProperty('--proximity-scale', (1 + strength * maxScale).toFixed(4));
       target.style.setProperty('--proximity-lift', `${(strength * maxLift).toFixed(2)}px`);
       target.style.setProperty('--proximity-shift-x', `${(strength * maxShiftX).toFixed(2)}px`);
-      target.style.setProperty('--proximity-brightness', (1 + strength * 0.08).toFixed(3));
+      target.style.setProperty('--proximity-attract-x', `${Math.max(-maxAttractX, Math.min(maxAttractX, dx * strength * 0.12)).toFixed(2)}px`);
+      target.style.setProperty('--proximity-attract-y', `${Math.max(-maxAttractY, Math.min(maxAttractY, dy * strength * 0.1)).toFixed(2)}px`);
+      target.style.setProperty('--proximity-brightness', (1 + strength * brightnessDelta).toFixed(3));
     });
-  }, [maxLift, maxScale, maxShiftX, radius]);
+  }, [brightnessDelta, maxAttractX, maxAttractY, maxLift, maxScale, maxShiftX, radius]);
 
   const onPointerMove = useCallback((event) => {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {

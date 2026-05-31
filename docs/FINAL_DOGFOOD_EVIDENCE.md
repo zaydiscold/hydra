@@ -749,3 +749,65 @@ This evidence file is not release-complete by itself. The release remains not co
   explicit-resource package smoke, strict deep signature verification, and
   bundled proxy-source inspection, then moved reversibly to
   `/Users/zaydk/.Trash/hydra-package-proxy-client-disconnect-20260531T190432Z`.
+- A sixteenth uninterrupted exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-sixteenth-untouched-idle-reprofile-20260531T190601Z`
+  kept four Hydra-owned processes and zero stale profiles through all 11
+  30-second samples. CPU stayed between `0.0%` and `0.1%` (`0.009%` average);
+  RSS moved from `319.20 MiB` to `317.50 MiB` (`-1.70 MiB`). This is
+  exact-public idle evidence, not packaged evidence for the pending renderer
+  source changes.
+- The pending renderer source pass restores the detailed three-headed dragon
+  master for platform icons, app chrome, and sidebar branding; extends bounded
+  proximity fields across adjacent dashboard, sidebar, and Settings actions;
+  normalizes Settings card/action dimensions; and changes the splash ivy into
+  segmented neuron-like branches with a lower-work `30 Hz` post-collision
+  portal phase. Focused source checks passed. A rebuilt package and packaged
+  visual review remain required before these source changes count as manual
+  GUI evidence.
+- The pending 1.3.0 source lane also restores hosted Linux x64 AppImage
+  publication, makes `npm start` browser-free unless the operator explicitly
+  passes `--browser`, enables Electron sandboxing globally before readiness,
+  removes blocked remote-font and inline-data-favicon startup requests, names
+  the existing 24-hour desktop unlock window in Settings, and gives the
+  collision-free portal a decaying upward release across nine initial organic
+  branches. Focused syntax, workflow (`17/17`), UI static (`38/38`), and
+  Electron main-process (`29/29`) checks passed. This is source evidence until
+  a rebuilt LaunchServices package passes smoke and Computer Use review.
+- Dashboard account cards now layer bounded directional attraction onto the
+  existing pink proximity response: nearby cards move at most `10px` on x and
+  `8px` on y toward the pointer without grid reflow. This remains pending
+  packaged Computer Use review with the nine-account grid.
+- Native-only rebuilt-package verification for the pending `1.3.0` lane used
+  normal LaunchServices `open -n`, package smoke, strict deep codesign, icon
+  comparison, Spotlight uniqueness, and Computer Use. The splash capture
+  visibly contained individualized falling letters, nine segmented stems, and
+  the centered `Welcome, Zayd Khan` overlay. After handoff Computer Use exposed
+  the `Hydra - Dashboard` native window but captured only its renderer
+  background layer, so the nine-card magnetic response remains explicit
+  user-facing visual acceptance. No browser harness, browser MCP, CDP port, or
+  remote-debug launch was used.
+- The same native launch logged finite splash diagnostics:
+  `target=72`, `queueLength=72`, `shatteredWordCount=72`,
+  `duplicateShatterSkips=0`, `peakDynamicBodyCount=551`,
+  `portalCollisionDisabled=true`, `portalLiftApplied=true`,
+  `renderFrames=408`, `physicsSteps=668`, `timers=0`, `rafActive=false`, and
+  `matterCleared=true`.
+- `/private/tmp/hydra-130-post-attraction-idle-20260531T124106` sampled the
+  settled rebuilt package every 30 seconds for five uninterrupted minutes.
+  All 11 samples retained four Hydra-owned processes and zero stale profiles.
+  Nine samples read `0.0%` aggregate Hydra CPU, but samples `04` and `06`
+  reported `97.1%` and `44.6%`; RSS moved from `537.41 MiB` to `622.81 MiB`.
+  The tree remained bounded, but a fresh untouched reprofile is required before
+  this pending package counts as calm-idle evidence.
+- `/private/tmp/hydra-130-second-untouched-idle-reprofile-20260531T124730`
+  then sampled the same settled rebuilt package every 30 seconds for another
+  five uninterrupted minutes while the machine was otherwise left quiet. All
+  11 samples retained four Hydra-owned processes and zero stale profiles.
+  Aggregate Hydra CPU stayed between `0.0%` and `0.1%` (`0.018%` average);
+  RSS moved from `619.48 MiB` to `622.59 MiB` (`+3.11 MiB`). This is the calm
+  idle follow-up; the earlier spike run remains documented above.
+- The living design guide now documents the sidebar proximity field,
+  account-grid magnetic channel, Settings/action proximity groups, Anime.js
+  split-text lifecycle, falling-glyph queue and one-shot shatter guard,
+  collision-free portal cadence, disposal diagnostics, and reduced-motion
+  contract.

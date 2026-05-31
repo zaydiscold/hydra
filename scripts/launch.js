@@ -2,7 +2,8 @@
 /**
  * Hydra Smart Launcher
  * Cross-platform (Mac + Windows) launch orchestrator.
- * Handles: deps install, env setup, DB migrations, build, server start, browser open.
+ * Handles: deps install, env setup, DB migrations, build, and server start.
+ * Browser opening is an explicit --browser opt-in for web-mode development.
  */
 
 import { execSync } from 'child_process';
@@ -15,6 +16,7 @@ import { bootstrap, gracefulShutdown } from '../server/index.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
+const openWebUi = process.argv.slice(2).includes('--browser');
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 const c = {
@@ -175,9 +177,12 @@ async function checkPort() {
     warn(`Port ${PORT} is already in use.`);
     info('Hydra may already be running — check http://localhost:3001');
     
-    // Try to just open the browser since it might already be running
-    info('Attempting to open existing instance...');
-    openBrowser(`http://localhost:${PORT}`);
+    if (openWebUi) {
+      info('Opening the existing web-mode instance...');
+      openBrowser(`http://localhost:${PORT}`);
+    } else {
+      info('Browser auto-open is disabled. Use the packaged Electron app for the desktop UI.');
+    }
     process.exit(0);
   }
   return PORT;
@@ -215,7 +220,11 @@ ${c.reset}
   ${c.dim}Press Ctrl+C to stop the server${c.reset}
 `);
 
-    openBrowser(`http://localhost:${port}`);
+    if (openWebUi) {
+      openBrowser(`http://localhost:${port}`);
+    } else {
+      info('Browser auto-open is disabled. Pass --browser only for intentional web-mode development.');
+    }
     process.on('SIGINT', () => {
       log('⏹', 'Shutting down Hydra...', c.yellow);
       gracefulShutdown('SIGINT', { exit: true });

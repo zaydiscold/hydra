@@ -327,10 +327,9 @@ export function createSplashWindow() {
     +   'rgba(0,0,0,.10) 35%,'
     +   'transparent 60%);'
     + 'pointer-events:none;z-index:3}'
-    + '.vines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:.95}'
+    + '.vines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:.95;filter:drop-shadow(0 0 5px rgba(168,85,247,.22))}'
     + '.vines .stem,.vines .twig{fill:none;stroke-linecap:round;stroke-linejoin:round;'
     + 'stroke-dasharray:0 1400;stroke-dashoffset:0;animation:grow 13s cubic-bezier(.18,.86,.2,1) forwards}'
-    + '.vines .stem{filter:drop-shadow(0 0 7px rgba(168,85,247,.28))}'
     + '.vines .twig{stroke-dasharray:0 360;opacity:.72;animation-name:growTwig}'
     + '.vines .bud{fill:rgba(190,242,255,.70);opacity:0;transform-box:fill-box;transform-origin:center;'
     + 'animation:bud 13s cubic-bezier(.16,1,.3,1) forwards;filter:drop-shadow(0 0 5px rgba(96,165,250,.35))}'
@@ -509,8 +508,8 @@ export function createSplashWindow() {
     + '<script>' + MATTER_JS_SRC + '</script>'
     + '<script>(function(){'
     // ─── Fractal ivy generator ──────────────────────────────────────────
-    // Recursive branching from a center point. Each stem grows along a
-    // Bezier path; at depth N we spawn 1-3 child branches that fork off the
+    // Recursive branching from a center point. Each stem grows along an
+    // irregular segmented path; at depth N we spawn 1-3 child branches that fork off the
     // parent at random parametric positions (t = 0.4..0.85 along the
     // parent's length). Stroke width tapers with depth so the trunk reads
     // thicker than the leaves. Animation-delay scales with depth so the
@@ -522,10 +521,10 @@ export function createSplashWindow() {
     +   'if(!svg)return;'
     // Center point in the SVG viewBox coords (1280×860).
     +   'const cx=640,cy=430;'
-    // 6 primary stems radiating outward at randomized angles. Slight angle
-    // jitter from a regular hexagon so the result feels organic, not
+    // 9 primary stems radiating outward at randomized angles. Slight angle
+    // jitter from a regular ring so the result feels organic, not
     // mechanically symmetric.
-    +   'const stems=5;'
+    +   'const stems=9;'
     +   'for(let i=0;i<stems;i++){'
     +     'const baseAngle=(i/stems)*Math.PI*2+Math.PI*0.5;'
     +     'const angle=baseAngle+(Math.random()-0.5)*0.45;'
@@ -539,14 +538,20 @@ export function createSplashWindow() {
     // Endpoint
     +   'const ex=x+Math.cos(angle)*length;'
     +   'const ey=y+Math.sin(angle)*length;'
-    // Curl: control points offset perpendicular to growth direction so the
-    // path curves like a real plant tendril, not a straight line.
+    // Build a kinked branch from short segments. A broad perpendicular bend
+    // keeps the whole tendril coherent while bounded local jitter stops the
+    // result reading as a perfect spline. The visual is closer to branching
+    // neurons or winter twigs and costs one SVG path per branch.
     +   'const perpX=-Math.sin(angle),perpY=Math.cos(angle);'
-    +   'const curl=(Math.random()-0.5)*length*0.3;'
-    +   'const cx1=x+Math.cos(angle)*length*0.35+perpX*curl;'
-    +   'const cy1=y+Math.sin(angle)*length*0.35+perpY*curl;'
-    +   'const cx2=x+Math.cos(angle)*length*0.7+perpX*curl*0.6;'
-    +   'const cy2=y+Math.sin(angle)*length*0.7+perpY*curl*0.6;'
+    +   'const bend=(Math.random()-0.5)*length*0.26,segments=Math.max(3,7-depth);'
+    +   'let d="M"+x.toFixed(1)+" "+y.toFixed(1);'
+    +   'for(let s=1;s<=segments;s++){const t=s/segments;'
+    +     'const localJitter=s===segments?0:(Math.random()-0.5)*length*(0.045+depth*0.008);'
+    +     'const offset=Math.sin(t*Math.PI)*bend+localJitter;'
+    +     'const px=x+Math.cos(angle)*length*t+perpX*offset;'
+    +     'const py=y+Math.sin(angle)*length*t+perpY*offset;'
+    +     'd+=" L"+px.toFixed(1)+" "+py.toFixed(1);'
+    +   '}'
     // Stroke width tapers per depth — trunk thick, leaf branches hairline.
     +   'const sw=Math.max(0.5,1.8-depth*0.55);'
     // Stroke: primary stems use the vineA/vineB gradients; deeper twigs
@@ -554,7 +559,7 @@ export function createSplashWindow() {
     // (trunk → twig → leaf).
     +   'const useStroke=depth===0?stroke:"rgba(190,242,255,"+Math.max(0.32,0.62-depth*0.12)+")";'
     +   'const path=document.createElementNS(NS,"path");'
-    +   'path.setAttribute("d","M"+x.toFixed(1)+" "+y.toFixed(1)+" C"+cx1.toFixed(1)+" "+cy1.toFixed(1)+" "+cx2.toFixed(1)+" "+cy2.toFixed(1)+" "+ex.toFixed(1)+" "+ey.toFixed(1));'
+    +   'path.setAttribute("d",d);'
     +   'path.setAttribute("stroke",useStroke);'
     +   'path.setAttribute("stroke-width",sw.toFixed(2));'
     +   'path.setAttribute("class",depth===0?"stem":"twig");'
@@ -566,8 +571,9 @@ export function createSplashWindow() {
     +     'const numChildren=Math.max(1,Math.floor(2.1-depth*0.45+Math.random()*0.9));'
     +     'for(let j=0;j<numChildren;j++){'
     +       'const t=0.45+Math.random()*0.42;'
-    +       'const childX=x+(ex-x)*t+perpX*curl*t*0.8;'
-    +       'const childY=y+(ey-y)*t+perpY*curl*t*0.8;'
+    +       'const childBend=Math.sin(t*Math.PI)*bend;'
+    +       'const childX=x+(ex-x)*t+perpX*childBend;'
+    +       'const childY=y+(ey-y)*t+perpY*childBend;'
     // Children fork at ±25-60° from the parent direction, alternating
     // sides so the ivy doesn't all bend the same way.
     +       'const sign=j%2===0?1:-1;'
@@ -597,7 +603,7 @@ export function createSplashWindow() {
     + 'let phaseIndex=0,updateActive=false;'
     + 'const HYDRA_SPLASH_DURATION_MS=16000,HYDRA_SPLASH_EXIT_MS=13000,HYDRA_SPLASH_PORTAL_MS=3000,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=2700,HYDRA_SPLASH_DISPOSE_MS=18500,HYDRA_SPLASH_TARGET=72;'
     + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0,hydraSplashExitStartedAt=0;'
-    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,portalMs:HYDRA_SPLASH_PORTAL_MS,target:HYDRA_SPLASH_TARGET,queueLength:0,shatteredWordCount:0,duplicateShatterSkips:0,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,peakDynamicBodyCount:0,portalCollisionDisabled:false,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
+    + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,portalMs:HYDRA_SPLASH_PORTAL_MS,target:HYDRA_SPLASH_TARGET,queueLength:0,shatteredWordCount:0,duplicateShatterSkips:0,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,peakDynamicBodyCount:0,portalCollisionDisabled:false,portalLiftApplied:false,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
     + 'window.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics;'
     + 'function hydraSplashRefreshDiagnostics(){hydraSplashDiagnostics.timers=hydraSplashTimers.length;hydraSplashDiagnostics.rafActive=Boolean(hydraSplashRaf)&&!hydraSplashDisposed;return hydraSplashDiagnostics;}'
     + 'function hydraSplashRemoveTimer(id){const i=hydraSplashTimers.indexOf(id);if(i>=0)hydraSplashTimers.splice(i,1);hydraSplashRefreshDiagnostics();}'
@@ -773,10 +779,10 @@ export function createSplashWindow() {
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
     +     'if(b.isStatic)continue;'
     +     'b.collisionFilter.mask=0;b.isSensor=true;'
-    +     'Body.setVelocity(b,{x:b.velocity.x+(Math.random()-0.5)*1.4,y:b.velocity.y+(Math.random()-0.5)*1.4});'
+    +     'Body.setVelocity(b,{x:b.velocity.x+(Math.random()-0.5)*1.4,y:b.velocity.y-(3.4+Math.random()*4.4)});'
     +     'Body.setAngularVelocity(b,b.angularVelocity+0.08+(Math.random()-0.5)*0.04);'
     +   '}'
-    +   'hydraSplashDiagnostics.portalCollisionDisabled=true;'
+    +   'hydraSplashDiagnostics.portalCollisionDisabled=true;hydraSplashDiagnostics.portalLiftApplied=true;'
     + '},HYDRA_SPLASH_EXIT_MS);'
     // One owned requestAnimationFrame loop steps Matter and paints the canvas.
     // Matter.Runner is intentionally not used here: it schedules its own
@@ -818,26 +824,31 @@ export function createSplashWindow() {
     +   'hydraSplashLeanX+= (hydraSplashTiltGravityX-hydraSplashLeanX)*0.08;'
     +   'engine.world.gravity.x=hydraSplashLeanX;hydraSplashDiagnostics.tilt.gravityX=hydraSplashLeanX;'
     +   'if(hydraSplashExitStartedAt){'
-    +     'const exitRatio=hydraSplashPortalRatio(now);const easedExit=exitRatio*exitRatio*(3-2*exitRatio);'
     +     'engine.world.gravity.x=0;engine.world.gravity.y=0;'
-    +     'const portalX=W()/2,portalY=H()/2,portalRadius=Math.min(W(),H())*(0.46-0.27*easedExit),portalSpeed=4.4+18.6*easedExit;'
-    +     'const portalBodies=Comp.allBodies(engine.world);'
-    +     'for(let p=0;p<portalBodies.length;p++){const b=portalBodies[p];if(b.isStatic)continue;'
-    +       'const dx=b.position.x-portalX,dy=b.position.y-portalY,dist=Math.max(1,Math.sqrt(dx*dx+dy*dy)),nx=dx/dist,ny=dy/dist;'
-    +       'const liftBoost=(1-exitRatio)*10,radial=Math.max(-8,Math.min(30,(dist-portalRadius)*0.09+liftBoost));'
-    +       'const targetX=-ny*portalSpeed-nx*radial,targetY=nx*portalSpeed-ny*radial,blend=0.28+0.34*easedExit;'
-    +       'Body.setVelocity(b,{x:b.velocity.x+(targetX-b.velocity.x)*blend,y:b.velocity.y+(targetY-b.velocity.y)*blend});'
-    +       'Body.setAngularVelocity(b,b.angularVelocity+(0.18+0.34*easedExit-b.angularVelocity)*0.22);'
-    +     '}'
     +   '}'
-    +   'while(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2){Eng.update(engine,HYDRA_SPLASH_PHYSICS_STEP_MS);hydraSplashPhysicsCarry-=HYDRA_SPLASH_PHYSICS_STEP_MS;steps++;}'
+    // Dense collision response is already disabled once portal entry starts.
+    // Step that non-colliding orbit at the 30 Hz paint cadence instead of the
+    // 45 Hz falling-letter cadence, and steer only when a frame is painted.
+    +   'const physicsStep=hydraSplashExitStartedAt?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS;'
+    +   'while(hydraSplashPhysicsCarry>=physicsStep&&steps<2){Eng.update(engine,physicsStep);hydraSplashPhysicsCarry-=physicsStep;steps++;}'
     +   'hydraSplashDiagnostics.physicsSteps+=steps;'
     +   'if(steps>=2)hydraSplashPhysicsCarry=0;'
     +   'if(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS)return;'
     +   'hydraSplashLastRender=now;'
     +   'ctx.clearRect(0,0,W(),H());'
-    +   'const portalRatio=hydraSplashPortalRatio(now);drawHydraPortal(now,portalRatio);'
     +   'const all=Comp.allBodies(engine.world);'
+    +   'const portalRatio=hydraSplashPortalRatio(now);'
+    +   'if(portalRatio){'
+    +     'const easedExit=portalRatio*portalRatio*(3-2*portalRatio),portalX=W()/2,portalY=H()/2,portalRadius=Math.min(W(),H())*(0.46-0.27*easedExit),portalSpeed=4.4+18.6*easedExit;'
+    +     'for(let p=0;p<all.length;p++){const b=all[p];if(b.isStatic)continue;'
+    +       'const dx=b.position.x-portalX,dy=b.position.y-portalY,dist=Math.max(1,Math.sqrt(dx*dx+dy*dy)),nx=dx/dist,ny=dy/dist;'
+    +       'const liftBoost=(1-portalRatio)*10,releaseLift=(1-portalRatio)*7.5,radial=Math.max(-8,Math.min(30,(dist-portalRadius)*0.09+liftBoost));'
+    +       'const targetX=-ny*portalSpeed-nx*radial,targetY=nx*portalSpeed-ny*radial-releaseLift,blend=0.28+0.34*easedExit;'
+    +       'Body.setVelocity(b,{x:b.velocity.x+(targetX-b.velocity.x)*blend,y:b.velocity.y+(targetY-b.velocity.y)*blend});'
+    +       'Body.setAngularVelocity(b,b.angularVelocity+(0.18+0.34*easedExit-b.angularVelocity)*0.22);'
+    +     '}'
+    +   '}'
+    +   'drawHydraPortal(now,portalRatio);'
     +   'let dynamicCount=0;for(let c=0;c<all.length;c++){if(!all[c].isStatic)dynamicCount++;}hydraSplashDiagnostics.bodyCount=all.length;hydraSplashDiagnostics.dynamicBodyCount=dynamicCount;hydraSplashDiagnostics.peakDynamicBodyCount=Math.max(hydraSplashDiagnostics.peakDynamicBodyCount,dynamicCount);hydraSplashDiagnostics.renderFrames++;'
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
     +     'if(b.isStatic||!b.plugin||!b.plugin.hydra)continue;'

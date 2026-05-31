@@ -65,7 +65,7 @@ Use the packaged release artifact for your platform:
 | --- | --- | --- |
 | macOS | `Hydra.app` / zip | Boots the embedded server and native desktop window. |
 | Windows | `Hydra Setup.exe` | Uses `%APPDATA%\\Hydra\\` for app data. |
-| Linux | Historical `Hydra.AppImage` | Existing builds remain available, but the active desktop update lane is macOS and Windows. |
+| Linux | `Hydra-*.AppImage` | Active x64 desktop package with updater metadata. |
 
 On first launch, Hydra creates an encrypted local vault and an empty SQLite database in the platform user-data directory. Closing the app window does not have to kill the router; quit from the tray/menu when you want the server fully stopped.
 

@@ -67,6 +67,13 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(main.includes("from 'electron'"), 'main.js must import from electron');
   });
 
+  it('enables Electron sandboxing globally before renderer lifecycle wiring', () => {
+    const main = readFileSync(MAIN_JS, 'utf-8');
+
+    assert.ok(main.indexOf('app.enableSandbox()') > -1, 'main process must enable global renderer sandboxing');
+    assert.ok(main.indexOf('app.enableSandbox()') < main.indexOf('setupPlatform()'), 'global sandboxing must happen before app readiness wiring');
+  });
+
   it('disables Chromium keychain prompts for app startup', () => {
     const env = readFileSync(resolve(APP_DIR, 'env.js'), 'utf-8');
 
@@ -308,10 +315,13 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /Welcome, /);
     assert.match(windows, /portalRadius=Math\.min\(W\(\),H\(\)\)\*\(0\.46-0\.27\*easedExit\)/);
     assert.match(windows, /portalSpeed=4\.4\+18\.6\*easedExit/);
-    assert.match(windows, /liftBoost=\(1-exitRatio\)\*10/);
-    assert.match(windows, /targetX=-ny\*portalSpeed-nx\*radial,targetY=nx\*portalSpeed-ny\*radial/);
+    assert.match(windows, /liftBoost=\(1-portalRatio\)\*10/);
+    assert.match(windows, /releaseLift=\(1-portalRatio\)\*7\.5/);
+    assert.match(windows, /targetX=-ny\*portalSpeed-nx\*radial,targetY=nx\*portalSpeed-ny\*radial-releaseLift/);
     assert.match(windows, /b\.collisionFilter\.mask=0;b\.isSensor=true/);
     assert.match(windows, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
+    assert.match(windows, /hydraSplashDiagnostics\.portalLiftApplied=true/);
+    assert.match(windows, /const stems=9/);
     assert.match(windows, /if\(i%5===0\)\{ctx\.shadowColor=m\.color;ctx\.shadowBlur=4\+portalRatio\*8;\}/);
     assert.match(windows, /function drawHydraPortal\(now,ratio\)/);
     assert.match(windows, /ctx\.globalCompositeOperation="lighter"/);
@@ -322,7 +332,9 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /hydraSplashLeanX\+= \(hydraSplashTiltGravityX-hydraSplashLeanX\)\*0\.08/);
     assert.match(windows, /window\.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics/);
     assert.match(windows, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
-    assert.match(windows, /Eng\.update\(engine,HYDRA_SPLASH_PHYSICS_STEP_MS\)/);
+    assert.match(windows, /const physicsStep=hydraSplashExitStartedAt\?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS/);
+    assert.match(windows, /Eng\.update\(engine,physicsStep\)/);
+    assert.match(windows, /segments=Math\.max\(3,7-depth\)/);
     assert.doesNotMatch(windows, /Run\.create/);
     assert.doesNotMatch(windows, /Run\.run/);
     assert.match(windows, /Eng\.clear\(engine\)/);

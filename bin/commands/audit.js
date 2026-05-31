@@ -232,7 +232,10 @@ function buildAudit() {
   const poolController = safeRead('server/controllers/PoolController.js');
   const rendererApi = safeRead('src/api.js');
   const runtimeDiagnostics = safeRead('src/lib/runtimeDiagnostics.js');
+  const proximityField = safeRead('src/hooks/useProximityField.js');
+  const designEngineering = safeRead('docs/DESIGN_ENGINEERING.md');
   const settingsPage = safeRead('src/pages/Settings.jsx');
+  const dashboardPage = safeRead('src/pages/Dashboard.jsx');
   const rotationManager = safeRead('server/services/rotation-manager.js');
   const store = safeRead('server/services/store.js');
   const legacyStorage = safeRead('server/services/legacy-storage.js');
@@ -518,7 +521,8 @@ function buildAudit() {
       goalDoc.includes('Primary focus for the next 4-5 hours: performance and efficiency release')
         && releaseAudit.includes('performance and efficiency pass')
         && electronWindows.includes('HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45')
-        && electronWindows.includes('Eng.update(engine,HYDRA_SPLASH_PHYSICS_STEP_MS)')
+        && electronWindows.includes('const physicsStep=hydraSplashExitStartedAt?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS')
+        && electronWindows.includes('Eng.update(engine,physicsStep)')
         && !electronWindows.includes('Run.create')
         && !electronWindows.includes('Run.run')
         && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
@@ -526,12 +530,16 @@ function buildAudit() {
         && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=3000')
         && electronWindows.includes('function drawHydraPortal')
         && electronWindows.includes('ctx.globalCompositeOperation="lighter"')
+        && electronWindows.includes('segments=Math.max(3,7-depth)')
+        && electronWindows.includes('const stems=9')
         && electronWindows.includes('HYDRA_SPLASH_TARGET=72')
         && !electronWindows.includes('Bod.rectangle(w/2,-WT/2,lx,WT')
         && electronWindows.includes('m.kind="shattered";hydraSplashDiagnostics.shatteredWordCount++')
         && electronWindows.includes('shuffle(items).slice(0,Math.min(n,items.length))')
         && electronWindows.includes('b.collisionFilter.mask=0;b.isSensor=true')
         && electronWindows.includes('hydraSplashDiagnostics.portalCollisionDisabled=true')
+        && electronWindows.includes('releaseLift=(1-portalRatio)*7.5')
+        && electronWindows.includes('hydraSplashDiagnostics.portalLiftApplied=true')
         && electronWindows.includes('tiltBias=hydraSplashTiltGravityX*(W()*0.18)')
         && electronWindows.includes('hydraSplashLeanX+= (hydraSplashTiltGravityX-hydraSplashLeanX)*0.08')
         && electronWindows.includes('disposeHydraSplash')
@@ -696,8 +704,16 @@ function buildAudit() {
       'UI polish/static contract',
       uiStatic.includes('primary page headers use the shared AnimeText treatment')
         && uiStatic.includes('first-run setup is a guided password key tour instead of a login dead end')
-        && uiStatic.includes('active renderer UI does not ship obvious dead-button placeholders'),
-      'server/tests/ui-static-contract.test.mjs covers AnimeText headers, first-run setup, and dead-button placeholders',
+        && uiStatic.includes('active renderer UI does not ship obvious dead-button placeholders')
+        && uiStatic.includes('dashboard, sidebar, and settings actions use bounded reduced-motion-safe proximity fields')
+        && dashboardPage.includes('maxAttractX: 10')
+        && dashboardPage.includes('maxAttractY: 8')
+        && proximityField.includes('dx * strength * 0.12')
+        && proximityField.includes('dy * strength * 0.1')
+        && designEngineering.includes('### Proximity implementation map')
+        && designEngineering.includes('## Anime.js Text Treatments')
+        && designEngineering.includes('## Graphics Maintenance Checklist'),
+      'UI contracts and living design docs cover AnimeText headers, first-run setup, dead-button placeholders, reduced-motion proximity response, bounded account-grid attraction, and graphics lifecycle invariants',
     ),
     check(
       'startup-fallback',

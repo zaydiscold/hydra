@@ -34,6 +34,9 @@ const PRELOAD_PATH = path.join(__dirname, 'preload.js');
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 app.setName('Hydra');
+// Enforce renderer sandboxing globally before app readiness. Individual
+// BrowserWindow options retain sandbox:true as an explicit local contract.
+app.enableSandbox();
 setupLogging();
 setupPlatform();
 

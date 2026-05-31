@@ -31,6 +31,12 @@ glyphs behind. Only every fifth glyph receives canvas shadow blur during the
 portal; the radial glow and ring layers preserve depth while avoiding the
 largest repeated paint cost.
 
+Portal entry also changes the Matter cadence from `45 Hz` to the existing
+`30 Hz` canvas cadence. Collision response is already disabled at that point,
+so the denser step rate no longer adds useful detail. Orbit steering now runs
+only when a canvas frame will actually paint and reuses the same body snapshot
+for steering, diagnostics, and glyph drawing.
+
 The falling phase keeps Matter collision response so words still shatter into
 individual letters and visibly pile up. The viewport has a floor and side
 walls, but no ceiling: words spawn just above the visible top edge and must not
@@ -53,19 +59,104 @@ four corners stay translucent so the portal remains legible around the launch
 rectangle. The center cell carries the strongest material and glow, keeping the
 greeting readable without flattening the animation into an opaque modal.
 
+The background branches use irregular short line segments rather than smooth
+Bezier splines. Each recursively forked branch keeps a broad bend plus bounded
+local jitter, which reads more like neurons or winter twigs than perfect
+curves. Glow is applied once at the SVG surface instead of once per primary
+stem.
+
 ## Proximity Fields
 
-Dashboard account cards and primary sidebar navigation use proximity response,
-not only binary hover. A reusable `useProximityField()` hook measures the
-cursor's Euclidean distance from each tagged target and writes restrained CSS
-variables for scale, lift, horizontal shift, and brightness.
+Dashboard account cards, command actions, empty-state actions, primary sidebar
+navigation, sidebar footer controls, and Settings action clusters use proximity
+response, not only binary hover. A reusable `useProximityField()` hook measures
+the cursor's Euclidean distance from each tagged target and writes restrained
+CSS variables for scale, lift, horizontal shift, and brightness.
 
 The implementation batches pointer work through one tracked animation frame
 per field, changes only composited transforms and filters, resets cleanly on
 leave or unmount, and disables the effect under `prefers-reduced-motion`.
 Account cards use a slightly larger field and vertical lift. Sidebar targets
-use a smaller field and horizontal nudge. Form inputs, destructive actions,
-and dense Vault table rows remain stationary so precision is not compromised.
+use a smaller field and horizontal nudge. Compact adjacent buttons receive a
+subtle scale/lift response while their stable dimensions prevent layout shift.
+Form inputs and dense Vault table rows remain stationary so precision is not
+compromised.
+
+The account grid also applies a bounded directional attraction channel. Cards
+near the pointer move by at most `10px` horizontally and `8px` vertically
+toward it while the pink highlight brightens. Neighboring cards therefore
+cluster subtly around the active region without changing CSS grid geometry,
+causing reflow, or affecting precision controls elsewhere.
+
+Settings top-row cards use equal grid rows, flex-column interiors, aligned
+footers, and one consistent action-button minimum size. System location actions
+are grouped together instead of appearing as uneven inline controls.
+
+### Proximity implementation map
+
+- `src/hooks/useProximityField.js` owns the reusable field. Each mounted field
+  receives one pointer handler, one tracked RAF slot, and one cleanup path.
+- `src/App.jsx` applies the tight sidebar profile: `105px` radius, `3.5%`
+  maximum scale, and `3px` horizontal shift. It affects primary navigation and
+  footer controls without moving the sidebar track itself.
+- `src/pages/Dashboard.jsx` applies the broader account profile: `250px`
+  radius, `4%` maximum scale, `5px` lift, `10px` horizontal attraction, `8px`
+  vertical attraction, and `14%` brightness headroom. The same page applies a
+  smaller lift/scale profile to adjacent command buttons and empty-state
+  actions.
+- `src/pages/Settings.jsx` applies restrained button-group fields so the
+  normalized Settings controls feel related without making form input
+  placement unstable.
+- `src/index.css` consumes the hook's custom properties through compositor
+  transforms and filters. Account-card attraction is intentionally scoped to
+  `.dashboard-mini-grid .account-card[data-proximity-target]`; the directional
+  channel must not leak into precision controls or cause grid reflow.
+
+The visual rule is proximity before hover: neighboring controls should begin
+responding as the pointer approaches, then let the existing hover border and
+pink highlight provide the final active-state emphasis. The engineering rule
+is stable geometry: never animate layout dimensions, grid tracks, or form
+control placement for this effect.
+
+## Anime.js Text Treatments
+
+`src/components/AnimeText.jsx` is the shared bounded text-motion primitive for
+page headers. It uses Anime.js `splitText()` to animate characters, words, or
+lines for short `signal` and `scanline` entrances. It is deliberately not a
+general-purpose ambient-animation layer.
+
+Each effect registers with renderer runtime diagnostics through
+`trackRendererAnimation()`, cancels its Anime.js instances during React effect
+cleanup, and calls `splitter.revert()` so route changes do not leave wrapper
+spans or animation handles behind. Reduced-motion preference bypasses the
+effect. The lifecycle contract is covered by the UI static suite and packaged
+route diagnostics: transient mount effects may appear briefly, but a settled
+or unmounted view must return to zero active Anime.js effects.
+
+Use Anime.js for short text entrances where split typography materially helps
+hierarchy. Keep persistent motion in CSS only when it communicates a genuinely
+transient state, and cap its iterations. Do not attach Anime.js to the splash:
+the splash already has one finite Matter.js/canvas owner and should not gain a
+second timing system.
+
+## Graphics Maintenance Checklist
+
+When changing motion, preserve these invariants:
+
+- Splash words remain unique within the bounded `72`-entry queue.
+- `shatter()` mutates its parent to `kind="shattered"` before adding glyphs.
+- Falling words keep collision response; portal glyphs disable collisions but
+  remain independent Matter bodies.
+- Portal steering runs at the painted `30 Hz` cadence and reuses one body
+  snapshot per frame.
+- Splash disposal clears tracked timers, RAF, sensor listeners, Matter world,
+  and engine state, then reports diagnostics.
+- Proximity fields schedule at most one RAF per field and reset variables on
+  pointer leave and unmount.
+- Anime.js text effects unregister, cancel, and revert split wrappers on
+  unmount.
+- `prefers-reduced-motion` removes proximity transforms and bypasses decorative
+  text entrances.
 
 ## Session Truth Copy
 
@@ -96,5 +187,51 @@ preserves the same hierarchy while allowing the settled app to return to idle.
 Release metadata, About, and Build Info identify `Frostbyte Technology` and
 `Developed by Zayd / Cold`. The renderer shell and packaged splash also carry
 the subtle non-visible `data-studio="frostbyte-zayd-cold"` signature. Windows
-executable, installer, and uninstaller artwork continue to use the shared ICO
-asset.
+executable, installer, and uninstaller artwork use the shared multi-resolution
+ICO asset. The Dock, taskbar, sidebar, and renderer chrome use the restored
+detailed three-headed Hydra raster. The simplified H micro-mark remains
+separate for tiny favicon and menu-bar surfaces where the detailed raster would
+collapse into visual noise.
+
+## 1.3.0 Desktop Refinement
+
+The portal now starts with a bounded upward release after collision masks are
+cleared. Each letter body receives a small negative-y kick, then orbit steering
+adds a decaying `releaseLift` term while the clockwise velocity accelerates.
+The letters remain independent Matter bodies, but the dense collision solver
+stays off during the spin. This preserves visible motion without returning to
+the laggy pile-against-pile workload.
+
+The organic background now starts from nine primary stems rather than five.
+The existing recursive depth and segmented-path budget remain bounded, so the
+opening reads as a fuller neuron-like branch field without adding an
+unbounded canvas or SVG loop.
+
+Renderer startup assets are now same-origin and offline-capable. The blocked
+Google Fonts stylesheet request was removed, and the CSP-rejected inline data
+favicon was replaced with `/hydra_dragon.png`. The local font fallback stack
+already preserves the intended compact operator-console typography.
+
+Current primary-source guidance reviewed for this pass:
+
+- Electron security and sandbox guidance:
+  <https://www.electronjs.org/docs/latest/tutorial/security> and
+  <https://www.electronjs.org/docs/latest/tutorial/sandbox>
+- Anime.js React cleanup guidance:
+  <https://animejs.com/documentation/getting-started/using-with-react>
+- Three.js resource cleanup guidance:
+  <https://threejs.org/manual/en/how-to-dispose-of-objects.html>
+- electron-builder CLI and GitHub Actions packaging guidance:
+  <https://www.electron.build/cli> and
+  <https://www.electron.build/tutorials/github-actions>
+
+Three.js was evaluated and intentionally not added to the splash. The current
+effect is a finite 2D typographic physics scene. A WebGL renderer would add a
+second owned animation lifecycle plus explicit geometry, material, texture,
+and renderer disposal obligations without improving the requested letter
+orbit. Anime.js remains reserved for bounded renderer text micro-interactions;
+each `AnimeText` split effect has explicit cleanup and reduced-motion handling.
+
+The source launcher is desktop-first: `npm start` no longer opens a browser.
+Intentional web-mode development must opt in with `npm start -- --browser`.
+The packaged Electron app remains the acceptance surface.

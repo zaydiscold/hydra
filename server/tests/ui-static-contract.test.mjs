@@ -58,6 +58,9 @@ test('Electron app chrome draws its own drag strip on macOS with traffic-light c
   assert.match(app, /function isMacUserAgent\(\)/);
   assert.match(appChrome, /app-chrome app-chrome--mac/);
   assert.match(appChrome, /className="app-chrome__name">Hydra/);
+  assert.match(appChrome, /<img src="\/hydra_dragon\.png" alt="" \/>/);
+  assert.match(app, /className="sidebar-logo-icon">\s*<img src="\/hydra_dragon\.png" alt="" \/>/);
+  assert.match(css, /\.app-chrome__mark img\s*\{[\s\S]*?object-fit:\s*cover;/);
   assert.match(app, /function AppVersionStamp\(\)/);
   assert.match(app, /className="app-version-stamp"/);
   assert.match(app, /import\.meta\.env\.VITE_APP_VERSION/);
@@ -74,6 +77,27 @@ test('Electron app chrome draws its own drag strip on macOS with traffic-light c
   assert.match(css, /\.app-chrome\s*\{[\s\S]*?-webkit-app-region:\s*drag;/);
   assert.match(css, /\.app-chrome__controls\s*\{[\s\S]*?-webkit-app-region:\s*no-drag;/);
   assert.match(css, /\.app-chrome--mac\s*\{[\s\S]*?padding-left:\s*82px;/);
+});
+
+test('detailed Hydra dragon stays the curated platform-icon master', () => {
+  const pkg = JSON.parse(readRepoFile('package.json'));
+  const microMarkGenerator = readRepoFile('scripts/generate-hydra-source-icon.mjs');
+  const iconDocs = readRepoFile('desktop/icons/README.md');
+
+  assert.equal(pkg.scripts['icons:generate'], 'node scripts/generate-icons.mjs --source public/hydra_dragon.png');
+  assert.match(microMarkGenerator, /const microBadgePng = path\.join\(publicDir, 'hydra_micro_badge\.png'\)/);
+  assert.match(microMarkGenerator, /must not overwrite[\s\S]*platform-icon source/);
+  assert.match(iconDocs, /curated 1024×1024 detailed[\s\S]*three-headed Hydra raster/);
+  assert.match(iconDocs, /does not overwrite the detailed platform-icon master/);
+});
+
+test('packaged renderer startup assets stay same-origin and offline-capable', () => {
+  const html = readRepoFile('index.html');
+  const css = readRepoFile('src/index.css');
+
+  assert.match(html, /<link rel="icon" type="image\/png" href="\/hydra_dragon\.png" \/>/);
+  assert.doesNotMatch(html, /data:image\/svg\+xml/);
+  assert.doesNotMatch(css, /fonts\.googleapis\.com/);
 });
 
 test('ambient app chrome animations settle after launch instead of running forever', () => {
@@ -136,8 +160,8 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /hydraSplashLeanX\+= \(hydraSplashTiltGravityX-hydraSplashLeanX\)\*0\.08/);
   assert.match(windowsJs, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
   assert.match(windowsJs, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
-  assert.match(windowsJs, /Eng\.update\(engine,HYDRA_SPLASH_PHYSICS_STEP_MS\)/);
-  assert.match(windowsJs, /while\(hydraSplashPhysicsCarry>=HYDRA_SPLASH_PHYSICS_STEP_MS&&steps<2\)/);
+  assert.match(windowsJs, /const physicsStep=hydraSplashExitStartedAt\?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS/);
+  assert.match(windowsJs, /while\(hydraSplashPhysicsCarry>=physicsStep&&steps<2\)\{Eng\.update\(engine,physicsStep\)/);
   assert.match(windowsJs, /window\.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics/);
   assert.match(windowsJs, /window\.addEventListener\("deviceorientation",onHydraSplashDeviceOrientation\)/);
   assert.match(windowsJs, /window\.GravitySensor\|\|window\.Accelerometer/);
@@ -146,13 +170,19 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /engine\.world\.gravity\.x=hydraSplashLeanX/);
   assert.match(windowsJs, /portalRadius=Math\.min\(W\(\),H\(\)\)\*\(0\.46-0\.27\*easedExit\)/);
   assert.match(windowsJs, /portalSpeed=4\.4\+18\.6\*easedExit/);
-  assert.match(windowsJs, /liftBoost=\(1-exitRatio\)\*10/);
+  assert.match(windowsJs, /liftBoost=\(1-portalRatio\)\*10/);
+  assert.match(windowsJs, /releaseLift=\(1-portalRatio\)\*7\.5/);
   assert.match(windowsJs, /b\.collisionFilter\.mask=0;b\.isSensor=true/);
   assert.match(windowsJs, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
+  assert.match(windowsJs, /hydraSplashDiagnostics\.portalLiftApplied=true/);
+  assert.match(windowsJs, /const stems=9/);
   assert.match(windowsJs, /baseFontSize\*\(0\.86\+Math\.random\(\)\*1\.04\)/);
   assert.match(windowsJs, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
   assert.match(windowsJs, /Welcome, /);
   assert.match(windowsJs, /function drawHydraPortal\(now,ratio\)/);
+  assert.match(windowsJs, /const bend=\(Math\.random\(\)-0\.5\)\*length\*0\.26,segments=Math\.max\(3,7-depth\)/);
+  assert.match(windowsJs, /d\+=" L"\+px\.toFixed\(1\)\+" "\+py\.toFixed\(1\)/);
+  assert.doesNotMatch(windowsJs, /path\.setAttribute\("d","M"\+x\.toFixed\(1\)\+" "\+y\.toFixed\(1\)\+" C"/);
   assert.match(windowsJs, /ctx\.globalCompositeOperation="lighter"/);
   assert.match(windowsJs, /drawHydraPortal\(now,portalRatio\)/);
   assert.match(windowsJs, /document\.body\.classList\.add\("is-settling"\)/);
@@ -319,6 +349,12 @@ test('settings exposes encrypted account proxy pool controls', () => {
   assert.match(settings, /api\.setAccountProxies\(accountProxies\)/);
   assert.match(api, /getAccountProxies/);
   assert.match(api, /setAccountProxies/);
+});
+
+test('settings explains the bounded desktop unlock window', () => {
+  const settings = readRepoFile('src/pages/Settings.jsx');
+
+  assert.match(settings, /Successful unlocks persist for up to 24 hours on this device\./);
 });
 
 test('traffic and panel headers keep readable foreground contrast over the background', () => {
@@ -816,10 +852,11 @@ test('session ages are labeled as historical context while live probes show obse
   assert.match(vault, /Live probe: \$\{checkResults\[acc\.id\]\.observedAt\}/);
 });
 
-test('dashboard cards and sidebar navigation use bounded reduced-motion-safe proximity fields', () => {
+test('dashboard, sidebar, and settings actions use bounded reduced-motion-safe proximity fields', () => {
   const hook = readRepoFile('src/hooks/useProximityField.js');
   const app = readRepoFile('src/App.jsx');
   const dashboard = readRepoFile('src/pages/Dashboard.jsx');
+  const settings = readRepoFile('src/pages/Settings.jsx');
   const accountCard = readRepoFile('src/components/AccountCard.jsx');
   const css = readRepoFile('src/index.css');
 
@@ -827,11 +864,25 @@ test('dashboard cards and sidebar navigation use bounded reduced-motion-safe pro
   assert.match(hook, /Math\.hypot\(dx, dy\) \/ radius/);
   assert.match(hook, /prefers-reduced-motion: reduce/);
   assert.match(hook, /querySelectorAll\(TARGET_SELECTOR\)\.forEach\(resetTarget\)/);
+  assert.match(hook, /brightnessDelta = 0\.08/);
+  assert.match(hook, /maxAttractX = 0/);
+  assert.match(hook, /maxAttractY = 0/);
+  assert.match(hook, /Math\.max\(-maxAttractX, Math\.min\(maxAttractX, dx \* strength \* 0\.12\)\)/);
+  assert.match(hook, /Math\.max\(-maxAttractY, Math\.min\(maxAttractY, dy \* strength \* 0\.1\)\)/);
   assert.match(app, /owner: 'App\.sidebarNav'/);
+  assert.match(app, /<div className="sidebar-bottom">[\s\S]*?data-proximity-target className="nav-link"/);
   assert.match(app, /data-studio="frostbyte-zayd-cold"/);
   assert.match(dashboard, /owner: 'Dashboard\.accountGrid'/);
+  assert.match(dashboard, /maxAttractX: 10/);
+  assert.match(dashboard, /maxAttractY: 8/);
+  assert.match(dashboard, /owner: 'Dashboard\.commandActions'/);
+  assert.match(settings, /owner: 'Settings\.actionGroup'/);
+  assert.match(settings, /className="settings-grid"/);
   assert.match(accountCard, /data-proximity-target/);
   assert.match(css, /\.dashboard-mini-grid \.account-card\[data-proximity-target\]/);
+  assert.match(css, /translateX\(var\(--proximity-attract-x\)\)[\s\S]*?translateY\(var\(--proximity-attract-y\)\)/);
   assert.match(css, /\.sidebar \.nav-link\[data-proximity-target\]/);
+  assert.match(css, /\.action-proximity-group \[data-proximity-target\]/);
+  assert.match(css, /\.settings-grid\s*\{[\s\S]*?grid-auto-rows:\s*1fr;/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.proximity-field \[data-proximity-target\]/);
 });
