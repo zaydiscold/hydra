@@ -1037,3 +1037,22 @@ This evidence file is not release-complete by itself. The release remains not co
   `26726917984` passed runtime smoke plus registry push. This closes hosted
   silent NSIS lifecycle proof without claiming the still-manual interactive
   Windows installer click-through.
+- A third untouched exact-public `v1.4.0` calm-runtime pass under
+  `/private/tmp/hydra-v140-post-audit-parser-idle-reprofile-20260531T231558Z`
+  sampled the canonical package every 30 seconds for five minutes after the
+  audit parser fix. All 11 samples retained four Hydra-owned processes and
+  zero stale Hydra Playwright profiles. CPU stayed between `0.0%` and `0.1%`
+  (`0.009%` average, `0.0%` ending); RSS moved from `502.16 MiB` to
+  `500.19 MiB` (`-1.97 MiB`). No Computer Use attach occurred.
+- The exact final local acceptance-item-11 chain passed against the published
+  arm64 zip after SHA-256 verification at
+  `320bb60fc3400449fb9c34d4003c5afd9811337c3c9e8cf08f074921fa5e4dac`:
+  `npm run lint && npm test && npm run gate &&
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run
+  docker:smoke && npm run openapi:hydra`. Gate remained `12/12`, packaged
+  smoke exercised the verified public artifact, Docker smoke rebuilt the
+  production image and launched the isolated full-Chromium path, and OpenAPI
+  generation retained `83 operations`. Strict deep `codesign` passed,
+  `docker compose ps --all` returned no residual services, and the temporary
+  public-zip symlink moved reversibly to Trash afterward. Docker Desktop was
+  restored to its prior stopped state through `docker desktop stop`.

@@ -601,6 +601,24 @@ closed-app CLI commands, tests, and repo-local documentation.
   leave stale runtime-smoke evidence in CLI output. The CLI regression derives
   the newest documented checkpoint and requires the reported Docker evidence
   to match it; current output records `26726917984`.
+- A fresh untouched exact-public `v1.4.0` post-parser sampler at
+  `/private/tmp/hydra-v140-post-audit-parser-idle-reprofile-20260531T231558Z`
+  retained four packaged Hydra processes and zero stale Hydra Playwright
+  profiles across 11 samples over five minutes. CPU stayed between `0.0%` and
+  `0.1%` (`0.009%` average, `0.0%` ending); RSS moved from `502.16 MiB` to
+  `500.19 MiB` (`-1.97 MiB`). No Computer Use attach occurred during this
+  valid calm-runtime pass.
+- The exact final local acceptance-item-11 chain passed against the downloaded
+  public `Hydra-1.4.0-mac-arm64.zip` asset after SHA-256 verification at
+  `320bb60fc3400449fb9c34d4003c5afd9811337c3c9e8cf08f074921fa5e4dac`:
+  `npm run lint && npm test && npm run gate &&
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run
+  docker:smoke && npm run openapi:hydra`. Gate remained `12/12`, strict deep
+  `codesign` passed, Docker smoke rebuilt the production image and launched
+  the isolated full-Chromium path, OpenAPI retained `83 operations`,
+  `docker compose ps --all` returned no residual services, and the temporary
+  public-zip symlink moved reversibly to Trash afterward. Docker Desktop was
+  restored to its prior stopped state through `docker desktop stop`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

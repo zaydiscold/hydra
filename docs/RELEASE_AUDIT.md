@@ -1103,3 +1103,25 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   checkpoint instead of accepting any stale run ID. The actual interactive
   NSIS installer install/open UX remains a real Windows desktop manual
   boundary.
+- 2026-05-31 post-parser exact-public calm-runtime proof:
+  `/private/tmp/hydra-v140-post-audit-parser-idle-reprofile-20260531T231558Z`
+  sampled the untouched canonical packaged app every 30 seconds for five
+  minutes after the audit parser fix. All 11 samples retained four Hydra-owned
+  processes and zero stale Hydra Playwright profiles. Aggregate CPU stayed
+  between `0.0%` and `0.1%` (`0.009%` average, `0.0%` ending); RSS moved from
+  `502.16 MiB` to `500.19 MiB` (`-1.97 MiB`). No Computer Use accessibility
+  attach occurred during this valid sample.
+- 2026-05-31 exact-final-chain local rerun: the published
+  `Hydra-1.4.0-mac-arm64.zip` release asset was downloaded and verified at
+  SHA-256
+  `320bb60fc3400449fb9c34d4003c5afd9811337c3c9e8cf08f074921fa5e4dac`.
+  The literal ordered acceptance chain passed: `npm run lint && npm test &&
+  npm run gate && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke &&
+  npm run docker:smoke && npm run openapi:hydra`. Gate remained `12/12`,
+  package smoke used the verified published zip, Docker smoke rebuilt the
+  production image and launched Hydra's isolated full-Chromium persistent
+  context, and OpenAPI regeneration retained `83 operations`. Strict deep
+  `codesign` passed, `docker compose ps --all` returned no services, and the
+  temporary public-zip symlink moved reversibly to Trash afterward. Docker
+  Desktop was restored to its prior stopped state through `docker desktop
+  stop`.
