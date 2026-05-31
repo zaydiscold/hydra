@@ -77,6 +77,18 @@ Session surfaces use four distinct labels:
 The checkpoint is never described as total session lifetime. Forced probes
 persist and reload renewal metadata before rendering the result.
 
+## Steady Status Indicators
+
+Success, error, and warning dots use static color-matched glows. They remain
+legible at a glance without perpetual compositor animation. Only a genuinely
+transient loading dot pulses, and that motion is capped at three `1.2s`
+cycles.
+
+This is an empirical design constraint, not only a preference: packaged
+Settings dogfood found that two six-pixel success dots running an infinite
+`box-shadow` pulse kept the visible renderer and GPU hot. The static treatment
+preserves the same hierarchy while allowing the settled app to return to idle.
+
 ## Product Signature
 
 Release metadata, About, and Build Info identify `Frostbyte Technology` and

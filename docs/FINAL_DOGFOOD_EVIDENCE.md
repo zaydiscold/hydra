@@ -344,3 +344,41 @@ This evidence file is not release-complete by itself. The release remains not co
   verified zero packaged-process survivors after cleanup. This materially
   tightens Windows release evidence without claiming the still-manual NSIS
   install/open UX pass.
+
+## Native Accessibility Profiling Guardrail
+
+- Two Computer Use attaches against the settled exact-public `v1.1.4` package
+  timed out after `120s` each and left the external `SkyComputerUseService`
+  helper continuously requesting macOS accessibility attributes.
+- The resulting sampler is not a valid idle baseline: Hydra's Electron main
+  process held roughly `67-70%` CPU while GPU, network utility, and renderer
+  processes remained idle. Terminating only the stuck external helper returned
+  the same four-process Hydra tree immediately to `0.0%` sampled CPU with zero
+  stale Hydra Playwright profiles.
+- A clean five-minute post-recovery sampler then kept four Hydra-owned
+  processes and zero stale Hydra Playwright profiles across all 11 samples.
+  CPU stayed between `0.0%` and `0.2%` (`0.091%` average); RSS moved from
+  `505.36 MiB` to `507.20 MiB` (`+1.84 MiB`). Raw local samples are in
+  `/private/tmp/hydra-v114-post-cua-idle-reprofile-20260531T122026Z`.
+- `docs/ACCESSIBILITY_PROFILING_DISTORTION.md` records the local raw evidence,
+  stack signature, exact recovery command, and the rule to profile before any
+  accessibility attach. Computer Use is not used as packaged interaction
+  evidence in this environment.
+
+## Renderer Idle Performance Follow-Up
+
+- A CDP-only exact-public `v1.1.4` route walk exposed a separate visible-route
+  renderer cost after native accessibility polling was removed. Settings had
+  zero intervals, zero active RAFs, and zero Anime.js effects, but two
+  six-pixel success dots still ran an infinite `breathe` CSS animation.
+- Pausing those two animations ephemerally dropped aggregate Hydra CPU from
+  roughly `64%` to `0.0-0.3%` without a route change or relaunch.
+- The local patch replaces steady success, error, and warning animations with
+  static color-matched glows and bounds transient loading-dot motion to three
+  `1.2s` cycles. Rebuilt packaged Settings settled to five consecutive `0.0%`
+  samples after the bounded startup visual window; `hydra doctor` then sampled
+  `0.5%` CPU with four Hydra-owned processes and zero stale profiles.
+- The rebuilt package passed Dashboard, Bulk OTP, Vault, Pool Manager, Redeem,
+  Generator, Traffic, Settings, and a redacted Account Detail reachability
+  check. `docs/RENDERER_IDLE_PERFORMANCE.md` records exact reproduction,
+  package-local raw evidence paths, the design choice, and verification.

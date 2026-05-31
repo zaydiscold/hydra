@@ -100,6 +100,18 @@ test('ambient app chrome animations settle after launch instead of running forev
   assert.match(css, /\.app-shell--motion-settled \.meteor-container\s*\{[\s\S]*?display:\s*none;/);
 });
 
+test('steady status dots keep their glow without perpetual compositor animation', () => {
+  const css = readRepoFile('src/index.css');
+
+  assert.doesNotMatch(cssRuleBlock(css, '.status-dot.success {'), /animation:/);
+  assert.doesNotMatch(cssRuleBlock(css, '.status-dot.error {'), /animation:/);
+  assert.doesNotMatch(cssRuleBlock(css, '.status-dot.warning, .status-dot.loading {'), /animation:/);
+  assert.match(cssRuleBlock(css, '.status-dot.success {'), /box-shadow:\s*0 0 6px color-mix/);
+  assert.match(cssRuleBlock(css, '.status-dot.error {'), /box-shadow:\s*0 0 6px color-mix/);
+  assert.match(cssRuleBlock(css, '\n.status-dot.loading {'), /animation:\s*dotPulse 1\.2s ease-in-out 3;/);
+  assert.doesNotMatch(cssRuleBlock(css, '\n.status-dot.loading {'), /infinite/);
+});
+
 test('splash owns one throttled physics and render loop', () => {
   const windowsJs = readRepoFile('electron/app/windows.js');
 

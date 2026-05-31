@@ -176,3 +176,19 @@ nine PNGs. A direct repository visual-review pass also replaced
 machine-specific local and LAN endpoint values in the Settings image with
 explicit redaction labels. Computer Use still times out against Hydra, so this
 checkpoint does not replace the final interactive route review.
+
+## Native Accessibility Profiling Guardrail
+
+Do not run Computer Use before collecting Hydra idle measurements in this
+environment. Two `get_app_state` attempts against the exact-public `v1.1.4`
+package timed out after `120s` and left `SkyComputerUseService` polling macOS
+accessibility attributes. Hydra's main process then held roughly `67-70%` CPU
+until the stuck external helper was terminated, after which the same packaged
+app returned immediately to `0.0%` sampled CPU without relaunch.
+
+Treat any idle profile collected after a timed-out accessibility attach as
+contaminated. Collect the anchored baseline first, confirm
+`SkyComputerUseService` is not stuck, and keep native traffic-light controls,
+tray reopen, Touch ID approval, and final interactive review as manual
+evidence. See `docs/ACCESSIBILITY_PROFILING_DISTORTION.md` for the exact
+reproduction, raw local evidence paths, stack signature, and recovery command.

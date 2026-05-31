@@ -193,6 +193,12 @@ Current release-train docs:
   state, live Clerk probes, bounded device-cookie identity memory, and OTP aliases.
 - [Release Audit](docs/RELEASE_AUDIT.md): measured performance evidence,
   packaged-app evidence, and the remaining manual dogfood blockers.
+- [Accessibility Profiling Distortion](docs/ACCESSIBILITY_PROFILING_DISTORTION.md):
+  why timed-out native Computer Use attaches contaminate idle profiles and how
+  to recover before remeasuring.
+- [Renderer Idle Performance](docs/RENDERER_IDLE_PERFORMANCE.md): why steady
+  status dots use static glows and how the packaged compositor fix was
+  measured.
 
 ## Star History
 
