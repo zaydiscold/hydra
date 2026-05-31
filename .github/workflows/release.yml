@@ -123,7 +123,7 @@ jobs:
       - run: npm run electron:smoke
         env:
           HYDRA_BUILD_TARGET: ${{ matrix.build_target }}
-      - name: Launch and cleanup Windows packaged executable
+      - name: Launch unpacked and NSIS-installed Windows executables
         if: matrix.build_target == 'win32-x64'
         run: npm run electron:smoke:win-launch
       - name: Upload verified artifacts to GitHub Release

@@ -229,14 +229,14 @@ test('electron package smoke validates the packaged app shell without launching 
   assert.match(script, /Linux main executable/, 'smoke must require the Linux executable');
 });
 
-test('Windows release workflow launches the packaged executable and proves cleanup', () => {
+test('Windows release workflow launches unpacked and NSIS-installed executables and proves cleanup', () => {
   const pkg = JSON.parse(read('package.json'));
   const workflow = read('.github/workflows/release.yml');
   const script = read('scripts/smoke-windows-launch.mjs');
 
   assert.equal(pkg.scripts['electron:smoke:win-launch'], 'node scripts/smoke-windows-launch.mjs');
   assert.match(workflow, /scripts\/smoke-windows-launch\.mjs/, 'Windows launch smoke edits must trigger release workflow checks on pull requests');
-  assert.match(workflow, /name:\s*Launch and cleanup Windows packaged executable[\s\S]*if:\s*matrix\.build_target == 'win32-x64'[\s\S]*run:\s*npm run electron:smoke:win-launch/, 'release workflow must launch only the Windows packaged executable');
+  assert.match(workflow, /name:\s*Launch unpacked and NSIS-installed Windows executables[\s\S]*if:\s*matrix\.build_target == 'win32-x64'[\s\S]*run:\s*npm run electron:smoke:win-launch/, 'release workflow must launch the unpacked and NSIS-installed Windows executables');
   assert.ok(
     workflow.indexOf('npm run electron:smoke') < workflow.indexOf('npm run electron:smoke:win-launch'),
     'Windows packaged launch must run after filesystem package smoke',
@@ -247,6 +247,11 @@ test('Windows release workflow launches the packaged executable and proves clean
   );
   assert.match(script, /release', 'win-unpacked'/, 'launch smoke must target the unpacked Windows app');
   assert.match(script, /Hydra\.exe/, 'launch smoke must run the real packaged executable');
+  assert.match(script, /Hydra-\$\{PACKAGE_VERSION\}-win-x64\.exe/, 'launch smoke must target the generated NSIS installer');
+  assert.match(script, /execFileSync\(INSTALLER_EXE, \['\/S', '\/currentuser', `\/D=\$\{installDir\}`\]/, 'launch smoke must silently install NSIS into an isolated directory with /D last');
+  assert.match(script, /copyFileSync\(uninstaller, tempUninstaller\)/, 'launch smoke must copy the generated uninstaller outside the install tree');
+  assert.match(script, /execFileSync\(tempUninstaller, \['\/S', '\/currentuser', `_\?=\$\{installDir\}`\]/, 'launch smoke must silently uninstall the isolated NSIS installation');
+  assert.match(script, /NSIS uninstall left install-directory residue/, 'launch smoke must reject NSIS uninstall residue');
   assert.match(script, /--user-data-dir=\$\{userDataDir\}/, 'launch smoke must isolate Windows app data');
   assert.match(script, /Get-CimInstance Win32_Process/, 'launch smoke must capture the packaged process tree');
   assert.match(script, /taskkill\.exe/, 'launch smoke must terminate the packaged process tree');
