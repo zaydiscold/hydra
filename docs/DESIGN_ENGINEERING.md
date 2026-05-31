@@ -39,8 +39,10 @@ switches to a zero collision mask and sensor behavior. Matter still integrates
 the individual orbiting bodies, but it no longer resolves the dense pile's
 collision pairs during the spin.
 
-Every shower entry is unique within one launch. `shatter()` marks its parent
-body before adding glyphs, because one parent can appear in several pairs
+Every shower entry is unique within one launch. The source corpus currently
+contains `85` distinct labels, and the bounded queue selects `72` without a
+refill path. The UI contract rejects duplicate corpus labels. `shatter()` marks
+its parent body before adding glyphs, because one parent can appear in several pairs
 inside a single Matter collision batch. Without that one-shot guard, the same
 label can clone its letters and colors repeatedly before the removed body
 leaves the event list.

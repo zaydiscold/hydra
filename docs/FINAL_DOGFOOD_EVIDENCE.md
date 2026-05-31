@@ -480,3 +480,22 @@ This evidence file is not release-complete by itself. The release remains not co
   total login lifetime. The debug session closed, port `9333` closed, and the
   normal LaunchServices reopen settled to four owned processes, `0.0%` sampled
   CPU, and zero stale profiles.
+- Exact-public Windows transfer inspection downloaded
+  `Hydra-1.1.5-win-x64.exe` and `latest.yml`. The installer SHA-256 matched the
+  GitHub asset digest
+  `7f1a74c576710be9a2fd0fe8883aca501c9e53c1d84cd8404650367b308944b5`;
+  its recomputed SHA-512 base64 matched `latest.yml`. Nested NSIS extraction
+  found the x64 GUI executable, updater handoff module, packaged dashboard,
+  Windows Prisma engine, Chromium archive, empty database, and Prisma schema.
+  Electron source files, renderer assets, and source maps match the public
+  macOS package after normalizing Windows line endings. The NSIS uninstaller
+  ICO is byte-identical to the six-size source ICO, and `Hydra.exe` contains
+  UTF-16LE `Frostbyte Technology` and `Developed by Zayd / Cold` strings.
+  Release run `26712864469` independently passed Windows NSIS smoke plus
+  packaged executable launch-and-cleanup. Real NSIS install/open UX remains a
+  real-Windows-desktop manual boundary.
+- The intermittent repeated-label splash report was rechecked against source.
+  The splash has one recursive scheduler, one monotonic queue index, no refill
+  path, `85/85` unique corpus labels, a `72`-entry no-repeat launch queue, and
+  the one-shot parent `kind="shattered"` guard before glyph creation. The UI
+  contract now rejects corpus-label duplication as well as a refill regression.

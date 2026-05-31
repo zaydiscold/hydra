@@ -114,6 +114,8 @@ test('steady status dots keep their glow without perpetual compositor animation'
 
 test('splash owns one throttled physics and render loop', () => {
   const windowsJs = readRepoFile('electron/app/windows.js');
+  const splashLabels = [...windowsJs.matchAll(/\{ text: '([^']+)',\s+tag: '(?:brand|model)'/g)]
+    .map(([, label]) => label);
 
   assert.match(windowsJs, /HYDRA_SPLASH_DURATION_MS=16000/);
   assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=13000/);
@@ -121,6 +123,8 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FADE_DELAY_MS=2700/);
   assert.match(windowsJs, /HYDRA_SPLASH_DISPOSE_MS=18500/);
   assert.match(windowsJs, /HYDRA_SPLASH_TARGET=72/);
+  assert.ok(splashLabels.length >= 72, 'splash corpus must cover the bounded queue without refill');
+  assert.equal(new Set(splashLabels).size, splashLabels.length, 'splash corpus labels must stay unique');
   assert.doesNotMatch(windowsJs, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
   assert.match(windowsJs, /m\.kind="shattered";hydraSplashDiagnostics\.shatteredWordCount\+\+/);
   assert.match(windowsJs, /shuffle\(items\)\.slice\(0,Math\.min\(n,items\.length\)\)/);
