@@ -443,3 +443,22 @@ This evidence file is not release-complete by itself. The release remains not co
   processes reached zero, port `9333` closed, and a normal no-debug
   LaunchServices reopen settled to four processes, `0.0%` CPU, and zero stale
   profiles.
+- A third untouched exact-public `v1.1.5` idle reprofile at
+  `/private/tmp/hydra-v115-public-idle-reprofile-20260531T133222Z` sampled the
+  already-settled canonical app every 30 seconds for five minutes. All 11
+  samples reported four Hydra-owned processes, zero stale profiles, and
+  `0.000%` sampled CPU. RSS reclaimed `94.98 MiB` during the run. Follow-up
+  inventory found no stuck accessibility helper, no debug listener on `9333`,
+  one LaunchServices registration for `com.zayd.hydra` version `1.1.5`, and
+  the same sole canonical `Hydra.app` through Spotlight and targeted
+  filesystem scans.
+- A native CoreGraphics-only calm-startup observation at
+  `/private/tmp/hydra-v115-public-calm-launch-20260531T133924Z` quit the old
+  canonical four-process tree to zero, launched the same app through
+  LaunchServices, observed the splash-to-Dashboard window handoff, and
+  reported `security_prompt_count=0` across 55 seconds. No native window owner
+  or title matched `SecurityAgent`, Keychain, `CoreServicesUIAgent`, or
+  authorization. The settled app returned to four owned processes with zero
+  stale profiles. Chromium startup remains isolated through
+  `password-store=basic` and macOS `use-mock-keychain`; biometric auth-token
+  release remains independently fail-closed.
