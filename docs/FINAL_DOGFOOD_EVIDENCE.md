@@ -1571,3 +1571,39 @@ This evidence file is not release-complete by itself. The release remains not co
   retained four Hydra-owned processes and zero stale profiles across 11
   five-minute samples. CPU ranged from `0.000%` to `0.100%`, averaged
   `0.009%`, and ended at `0.000%`; RSS changed by `-3296 KiB`.
+- Task-scheduler checkpoint
+  `b1577fd2938848fd292b6945c064fb3fff4bd91b` used `[skip-bump]`;
+  Auto-version run `26736665665` skipped, CI run `26736665670` passed, and
+  Docker workflow `26736665671` passed runtime smoke and registry image push.
+- Request-log retention now avoids both SQLite delete paths while its table is
+  empty, avoids age deletion while the oldest row is fresh, and avoids cap
+  deletion while the table stays below `KEEP_COUNT`. Both inspected local
+  databases held zero request logs. The benchmark under
+  `/private/tmp/hydra-request-log-retention-empty-table-benchmark-20260601T051408Z/summary.json`
+  records idle writes `2 -> 0` and 20,000 empty cycles
+  `159.386ms -> 28.574ms` (`82.1%` lower elapsed time). The recon note is
+  `docs/recon/REQUEST_LOG_RETENTION_IDLE_GUARD.md`. Focused retention tests
+  passed `4/4`, background visibility contracts passed `32/32`, and the
+  complete source chain passed before rebuild.
+- Native shutdown evidence is under
+  `/private/tmp/hydra-v140-request-log-retention-rebuild-shutdown-20260601T052441Z`;
+  four package processes exited immediately. The current-source ARM package
+  rebuilt and passed package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), embedded retention-guard inspection, packaged hidden-glyph
+  absence, and retained splash target. The local ARM zip SHA-256 was
+  `a257f62ba968eb8f9f48bd62f734aab19a42a66a6e7dcec36c6be19af62495fc`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-request-log-retention-package-20260601T052618Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly one Hydra bundle, and Docker Desktop remains stopped.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v140-request-log-retention-current-source-launch-20260601T052630Z`
+  records four settled processes at `0.000%` CPU, zero stale profiles, and no
+  Computer Use helper by 35 seconds. Splash teardown stayed finite with
+  `72/72` shuffled words, zero duplicate skips, collision-free lifted portal
+  entry, timers `0`, inactive RAF, and cleared Matter state.
+- The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v140-request-log-retention-post-rebuild-idle-20260601T052729Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.700%`, averaged
+  `0.064%`, and ended at `0.000%`; RSS changed by `+4848 KiB`.

@@ -14,17 +14,33 @@ let stopping = false;
 let lastErrorAt = 0;
 let startupTimer = null;
 
-async function pruneRequestLogs() {
+export async function pruneRequestLogs() {
   if (stopping) return;
   if (pruneInFlight) return;
   pruneInFlight = true;
 
   try {
     const cutoff = new Date(Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000);
-
-    await prisma.requestLog.deleteMany({
-      where: { createdAt: { lt: cutoff } }
+    const oldest = await prisma.requestLog.findFirst({
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
     });
+
+    if (!oldest) return;
+
+    if (oldest.createdAt < cutoff) {
+      await prisma.requestLog.deleteMany({
+        where: { createdAt: { lt: cutoff } }
+      });
+    }
+
+    const overflow = await prisma.requestLog.findFirst({
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+      skip: KEEP_COUNT,
+    });
+
+    if (!overflow) return;
 
     await prisma.$executeRawUnsafe(
       `DELETE FROM "RequestLog"

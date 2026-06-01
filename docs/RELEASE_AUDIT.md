@@ -1801,3 +1801,48 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   across all 11 samples. CPU ranged from `0.000%` to `0.100%`, averaged
   `0.009%`, and ended at `0.000%`; RSS moved from `605696 KiB` to
   `602400 KiB` (`-3296 KiB`).
+- Task-scheduler checkpoint
+  `b1577fd2938848fd292b6945c064fb3fff4bd91b` used `[skip-bump]`;
+  Auto-version run `26736665665` skipped, CI run `26736665670` passed, and
+  Docker workflow run `26736665671` passed runtime smoke and registry image
+  push.
+- 2026-06-01 request-log retention idle guard: the 15-minute retention cycle
+  now stops after one oldest-row read when `RequestLog` is empty, skips age
+  deletion while the oldest row is fresh, and skips cap deletion while the
+  table stays below `KEEP_COUNT`. Existing stale-row and overflow cleanup
+  remain intact. Both production and repo-local databases held zero request
+  logs during inspection. The deterministic SQLite benchmark under
+  `/private/tmp/hydra-request-log-retention-empty-table-benchmark-20260601T051408Z/summary.json`
+  records idle writes `2 -> 0` and 20,000 empty cycles
+  `159.386ms -> 28.574ms` (`82.1%` lower elapsed time). The required recon
+  note is `docs/recon/REQUEST_LOG_RETENTION_IDLE_GUARD.md`. Focused retention
+  tests passed `4/4`, background visibility contracts passed `32/32`, and
+  the complete source chain passed lint, full `npm test`, build, gate
+  (`12/12`), OpenAPI generation (`83 operations`), audit, and diff check.
+- 2026-06-01 request-log retention current-source package proof: native quit
+  removed all four prior package processes immediately with evidence under
+  `/private/tmp/hydra-v140-request-log-retention-rebuild-shutdown-20260601T052441Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), embedded retention-guard inspection, packaged hidden-glyph
+  absence, and retained `HYDRA_SPLASH_TARGET=72` passed. The local ARM zip
+  SHA-256 was
+  `a257f62ba968eb8f9f48bd62f734aab19a42a66a6e7dcec36c6be19af62495fc`;
+  it is current-source local proof, not a replacement public asset.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-request-log-retention-package-20260601T052618Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one bundle, and Docker Desktop remains stopped.
+- 2026-06-01 request-log retention LaunchServices proof:
+  `/private/tmp/hydra-v140-request-log-retention-current-source-launch-20260601T052630Z`
+  recorded splash-active CPU at three seconds, handoff CPU at 20 seconds, and
+  the settled four-process package at `0.000%` CPU with zero stale profiles
+  and no Computer Use helper by 35 seconds. Native splash diagnostics remained
+  finite: target and queue length `72`, shattered words `72`, duplicate skips
+  `0`, portal collision disabled, lift applied, timers `0`, RAF inactive, and
+  Matter cleared.
+- 2026-06-01 request-log retention post-rebuild profile:
+  `/private/tmp/hydra-v140-request-log-retention-post-rebuild-idle-20260601T052729Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across all 11 untouched samples over five minutes. CPU ranged from `0.000%`
+  to `0.700%`, averaged `0.064%`, and ended at `0.000%`; RSS moved from
+  `610080 KiB` to `614928 KiB` (`+4848 KiB`).

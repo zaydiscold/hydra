@@ -1127,6 +1127,41 @@ closed-app CLI commands, tests, and repo-local documentation.
   retained four Hydra-owned processes and zero stale profiles across 11
   five-minute samples. CPU ranged from `0.000%` to `0.100%`, averaged
   `0.009%`, and ended at `0.000%`; RSS changed by `-3296 KiB`.
+- Task-scheduler checkpoint
+  `b1577fd2938848fd292b6945c064fb3fff4bd91b` used `[skip-bump]`;
+  Auto-version run `26736665665` skipped, CI run `26736665670` passed, and
+  Docker workflow `26736665671` passed runtime smoke and registry image push.
+- Request-log retention idle cycles no longer issue unconditional SQLite
+  delete statements. Empty tables stop after one oldest-row read; fresh rows
+  skip age deletion; under-cap tables skip overflow deletion; stale and
+  overflowing tables retain the existing cleanup behavior. Both inspected
+  local databases held zero request logs. The benchmark under
+  `/private/tmp/hydra-request-log-retention-empty-table-benchmark-20260601T051408Z/summary.json`
+  records idle writes `2 -> 0` and 20,000 empty cycles
+  `159.386ms -> 28.574ms` (`82.1%` lower elapsed time). The recon note is
+  `docs/recon/REQUEST_LOG_RETENTION_IDLE_GUARD.md`. Focused retention tests
+  passed `4/4`, background visibility contracts passed `32/32`, and the
+  complete source chain passed before rebuilding.
+- The request-log retention package rebuild passed ARM smoke, strict deep
+  `codesign`, bundle version (`1.4.0`), embedded retention-guard inspection,
+  packaged hidden-glyph absence, and retained `HYDRA_SPLASH_TARGET=72`. The
+  current-source local ARM zip SHA-256 was
+  `a257f62ba968eb8f9f48bd62f734aab19a42a66a6e7dcec36c6be19af62495fc`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-request-log-retention-package-20260601T052618Z`; `release/`
+  again contains only `mac-arm64/Hydra.app`, Spotlight resolves exactly one
+  Hydra bundle, and Docker Desktop remains stopped.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v140-request-log-retention-current-source-launch-20260601T052630Z`
+  records the settled four-process package at `0.000%` CPU with zero stale
+  profiles and no Computer Use helper by 35 seconds. Splash diagnostics stay
+  finite: `72/72` words, zero duplicate skips, collision-free lifted portal
+  entry, timers `0`, inactive RAF, and cleared Matter state.
+- The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v140-request-log-retention-post-rebuild-idle-20260601T052729Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.700%`, averaged
+  `0.064%`, and ended at `0.000%`; RSS changed by `+4848 KiB`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

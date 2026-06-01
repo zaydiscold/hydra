@@ -264,6 +264,12 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.doesNotMatch(magicLinks, /setInterval/);
   assert.doesNotMatch(magicLinks, /clearInterval/);
   assert.match(retention, /startupTimer\.unref\?\.\(\)/);
+  assert.match(retention, /const oldest = await prisma\.requestLog\.findFirst/);
+  assert.match(retention, /if \(!oldest\) return/);
+  assert.match(retention, /if \(oldest\.createdAt < cutoff\)/);
+  assert.match(retention, /const overflow = await prisma\.requestLog\.findFirst/);
+  assert.match(retention, /skip: KEEP_COUNT/);
+  assert.match(retention, /if \(!overflow\) return/);
   assert.match(requestLogBuffer, /timer\.unref\?\.\(\)/);
   assert.match(requestLogBuffer, /timer = setTimeout/);
   assert.doesNotMatch(requestLogBuffer, /timer = setInterval/);
