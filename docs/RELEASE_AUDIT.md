@@ -2467,3 +2467,20 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `~/.Trash/hydra-v147-final-local-chain-20260601T215008Z`, and Docker
   Desktop returned to its prior stopped state. The documentation-reconciled
   successor repeated the same literal chain before push.
+- 2026-06-01 exact-public-`v1.4.7` packaged native-accessibility retry:
+  `get_app_state("com.zayd.hydra")` timed out after `120s` twice. Each failed
+  attach left an external `SkyComputerUseService` helper alive and raised the
+  unchanged four-process Hydra tree from idle to `68.8%` and `67.5%`
+  aggregate CPU respectively. Terminating only the external helper returned
+  the same four Hydra PIDs immediately to `0.0%` with zero stale profiles
+  after each retry. CoreGraphics still found one packaged
+  `Hydra - Dashboard` window and captured it without browser tooling. The
+  private raw capture moved reversibly to
+  `~/.Trash/hydra-v147-private-native-capture-20260601T220405Z`; its redacted
+  structural derivative remains under
+  `/private/tmp/hydra-v147-cua-timeout-recovery-20260601T220102Z`, SHA-256
+  `cbd66508eb94e9a58016ebb82dace2b26c472ea695939a307508ce21de603de6`.
+  The redacted image is `3016x1936`, contains `413` colors with nonzero
+  variance, and returned no Vision OCR text. This is current native capture
+  and environment-blocker evidence, not interactive route, screenshot-review,
+  or physical Touch ID completion.

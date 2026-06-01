@@ -122,6 +122,12 @@ Then copy the relevant summary into `docs/RELEASE_AUDIT.md`.
 
 Manual flag mapping:
 
+Current exact-public `v1.4.7` note: Computer Use accessibility attachment
+timed out twice after `120s` and distorted the otherwise-idle Hydra main
+process until the external helper was terminated. Native CoreGraphics capture
+still works without browser tooling, but interactive route walking remains a
+manual boundary on this machine. See `docs/ACCESSIBILITY_PROFILING_DISTORTION.md`.
+
 | Manual flag | Requires |
 | --- | --- |
 | `--manual=packaged-gui-launch` | Packaged app launched from `.app`/LaunchServices in a real GUI session and Hydra is visible/running. |

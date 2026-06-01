@@ -172,3 +172,34 @@ The pre-attach anchored idle profile is under:
 This keeps native route review and Touch ID fingerprint approval manual. It
 does not weaken the current-source package proof or indicate a Hydra-owned
 idle regression.
+
+## Exact-Public v1.4.7 Retry
+
+The sole canonical exact-public `v1.4.7` package reproduced the same
+environment boundary twice on 2026-06-01. Each
+`get_app_state("com.zayd.hydra")` call timed out after `120s`. The first stuck
+external `SkyComputerUseService` helper raised the unchanged four-process Hydra
+tree from idle to `68.8%` aggregate CPU. Terminating only that helper returned
+Hydra immediately to `0.0%` with the same four PIDs and zero stale Hydra
+Playwright profiles. The corrected retry reproduced `67.5% -> 0.0%` with the
+same recovery shape.
+
+Raw owner-only snapshots are preserved under:
+
+```text
+/private/tmp/hydra-v147-cua-timeout-recovery-20260601T220102Z
+```
+
+Native CoreGraphics still saw one packaged `Hydra - Dashboard` window and
+captured it without browser tooling. The private raw capture moved reversibly
+to:
+
+```text
+~/.Trash/hydra-v147-private-native-capture-20260601T220405Z
+```
+
+The redacted structural derivative remains beside the snapshots with SHA-256
+`cbd66508eb94e9a58016ebb82dace2b26c472ea695939a307508ce21de603de6`.
+It is `3016x1936`, contains `413` colors with nonzero variance, and returned
+no Vision OCR text after the privacy mask. Interactive route review and
+physical Touch ID approval remain manual on this machine.

@@ -2024,3 +2024,17 @@ This evidence file is not release-complete by itself. The release remains not co
   `~/.Trash/hydra-v147-final-local-chain-20260601T215008Z`, Docker Desktop
   returned to its prior stopped state, and the documentation-reconciled
   successor repeated the same literal chain before push.
+- Exact-public-`v1.4.7` packaged native-accessibility retry: Computer Use
+  attachment timed out after `120s` twice and left external
+  `SkyComputerUseService` helpers alive. Hydra's unchanged four-PID tree
+  recovered `68.8% -> 0.0%` and `67.5% -> 0.0%` after terminating only those
+  external helpers; stale Hydra Playwright profiles stayed at zero. Native
+  CoreGraphics captured the packaged `Hydra - Dashboard` window without
+  browser tooling. The private raw image moved reversibly to
+  `~/.Trash/hydra-v147-private-native-capture-20260601T220405Z`. A redacted
+  structural derivative remains under
+  `/private/tmp/hydra-v147-cua-timeout-recovery-20260601T220102Z`, SHA-256
+  `cbd66508eb94e9a58016ebb82dace2b26c472ea695939a307508ce21de603de6`,
+  `3016x1936`, `413` colors, nonzero variance, and no Vision OCR text.
+  Interactive route review, screenshot approval, and physical Touch ID remain
+  manual.

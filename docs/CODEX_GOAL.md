@@ -1373,6 +1373,19 @@ closed-app CLI commands, tests, and repo-local documentation.
   `~/.Trash/hydra-v147-final-local-chain-20260601T215008Z`, and Docker
   Desktop returned to its prior stopped state. The documentation-reconciled
   successor repeated the same literal chain before push.
+- Exact-public `v1.4.7` native-accessibility retry evidence under
+  `/private/tmp/hydra-v147-cua-timeout-recovery-20260601T220102Z` reproduces
+  the external Computer Use attach boundary twice. Each `get_app_state`
+  attempt timed out after `120s`; terminating only the stuck external helper
+  restored the unchanged four-PID Hydra tree from `68.8% -> 0.0%` and
+  `67.5% -> 0.0%` aggregate CPU with zero stale profiles. Native CoreGraphics
+  captured one packaged Dashboard window without browser tooling. The
+  private raw image moved reversibly to
+  `~/.Trash/hydra-v147-private-native-capture-20260601T220405Z`; the redacted
+  structural derivative has SHA-256
+  `cbd66508eb94e9a58016ebb82dace2b26c472ea695939a307508ce21de603de6`,
+  nonzero variance, and no Vision OCR text. Interactive route review,
+  screenshot approval, and physical Touch ID remain manual.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
