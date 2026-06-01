@@ -684,6 +684,50 @@ closed-app CLI commands, tests, and repo-local documentation.
   Auto-version run `26728333080` skipped, CI run `26728333078` passed, and
   Docker workflow run `26728333077` passed both runtime smoke and registry
   image push.
+- A post-cleanup untouched exact-local baseline under
+  `/private/tmp/hydra-v140-post-cleanup-idle-reprofile-20260601T001229Z`
+  retained four packaged processes and zero stale Hydra Playwright profiles
+  across 11 samples over five minutes. CPU stayed between `0.0%` and `0.3%`
+  (`0.036%` average, `0.0%` ending); RSS moved from `474.34 MiB` to
+  `479.52 MiB` (`+5.17 MiB`).
+- The next runtime ownership sweep found that `rotationManager.cancelReload()`
+  discarded its dedupe promise before a non-abortable Prisma-backed pool
+  reload necessarily finished unwinding, while graceful shutdown did not
+  await cancellation. The manager now owns one coalesced reload promise,
+  aborts stale work for a fresh rerun, joins cold-load and reload promises
+  during cancellation, and logs non-abort unwind failures. Shutdown awaits the
+  join before continuing. New direct rotation-manager regressions passed
+  `3/3`; background visibility contracts passed `32/32`; lint, full `npm
+  test`, Vite build, gate (`12/12`), OpenAPI generation (`83 operations`), and
+  diff check passed before packaging.
+- The pre-rebuild package quit natively in one second with broad before/after
+  inventories under
+  `/private/tmp/hydra-v140-rotation-rebuild-shutdown-20260601T001750Z`. The
+  hardened current-source local arm64 package rebuilt successfully; package
+  smoke, strict deep `codesign`, bundle-version inspection, and embedded-source
+  inspection passed. The local zip checksum is
+  `5843e00514abc9932ddeb3dba83cc37a5bdcc618ae10eaac935608aa6dd372fc`;
+  this is current-source local evidence, not a new published artifact.
+  LaunchServices handoff evidence is under
+  `/private/tmp/hydra-v140-rotation-current-source-launch-20260601T001924Z`.
+- The first post-rebuild untouched profile under
+  `/private/tmp/hydra-v140-rotation-post-rebuild-idle-reprofile-20260601T002013Z`
+  retained four processes and zero stale profiles across 11 samples while
+  launch settling moved from `4.5%` to `0.9%` CPU (`1.0%` average) and RSS
+  dropped `24.25 MiB`. A short main-process stack sample under
+  `/private/tmp/hydra-v140-rotation-hot-split-20260601T002143Z` was
+  predominantly parked in `CFRunLoop`/`mach_msg`, not spinning in JS or
+  HIServices. A denser settled follow-up under
+  `/private/tmp/hydra-v140-rotation-dense-idle-20260601T002536Z` captured 12
+  samples at `0.0...0.2%` CPU (`0.025%` average, `0.0%` ending), with four
+  processes and zero stale profiles throughout.
+- The rotation-pool-hardening final local chain passed in literal order:
+  lint, full `npm test`, serial gate (`12/12`), ARM package smoke, Docker
+  smoke against the rebuilt production image with the isolated full-Chromium
+  persistent-context path, and OpenAPI generation (`83 operations`). A final
+  strict deep `codesign` passed. `docker compose ps --all` returned no
+  services, no `hydra_default` network remained, and Docker Desktop stopped
+  cleanly in one second.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

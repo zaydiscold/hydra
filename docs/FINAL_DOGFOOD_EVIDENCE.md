@@ -1119,3 +1119,46 @@ This evidence file is not release-complete by itself. The release remains not co
   Auto-version run `26728333080` skipped, CI run `26728333078` passed, and
   Docker workflow run `26728333077` passed both runtime smoke and registry
   image push.
+- A post-cleanup untouched exact-local baseline under
+  `/private/tmp/hydra-v140-post-cleanup-idle-reprofile-20260601T001229Z`
+  retained four packaged processes and zero stale Hydra Playwright profiles
+  across 11 samples over five minutes. CPU stayed between `0.0%` and `0.3%`
+  (`0.036%` average, `0.0%` ending); RSS moved from `474.34 MiB` to
+  `479.52 MiB` (`+5.17 MiB`).
+- The next ownership sweep found that `rotationManager.cancelReload()` could
+  discard its dedupe promise before a non-abortable Prisma-backed pool reload
+  finished unwinding, while graceful shutdown did not await cancellation. The
+  manager now owns a coalesced reload promise, aborts stale work for one fresh
+  rerun, joins cold-load and reload promises during cancellation, and logs
+  non-abort unwind failures. Shutdown awaits that join before continuing.
+  Direct rotation-manager regressions passed `3/3`; background visibility
+  contracts passed `32/32`; lint, full test, build, gate (`12/12`), OpenAPI
+  generation (`83 operations`), and diff check passed before packaging.
+- The pre-rebuild package quit natively in one second with broad before/after
+  inventories under
+  `/private/tmp/hydra-v140-rotation-rebuild-shutdown-20260601T001750Z`. The
+  current-source local arm64 package rebuilt successfully; package smoke,
+  strict deep `codesign`, bundle-version inspection, and embedded-source
+  inspection passed. The local zip checksum is
+  `5843e00514abc9932ddeb3dba83cc37a5bdcc618ae10eaac935608aa6dd372fc`;
+  it is current-source local evidence, not a new published artifact.
+  LaunchServices handoff evidence is under
+  `/private/tmp/hydra-v140-rotation-current-source-launch-20260601T001924Z`.
+- The first post-rebuild untouched profile under
+  `/private/tmp/hydra-v140-rotation-post-rebuild-idle-reprofile-20260601T002013Z`
+  retained four processes and zero stale profiles across 11 samples while
+  launch settling moved from `4.5%` to `0.9%` CPU (`1.0%` average) and RSS
+  dropped `24.25 MiB`. A short stack sample under
+  `/private/tmp/hydra-v140-rotation-hot-split-20260601T002143Z` found the main
+  process predominantly parked in `CFRunLoop`/`mach_msg`, not spinning in JS
+  or HIServices. A denser settled follow-up under
+  `/private/tmp/hydra-v140-rotation-dense-idle-20260601T002536Z` then captured
+  12 samples at `0.0...0.2%` CPU (`0.025%` average, `0.0%` ending), with four
+  processes and zero stale profiles throughout.
+- The rotation-pool-hardening final local chain passed in literal order:
+  lint, full `npm test`, serial gate (`12/12`), ARM package smoke, Docker
+  smoke against the rebuilt production image with the isolated full-Chromium
+  persistent-context path, and OpenAPI generation (`83 operations`). A final
+  strict deep `codesign` passed. `docker compose ps --all` returned no
+  services, no `hydra_default` network remained, and Docker Desktop stopped
+  cleanly in one second.

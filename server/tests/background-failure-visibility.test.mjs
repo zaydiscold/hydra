@@ -146,11 +146,17 @@ test('pool status and sync-key registration fallbacks are logged', () => {
 
 test('rotation manager weighted-selection fallbacks are logged', () => {
   const source = readRepoFile('server/services/rotation-manager.js');
+  const server = readRepoFile('server/index.js');
 
   assert.match(source, /this\._loadPromise = null/);
   assert.match(source, /if \(this\._loadPromise\) return this\._loadPromise/);
   assert.match(source, /this\._loadPromise = \(async \(\) => \{/);
   assert.match(source, /\}\)\(\)\.finally\(\(\) => \{\s*this\._loadPromise = null;/);
+  assert.match(source, /this\._reloadPromise = null/);
+  assert.match(source, /this\._reloadRequested = false/);
+  assert.match(source, /await Promise\.all\(pending\.map\(promise => promise\.catch/);
+  assert.match(source, /Shutdown waited on failed reload/);
+  assert.match(server, /await rotationManager\.cancelReload\(\)/);
   assert.match(source, /SELECTION_FALLBACK_LOG_WINDOW_MS/);
   assert.match(source, /Weighted key selection failed for \$\{available\.length\} available key\(s\); using round-robin fallback/);
   assert.match(source, /invalid limitRemaining for key/);

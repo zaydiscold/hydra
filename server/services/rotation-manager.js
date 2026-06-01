@@ -14,7 +14,7 @@ const MAX_RETRIES = 4;                 // Drop key after 4 consecutive proxy fai
 const MAX_LOGIN_ATTEMPTS = 4;          // Stop login attempts after 4 consecutive failures (prevents account lockout)
 const SELECTION_FALLBACK_LOG_WINDOW_MS = 60 * 1000;
 
-class RotationManager {
+export class RotationManager {
   constructor() {
     /** @type {Array<{hash: string, keyString: string, name: string, accountAlias: string, accountId: string}>} */
     this.pool = [];
@@ -33,6 +33,10 @@ class RotationManager {
     this._reloadController = null;
     /** @type {Promise<void>|null} — dedupes concurrent cold-load requests. */
     this._loadPromise = null;
+    /** @type {Promise<void>|null} — owns the active coalesced pool reload loop. */
+    this._reloadPromise = null;
+    /** Coalesces mutations that arrive while a reload is still unwinding. */
+    this._reloadRequested = false;
     this._lastSelectionFallbackWarningAt = 0;
   }
 
@@ -53,46 +57,79 @@ class RotationManager {
     return this._loadPromise;
   }
 
+  async _reloadOnce() {
+    const controller = new AbortController();
+    this._reloadController = controller;
+    const { signal } = controller;
+
+    try {
+      if (!this.userId) {
+        const user = await prisma.user.findFirst();
+        signal.throwIfAborted();
+        if (!user) return;
+        this.userId = user.id;
+      }
+
+      signal.throwIfAborted();
+
+      // Lazy import to avoid circular require
+      const { getPooledKeys } = await import('./store.js');
+      signal.throwIfAborted();
+      const keys = await getPooledKeys(this.userId);
+
+      signal.throwIfAborted();
+
+      this.pool = keys;
+      this.index = 0;
+      this.loaded = true;
+      this.lastSyncAt = new Date().toISOString();
+      logger.info(`[POOL] Rotation pool reloaded: ${keys.length} active key(s)`);
+    } finally {
+      if (this._reloadController === controller) this._reloadController = null;
+    }
+  }
+
   /** Reload the pool from DB. Call after any pool toggle. Cancellable via cancelReload(). */
   async reload() {
-    // Cancel any previous in-flight reload
-    if (this._reloadController) {
-      this._reloadController.abort();
-    }
-    this._reloadController = new AbortController();
-    const signal = this._reloadController.signal;
-
-    if (!this.userId) {
-      const user = await prisma.user.findFirst();
-      if (!user) return;
-      this.userId = user.id;
+    this._reloadRequested = true;
+    if (this._reloadPromise) {
+      this._reloadController?.abort();
+      return this._reloadPromise;
     }
 
-    signal.throwIfAborted();
+    const reloadPromise = (async () => {
+      while (this._reloadRequested) {
+        this._reloadRequested = false;
+        try {
+          await this._reloadOnce();
+        } catch (err) {
+          if (err?.name === 'AbortError' && this._reloadRequested) continue;
+          throw err;
+        }
+      }
+    })();
+    this._reloadPromise = reloadPromise;
 
-    // Lazy import to avoid circular require
-    const { getPooledKeys } = await import('./store.js');
-    const keys = await getPooledKeys(this.userId);
-
-    signal.throwIfAborted();
-
-    this.pool = keys;
-    this.index = 0;
-    this.loaded = true;
-    this.lastSyncAt = new Date().toISOString();
-    this._reloadController = null;
-    logger.info(`[POOL] Rotation pool reloaded: ${keys.length} active key(s)`);
+    try {
+      return await reloadPromise;
+    } finally {
+      if (this._reloadPromise === reloadPromise) this._reloadPromise = null;
+    }
   }
 
   /**
    * Cancel any in-flight reload(). Safe to call during shutdown.
    * Resolves when the current reload is aborted.
    */
-  cancelReload() {
-    if (this._reloadController) {
-      this._reloadController.abort();
-    }
-    this._loadPromise = null;
+  async cancelReload() {
+    this._reloadRequested = false;
+    this._reloadController?.abort();
+    const pending = [...new Set([this._loadPromise, this._reloadPromise].filter(Boolean))];
+    await Promise.all(pending.map(promise => promise.catch((err) => {
+      if (err?.name !== 'AbortError') {
+        logger.warn(`[POOL] Shutdown waited on failed reload: ${err?.message || err}`);
+      }
+    })));
   }
 
   /**

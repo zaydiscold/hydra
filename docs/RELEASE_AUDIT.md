@@ -1204,3 +1204,62 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Auto-version run `26728333080` skipped as intended, CI run `26728333078`
   passed, and Docker workflow run `26728333077` passed both runtime smoke and
   registry image push.
+- 2026-06-01 post-cleanup exact-local calm-runtime baseline:
+  `/private/tmp/hydra-v140-post-cleanup-idle-reprofile-20260601T001229Z`
+  sampled the untouched canonical packaged app every 30 seconds for five
+  minutes after local packaging byproducts moved reversibly to Trash. All 11
+  samples retained four Hydra-owned processes and zero stale Hydra Playwright
+  profiles. CPU stayed between `0.0%` and `0.3%` (`0.036%` average, `0.0%`
+  ending); RSS moved from `474.34 MiB` to `479.52 MiB` (`+5.17 MiB`).
+- 2026-06-01 rotation-pool shutdown ownership hardening: the next runtime
+  ownership sweep found that `rotationManager.cancelReload()` aborted its
+  controller but immediately discarded `_loadPromise`, while
+  `gracefulShutdown()` invoked cancellation without awaiting it. Because
+  Prisma reads are not abortable in flight, shutdown could advance toward
+  disconnect while an eager or cold-load pool reload was still unwinding; a
+  later caller could also start duplicate work. `server/services/rotation-manager.js`
+  now owns one coalesced `_reloadPromise`, aborts stale work when a newer
+  reload arrives, performs one fresh rerun, joins cold-load and reload promises
+  during cancellation, and logs non-abort unwind failures. `server/index.js`
+  now awaits `rotationManager.cancelReload()` before later shutdown steps.
+  New `server/tests/rotation-manager.test.mjs` regressions passed `3/3`:
+  shutdown joins an active DB-backed reload, concurrent reloads coalesce into
+  one fresh rerun, and non-abort unwind failures stay visible. Background
+  visibility contracts passed `32/32`; lint, full `npm test`, Vite build,
+  serial gate (`12/12`), OpenAPI generation (`83 operations`), and diff check
+  passed before packaging.
+- 2026-06-01 rotation-pool current-source package proof: the pre-rebuild
+  package quit through native app shutdown in one second with broad before and
+  after inventories under
+  `/private/tmp/hydra-v140-rotation-rebuild-shutdown-20260601T001750Z`.
+  `ELECTRON_CACHE=/private/tmp/hydra-electron-cache npm run
+  electron:build:mac-arm64` rebuilt the local package. ARM package smoke,
+  strict deep `codesign`, bundle-version inspection, and packaged-source
+  inspection passed; the embedded server copy contains the coalesced reload
+  loop and awaited shutdown join. The current-source local arm64 zip hashes to
+  `5843e00514abc9932ddeb3dba83cc37a5bdcc618ae10eaac935608aa6dd372fc`;
+  it is local rebuild evidence, not a replacement for the published `v1.4.0`
+  asset. LaunchServices handoff evidence is under
+  `/private/tmp/hydra-v140-rotation-current-source-launch-20260601T001924Z`.
+- 2026-06-01 rotation-pool post-rebuild profile: the first untouched
+  five-minute pass under
+  `/private/tmp/hydra-v140-rotation-post-rebuild-idle-reprofile-20260601T002013Z`
+  retained four packaged processes and zero stale Hydra Playwright profiles
+  across 11 samples. Its launch-settling window moved from `4.5%` to `0.9%`
+  CPU (`1.0%` average) while RSS dropped from `619.94 MiB` to `595.69 MiB`
+  (`-24.25 MiB`). Because the final reading was still above the established
+  calm baseline, a short native stack sample was captured under
+  `/private/tmp/hydra-v140-rotation-hot-split-20260601T002143Z`; the main
+  process was predominantly parked in `CFRunLoop`/`mach_msg`, not a persistent
+  JS spin or HIServices attach loop. A denser settled follow-up under
+  `/private/tmp/hydra-v140-rotation-dense-idle-20260601T002536Z` then captured
+  12 samples over about one minute: four processes, zero stale profiles,
+  `0.0...0.2%` CPU (`0.025%` average, `0.0%` ending). This is the valid
+  post-settle calm-runtime result.
+- 2026-06-01 rotation-pool-hardening final local chain: the literal ordered
+  acceptance sequence passed: lint, full `npm test`, serial gate (`12/12`),
+  ARM package smoke, Docker smoke against the rebuilt production image with
+  the isolated full-Chromium persistent-context path, and OpenAPI generation
+  (`83 operations`). A final strict deep `codesign` passed. `docker compose ps
+  --all` returned no services, no `hydra_default` network remained, and Docker
+  Desktop was restored to its stopped state in one second.
