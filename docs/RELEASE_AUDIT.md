@@ -2504,3 +2504,15 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Clerk requests. Bulk OTP remains the supported direct-HTTPS OpenRouter
   import path. Reproduction commands and external references are recorded in
   `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`.
+- 2026-06-01 exact-public-`v1.4.7` post-relay-docs runtime recheck:
+  `/private/tmp/hydra-v147-post-relay-docs-fresh-profile-20260601T222048Z`
+  records another native LaunchServices `4 -> 0 -> 4` lifecycle against the
+  sole Spotlight-resolved canonical public ARM bundle. No Computer Use or
+  browser attachment touched the run. Splash work decayed from `130.9%`
+  aggregate Hydra CPU at `t+5s` to `60.5%` at `t+20s` and `0.0%` at `t+35s`.
+  The following 11 samples at 30-second intervals retained exactly four
+  Hydra-owned processes and zero stale Hydra Playwright profiles. Idle CPU
+  stayed within `0.0-0.6%`, averaged `0.109%`, and ended at `0.0%`; RSS moved
+  from `658194432` to `629342208` bytes (`-28852224`). Raw owner-aware doctor
+  JSON, owned-process TSVs, and broad process inventories before quit, after
+  quit, after splash, and after idle remain under the profile directory.

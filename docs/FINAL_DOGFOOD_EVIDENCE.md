@@ -2038,3 +2038,14 @@ This evidence file is not release-complete by itself. The release remains not co
   `3016x1936`, `413` colors, nonzero variance, and no Vision OCR text.
   Interactive route review, screenshot approval, and physical Touch ID remain
   manual.
+- Exact-public-`v1.4.7` post-relay-docs runtime recheck:
+  `/private/tmp/hydra-v147-post-relay-docs-fresh-profile-20260601T222048Z`
+  records a second native LaunchServices `4 -> 0 -> 4` lifecycle against the
+  sole canonical public ARM bundle, with no Computer Use or browser attachment.
+  Splash CPU decayed `130.9% -> 60.5% -> 0.0%` at `t+5s`, `t+20s`, and
+  `t+35s`. Eleven following samples at 30-second intervals retained exactly
+  four Hydra-owned processes and zero stale profiles. Idle CPU ranged
+  `0.0-0.6%`, averaged `0.109%`, and ended at `0.0%`; RSS moved
+  `658194432 -> 629342208` bytes (`-28852224`). Raw doctor JSON,
+  owned-process TSVs, broad process inventories, and Spotlight resolution
+  before and after the run remain under the profile directory.
