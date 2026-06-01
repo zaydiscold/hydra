@@ -117,7 +117,7 @@ Then copy the relevant summary into `docs/RELEASE_AUDIT.md`.
 | Code redemption | Single and bulk redemption paths are verified with live or controlled redeemable codes | pending |
 | Proxy rotation/SSE | `/v1/chat/completions` with real pooled keys streams and rotates as expected | pending |
 | Windows installer launch | Install and launch the current `release/Hydra-<version>-win-x64.exe` or CI release artifact on a real Windows desktop; record OS and result. Hosted `windows-2022` unpacked and NSIS-installed executable lifecycle smoke passed for public `v1.4.7` in release run `26782121839`. | pending |
-| Docker runtime | Hosted Docker workflow run `26782109931` passed `Runtime Smoke` and `Build & Push` for the `v1.4.7` release trigger. A local `npm run docker:smoke` rerun is optional while Docker Desktop is stopped. | verified by hosted runtime |
+| Docker runtime | Hosted Docker workflow run `26782109931` passed `Runtime Smoke` and `Build & Push` for the `v1.4.7` release trigger. The final local item-11 chain also passed `npm run docker:smoke`: production image rebuild, Hydra-owned isolated full-Chromium launch, zero compose services, zero `hydra_default` network residue, then Docker Desktop restored to stopped. | verified hosted and locally |
 | Screenshot audit | Last step only: packaged Electron screenshots across representative sizes are reviewed for layout/color/text issues | pending |
 
 Manual flag mapping:

@@ -43,7 +43,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | 8 | Per-task encrypted random account-proxy rotation | Settings/API encrypted storage, empty-list fallback, signup, browser redemption, HTTP redemption, and shared route reuse are covered by integration/contracts and measured dispatcher reuse. | Verified |
 | 9 | README clean, navigable, no Remotion references; audit anchors match | README navigation and release docs are reconciled; `rg -n "Remotion\|remotion" README.md` returns no matches; CLI audit remains `31 ok / 5 deferred / 0 missing / 0 blockers`. | Verified |
 | 10 | Every named long-running path measured or justified | Embedded server, proxy/router, automation, request-log buffering, health polling, and dashboard refresh are mapped with measurements below. | Verified |
-| 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | Public `v1.4.7` package proof passed local focused renderer/session tests, `npm run lint`, `npm run build`, `npm run test:dogfood-evidence` (`1/1`), `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep codesign, and embedded-source inspection. Public release run `26782121839` passed shared `test:ci`, lint, gate, and the cross-platform desktop matrix; CI run `26782110073` passed; Docker run `26782109931` passed runtime smoke and registry push. Post-release docs checkpoint `46b4bf1` also passed CI run `26783649083` and Docker build/push plus runtime-smoke run `26783649114`; Auto-version run `26783649079` skipped as intended. | Verified |
+| 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | Public `v1.4.7` package proof passed local focused renderer/session tests, `npm run lint`, `npm run build`, `npm run test:dogfood-evidence` (`1/1`), `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep codesign, and embedded-source inspection. Public release run `26782121839` passed shared `test:ci`, lint, gate, and the cross-platform desktop matrix; CI run `26782110073` passed; Docker run `26782109931` passed runtime smoke and registry push. Post-release docs checkpoint `46b4bf1` also passed CI run `26783649083` and Docker build/push plus runtime-smoke run `26783649114`; Auto-version run `26783649079` skipped as intended. The final local literal chain now also passes in order: `npm run lint && npm test && npm run gate && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run docker:smoke && npm run openapi:hydra`. | Verified |
 | 12 | Final dogfood evidence refreshed with packaged-app screenshots | The exact public `v1.1.4` package has native-window captures for first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a synthetic-data Traffic console, plus rendered privacy-safe CLI captures for `hydra status`, `hydra proxy status`, and a compact `hydra doctor --json` excerpt. The exact-public `v1.3.0` canonical app adds a native CoreGraphics Dashboard privacy proof with all content below the titlebar pixelated before check-in. OCR found zero credential-shaped or endpoint-shaped hits and ImageMagick reported nonblank color variance. Computer Use attached successfully to the exact-public `v1.4.7` bundle and verified Dashboard plus the repaired Account Detail actions; final redacted screenshot review remains explicit. | Partial — interactive human visual review required |
 
 ## Current Verified Evidence
@@ -2452,3 +2452,18 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `626966528` bytes (`-28901376`). Unrelated browser-tool pressure varied
   independently and is recorded separately in the owner-aware doctor
   snapshots rather than attributed to Hydra.
+- 2026-06-01 exact-public-`v1.4.7` final local item-11 chain: commit
+  `0be26982601b2b533fc64badd228ced10baef0f8` passed the literal required
+  sequence in order: `npm run lint && npm test && npm run gate &&
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run
+  docker:smoke && npm run openapi:hydra`. Package smoke temporarily linked
+  the downloaded public ARM archive after SHA-256
+  `0d4ea5946c547a8d9cfb0df578e41d1850fe95dbb903346f41f3de94b79989c1`
+  matched GitHub. Docker smoke rebuilt the production image and launched
+  Hydra's isolated full-Chromium persistent context. OpenAPI retained `84
+  operations`. `docker compose ps --all` returned no services, no
+  `hydra_default` network remained, the temporary archive workspace and
+  smoke log moved reversibly to
+  `~/.Trash/hydra-v147-final-local-chain-20260601T215008Z`, and Docker
+  Desktop returned to its prior stopped state. The documentation-reconciled
+  successor repeated the same literal chain before push.

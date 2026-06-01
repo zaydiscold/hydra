@@ -2012,3 +2012,15 @@ This evidence file is not release-complete by itself. The release remains not co
   stale Hydra Playwright profiles. Idle CPU stayed exactly `0.0%`; RSS moved
   from `655867904` to `626966528` bytes (`-28901376`). Owner-aware doctor
   snapshots record unrelated browser-tool pressure separately.
+- Exact-public-`v1.4.7` final local item-11 chain: commit
+  `0be26982601b2b533fc64badd228ced10baef0f8` passed `npm run lint`, full
+  `npm test`, gate, exact-public ARM package smoke, real local Docker image
+  build plus Hydra-owned isolated full-Chromium launch, and OpenAPI generation
+  (`84 operations`) in the required order. The public ARM archive matched
+  GitHub SHA-256
+  `0d4ea5946c547a8d9cfb0df578e41d1850fe95dbb903346f41f3de94b79989c1`.
+  Compose retained no services or `hydra_default` network afterward. The
+  downloaded archive workspace and smoke log moved reversibly to
+  `~/.Trash/hydra-v147-final-local-chain-20260601T215008Z`, Docker Desktop
+  returned to its prior stopped state, and the documentation-reconciled
+  successor repeated the same literal chain before push.
