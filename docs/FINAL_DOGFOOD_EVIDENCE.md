@@ -1815,6 +1815,15 @@ This evidence file is not release-complete by itself. The release remains not co
   Focused contracts passed `test:electron-main-process` (`29/29`) and
   `test:ui-static` (`42/42`). The recon note is
   `docs/recon/ELECTRON_LIFECYCLE_KEEPALIVE_AND_QUIT_TRACING.md`.
+- Post-release lifecycle keepalive refinement: the lock-holder still retains a
+  ref'd Node-side hold so the packaged app cannot fall out of the event loop,
+  but `electron/main.js` now renews one 24-hour timeout instead of waking a
+  no-op interval every minute. A deterministic one-day scheduler comparison
+  records `1440 -> 1` keepalive wakeups (`-1439`, `99.931%` reduction).
+  `npm run test:electron-main-process` passed `31/31`, including the contract
+  that rejects a recurring keepalive interval. This source refinement still
+  requires a rebuilt-package LaunchServices profile before it counts as
+  packaged-runtime evidence.
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under
   `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`

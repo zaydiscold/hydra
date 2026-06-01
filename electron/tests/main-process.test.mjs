@@ -185,6 +185,18 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(surface.includes('app.exit'), 'must call app.exit after shutdown');
   });
 
+  it('keeps the lock-holder alive without a recurring minute wakeup', () => {
+    const main = readFileSync(MAIN_JS, 'utf-8');
+
+    assert.match(main, /const LIFECYCLE_KEEPALIVE_RENEW_MS = 24 \* 60 \* 60 \* 1000/);
+    assert.match(main, /function armLifecycleKeepAlive\(\)/);
+    assert.match(main, /lifecycleKeepAliveTimer = setTimeout\(\(\) => \{/);
+    assert.match(main, /\}, LIFECYCLE_KEEPALIVE_RENEW_MS\)/);
+    assert.match(main, /lifecycleKeepAliveTimer\.ref\?\.\(\)/);
+    assert.match(main, /clearTimeout\(lifecycleKeepAliveTimer\)/);
+    assert.doesNotMatch(main, /lifecycleKeepAliveTimer = setInterval/);
+  });
+
   it('wires quit and tray actions through the complete shutdown path', () => {
     const main = readFileSync(MAIN_JS, 'utf-8');
     const surface = readMainProcessSurface();

@@ -2352,15 +2352,19 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   bundle. No app bundle or Trash backup was deleted.
 - 2026-06-01 post-release timer-ownership sweep: `rg` across production
   Electron, server, renderer, CLI, and script sources found one unconditional
-  packaged-idle timer that remains intentionally armed:
-  `electron/main.js` starts one ref'd `60_000ms` lifecycle keepalive in the
-  single-instance lock holder and clears it during shutdown. This is a
-  measured-no-win-here decision, not an overlooked hot loop. Earlier
-  LaunchServices dogfood reproduced a voluntary zero-code package exit after
-  the other Node-side idle timers were deliberately unref'd; the keepalive
-  prevents that lifecycle regression at one wakeup per minute while the fresh
-  canonical `v1.4.6` soak still averaged `0.009%` aggregate Hydra CPU. The
-  root-cause evidence and shutdown contract remain documented in
+  packaged-idle timer that remained armed: `electron/main.js` started one
+  ref'd `60_000ms` lifecycle interval in the single-instance lock holder and
+  cleared it during shutdown. Earlier LaunchServices dogfood reproduced a
+  voluntary zero-code package exit after the other Node-side idle timers were
+  deliberately unref'd, so removing the lifecycle hold would be unsafe.
+  The narrower fix preserves one ref'd hold but replaces the recurring minute
+  interval with a renewed `24 * 60 * 60 * 1000ms` timeout. A deterministic
+  one-day scheduler comparison reports `1440 -> 1` keepalive wakeups
+  (`-1439`, `99.931%` reduction). `npm run test:electron-main-process`
+  passed `31/31`, including a regression contract that rejects a return to
+  `lifecycleKeepAliveTimer = setInterval`; `hydra audit --json` remains
+  `31 ok / 5 deferred / 0 missing / 0 blockers`. The root-cause evidence and
+  shutdown contract remain documented in
   `docs/recon/ELECTRON_LIFECYCLE_KEEPALIVE_AND_QUIT_TRACING.md`.
 - 2026-06-01 post-release literal-gate recheck: `npm run lint`, full
   `npm test`, and `npm run gate` (`12/12`) passed against the docs-reconciled

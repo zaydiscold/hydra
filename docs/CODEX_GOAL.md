@@ -1507,6 +1507,17 @@ closed-app CLI commands, tests, and repo-local documentation.
   the next sample, and ended at `0.0%`; RSS moved
   `465502208 -> 470351872` bytes (`+4849664`). The full samples and broad
   process inventories remain under that profile directory.
+- Post-release timer-ownership follow-up: `electron/main.js` still preserves
+  the ref'd lock-holder lifecycle hold required by the earlier LaunchServices
+  voluntary-exit regression, but it now renews one 24-hour timeout instead of
+  running a no-op interval every minute. A deterministic one-day scheduler
+  comparison reports `1440 -> 1` keepalive wakeups (`-1439`, `99.931%`
+  reduction). `npm run test:electron-main-process` passed `31/31`, including a
+  regression contract that rejects a return to
+  `lifecycleKeepAliveTimer = setInterval`; `hydra audit --json` remains
+  `31 ok / 5 deferred / 0 missing / 0 blockers`. Rebuilt-package
+  LaunchServices profiling is still required before this source refinement is
+  recorded as packaged-runtime evidence.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

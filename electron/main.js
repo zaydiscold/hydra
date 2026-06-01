@@ -31,7 +31,7 @@ import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
-const LIFECYCLE_KEEPALIVE_MS = 60_000;
+const LIFECYCLE_KEEPALIVE_RENEW_MS = 24 * 60 * 60 * 1000;
 
 let lifecycleKeepAliveTimer = null;
 
@@ -59,21 +59,27 @@ function logLifecycle(event, extra = {}) {
   }
 }
 
-function startLifecycleKeepAlive() {
-  if (lifecycleKeepAliveTimer) return;
+function armLifecycleKeepAlive() {
   // Electron native objects should be enough to keep a packaged app alive, but
   // LaunchServices dogfood exposed a voluntary zero-code exit without any app
-  // quit/window/IPC path firing. A single ref'd timer is a negligible safety
-  // belt that prevents the main process from ending just because every other
-  // Node-side timer was intentionally unref'd for idle efficiency.
-  lifecycleKeepAliveTimer = setInterval(() => {}, LIFECYCLE_KEEPALIVE_MS);
+  // quit/window/IPC path firing. A single long-horizon ref'd timeout is enough
+  // to retain the process without waking the idle event loop every minute.
+  lifecycleKeepAliveTimer = setTimeout(() => {
+    lifecycleKeepAliveTimer = null;
+    armLifecycleKeepAlive();
+  }, LIFECYCLE_KEEPALIVE_RENEW_MS);
   lifecycleKeepAliveTimer.ref?.();
-  logLifecycle('keepalive-started', { intervalMs: LIFECYCLE_KEEPALIVE_MS });
+}
+
+function startLifecycleKeepAlive() {
+  if (lifecycleKeepAliveTimer) return;
+  armLifecycleKeepAlive();
+  logLifecycle('keepalive-started', { renewMs: LIFECYCLE_KEEPALIVE_RENEW_MS });
 }
 
 function stopLifecycleKeepAlive() {
   if (!lifecycleKeepAliveTimer) return;
-  clearInterval(lifecycleKeepAliveTimer);
+  clearTimeout(lifecycleKeepAliveTimer);
   lifecycleKeepAliveTimer = null;
   logLifecycle('keepalive-stopped');
 }

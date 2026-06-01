@@ -82,10 +82,26 @@ Observed examples:
 `electron/app/env.js` now closes the log stream on `will-quit` rather than
 `before-quit`, preserving `before-quit` breadcrumbs.
 
-`electron/main.js` now starts a single ref'd one-minute lifecycle keepalive in
-the lock-holder process. This prevents the packaged main process from exiting
-only because every other Node-side timer was intentionally unref'd for idle
-efficiency.
+`electron/main.js` now starts a single ref'd lifecycle keepalive in the
+lock-holder process. This prevents the packaged main process from exiting only
+because every other Node-side timer was intentionally unref'd for idle
+efficiency. The initial repair used a one-minute interval. A post-release
+ownership sweep narrowed that to one renewed 24-hour timeout: the ref'd hold
+remains, but idle Hydra no longer wakes once per minute for a no-op callback.
+
+Deterministic one-day scheduler comparison:
+
+```json
+{
+  "windowMs": 86400000,
+  "oldIntervalMs": 60000,
+  "newRenewMs": 86400000,
+  "oldWakeups": 1440,
+  "newWakeups": 1,
+  "reductionWakeups": 1439,
+  "reductionPercent": 99.931
+}
+```
 
 `electron/main.js`, `electron/app/windows.js`, and `electron/app/ipc.js` now
 log source-level lifecycle paths:
