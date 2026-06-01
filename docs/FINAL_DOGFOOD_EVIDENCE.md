@@ -2049,3 +2049,19 @@ This evidence file is not release-complete by itself. The release remains not co
   `658194432 -> 629342208` bytes (`-28852224`). Raw doctor JSON,
   owned-process TSVs, broad process inventories, and Spotlight resolution
   before and after the run remain under the profile directory.
+- Exact-public-`v1.4.7` native screenshot refresh:
+  `/private/tmp/hydra-v147-native-screenshot-refresh-20260601T223151Z`
+  records a CoreGraphics-only LaunchServices `4 -> 0 -> 4` lifecycle with no
+  browser, accessibility, or Computer Use attachment. Packaged splash window
+  `4033` and replacement Dashboard window `4036` were captured through
+  `/usr/sbin/screencapture -x -o -l <CGWindowID>`. The checked-in splash image
+  hashes to
+  `3a608664fffde2b2976be1e1aacd9ca445056997854411396472c25f13b350fd`.
+  The checked-in Dashboard proof pixelates every pixel below the native
+  titlebar and hashes to
+  `c655726b575915159731242ebed34df96407f38b4cd6fb1a6c8e50750ed229e2`.
+  Vision and Tesseract reported zero secret-shaped or endpoint-shaped hits,
+  ImageMagick reported nonblank variance for both safe artifacts, and the
+  private raws moved reversibly to
+  `~/.Trash/hydra-v147-private-native-screenshot-refresh-20260601T223151Z`.
+  Interactive human visual review remains manual.

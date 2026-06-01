@@ -2516,3 +2516,22 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   from `658194432` to `629342208` bytes (`-28852224`). Raw owner-aware doctor
   JSON, owned-process TSVs, and broad process inventories before quit, after
   quit, after splash, and after idle remain under the profile directory.
+- 2026-06-01 exact-public-`v1.4.7` native screenshot refresh:
+  `/private/tmp/hydra-v147-native-screenshot-refresh-20260601T223151Z`
+  records a CoreGraphics-only LaunchServices lifecycle with no browser,
+  accessibility, or Computer Use attachment. The running public bundle moved
+  `4 -> 0 -> 4` owned processes with zero stale Hydra Playwright profiles.
+  CoreGraphics observed packaged splash window `4033` and replacement
+  Dashboard window `4036`; `/usr/sbin/screencapture -x -o -l <CGWindowID>`
+  captured only those Electron windows. The repository-safe splash hashes to
+  `3a608664fffde2b2976be1e1aacd9ca445056997854411396472c25f13b350fd`.
+  The Dashboard proof pixelates every pixel below its native titlebar before
+  check-in and hashes to
+  `c655726b575915159731242ebed34df96407f38b4cd6fb1a6c8e50750ed229e2`.
+  Vision and Tesseract scans found zero email markers, key prefixes,
+  credential assignments, endpoint strings, or long token-shaped strings in
+  either safe artifact. ImageMagick reported nonblank variance for both. The
+  two private raw captures moved reversibly to
+  `~/.Trash/hydra-v147-private-native-screenshot-refresh-20260601T223151Z`.
+  This refresh strengthens packaged screenshot provenance without claiming
+  the still-manual interactive human visual review.

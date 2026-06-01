@@ -1409,6 +1409,23 @@ closed-app CLI commands, tests, and repo-local documentation.
   `629342208` bytes (`-28852224`). Raw owner-aware doctor JSON,
   owned-process TSVs, and broad process inventories remain under the profile
   directory.
+- The exact-public `v1.4.7` native screenshot refresh under
+  `/private/tmp/hydra-v147-native-screenshot-refresh-20260601T223151Z`
+  records a CoreGraphics-only LaunchServices `4 -> 0 -> 4` lifecycle without
+  browser, accessibility, or Computer Use attachment. Packaged splash window
+  `4033` and replacement Dashboard window `4036` were captured through
+  `/usr/sbin/screencapture -x -o -l <CGWindowID>`. The checked-in splash image
+  hashes to
+  `3a608664fffde2b2976be1e1aacd9ca445056997854411396472c25f13b350fd`.
+  The checked-in Dashboard proof pixelates every pixel below the native
+  titlebar and hashes to
+  `c655726b575915159731242ebed34df96407f38b4cd6fb1a6c8e50750ed229e2`.
+  Vision and Tesseract reported zero secret-shaped or endpoint-shaped hits,
+  ImageMagick reported nonblank variance for both artifacts, and the private
+  raws moved reversibly to
+  `~/.Trash/hydra-v147-private-native-screenshot-refresh-20260601T223151Z`.
+  This strengthens packaged-app screenshot provenance without closing the
+  manual human visual-review boundary.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
