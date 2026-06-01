@@ -2183,3 +2183,23 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   sampled at approximately `0.0-0.6%` per owned process, with no extra browser
   process opened. The local ARM zip SHA-256 before cleanup was
   `eaca25ec73182672456b0fe09c1031e0a4f5b8200efad648b7e9fa7014a6310f`.
+- 2026-06-01 public `v1.4.4` release closeout: GitHub release v1.4.4 is public
+  at `https://github.com/zaydiscold/hydra/releases/tag/v1.4.4`, published
+  `2026-06-01T17:06:22Z` from commit
+  `bb0dda874853502732769982f83fc941c3fd0168`. Auto-version run
+  `26769595632`, CI run `26769595644`, Docker workflow run `26769595972`, and
+  Release Desktop Apps run `26769608095` all completed successfully. Docker
+  workflow run `26769595972` passed both runtime smoke and registry image push.
+  The public asset list contains macOS arm64 zip/blockmap, macOS Intel
+  zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged
+  `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`:
+  `Hydra-1.4.4-mac-arm64.zip`,
+  `Hydra-1.4.4-mac-arm64.zip.blockmap`,
+  `Hydra-1.4.4-mac-x64.zip`, `Hydra-1.4.4-mac-x64.zip.blockmap`,
+  `Hydra-1.4.4-win-x64.exe`, `Hydra-1.4.4-win-x64.exe.blockmap`,
+  `Hydra-1.4.4-linux-x86_64.AppImage`, `latest-mac.yml`, `latest.yml`, and
+  `latest-linux.yml`. The release workflow passed shared `lint`, `test:ci`,
+  and `gate`, Linux AppImage build/smoke/upload, macOS arm64 build/smoke/upload,
+  macOS Intel build/smoke/upload, Windows NSIS build/smoke plus hosted unpacked
+  and NSIS-installed executable lifecycle check, and final macOS updater
+  metadata merge.

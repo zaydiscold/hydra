@@ -1880,3 +1880,13 @@ This evidence file is not release-complete by itself. The release remains not co
   A settled process snapshot after splash reported the expected four Hydra-owned
   processes with low aggregate CPU. The local ARM zip SHA-256 before cleanup was
   `eaca25ec73182672456b0fe09c1031e0a4f5b8200efad648b7e9fa7014a6310f`.
+- Public `v1.4.4` release publication: GitHub release
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.4.4` was published on
+  2026-06-01 from commit `bb0dda874853502732769982f83fc941c3fd0168`.
+  Auto-version run `26769595632`, CI run `26769595644`, Docker workflow run
+  `26769595972`, and Release Desktop Apps run `26769608095` all passed. The
+  public release contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap,
+  Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows
+  `latest.yml`, and Linux `latest-linux.yml`; the release workflow also passed
+  the hosted Windows unpacked and NSIS-installed executable lifecycle check plus
+  the final macOS updater metadata merge.
