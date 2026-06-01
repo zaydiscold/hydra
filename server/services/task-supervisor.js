@@ -66,17 +66,19 @@ export class TaskSupervisor {
     this.draining = false;
     this.timer = null;
     this.sweepPromise = null;
+    this.started = false;
     this.stopping = false;
   }
 
   start() {
     this.stopping = false;
-    if (this.timer || this.sweepPromise) return;
+    this.started = true;
     this.scheduleNextSweep();
   }
 
   scheduleNextSweep(delayMs = TASK_SWEEP_INTERVAL_MS) {
-    if (this.stopping || this.timer) return;
+    if (!this.started || this.stopping || this.timer || this.sweepPromise) return;
+    if (this.listActive().length === 0) return;
     this.timer = setTimeout(() => {
       this.timer = null;
       if (this.stopping) return;
@@ -91,6 +93,7 @@ export class TaskSupervisor {
   }
 
   stop() {
+    this.started = false;
     this.stopping = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
@@ -144,6 +147,7 @@ export class TaskSupervisor {
     };
 
     this.tasks.set(taskId, task);
+    this.scheduleNextSweep();
     return task;
   }
 
@@ -422,6 +426,10 @@ export class TaskSupervisor {
 
   archiveTask(task) {
     this.tasks.delete(task.taskId);
+    if (this.listActive().length === 0 && this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
     this.recentTasks.unshift(this.serializeTask(task));
     if (this.recentTasks.length > TASK_HISTORY_LIMIT) {
       this.recentTasks.length = TASK_HISTORY_LIMIT;

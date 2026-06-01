@@ -1756,3 +1756,48 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   idle-dominant. The follow-up sweep found a separate server-side cost:
   `TaskSupervisor` still arms a 30-second expiry timeout while its task map is
   empty. That demand-driven scheduler repair is the next code checkpoint.
+- Hidden fallback-glyph checkpoint
+  `4d370181e93b11bfa4408a80dc236e455840cb28` used `[skip-bump]`;
+  Auto-version run `26736288813` skipped, CI run `26736288818` passed, and
+  Docker workflow run `26736288832` passed runtime smoke and registry image
+  push.
+- 2026-06-01 demand-driven task-expiry scheduler: `TaskSupervisor` no longer
+  arms a 30-second expiry timeout against an empty task map. Server startup
+  stays disarmed while idle; task registration arms the existing one-shot
+  expiry path; archiving the final active task clears it again; shutdown
+  still clears the timer and waits for any already-running sweep. The
+  deterministic lifecycle benchmark under
+  `/private/tmp/hydra-task-supervisor-demand-driven-benchmark-20260601T050815Z/summary.json`
+  records empty-task wakeups per hour `120 -> 0`, no idle timer after start,
+  an armed timer after registration, no timer after final archive, and
+  preserved active-task expiry cadence. The required recon note is
+  `docs/recon/TASK_SUPERVISOR_IDLE_SCHEDULER.md`. Focused task lifecycle tests
+  passed `4/4`, background visibility contracts passed `32/32`, and the
+  complete source chain passed lint, full `npm test`, build, gate (`12/12`),
+  OpenAPI generation (`83 operations`), audit, and diff check before rebuild.
+- 2026-06-01 task-scheduler current-source package proof: native quit removed
+  all four prior package processes immediately with evidence under
+  `/private/tmp/hydra-v140-task-supervisor-rebuild-shutdown-20260601T050928Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), embedded demand-driven scheduler inspection, packaged
+  hidden-glyph absence, and retained `HYDRA_SPLASH_TARGET=72` passed. The
+  local ARM zip SHA-256 was
+  `df686f29f2f482383841e2ffe05bb64bae73c952d99e08afc49c996ce330fd0b`;
+  it is current-source local proof, not a replacement public asset.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-task-supervisor-package-20260601T051122Z`; `release/` again
+  contains only `mac-arm64/Hydra.app`, Spotlight resolves exactly that one
+  bundle, and Docker Desktop remains stopped.
+- 2026-06-01 task-scheduler LaunchServices and post-rebuild profile:
+  `/private/tmp/hydra-v140-task-supervisor-current-source-launch-20260601T051136Z`
+  recorded splash-active CPU at three seconds, handoff CPU at 20 seconds, and
+  the settled four-process package at `0.100%` CPU with zero stale profiles
+  and no Computer Use helper by 35 seconds. Native splash diagnostics remained
+  finite: target and queue length `72`, shattered words `72`, duplicate skips
+  `0`, portal collision disabled, lift applied, timers `0`, RAF inactive,
+  Matter cleared. The untouched five-minute profile under
+  `/private/tmp/hydra-v140-task-supervisor-post-rebuild-idle-20260601T051236Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across all 11 samples. CPU ranged from `0.000%` to `0.100%`, averaged
+  `0.009%`, and ended at `0.000%`; RSS moved from `605696 KiB` to
+  `602400 KiB` (`-3296 KiB`).

@@ -76,11 +76,34 @@ test('task supervisor reports asynchronous background errors with context', () =
   assert.deepEqual(warnings, ['[TASK] batch queue drain failed: drain exploded']);
 });
 
+test('task supervisor expiry scheduler arms only while active tasks exist', async () => {
+  const supervisor = new TaskSupervisor();
+
+  supervisor.start();
+  assert.equal(supervisor.timer, null);
+
+  const task = supervisor.register({
+    taskId: 'demand-driven-scheduler-test',
+    type: 'generator_job',
+    status: 'running',
+  });
+  assert.ok(supervisor.timer);
+
+  await supervisor.complete(task.taskId);
+  assert.equal(supervisor.timer, null);
+
+  supervisor.stop();
+});
+
 test('task supervisor expiry scheduler is one-shot and shutdown waits on active sweep', () => {
   const source = new URL('../services/task-supervisor.js', import.meta.url);
   const text = readFileSync(source, 'utf-8');
 
   assert.match(text, /scheduleNextSweep\(delayMs = TASK_SWEEP_INTERVAL_MS\)/);
+  assert.match(text, /if \(!this\.started \|\| this\.stopping \|\| this\.timer \|\| this\.sweepPromise\) return/);
+  assert.match(text, /if \(this\.listActive\(\)\.length === 0\) return/);
+  assert.match(text, /this\.tasks\.set\(taskId, task\);\s*this\.scheduleNextSweep\(\)/);
+  assert.match(text, /if \(this\.listActive\(\)\.length === 0 && this\.timer\) \{\s*clearTimeout\(this\.timer\);\s*this\.timer = null/);
   assert.match(text, /this\.timer = setTimeout\(\(\) => \{/);
   assert.match(text, /this\.sweepPromise = this\.expireTasks\(\)\.catch/);
   assert.match(text, /if \(!this\.stopping\) this\.scheduleNextSweep\(TASK_SWEEP_INTERVAL_MS\)/);

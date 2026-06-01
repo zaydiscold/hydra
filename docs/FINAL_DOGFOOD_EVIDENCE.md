@@ -1534,3 +1534,40 @@ This evidence file is not release-complete by itself. The release remains not co
   `/private/tmp/hydra-v140-hidden-glyph-main-stack-20260601T050302Z`. The
   follow-up sweep found a separate empty-task `TaskSupervisor` expiry wakeup
   to remove in the next code checkpoint.
+- Hidden fallback-glyph checkpoint
+  `4d370181e93b11bfa4408a80dc236e455840cb28` used `[skip-bump]`;
+  Auto-version run `26736288813` skipped, CI run `26736288818` passed, and
+  Docker workflow `26736288832` passed runtime smoke and registry image push.
+- `TaskSupervisor` expiry scheduling is now demand-driven. Idle startup no
+  longer arms the 30-second task-expiry timeout; task registration arms it;
+  archiving the final active task clears it; shutdown still clears the timer
+  and waits for an active sweep. The benchmark under
+  `/private/tmp/hydra-task-supervisor-demand-driven-benchmark-20260601T050815Z/summary.json`
+  records empty-task wakeups per hour `120 -> 0` while preserving active-task
+  expiry cadence. The recon note is
+  `docs/recon/TASK_SUPERVISOR_IDLE_SCHEDULER.md`. Focused lifecycle tests
+  passed `4/4`, background visibility contracts passed `32/32`, and the
+  complete source chain passed before rebuild.
+- Native shutdown evidence is under
+  `/private/tmp/hydra-v140-task-supervisor-rebuild-shutdown-20260601T050928Z`;
+  four package processes exited immediately. The current-source ARM package
+  rebuilt and passed package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), embedded demand-driven scheduler inspection, packaged
+  hidden-glyph absence, and retained splash target. The local ARM zip SHA-256
+  was
+  `df686f29f2f482383841e2ffe05bb64bae73c952d99e08afc49c996ce330fd0b`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-task-supervisor-package-20260601T051122Z`; `release/` again
+  contains only `mac-arm64/Hydra.app`, Spotlight resolves exactly one Hydra
+  bundle, and Docker Desktop remains stopped.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v140-task-supervisor-current-source-launch-20260601T051136Z`
+  records four settled processes at `0.100%` CPU, zero stale profiles, and no
+  Computer Use helper by 35 seconds. Splash teardown stayed finite with
+  `72/72` shuffled words, zero duplicate skips, collision-free lifted portal
+  entry, timers `0`, inactive RAF, and cleared Matter state. The untouched
+  rebuilt-package profile under
+  `/private/tmp/hydra-v140-task-supervisor-post-rebuild-idle-20260601T051236Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.100%`, averaged
+  `0.009%`, and ended at `0.000%`; RSS changed by `-3296 KiB`.

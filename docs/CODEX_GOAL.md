@@ -1091,6 +1091,42 @@ closed-app CLI commands, tests, and repo-local documentation.
   that `TaskSupervisor` still arms a 30-second expiry timer against an empty
   task map; converting that scheduler to demand-driven ownership is the next
   code checkpoint.
+- Hidden fallback-glyph checkpoint
+  `4d370181e93b11bfa4408a80dc236e455840cb28` used `[skip-bump]`;
+  Auto-version run `26736288813` skipped, CI run `26736288818` passed, and
+  Docker workflow `26736288832` passed runtime smoke and registry image push.
+- `TaskSupervisor` expiry ownership is now demand-driven. Idle startup no
+  longer arms its 30-second timeout; registration arms the existing one-shot
+  expiry path; archiving the final active task clears the timer again; and
+  shutdown retains its clear-and-wait behavior. The deterministic benchmark
+  under
+  `/private/tmp/hydra-task-supervisor-demand-driven-benchmark-20260601T050815Z/summary.json`
+  records empty-task wakeups per hour `120 -> 0`, no idle timer after start,
+  an armed timer after registration, no timer after final archive, and
+  preserved expiry cadence while work exists. The required recon note is
+  `docs/recon/TASK_SUPERVISOR_IDLE_SCHEDULER.md`. Focused task lifecycle tests
+  passed `4/4`, background visibility contracts passed `32/32`, and the
+  complete source chain passed before rebuilding.
+- The task-scheduler package rebuild passed ARM smoke, strict deep `codesign`,
+  bundle version (`1.4.0`), embedded demand-driven scheduler inspection,
+  packaged hidden-glyph absence, and retained `HYDRA_SPLASH_TARGET=72`. The
+  current-source local ARM zip SHA-256 was
+  `df686f29f2f482383841e2ffe05bb64bae73c952d99e08afc49c996ce330fd0b`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-task-supervisor-package-20260601T051122Z`; `release/` again
+  contains only `mac-arm64/Hydra.app`, Spotlight resolves exactly one Hydra
+  bundle, and Docker Desktop remains stopped.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v140-task-supervisor-current-source-launch-20260601T051136Z`
+  records the settled four-process package at `0.100%` CPU with zero stale
+  profiles and no Computer Use helper by 35 seconds. Splash diagnostics stay
+  finite: `72/72` words, zero duplicate skips, collision-free lifted portal
+  entry, timers `0`, inactive RAF, and cleared Matter state. The untouched
+  rebuilt-package profile under
+  `/private/tmp/hydra-v140-task-supervisor-post-rebuild-idle-20260601T051236Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.100%`, averaged
+  `0.009%`, and ended at `0.000%`; RSS changed by `-3296 KiB`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

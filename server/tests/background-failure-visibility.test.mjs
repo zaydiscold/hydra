@@ -243,6 +243,10 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.doesNotMatch(refresher, /clearInterval/);
   assert.match(supervisor, /this\.timer\.unref\?\.\(\)/);
   assert.match(supervisor, /scheduleNextSweep\(delayMs = TASK_SWEEP_INTERVAL_MS\)/);
+  assert.match(supervisor, /if \(!this\.started \|\| this\.stopping \|\| this\.timer \|\| this\.sweepPromise\) return/);
+  assert.match(supervisor, /if \(this\.listActive\(\)\.length === 0\) return/);
+  assert.match(supervisor, /this\.tasks\.set\(taskId, task\);\s*this\.scheduleNextSweep\(\)/);
+  assert.match(supervisor, /if \(this\.listActive\(\)\.length === 0 && this\.timer\) \{\s*clearTimeout\(this\.timer\);\s*this\.timer = null/);
   assert.match(supervisor, /this\.timer = setTimeout\(\(\) => \{/);
   assert.match(supervisor, /this\.sweepPromise = this\.expireTasks\(\)\.catch/);
   assert.match(supervisor, /async function withClearedTimeout\(promise, timeoutMs\)/);
@@ -307,6 +311,7 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*prunePromise = pruneRequestLogs\(\)\.finally\(\(\) => \{[\s\S]*scheduleNextPrune\(RETENTION_INTERVAL_MS\)[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
   assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\r?\n\s*prunePromise = pruneRequestLogs\(\);/);
   assert.match(supervisor, /const TASK_SWEEP_INTERVAL_MS = 30 \* 1000/);
+  assert.match(supervisor, /if \(this\.listActive\(\)\.length === 0\) return/);
   assert.match(supervisor, /if \(!this\.stopping\) this\.scheduleNextSweep\(TASK_SWEEP_INTERVAL_MS\)/);
   assert.match(dashboard, /const needsRefresh = meta\?\.sessionStatus === 'expiring'/);
   assert.doesNotMatch(dashboard, /meta\?\.sessionStatus === 'expired' \|\| meta\?\.sessionStatus === 'unknown'/);
