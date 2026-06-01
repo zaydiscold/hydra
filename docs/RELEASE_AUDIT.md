@@ -1846,3 +1846,52 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   across all 11 untouched samples over five minutes. CPU ranged from `0.000%`
   to `0.700%`, averaged `0.064%`, and ended at `0.000%`; RSS moved from
   `610080 KiB` to `614928 KiB` (`+4848 KiB`).
+- Request-log retention checkpoint
+  `6f2fc6d40b39d3c364ea294caec91ef002ba8c41` used `[skip-bump]`;
+  Auto-version run `26737110121` skipped, CI run `26737110128` passed, and
+  Docker workflow run `26737110126` passed runtime smoke and registry image
+  push.
+- 2026-06-01 empty-pool health-pinger scheduler: the five-minute OpenRouter
+  key-health timeout is now demand-driven. The rotation manager publishes
+  pool replacements after reload, drop, and eviction; pinger startup
+  subscribes to pool changes; an empty pool stays disarmed; the first pooled
+  key rearms the existing delayed probe; final-key removal clears the timer;
+  and shutdown unsubscribes. Production inspection found `13` stored keys and
+  `0` active pooled keys. The deterministic lifecycle benchmark under
+  `/private/tmp/hydra-health-pinger-empty-pool-benchmark-20260601T053640Z/summary.json`
+  records empty-pool wakeups per hour `12 -> 0`, no timer against an empty
+  pool, a timer after first-key arrival, no timer after final-key removal, and
+  preserved delayed-probe semantics while keys exist. The required recon note
+  is `docs/recon/EMPTY_POOL_HEALTH_PINGER_SCHEDULER.md`. Focused pinger tests
+  passed `4/4`, rotation-manager lifecycle tests passed `4/4`, background
+  visibility contracts passed `32/32`, and the complete source chain passed
+  lint, full `npm test`, build, gate (`12/12`), OpenAPI generation
+  (`83 operations`), audit, and diff check.
+- 2026-06-01 empty-pool health-pinger current-source package proof: native
+  quit removed all four prior package processes immediately with evidence
+  under
+  `/private/tmp/hydra-v140-empty-pool-health-pinger-rebuild-shutdown-20260601T053814Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), embedded pinger guard, rotation notifier, retained
+  request-log-retention guard, and retained `HYDRA_SPLASH_TARGET=72` passed.
+  The local ARM zip SHA-256 was
+  `b7e3aebc871f1ad2e3b74882a4ac662a783cca49d24a28d9e590c41d33dbfe6f`;
+  it is current-source local proof, not a replacement public asset.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-empty-pool-health-pinger-package-20260601T053957Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one bundle, and Docker Desktop remains stopped.
+- 2026-06-01 empty-pool health-pinger LaunchServices proof:
+  `/private/tmp/hydra-v140-empty-pool-health-pinger-current-source-launch-20260601T054009Z`
+  recorded splash-active CPU at three seconds, handoff CPU at 20 seconds, and
+  the settled four-process package at `0.000%` CPU with zero stale profiles
+  and no Computer Use helper by 35 seconds. Native splash diagnostics remained
+  finite: target and queue length `72`, shattered words `72`, duplicate skips
+  `0`, portal collision disabled, lift applied, timers `0`, RAF inactive, and
+  Matter cleared.
+- 2026-06-01 empty-pool health-pinger post-rebuild profile:
+  `/private/tmp/hydra-v140-empty-pool-health-pinger-post-rebuild-idle-20260601T054117Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across all 11 untouched samples over five minutes. CPU ranged from `0.000%`
+  to `0.300%`, averaged `0.027%`, and ended at `0.300%`; RSS moved from
+  `604464 KiB` to `608976 KiB` (`+4512 KiB`).

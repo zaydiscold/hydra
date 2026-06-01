@@ -38,6 +38,28 @@ export class RotationManager {
     /** Coalesces mutations that arrive while a reload is still unwinding. */
     this._reloadRequested = false;
     this._lastSelectionFallbackWarningAt = 0;
+    /** Pool-change listeners keep dependent background work demand-driven. */
+    this._poolChangeListeners = new Set();
+  }
+
+  onPoolChange(listener) {
+    this._poolChangeListeners.add(listener);
+    return () => this._poolChangeListeners.delete(listener);
+  }
+
+  _notifyPoolChange() {
+    for (const listener of this._poolChangeListeners) {
+      try {
+        listener(this.pool);
+      } catch (err) {
+        logger.warn(`[POOL] Pool-change listener failed: ${err?.message || err}`);
+      }
+    }
+  }
+
+  _replacePool(pool) {
+    this.pool = pool;
+    this._notifyPoolChange();
   }
 
   /** Called lazily on first request if pool was never initialized */
@@ -79,7 +101,7 @@ export class RotationManager {
 
       signal.throwIfAborted();
 
-      this.pool = keys;
+      this._replacePool(keys);
       this.index = 0;
       this.loaded = true;
       this.lastSyncAt = new Date().toISOString();
@@ -323,7 +345,7 @@ export class RotationManager {
       });
       
       // Remove from in-memory pool
-      this.pool = this.pool.filter(k => k.hash !== hash);
+      this._replacePool(this.pool.filter(k => k.hash !== hash));
       this.failureCounts.delete(hash);
       this.cooldowns.delete(hash);
       
@@ -343,7 +365,7 @@ export class RotationManager {
     } catch (e) {
       logger.error(`[POOL] Failed to evict ${hash.slice(0, 8)}: ${e.message}`);
     }
-    this.pool = this.pool.filter(k => k.hash !== hash);
+    this._replacePool(this.pool.filter(k => k.hash !== hash));
     logger.warn(`[POOL] Key ${hash.slice(0, 8)}… permanently evicted (401 revoked)`);
   }
 

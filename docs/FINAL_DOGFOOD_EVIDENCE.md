@@ -1607,3 +1607,41 @@ This evidence file is not release-complete by itself. The release remains not co
   retained four Hydra-owned processes and zero stale profiles across 11
   five-minute samples. CPU ranged from `0.000%` to `0.700%`, averaged
   `0.064%`, and ended at `0.000%`; RSS changed by `+4848 KiB`.
+- Request-log retention checkpoint
+  `6f2fc6d40b39d3c364ea294caec91ef002ba8c41` used `[skip-bump]`;
+  Auto-version run `26737110121` skipped, CI run `26737110128` passed, and
+  Docker workflow `26737110126` passed runtime smoke and registry image push.
+- OpenRouter background health checks are now demand-driven while the pooled
+  key set is empty. Rotation-manager reload, drop, and eviction publish pool
+  replacements; pinger startup subscribes; first-key arrival rearms the
+  delayed probe; final-key removal disarms it; shutdown unsubscribes. The
+  production DB held `13` stored keys and `0` active pooled keys. The
+  lifecycle benchmark under
+  `/private/tmp/hydra-health-pinger-empty-pool-benchmark-20260601T053640Z/summary.json`
+  records empty-pool wakeups per hour `12 -> 0` while preserving delayed
+  probing when keys exist. The recon note is
+  `docs/recon/EMPTY_POOL_HEALTH_PINGER_SCHEDULER.md`. Focused pinger tests
+  passed `4/4`, rotation-manager tests passed `4/4`, background contracts
+  passed `32/32`, and the complete source chain passed before rebuild.
+- Native shutdown evidence is under
+  `/private/tmp/hydra-v140-empty-pool-health-pinger-rebuild-shutdown-20260601T053814Z`;
+  four package processes exited immediately. The current-source ARM package
+  rebuilt and passed package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), embedded pinger guard, rotation notifier, retained retention
+  guard, and retained splash target. The local ARM zip SHA-256 was
+  `b7e3aebc871f1ad2e3b74882a4ac662a783cca49d24a28d9e590c41d33dbfe6f`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-empty-pool-health-pinger-package-20260601T053957Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly one Hydra bundle, and Docker Desktop remains stopped.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v140-empty-pool-health-pinger-current-source-launch-20260601T054009Z`
+  records four settled processes at `0.000%` CPU, zero stale profiles, and no
+  Computer Use helper by 35 seconds. Splash teardown stayed finite with
+  `72/72` shuffled words, zero duplicate skips, collision-free lifted portal
+  entry, timers `0`, inactive RAF, and cleared Matter state.
+- The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v140-empty-pool-health-pinger-post-rebuild-idle-20260601T054117Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.300%`, averaged
+  `0.027%`, and ended at `0.300%`; RSS changed by `+4512 KiB`.

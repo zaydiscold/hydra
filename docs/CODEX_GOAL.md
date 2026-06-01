@@ -1162,6 +1162,43 @@ closed-app CLI commands, tests, and repo-local documentation.
   retained four Hydra-owned processes and zero stale profiles across 11
   five-minute samples. CPU ranged from `0.000%` to `0.700%`, averaged
   `0.064%`, and ended at `0.000%`; RSS changed by `+4848 KiB`.
+- Request-log retention checkpoint
+  `6f2fc6d40b39d3c364ea294caec91ef002ba8c41` used `[skip-bump]`;
+  Auto-version run `26737110121` skipped, CI run `26737110128` passed, and
+  Docker workflow `26737110126` passed runtime smoke and registry image push.
+- OpenRouter health-pinger timer ownership is now demand-driven while the
+  pooled key set is empty. Rotation-manager reload, drop, and eviction
+  publish pool replacements; pinger startup subscribes; first-key arrival
+  rearms the delayed probe; final-key removal disarms it; and shutdown
+  unsubscribes. Production inspection found `13` stored keys and `0` active
+  pooled keys. The benchmark under
+  `/private/tmp/hydra-health-pinger-empty-pool-benchmark-20260601T053640Z/summary.json`
+  records empty-pool wakeups per hour `12 -> 0`, no timer against an empty
+  pool, a timer after first-key arrival, no timer after final-key removal, and
+  preserved delayed probing while keys exist. The recon note is
+  `docs/recon/EMPTY_POOL_HEALTH_PINGER_SCHEDULER.md`. Focused pinger tests
+  passed `4/4`, rotation-manager tests passed `4/4`, background contracts
+  passed `32/32`, and the complete source chain passed before rebuilding.
+- The empty-pool health-pinger package rebuild passed ARM smoke, strict deep
+  `codesign`, bundle version (`1.4.0`), embedded pinger guard, rotation
+  notifier, retained request-log-retention guard, and retained
+  `HYDRA_SPLASH_TARGET=72`. The current-source local ARM zip SHA-256 was
+  `b7e3aebc871f1ad2e3b74882a4ac662a783cca49d24a28d9e590c41d33dbfe6f`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-empty-pool-health-pinger-package-20260601T053957Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly one Hydra bundle, and Docker Desktop remains stopped.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v140-empty-pool-health-pinger-current-source-launch-20260601T054009Z`
+  records the settled four-process package at `0.000%` CPU with zero stale
+  profiles and no Computer Use helper by 35 seconds. Splash diagnostics stay
+  finite: `72/72` words, zero duplicate skips, collision-free lifted portal
+  entry, timers `0`, inactive RAF, and cleared Matter state.
+- The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v140-empty-pool-health-pinger-post-rebuild-idle-20260601T054117Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.300%`, averaged
+  `0.027%`, and ended at `0.300%`; RSS changed by `+4512 KiB`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

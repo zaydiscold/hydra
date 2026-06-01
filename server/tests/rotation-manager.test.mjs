@@ -6,7 +6,7 @@ let getPooledKeysImpl = async () => [];
 const warnings = [];
 
 mock.module(new URL('../services/db.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     prisma: {
       user: {
         findFirst: mock.fn(async () => ({ id: 'user-1' })),
@@ -16,7 +16,7 @@ mock.module(new URL('../services/db.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../services/logger.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     logger: {
       info() {},
       warn(message) {
@@ -27,7 +27,7 @@ mock.module(new URL('../services/logger.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../services/store.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     getPooledKeys: (...args) => getPooledKeysImpl(...args),
   },
 });
@@ -117,4 +117,22 @@ test('cancelReload logs non-abort unwind failures without hiding them', async ()
   await Promise.all([reload, stop]);
 
   assert.ok(warnings.some((line) => line.includes('Shutdown waited on failed reload: reload database failure')));
+});
+
+test('pool change listeners receive reload results and unsubscribe cleanly', async () => {
+  getPooledKeysImpl = async () => [{ hash: 'fresh', limitRemaining: 2 }];
+
+  const manager = new RotationManager();
+  manager.userId = 'user-1';
+  const snapshots = [];
+  const unsubscribe = manager.onPoolChange((pool) => {
+    snapshots.push(pool.map((entry) => entry.hash));
+  });
+
+  await manager.reload();
+  unsubscribe();
+  getPooledKeysImpl = async () => [];
+  await manager.reload();
+
+  assert.deepEqual(snapshots, [['fresh']]);
 });

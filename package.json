@@ -46,7 +46,7 @@
     "test:cookie-utils": "node --test server/tests/cookie-utils.test.mjs",
     "test:webhooks": "node --test server/tests/clerk-webhook-session-revoke.test.mjs",
     "test:upstream-health": "node --test server/tests/upstream-health.test.mjs",
-    "test:health-pinger": "node --test server/tests/health-pinger-contract.test.mjs",
+    "test:health-pinger": "node --experimental-test-module-mocks --test server/tests/health-pinger-contract.test.mjs server/tests/health-pinger-lifecycle.test.mjs",
     "test:proxy-gate": "node --test server/tests/proxy-gate.test.mjs",
     "test:rotation-manager": "node --experimental-test-module-mocks --test server/tests/rotation-manager.test.mjs",
     "test:task-supervisor": "node --experimental-test-module-mocks --test server/tests/task-supervisor.test.mjs",

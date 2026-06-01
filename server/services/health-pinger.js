@@ -17,6 +17,7 @@ let pingPromise = null;
 let activeController = null;
 let stopping = false;
 let lastNetworkErrorAt = 0;
+let unsubscribePoolChange = null;
 
 function readNonNegativeMs(name, fallback) {
   const value = Number(process.env[name]);
@@ -92,7 +93,7 @@ async function pingRandomKey() {
 }
 
 function scheduleNextPing(delayMs = PING_INTERVAL_MS) {
-  if (stopping || timer) return;
+  if (stopping || timer || pingPromise || rotationManager.pool.length === 0) return;
   timer = setTimeout(() => {
     timer = null;
     if (stopping) return;
@@ -104,17 +105,33 @@ function scheduleNextPing(delayMs = PING_INTERVAL_MS) {
   timer.unref?.();
 }
 
-export function startPinger() {
-  if (timer || pingPromise) return;
-  stopping = false;
+function clearScheduledPing() {
+  if (timer) clearTimeout(timer);
+  timer = null;
+}
+
+function syncScheduledPing(pool = rotationManager.pool) {
+  if (stopping) return;
+  if (pool.length === 0) {
+    clearScheduledPing();
+    return;
+  }
   scheduleNextPing(PING_STARTUP_DELAY_MS);
+}
+
+export function startPinger() {
+  if (unsubscribePoolChange || timer || pingPromise) return;
+  stopping = false;
+  unsubscribePoolChange = rotationManager.onPoolChange(syncScheduledPing);
+  syncScheduledPing();
   logger.info(`[PINGER] Background health pinger initialized (startupDelayMs=${PING_STARTUP_DELAY_MS}, intervalMs=${PING_INTERVAL_MS})`);
 }
 
 export async function stopPinger() {
   stopping = true;
-  if (timer) clearTimeout(timer);
-  timer = null;
+  unsubscribePoolChange?.();
+  unsubscribePoolChange = null;
+  clearScheduledPing();
   activeController?.abort();
   activeController = null;
   if (pingPromise) {
@@ -123,4 +140,12 @@ export async function stopPinger() {
     });
     pingPromise = null;
   }
+}
+
+export function getHealthPingerSnapshot() {
+  return {
+    scheduled: Boolean(timer),
+    pingInFlight,
+    subscribed: Boolean(unsubscribePoolChange),
+  };
 }

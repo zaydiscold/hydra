@@ -231,6 +231,9 @@ test('long-running background timers do not pin idle Node processes', () => {
 
   assert.match(pinger, /timer\.unref\?\.\(\)/);
   assert.match(pinger, /timer = setTimeout\(\(\) => \{/);
+  assert.match(pinger, /if \(stopping \|\| timer \|\| pingPromise \|\| rotationManager\.pool\.length === 0\) return/);
+  assert.match(pinger, /unsubscribePoolChange = rotationManager\.onPoolChange\(syncScheduledPing\)/);
+  assert.match(pinger, /if \(pool\.length === 0\) \{\s*clearScheduledPing\(\)/);
   assert.match(pinger, /activeController\?\.abort\(\)/);
   assert.match(pinger, /await pingPromise\.catch/);
   assert.doesNotMatch(pinger, /setInterval/);
@@ -312,7 +315,7 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(refresher, /HYDRA_SESSION_LIFETIME_PROBE === '1'/);
   assert.match(refresher, /SESSION_PROBE_ENABLED && Date\.now\(\) - _lastSessionProbeAt >= SESSION_PROBE_INTERVAL_MS/);
   assert.match(pinger, /HYDRA_HEALTH_PING_STARTUP_DELAY_MS/);
-  assert.match(pinger, /scheduleNextPing\(PING_STARTUP_DELAY_MS\)/);
+  assert.match(pinger, /unsubscribePoolChange = rotationManager\.onPoolChange\(syncScheduledPing\)/);
   assert.match(retention, /HYDRA_REQUEST_LOG_RETENTION_STARTUP_DELAY_MS/);
   assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*prunePromise = pruneRequestLogs\(\)\.finally\(\(\) => \{[\s\S]*scheduleNextPrune\(RETENTION_INTERVAL_MS\)[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
   assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\r?\n\s*prunePromise = pruneRequestLogs\(\);/);

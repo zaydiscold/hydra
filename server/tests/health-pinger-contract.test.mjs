@@ -24,6 +24,9 @@ test('background health pinger validates keys without completion traffic', () =>
   assert.match(source, /rotationManager\.recordSuccess\(keyEntry\.hash\)/);
   assert.match(source, /timer = setTimeout\(\(\) => \{/);
   assert.match(source, /scheduleNextPing\(PING_INTERVAL_MS\)/);
+  assert.match(source, /rotationManager\.pool\.length === 0/);
+  assert.match(source, /unsubscribePoolChange = rotationManager\.onPoolChange\(syncScheduledPing\)/);
+  assert.match(source, /if \(pool\.length === 0\) \{\s*clearScheduledPing\(\)/);
   assert.match(source, /activeController\?\.abort\(\)/);
   assert.match(source, /await pingPromise\.catch/);
   assert.doesNotMatch(source, /setInterval/);
