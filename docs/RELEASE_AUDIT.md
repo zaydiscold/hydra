@@ -1199,3 +1199,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `docker compose ps --all` returned no services, no `hydra_default` network
   remained, and Docker Desktop was restored to its stopped state through
   `docker desktop stop`.
+- 2026-05-31 request-log-hardening checkpoint publication: commit
+  `fb4a3be7a811e439ecf859c1c096bb30504494c5` used `[skip-bump]`;
+  Auto-version run `26728333080` skipped as intended, CI run `26728333078`
+  passed, and Docker workflow run `26728333077` passed both runtime smoke and
+  registry image push.
