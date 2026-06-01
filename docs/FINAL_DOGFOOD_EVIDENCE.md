@@ -1904,3 +1904,13 @@ This evidence file is not release-complete by itself. The release remains not co
   expected four Hydra-owned processes, `0.0%` aggregate CPU across all 11
   samples, RSS `519.64 MB -> 520.83 MB`, and no stale Hydra Playwright
   profiles in the settled post-launch doctor snapshot.
+- Public `v1.4.5` release publication: GitHub release
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.4.5` was published on
+  2026-06-01 from commit `fdb725cf1c421f787a0aba1b0ba78090d8b79316`.
+  Auto-version run `26771322922`, CI run `26771322926`, Docker workflow run
+  `26771322892`, and Release Desktop Apps run `26771336388` all passed. The
+  public release contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap,
+  Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows
+  `latest.yml`, and Linux `latest-linux.yml`; the release workflow also passed
+  the hosted Windows unpacked and NSIS-installed executable lifecycle check plus
+  the final macOS updater metadata merge.

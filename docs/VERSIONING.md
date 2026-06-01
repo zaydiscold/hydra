@@ -109,7 +109,7 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.4` is published and `v1.4.5` is the next patch release candidate. Continue
+`v1.4.5` is published. Continue
 using `[skip-bump]` for audit, dogfood, and isolated documentation checkpoints
 after this patch ships unless a real source fix must go to users. Do not produce
 a second minor bump merely to record manual evidence.
