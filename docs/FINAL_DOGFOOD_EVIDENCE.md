@@ -1670,3 +1670,10 @@ This evidence file is not release-complete by itself. The release remains not co
   Auto-version run `26737940920` skipped, CI run `26737940926` passed, and
   Docker workflow run `26737940921` passed runtime smoke and registry image
   push.
+- Auto-version run `26738144380` created immutable tag `v1.4.1`, but Release
+  Desktop Apps run `26738151871` stopped in shared `test:ci` before packaging.
+  The audit remained honest: current-version Intel artifact evidence was
+  missing because no `v1.4.1` artifact had uploaded yet. The CLI regression now
+  permits historical hosted package-smoke evidence during the pre-publication
+  gate while continuing to require recorded current public evidence after
+  publication. The repaired artifact-parity tranche advances as `v1.4.2`.

@@ -1922,3 +1922,13 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Auto-version run `26737940920` skipped, CI run `26737940926` passed, and
   Docker workflow run `26737940921` passed runtime smoke and registry image
   push.
+- 2026-06-01 release-bootstrap audit contract: Auto-version run `26738144380`
+  created immutable tag `v1.4.1`, but Release Desktop Apps run `26738151871`
+  stopped in shared `test:ci` before packaging. `hydra audit` correctly
+  reported that the new-version Intel artifact was not public yet; the CLI
+  regression incorrectly required public `v1.4.1` Intel and Windows evidence
+  before the release workflow could build those artifacts. The regression now
+  accepts hosted package-smoke evidence during the pre-publication gate while
+  preserving `mac-intel-current` as `missing` until current public release
+  evidence is recorded. The recon note is
+  `docs/recon/RELEASE_BOOTSTRAP_AUDIT_CONTRACT.md`.

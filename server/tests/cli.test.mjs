@@ -363,6 +363,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   const report = JSON.parse(out);
   const releaseAudit = readFileSync(join(ROOT, 'docs/RELEASE_AUDIT.md'), 'utf8');
   const auditSource = readFileSync(join(ROOT, 'bin/commands/audit.js'), 'utf8');
+  const currentReleaseRecorded = releaseAudit.includes(`GitHub release v${pkg.version} is public`);
   const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker\s+workflow\s+run\s+`(\d+)`\s+passed both runtime smoke and\s+(?:the )?registry\s+image\s+push/g)]
     .map((match) => match[1]);
   const latestDockerCheckpointRun = dockerCheckpointRuns.at(-1);
@@ -377,9 +378,19 @@ test('hydra audit reports release evidence and deferred manual items without lau
     || item.evidence.includes(`GitHub release v${pkg.version} macOS arm64`)
   )));
   assert.ok(report.items.some((item) => item.id === 'packaged-dogfood-runbook' && item.state === 'ok' && /redacted user-run evidence capture/.test(item.evidence)));
-  assert.ok(report.items.some((item) => item.id === 'mac-intel-artifact' && item.state === 'ok' && item.evidence.includes(`GitHub release v${pkg.version} macOS Intel`)));
-  assert.ok(report.items.some((item) => item.id === 'mac-intel-current' && item.state === 'ok' && item.evidence.includes(`GitHub release v${pkg.version} macOS Intel`)));
-  assert.ok(report.items.some((item) => item.id === 'windows-installer-artifact' && item.state === 'ok' && item.evidence.includes(`GitHub release v${pkg.version} Windows NSIS`)));
+  assert.ok(report.items.some((item) => item.id === 'mac-intel-artifact' && item.state === 'ok' && (
+    item.evidence.includes(`GitHub release v${pkg.version} macOS Intel`)
+    || /GitHub Actions macOS Intel/.test(item.evidence)
+  )));
+  assert.ok(report.items.some((item) => item.id === 'mac-intel-current' && (
+    currentReleaseRecorded
+      ? item.state === 'ok' && item.evidence.includes(`GitHub release v${pkg.version} macOS Intel`)
+      : item.state === 'missing'
+  )));
+  assert.ok(report.items.some((item) => item.id === 'windows-installer-artifact' && item.state === 'ok' && (
+    item.evidence.includes(`GitHub release v${pkg.version} Windows NSIS`)
+    || /GitHub Actions Windows NSIS/.test(item.evidence)
+  )));
   assert.ok(report.items.some((item) => item.id === 'dependency-audit' && item.state === 'ok' && /brace-expansion/.test(item.evidence) && /5\.0\.6/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'account-proxy-pool' && item.state === 'ok' && /per-task automation route/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'performance-efficiency-pass' && item.state === 'ok' && /renderer polling/.test(item.evidence)));

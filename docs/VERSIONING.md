@@ -114,6 +114,13 @@ retention write avoidance, and empty-pool health-pinger disarming. Keep the
 tested `v1.4.0` tag immutable and close artifact parity with the normal patch
 lane as `v1.4.1`.
 
+The first `v1.4.1` tag exposed a pre-publication gate cycle before any desktop
+artifact uploaded: `hydra audit` correctly reported that current-version Intel
+artifacts were not public yet, while the CLI regression incorrectly required
+them to be public before the release matrix was allowed to build them. Keep
+that failed tag immutable. The repaired release-bootstrap contract ships the
+same artifact-parity tranche as `v1.4.2`.
+
 Operationally:
 
 1. Push source, docs, and test checkpoints to `master` with `[skip-bump]`.
