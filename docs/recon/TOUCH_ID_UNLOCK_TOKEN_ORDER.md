@@ -67,3 +67,26 @@ The Settings and README copy now say this explicitly:
   server status before waiting on native Touch ID token release and guards
   against late prompt results.
 - `bin/commands/audit.js` includes the same order as a release audit contract.
+
+## Exact-Public `v1.4.7` Runtime Recheck
+
+A read-only local metadata pass on 2026-06-01 rechecked the installed public
+`v1.4.7` package without printing the saved token:
+
+- `preferences.json` exists with mode `0600` and `biometricEnabled=true`.
+- `renderer-auth-token.json` exists with mode `0600`, contains a non-empty
+  token, and is not expired.
+- The saved token expires at `2026-06-02T08:00:41.726Z`. The read-only snapshot
+  recorded `33853` seconds remaining inside the bounded 24-hour window.
+- `~/Library/Logs/Hydra/main.log` contains `40` historical biometric gate
+  denials from `2026-05-31T10:23:08.963Z` through
+  `2026-06-01T10:07:10.265Z`. Every typed outcome is
+  `BIOMETRIC_CANCELLED`; there are zero persisted-token read failures, zero
+  persisted-token validation failures, and zero failed token-clear records.
+
+This distinguishes the expected fail-closed path from the still-manual
+hardware approval path. A prompt on relaunch is correct while the saved token
+is valid and Touch ID is enabled. Cancelling the prompt intentionally keeps the
+password screen. A completed fingerprint approval followed by a password
+screen would still be unexpected and needs an interactive hardware
+reproduction before it can be claimed fixed or closed.

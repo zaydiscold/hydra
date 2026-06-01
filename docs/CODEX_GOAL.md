@@ -1426,6 +1426,17 @@ closed-app CLI commands, tests, and repo-local documentation.
   `~/.Trash/hydra-v147-private-native-screenshot-refresh-20260601T223151Z`.
   This strengthens packaged-app screenshot provenance without closing the
   manual human visual-review boundary.
+- The exact-public `v1.4.7` Touch ID metadata recheck confirmed owner-only
+  `0600` permissions for `preferences.json` and `renderer-auth-token.json`,
+  `biometricEnabled=true`, a present non-empty saved token, and an unexpired
+  `2026-06-02T08:00:41.726Z` deadline with `33853` seconds remaining at
+  observation time. Typed log aggregation found `40` historical biometric
+  gate denials, all `BIOMETRIC_CANCELLED`, with zero persisted-token read
+  failures, zero validation failures, and zero failed-clear records. This
+  preserves the expected once-per-relaunch prompt while a valid token exists
+  and distinguishes cancellation-to-password from the still-manual successful
+  fingerprint approval path. The durable note is
+  `docs/recon/TOUCH_ID_UNLOCK_TOKEN_ORDER.md`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

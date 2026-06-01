@@ -2535,3 +2535,18 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `~/.Trash/hydra-v147-private-native-screenshot-refresh-20260601T223151Z`.
   This refresh strengthens packaged screenshot provenance without claiming
   the still-manual interactive human visual review.
+- 2026-06-01 exact-public-`v1.4.7` Touch ID metadata recheck: a read-only local
+  pass confirmed owner-only `0600` permissions for both `preferences.json` and
+  `renderer-auth-token.json`, `biometricEnabled=true`, a present non-empty
+  saved token, and an unexpired `2026-06-02T08:00:41.726Z` token deadline with
+  `33853` seconds remaining at observation time. Typed log aggregation found
+  `40` historical biometric gate denials between
+  `2026-05-31T10:23:08.963Z` and `2026-06-01T10:07:10.265Z`; every outcome was
+  `BIOMETRIC_CANCELLED`. There were zero persisted-token read failures, zero
+  persisted-token validation failures, and zero failed token-clear records.
+  This confirms the expected fail-closed behavior: a valid saved token plus an
+  enabled Touch ID preference should prompt once per relaunch, while
+  cancellation intentionally leaves the password screen visible. Successful
+  fingerprint approval followed by token release remains a user-run hardware
+  boundary. The durable note is
+  `docs/recon/TOUCH_ID_UNLOCK_TOKEN_ORDER.md`.

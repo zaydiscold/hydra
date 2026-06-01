@@ -2065,3 +2065,13 @@ This evidence file is not release-complete by itself. The release remains not co
   private raws moved reversibly to
   `~/.Trash/hydra-v147-private-native-screenshot-refresh-20260601T223151Z`.
   Interactive human visual review remains manual.
+- Exact-public-`v1.4.7` Touch ID metadata recheck: owner-only local inspection
+  confirmed `0600` preferences and renderer-token files,
+  `biometricEnabled=true`, a present non-empty saved token, and an unexpired
+  `2026-06-02T08:00:41.726Z` deadline with `33853` seconds remaining at
+  observation time. Typed log aggregation found `40` historical prompt
+  denials, all `BIOMETRIC_CANCELLED`, with zero persisted-token read failures,
+  zero validation failures, and zero failed clear records. This is expected
+  fail-closed evidence: a valid token prompts once per relaunch while
+  cancellation intentionally leaves password visible. Successful fingerprint
+  approval and release of the saved token remain a user-run hardware boundary.
