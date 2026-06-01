@@ -893,6 +893,15 @@ test('clipboard actions await write failures instead of failing silently', () =>
   assert.match(registerKeyModal, /Clipboard unavailable; paste the key manually\./);
 });
 
+test('Account Detail click handlers do not pass React events into AbortSignal parameters', () => {
+  const accountDetail = readRepoFile('src/pages/AccountDetail.jsx');
+
+  assert.doesNotMatch(accountDetail, /onClick=\{(?:probeSession|fetchSnapshot|fetchManagementKeys)\}/);
+  assert.equal((accountDetail.match(/onClick=\{\(\) => void probeSession\(\)\}/g) || []).length, 2);
+  assert.equal((accountDetail.match(/onClick=\{\(\) => void fetchSnapshot\(\)\}/g) || []).length, 2);
+  assert.equal((accountDetail.match(/onClick=\{\(\) => void fetchManagementKeys\(\)\}/g) || []).length, 6);
+});
+
 test('non-fatal renderer cleanup and history failures stay visible', () => {
   const generator = readRepoFile('src/pages/Generator.jsx');
   const codeRedemption = readRepoFile('src/pages/CodeRedemption.jsx');

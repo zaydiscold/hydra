@@ -640,7 +640,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={fetchSnapshot}
+            onClick={() => void fetchSnapshot()}
             disabled={loading}
             style={{ marginLeft: 'auto', flexShrink: 0 }}
           >
@@ -679,7 +679,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               {liveSessionStatus ? '[LIVE]' : '[CACHED]'} {displayStatus}
               <button
                 type="button"
-                onClick={probeSession}
+                onClick={() => void probeSession()}
                 disabled={sessionProbing}
                 title="Re-probe session status from Clerk"
                 style={{
@@ -712,7 +712,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <h3>Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}</h3>
               <p>Full account-control credentials. Snapshot is degraded, but stored management keys remain visible here.</p>
             </div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void fetchManagementKeys()} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
               {loadingMgmtKeys ? '…' : '↻'}
             </button>
           </div>
@@ -720,7 +720,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="account-detail-inline-status account-detail-inline-status--error">
               <span>Management key list failed to load.</span>
               <span style={{ color: 'var(--text-secondary)' }}>{managementKeysLoadError}</span>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void fetchManagementKeys()} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
                 {loadingMgmtKeys ? '…' : 'Retry'}
               </button>
             </div>
@@ -729,7 +729,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="account-detail-empty-inline">
               <div>No management keys in Hydra.</div>
               <div style={{ color: 'var(--text-tertiary)' }}>Provision a new one or import an existing key from OpenRouter.</div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void fetchManagementKeys()} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
                 Reload keys
               </button>
             </div>
@@ -1051,7 +1051,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               {liveSessionStatus ? '[LIVE]' : '[CACHED]'} {displayStatus}
               <button
                 type="button"
-                onClick={probeSession}
+                onClick={() => void probeSession()}
                 disabled={sessionProbing}
                 title="Re-probe session status from Clerk"
                 style={{
@@ -1137,7 +1137,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               <h3>Management Keys {managementKeys.length > 0 ? `(${managementKeys.length})` : ''}</h3>
               <p>Full account-control credentials: balances, API-key creation, disable/delete, and account maintenance.</p>
             </div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void fetchManagementKeys()} disabled={loadingMgmtKeys} style={{ fontSize: '0.7rem' }}>
               {loadingMgmtKeys ? '…' : '↻'}
             </button>
           </div>
@@ -1177,7 +1177,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="account-detail-inline-status account-detail-inline-status--error">
               <span>Management key list failed to load.</span>
               <span style={{ color: 'var(--text-secondary)' }}>{managementKeysLoadError}</span>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void fetchManagementKeys()} disabled={loadingMgmtKeys} style={{ fontSize: '0.75rem', marginLeft: 'auto' }}>
                 {loadingMgmtKeys ? '…' : 'Retry'}
               </button>
             </div>
@@ -1186,7 +1186,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             <div className="account-detail-empty-inline">
               <div>No management keys in Hydra.</div>
               <div style={{ color: 'var(--text-tertiary)' }}>Provision a new one or import an existing key from OpenRouter.</div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={fetchManagementKeys} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void fetchManagementKeys()} style={{ fontSize: '0.75rem', alignSelf: 'flex-start' }}>
                 Reload keys
               </button>
             </div>
@@ -1289,7 +1289,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
           <span className="section-count">{keys.length}</span>
         </div>
         <div className="action-bar-group" style={{ marginLeft: 'auto' }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={fetchSnapshot} disabled={loading}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => void fetchSnapshot()} disabled={loading}>
             <span className={loading ? 'spin-inline' : ''}>↻</span> Refresh
           </button>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowCreateModal(true)}>
