@@ -259,7 +259,9 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.doesNotMatch(supervisor, /clearInterval/);
   assert.match(retention, /timer\.unref\?\.\(\)/);
   assert.match(retention, /timer = setTimeout\(\(\) => \{/);
-  assert.match(retention, /scheduleNextPrune\(RETENTION_INTERVAL_MS\)/);
+  assert.match(retention, /export function noteRequestLogActivity\(\)/);
+  assert.match(retention, /if \(!started \|\| stopping\) return/);
+  assert.match(retention, /if \(!stopping && keepScheduled\) scheduleNextPrune\(RETENTION_INTERVAL_MS\)/);
   assert.doesNotMatch(retention, /setInterval/);
   assert.doesNotMatch(retention, /clearInterval/);
   assert.match(magicLinks, /cleanupTimer = setTimeout\(\(\) => \{/);
@@ -275,6 +277,7 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.match(retention, /if \(!overflow\) return/);
   assert.match(requestLogBuffer, /timer\.unref\?\.\(\)/);
   assert.match(requestLogBuffer, /timer = setTimeout/);
+  assert.match(requestLogBuffer, /noteRequestLogActivity\(\)/);
   assert.doesNotMatch(requestLogBuffer, /timer = setInterval/);
 });
 
@@ -317,7 +320,9 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(pinger, /HYDRA_HEALTH_PING_STARTUP_DELAY_MS/);
   assert.match(pinger, /unsubscribePoolChange = rotationManager\.onPoolChange\(syncScheduledPing\)/);
   assert.match(retention, /HYDRA_REQUEST_LOG_RETENTION_STARTUP_DELAY_MS/);
-  assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*prunePromise = pruneRequestLogs\(\)\.finally\(\(\) => \{[\s\S]*scheduleNextPrune\(RETENTION_INTERVAL_MS\)[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
+  assert.match(retention, /startupTimer = setTimeout\(\(\) => \{[\s\S]*runPruneAndReschedule\(\)[\s\S]*\}, RETENTION_STARTUP_DELAY_MS\)/);
+  assert.match(retention, /if \(!stopping && keepScheduled\) scheduleNextPrune\(RETENTION_INTERVAL_MS\)/);
+  assert.match(retention, /export function noteRequestLogActivity\(\)/);
   assert.doesNotMatch(retention, /timer\.unref\?\.\(\);\r?\n\s*prunePromise = pruneRequestLogs\(\);/);
   assert.match(supervisor, /const TASK_SWEEP_INTERVAL_MS = 30 \* 1000/);
   assert.match(supervisor, /if \(this\.listActive\(\)\.length === 0\) return/);
@@ -463,6 +468,7 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   assert.match(proxy, /Model list fallback used because live\/cache lookup failed: \$\{err\?\.message \|\| err\}/);
   assert.match(proxy, /formatPrismaError\(fallbackErr, 'create RequestLog placeholder without keyHash'\)/);
   assert.match(proxy, /enqueueRequestLog/, 'non-stream proxy request logs must use the bounded request-log buffer');
+  assert.match(proxy, /noteRequestLogActivity\(\)/, 'stream proxy logging must wake retention after an empty-table disarm');
   assert.match(proxy, /const requestLogPromise = createRequestLog\(/, 'stream proxy logging must not block first-byte forwarding on the placeholder DB write');
   assert.match(proxy, /forwardSseStream[\s\S]*requestLogPromise\.then/, 'stream proxy finalization should wait for the placeholder only after forwarding settles');
   assert.doesNotMatch(proxy, /const requestLog = await createRequestLog\(/);

@@ -1703,3 +1703,41 @@ This evidence file is not release-complete by itself. The release remains not co
   `618.70 MB` RSS with zero Hydra Playwright profiles. Spotlight resolves
   exactly the canonical bundle and `release/` contains only
   `mac-arm64/Hydra.app`.
+- The untouched exact-public `v1.4.2` baseline under
+  `/private/tmp/hydra-v142-public-fresh-idle-20260601T.msrEg0` retained four
+  Hydra-owned processes and zero Hydra Playwright profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.500%`, averaged
+  `0.100%`, and ended at `0.000%`; RSS changed by `+2992 KiB`.
+- Request-log retention is now demand-driven after an empty startup prune.
+  Buffered non-stream logging and direct SSE placeholder logging rearm the
+  existing 15-minute cadence when work appears; retained rows preserve cleanup
+  scheduling; shutdown still clears and joins active work. Production
+  inspection found `0` request-log rows. Deterministic lifecycle evidence
+  under
+  `/private/tmp/hydra-request-log-retention-demand-scheduler-20260601T.KJsakO/summary.json`
+  records empty-table recurring wakeups per hour `4 -> 0`, activity rearming,
+  and shutdown clearing. The recon note is
+  `docs/recon/REQUEST_LOG_RETENTION_DEMAND_SCHEDULER.md`. Focused retention
+  tests passed `8/8`, buffer tests passed `5/5`, background contracts passed
+  `32/32`, and the complete source chain passed.
+- Native quit evidence under
+  `/private/tmp/hydra-v142-retention-demand-rebuild-shutdown-20260601T.1DlSuZ`
+  records four prior exact-public processes exiting. The prior bundle moved
+  reversibly to
+  `~/.Trash/hydra-public-v142-before-retention-demand-20260601T064759Z`.
+  Current-source ARM rebuild, smoke, strict deep `codesign`, bundle version
+  (`1.4.2`), embedded notifier inspection, packaged renderer presence, and
+  retained splash target passed. The local zip SHA-256 was
+  `80dbd0ddbf08a32d39926b7fa3190d114e20de09af41f0142d0bc7438c248329`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-retention-demand-package-20260601T064937Z`.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v142-retention-demand-current-source-launch-20260601T.VRmXux`
+  records four settled processes at `0.000%` CPU and zero profiles by 35
+  seconds. Splash teardown stayed finite with `72/72` shuffled words, zero
+  duplicate skips, collision-free lifted portal entry, timers `0`, inactive
+  RAF, and cleared Matter state. The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v142-retention-demand-post-rebuild-idle-20260601T.ijYy3n`
+  retained four processes and zero profiles across 11 samples: CPU peaked at
+  `4.600%` in sample `00`, remained `0.000%` for all ten later samples, and
+  ended at `0.000%`; RSS changed by `+4912 KiB`.

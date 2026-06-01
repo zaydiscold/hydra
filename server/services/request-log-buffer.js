@@ -1,5 +1,6 @@
 import { prisma } from './db.js';
 import { logger } from './logger.js';
+import { noteRequestLogActivity } from './request-log-retention.js';
 
 const FLUSH_INTERVAL_MS = Number(process.env.HYDRA_REQUEST_LOG_FLUSH_MS || 1000);
 const MAX_QUEUE = Number(process.env.HYDRA_REQUEST_LOG_QUEUE_MAX || 2000);
@@ -53,6 +54,7 @@ export function enqueueRequestLog({ keyHash, model, status, latencyMs, tokens = 
     clientHint,
     ...normalizeTokens(tokens),
   });
+  noteRequestLogActivity();
   ensureTimer();
   return true;
 }

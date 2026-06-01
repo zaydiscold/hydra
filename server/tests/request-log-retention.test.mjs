@@ -60,8 +60,9 @@ test.afterEach(() => {
 });
 
 test('request-log retention skips both delete paths when the table is empty', async () => {
-  await pruneRequestLogs();
+  const hasRows = await pruneRequestLogs();
 
+  assert.equal(hasRows, false);
   assert.equal(fakeRequestLog.findFirst.mock.callCount(), 1);
   assert.equal(fakeRequestLog.deleteMany.mock.callCount(), 0);
   assert.equal(executeRawUnsafe.mock.callCount(), 0);
@@ -70,8 +71,9 @@ test('request-log retention skips both delete paths when the table is empty', as
 test('request-log retention skips writes while fresh rows stay below the cap', async () => {
   rows = [freshRow('fresh-1')];
 
-  await pruneRequestLogs();
+  const hasRows = await pruneRequestLogs();
 
+  assert.equal(hasRows, true);
   assert.equal(fakeRequestLog.findFirst.mock.callCount(), 2);
   assert.equal(fakeRequestLog.deleteMany.mock.callCount(), 0);
   assert.equal(executeRawUnsafe.mock.callCount(), 0);
@@ -88,6 +90,16 @@ test('request-log retention prunes old rows before checking count overflow', asy
   assert.equal(fakeRequestLog.deleteMany.mock.callCount(), 1);
   assert.equal(executeRawUnsafe.mock.callCount(), 0);
   assert.deepEqual(rows.map(row => row.id), ['fresh-1']);
+});
+
+test('request-log retention reports empty after pruning the last stale row', async () => {
+  rows = [freshRow('stale-1', -31 * 24 * 60 * 60 * 1000)];
+
+  const hasRows = await pruneRequestLogs();
+
+  assert.equal(hasRows, false);
+  assert.equal(fakeRequestLog.deleteMany.mock.callCount(), 1);
+  assert.deepEqual(rows, []);
 });
 
 test('request-log retention executes the raw cap delete only when overflow exists', async () => {

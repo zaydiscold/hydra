@@ -1956,3 +1956,48 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `618.70 MB` RSS with zero Hydra Playwright profiles; Spotlight resolves only
   that canonical bundle; and `release/` again contains only
   `mac-arm64/Hydra.app`.
+- 2026-06-01 exact-public `v1.4.2` idle baseline:
+  `/private/tmp/hydra-v142-public-fresh-idle-20260601T.msrEg0` retained four
+  Hydra-owned processes and zero Hydra Playwright profiles across 11 untouched
+  samples over five minutes. CPU ranged from `0.000%` to `0.500%`, averaged
+  `0.100%`, and ended at `0.000%`; RSS changed by `+2992 KiB`.
+- 2026-06-01 request-log retention demand scheduler: the worker now disarms
+  after its startup prune confirms that `RequestLog` is empty. Buffered
+  non-stream logging and direct SSE placeholder logging rearm the existing
+  15-minute retention cadence when traffic creates work. Fresh retained rows,
+  stale-row deletion, overflow deletion, error retry, and shutdown clearing
+  remain intact. Production inspection found `0` request-log rows. The
+  deterministic lifecycle evidence under
+  `/private/tmp/hydra-request-log-retention-demand-scheduler-20260601T.KJsakO/summary.json`
+  records empty-table recurring wakeups per hour `4 -> 0`, empty startup
+  disarming, traffic-driven rearming, and shutdown clearing. The recon note is
+  `docs/recon/REQUEST_LOG_RETENTION_DEMAND_SCHEDULER.md`. Focused retention
+  tests passed `8/8`, buffer tests passed `5/5`, background contracts passed
+  `32/32`, and full `npm run test:ci`, lint, build, gate (`12/12`), OpenAPI
+  generation (`83 operations`), audit, and diff check passed.
+- 2026-06-01 request-log retention demand-scheduler current-source package
+  proof: native quit removed all four prior exact-public package processes
+  with evidence under
+  `/private/tmp/hydra-v142-retention-demand-rebuild-shutdown-20260601T.1DlSuZ`.
+  The prior exact-public bundle moved reversibly to
+  `~/.Trash/hydra-public-v142-before-retention-demand-20260601T064759Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version (`1.4.2`),
+  embedded notifier inspection, packaged renderer presence, and retained
+  `HYDRA_SPLASH_TARGET=72` passed. The current-source local ARM zip SHA-256 was
+  `80dbd0ddbf08a32d39926b7fa3190d114e20de09af41f0142d0bc7438c248329`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-retention-demand-package-20260601T064937Z`; `release/` again
+  contains only `mac-arm64/Hydra.app`, Spotlight resolves exactly one Hydra
+  bundle, and Docker Desktop remains stopped.
+- 2026-06-01 request-log retention demand-scheduler LaunchServices and
+  post-rebuild profile: LaunchServices evidence under
+  `/private/tmp/hydra-v142-retention-demand-current-source-launch-20260601T.VRmXux`
+  records four settled processes at `0.000%` CPU and zero stale profiles by
+  35 seconds. Splash teardown remained finite with `72/72` shuffled words,
+  zero duplicate skips, collision-free lifted portal entry, timers `0`, RAF
+  inactive, and Matter cleared. The untouched five-minute profile under
+  `/private/tmp/hydra-v142-retention-demand-post-rebuild-idle-20260601T.ijYy3n`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across 11 samples. CPU peaked at `4.600%` in sample `00`, stayed at
+  `0.000%` for all ten subsequent samples including the startup-prune window,
+  and ended at `0.000%`; RSS changed by `+4912 KiB`.

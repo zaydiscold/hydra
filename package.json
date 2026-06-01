@@ -55,7 +55,7 @@
     "test:background-failure-visibility": "node --test server/tests/background-failure-visibility.test.mjs",
     "test:proxy-sse": "node --test server/tests/sse-stream.test.mjs",
     "test:request-log-buffer": "node --experimental-test-module-mocks --test server/tests/request-log-buffer.test.mjs",
-    "test:request-log-retention": "node --experimental-test-module-mocks --test server/tests/request-log-retention.test.mjs",
+    "test:request-log-retention": "node --experimental-test-module-mocks --test server/tests/request-log-retention.test.mjs server/tests/request-log-retention-lifecycle.test.mjs",
     "test:db-proxy-cache": "node --experimental-test-module-mocks --test server/tests/db-proxy-cache.test.mjs",
     "test:schema-self-heal-backups": "node --experimental-test-module-mocks --test server/tests/schema-self-heal-backups.test.mjs",
     "test:electron-url-allowlist": "node --experimental-test-module-mocks --test server/tests/electron-url-allowlist.test.mjs",

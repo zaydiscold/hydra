@@ -18,6 +18,7 @@ import { logger } from '../services/logger.js';
 import { rotationManager } from '../services/rotation-manager.js';
 import { getMasterProxyKey, getGenericProxyKey } from '../services/store.js';
 import { enqueueRequestLog, getRequestLogBufferSnapshot } from '../services/request-log-buffer.js';
+import { noteRequestLogActivity } from '../services/request-log-retention.js';
 import { bindRequestAbort } from '../lib/abort.js';
 
 const router = Router();
@@ -116,6 +117,7 @@ function logRequest(keyHash, model, status, latencyMs, tokens = {}, clientHint =
 }
 
 async function createRequestLog(keyHash, model, status, latencyMs, clientHint = null) {
+  noteRequestLogActivity();
   try {
     return await prisma.requestLog.create({
       data: {

@@ -130,7 +130,7 @@ mock.module(new URL('../services/health-pinger.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../services/request-log-retention.js', import.meta.url).href, {
-  exports: { startRequestLogRetention() {}, stopRequestLogRetention() {} },
+  exports: { noteRequestLogActivity() {}, startRequestLogRetention() {}, stopRequestLogRetention() {} },
 });
 
 mock.module(new URL('../services/task-supervisor.js', import.meta.url).href, {

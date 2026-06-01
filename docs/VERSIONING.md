@@ -110,13 +110,14 @@ isolated documentation checkpoints while the remaining manual packaged-GUI
 evidence is collected. Do not produce a second minor bump merely to record
 manual evidence.
 
-The post-`v1.4.0` stabilization tranche now includes source fixes that must
-reach public desktop artifacts: request-owned cancellation and shutdown joins,
-bounded Windows lifecycle smoke, hardened Docker browser fallback, passive
-renderer observer cleanup, idle task-expiry disarming, idle request-log
-retention write avoidance, and empty-pool health-pinger disarming. Keep the
-tested `v1.4.0` tag immutable and close artifact parity with the normal patch
-lane as `v1.4.1`.
+The post-`v1.4.0` stabilization tranche reached public desktop artifacts as
+`v1.4.2`: request-owned cancellation and shutdown joins, bounded Windows
+lifecycle smoke, hardened Docker browser fallback, passive renderer observer
+cleanup, idle task-expiry disarming, idle request-log retention write
+avoidance, and empty-pool health-pinger disarming. Keep the tested `v1.4.0`,
+failed `v1.4.1`, and published `v1.4.2` tags immutable. Follow-up refinements,
+including demand-driven request-log retention scheduling after empty startup,
+remain `[skip-bump]` checkpoints until the next normal patch lane is selected.
 
 The first `v1.4.1` tag exposed a pre-publication gate cycle before any desktop
 artifact uploaded: `hydra audit` correctly reported that current-version Intel
