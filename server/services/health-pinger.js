@@ -40,6 +40,7 @@ async function pingRandomKey() {
     ctrl = new AbortController();
     activeController = ctrl;
     timeoutId = setTimeout(() => ctrl.abort(), PING_TIMEOUT_MS);
+    timeoutId.unref?.();
 
     const res = await fetch(`${OR_BASE}${PING_PATH}`, {
       method: 'GET',

@@ -359,12 +359,12 @@ test('dashboard Playwright automation soft failures are logged', () => {
   assert.match(automationNetwork, /bypass: LOCAL_PROXY_BYPASS/);
   assert.match(automationNetwork, /ProxyAgent/);
   assert.match(source, /fetchOptionsWithAutomationProxy/);
-  assert.match(source, /tryManagementKeyServerActionReplay\(sessionCookie, clientCookie, keyName, automationRoute\)/);
-  assert.match(source, /tryRestApiCreateKey\(sessionCookie, clientCookie, keyName, automationRoute\)/);
-  assert.match(source, /redeemCodeViaServerAction\(sessionCookie, clientCookie, code, automationRoute\)/);
-  assert.match(source, /trpcCall\(route, input, sessionCookie, clientCookie, headerOverrides, \{ accountProxy: context\.accountProxy \}\)/);
-  assert.match(source, /tryRestApiRedeemCode\(sessionCookie, clientCookie, code, automationRoute\)/);
-  assert.match(source, /redeemCodeViaPlaywright\(userId, accountId, sessionCookie, clientCookie, code, automationRoute\)/);
+  assert.match(source, /tryManagementKeyServerActionReplay\(sessionCookie, clientCookie, keyName, automationRoute, signal\)/);
+  assert.match(source, /tryRestApiCreateKey\(sessionCookie, clientCookie, keyName, automationRoute, signal\)/);
+  assert.match(source, /redeemCodeViaServerAction\(sessionCookie, clientCookie, code, automationRoute, signal\)/);
+  assert.match(source, /trpcCall\(route, input, sessionCookie, clientCookie, headerOverrides, \{\s*accountProxy: context\.accountProxy,\s*signal: context\.signal,/);
+  assert.match(source, /tryRestApiRedeemCode\(sessionCookie, clientCookie, code, automationRoute, signal\)/);
+  assert.match(source, /redeemCodeViaPlaywright\(userId, accountId, sessionCookie, clientCookie, code, automationRoute, signal\)/);
   assert.match(source, /syncApiKeysViaPlaywright\(sessionCookie, clientCookie, automationRoute\)/);
   assert.match(source, /Using account proxy \$\{describeAutomationNetworkRoute\(automationRoute\)\} for management-key automation account=\$\{accountId\}/);
   assert.match(source, /Using account proxy \$\{describeAutomationNetworkRoute\(automationRoute\)\} for code redemption account=\$\{accountId\}/);
@@ -469,7 +469,7 @@ test('CLI, telemetry, and proxy soft failures are logged', () => {
   assert.match(openrouter, /Account snapshot credits lookup failed: \$\{err\?\.message \|\| err\}/);
   assert.match(openrouter, /Account snapshot key list lookup failed: \$\{err\?\.message \|\| err\}/);
   assert.match(openrouter, /DEFAULT_TIMEOUT_MS = 30000/);
-  assert.match(openrouter, /fetchOptions\.signal = AbortSignal\.timeout\(timeoutMs\)/);
+  assert.match(openrouter, /fetchOptions\.signal = combineAbortSignals\(signal, AbortSignal\.timeout\(timeoutMs\)\)/);
   assert.match(openrouter, /OpenRouter API request timed out after \$\{timeoutMs\}ms: \$\{path\}/);
   assert.doesNotMatch(openrouter, /getCredits\(managementKey\)\.catch\(\(\) => \(\{ total: 0, used: 0, remaining: 0 \}\)\)/);
   assert.doesNotMatch(openrouter, /listKeys\(managementKey\)\.catch\(\(\) => \[\]\)/);
@@ -565,7 +565,7 @@ test('OpenRouter model-list cache requests are timeout bounded', () => {
   );
 
   assert.match(source, /MODEL_LIST_TIMEOUT_MS = 30000/);
-  assert.match(source, /signal: AbortSignal\.timeout\(MODEL_LIST_TIMEOUT_MS\)/);
+  assert.match(source, /signal: combineAbortSignals\(signal, AbortSignal\.timeout\(MODEL_LIST_TIMEOUT_MS\)\)/);
   assert.match(source, /CLIENT_MODEL_CACHE_TTL_MS/);
   assert.match(source, /let clientModelCache = \{/);
   assert.match(source, /let poolModelCache = \{/);

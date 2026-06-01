@@ -15,12 +15,14 @@ import https from 'node:https';
 import { URL } from 'node:url';
 import { randomUserAgent, CLERK_BASE, CLERK_ORIGIN, CLERK_REFERER, OR_BASE } from '../config.js';
 import { logger } from './logger.js';
+import { combineAbortSignals, sleepWithSignal, throwIfAborted } from '../lib/abort.js';
 
 // Clerk JS version sent with all FAPI requests.
 // Real version per: curl https://clerk.openrouter.ai/npm/@clerk/clerk-js@5/package.json
 // OpenRouter's Clerk instance checks major version only, so 5.x.x all work.
 // Override with HYDRA_CLERK_JS_VERSION env var if OpenRouter upgrades to v6+.
 const CLERK_JS_VERSION = process.env.HYDRA_CLERK_JS_VERSION || '5.125.7';
+const CLERK_REQUEST_TIMEOUT_MS = 15_000;
 
 import {
   parseCookies,
@@ -129,8 +131,8 @@ function extractJwtFromClientLikeObject(root) {
   return null;
 }
 
-function sleepMs(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+function sleepMs(ms, signal = null) {
+  return sleepWithSignal(ms, signal);
 }
 
 /**
@@ -139,7 +141,7 @@ function sleepMs(ms) {
  * @param {string} clientCookie
  * @returns {{ data: object, setCookieLines: string[], clientCookie: string }}
  */
-async function touchClerkSession(sessionId, clientCookie) {
+async function touchClerkSession(sessionId, clientCookie, { signal = null } = {}) {
   const path = `client/sessions/${encodeURIComponent(sessionId)}/touch?_clerk_js_version=${CLERK_JS_VERSION}`;
   const { data, setCookieLines } = await clerkHttpsJson('POST', path, {
     cookieClient: clientCookie,
@@ -148,6 +150,7 @@ async function touchClerkSession(sessionId, clientCookie) {
       Referer: CLERK_REFERER,
     },
     body: formBody({}),
+    signal,
   });
   const cc = clientCookieAfterSetCookieLines(clientCookie, setCookieLines);
   return { data, setCookieLines, clientCookie: cc };
@@ -186,7 +189,7 @@ function logClerkDebugSignInSessionHints(label, result) {
  * @param {{ cookieClient?: string, extraHeaders?: Record<string, string>, body?: string }} opts
  */
 function clerkHttpsJson(method, pathAndQuery, opts = {}) {
-  const { cookieClient, sessionCookie, extraHeaders = {}, body } = opts;
+  const { cookieClient, sessionCookie, extraHeaders = {}, body, signal = null } = opts;
   const url = new URL(pathAndQuery.replace(/^\//, ''), `${CLERK_BASE}/`);
   const headers = {
     'User-Agent': randomUserAgent(),
@@ -211,6 +214,7 @@ function clerkHttpsJson(method, pathAndQuery, opts = {}) {
         path: url.pathname + url.search,
         method,
         headers,
+        signal: combineAbortSignals(signal, AbortSignal.timeout(CLERK_REQUEST_TIMEOUT_MS)),
       },
       (res) => {
         const chunks = [];
@@ -267,7 +271,7 @@ function clientCookieAfterResponse(prior, headers) {
  * raw node https still exposes headers['set-cookie'] reliably.
  */
 /** @returns {Promise<string[]>} raw Set-Cookie lines */
-function fetchClerkClientCookieViaHttps() {
+function fetchClerkClientCookieViaHttps(signal = null) {
   return new Promise((resolve, reject) => {
     const u = new URL(`${CLERK_BASE}/client`);
     u.searchParams.set('_clerk_js_version', CLERK_JS_VERSION);
@@ -276,6 +280,7 @@ function fetchClerkClientCookieViaHttps() {
         hostname: u.hostname,
         path: u.pathname + u.search,
         method: 'GET',
+        signal: combineAbortSignals(signal, AbortSignal.timeout(CLERK_REQUEST_TIMEOUT_MS)),
         headers: {
           'User-Agent': randomUserAgent(),
           Origin: CLERK_ORIGIN,
@@ -305,13 +310,14 @@ function deviceJarFromBootstrapLines(lines) {
   return jar;
 }
 
-async function obtainClerkClientCookie() {
+async function obtainClerkClientCookie({ signal = null } = {}) {
   const clientRes = await fetch(`${CLERK_BASE}/client?_clerk_js_version=${CLERK_JS_VERSION}`, {
     headers: {
       'User-Agent': randomUserAgent(),
       'Origin': CLERK_ORIGIN,
       'Referer': CLERK_REFERER,
     },
+    signal: combineAbortSignals(signal, AbortSignal.timeout(CLERK_REQUEST_TIMEOUT_MS)),
   });
 
   const lines1 = getSetCookieHeaderLines(clientRes.headers);
@@ -320,13 +326,14 @@ async function obtainClerkClientCookie() {
   try {
     await clientRes.text();
   } catch {
+    throwIfAborted(signal);
     /* drain body for undici connection reuse */
   }
 
   if (!jar.__client) {
     logger.warn('[CLERK] fetch() did not expose __client cookie; retrying bootstrap via https');
     try {
-      const lines2 = await fetchClerkClientCookieViaHttps();
+      const lines2 = await fetchClerkClientCookieViaHttps(signal);
       jar = mergeDeviceJar(jar, lines2);
       const p2 = parseCookies(lines2);
       const c = p2['__client']?.trim();
@@ -335,6 +342,7 @@ async function obtainClerkClientCookie() {
       else if (uat && uat !== '0' && (uat.length > 20 || uat.startsWith('eyJ'))) jar.__client = uat;
       if (uat) jar.__client_uat = uat;
     } catch (err) {
+      throwIfAborted(signal);
       logger.error(`[CLERK] https bootstrap failed: ${err.message}`);
     }
   }
@@ -431,8 +439,8 @@ function emailAddressIdFromEmailCodeFactor(factor) {
  * @param {string} email
  * @returns {{ signInId, clientCookie, strategies, method, emailAddressId }}
  */
-export async function detectAuthMethod(email) {
-  let clientCookie = await obtainClerkClientCookie();
+export async function detectAuthMethod(email, { signal = null } = {}) {
+  let clientCookie = await obtainClerkClientCookie({ signal });
 
   // Step 1b: POST /v1/client/sign_ins with just the identifier to get strategies
   const signInRes = await fetch(`${CLERK_BASE}/client/sign_ins?_clerk_js_version=${CLERK_JS_VERSION}`, {
@@ -445,6 +453,7 @@ export async function detectAuthMethod(email) {
       'Referer': CLERK_REFERER,
     },
     body: formBody({ identifier: email }),
+    signal: combineAbortSignals(signal, AbortSignal.timeout(CLERK_REQUEST_TIMEOUT_MS)),
   });
 
   clientCookie = clientCookieAfterResponse(clientCookie, signInRes.headers);
@@ -487,8 +496,8 @@ export async function detectAuthMethod(email) {
  * @param {string} password
  * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
  */
-export async function signInWithPassword(email, password) {
-  let { signInId, clientCookie } = await detectAuthMethod(email);
+export async function signInWithPassword(email, password, { signal = null } = {}) {
+  let { signInId, clientCookie } = await detectAuthMethod(email, { signal });
 
   const attemptPath = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_first_factor?_clerk_js_version=${CLERK_JS_VERSION}`;
   const { data: attemptData, setCookieLines } = await clerkHttpsJson('POST', attemptPath, {
@@ -498,6 +507,7 @@ export async function signInWithPassword(email, password) {
       Referer: CLERK_REFERER,
     },
     body: formBody({ strategy: 'password', password }),
+    signal,
   });
 
   const clientCookiePrior = clientCookie;
@@ -522,6 +532,7 @@ export async function signInWithPassword(email, password) {
     clientCookiePrior,
     signInId,
     'password',
+    { signal },
   );
   if (!resolved) throw new Error('No __session cookie returned');
   return resolved;
@@ -544,10 +555,11 @@ const GET_CLIENT_RETRY_MS_OTP = 200;
  * @param {{ debugPhase?: string, maxAttempts?: number, retryMs?: number }} [opts]
  * @returns {{ sessionCookie, clientCookie, sessionExpiry, setCookieLines } | null}
  */
-async function clerkGetClientSession(clientCookie, sessionCookie, { debugPhase = 'client', maxAttempts = 1, retryMs = 150 } = {}) {
+async function clerkGetClientSession(clientCookie, sessionCookie, { debugPhase = 'client', maxAttempts = 1, retryMs = 150, signal = null } = {}) {
   let cc = clientCookie;
   let lastSetCookieLines = [];
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    throwIfAborted(signal);
     const { statusCode, data, setCookieLines } = await clerkHttpsJson('GET', `client?_clerk_js_version=${CLERK_JS_VERSION}`, {
       cookieClient: cc,
       sessionCookie, // Pass session for refresh
@@ -555,6 +567,7 @@ async function clerkGetClientSession(clientCookie, sessionCookie, { debugPhase =
         Origin: CLERK_ORIGIN,
         Referer: CLERK_REFERER,
       },
+      signal,
     });
     logClerkDebugGetClient(`${debugPhase} attempt ${attempt}/${maxAttempts}`, { statusCode, data, setCookieLines });
     logClerkDebugSignInSessionHints(`${debugPhase} GET /client`, data.response || data.client?.sign_in);
@@ -564,7 +577,7 @@ async function clerkGetClientSession(clientCookie, sessionCookie, { debugPhase =
     let newSessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
     if (!newSessionCookie) newSessionCookie = sessionJwtFromClerkClientPayload(data);
     if (newSessionCookie) return { sessionCookie: newSessionCookie, clientCookie: cc, sessionExpiry: realisticSessionExpiry(), setCookieLines: lastSetCookieLines };
-    if (attempt < maxAttempts) await sleepMs(retryMs);
+    if (attempt < maxAttempts) await sleepMs(retryMs, signal);
   }
   return null;
 }
@@ -574,13 +587,14 @@ async function clerkGetClientSession(clientCookie, sessionCookie, { debugPhase =
  * Retries GET /client a few times when the first response has no session (timing / propagation).
  * OTP/2FA paths use a longer window (8 × 500ms = 4s) since Clerk propagation is slower after email codes.
  */
-async function getSessionToken(signInId, clientCookie, debugPhase = 'fallback', { maxAttempts, retryMs } = {}) {
+async function getSessionToken(signInId, clientCookie, debugPhase = 'fallback', { maxAttempts, retryMs, signal = null } = {}) {
   const phase = `${debugPhase} signIn=${String(signInId).slice(0, 12)}…`;
   const isOtpPath = /^(otp|2fa)\b/i.test(debugPhase);
   return clerkGetClientSession(clientCookie, {
     debugPhase: phase,
     maxAttempts: maxAttempts ?? (isOtpPath ? GET_CLIENT_MAX_ATTEMPTS_OTP : GET_CLIENT_MAX_ATTEMPTS),
     retryMs: retryMs ?? (isOtpPath ? GET_CLIENT_RETRY_MS_OTP : GET_CLIENT_RETRY_MS),
+    signal,
   });
 }
 
@@ -589,7 +603,7 @@ async function getSessionToken(signInId, clientCookie, debugPhase = 'fallback', 
  * optional POST .../sessions/{id}/touch (browser setActive parity), then GET /client fallback.
  * @returns {{ sessionCookie, clientCookie, sessionExpiry, setCookieLines } | null}
  */
-async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, clientCookieIn, signInId, debugLabel) {
+async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, clientCookieIn, signInId, debugLabel, { signal = null } = {}) {
   let cc = clientCookieAfterSetCookieLines(clientCookieIn, setCookieLines);
   let sessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
   if (!sessionCookie) sessionCookie = sessionJwtFromClerkClientPayload(attemptData);
@@ -608,7 +622,7 @@ async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, 
       );
     }
     try {
-      const touch = await touchClerkSession(createdId, cc);
+      const touch = await touchClerkSession(createdId, cc, { signal });
       cc = touch.clientCookie;
       if (touch.data?.errors?.length) {
         logger.warn(`[CLERK] session touch (${debugLabel}): ${clerkApiErrorText(touch.data.errors)}`);
@@ -625,12 +639,13 @@ async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, 
         allSetCookieLines = [...allSetCookieLines, ...touch.setCookieLines];
       }
     } catch (err) {
+      throwIfAborted(signal);
       logger.warn(`[CLERK] session touch (${debugLabel}) failed: ${err.message}`);
     }
   }
 
   if (!sessionCookie) {
-    const tokenResult = await getSessionToken(signInId, cc, debugLabel);
+    const tokenResult = await getSessionToken(signInId, cc, debugLabel, { signal });
     if (tokenResult?.setCookieLines) {
       allSetCookieLines = [...allSetCookieLines, ...tokenResult.setCookieLines];
     }
@@ -646,8 +661,8 @@ async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, 
  * @param {string} email
  * @returns {{ signInId, clientCookie, emailAddressId }}
  */
-export async function startEmailOTP(email) {
-  const { isSignUp, signUpId, signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email);
+export async function startEmailOTP(email, { signal = null } = {}) {
+  const { isSignUp, signUpId, signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email, { signal });
 
   if (isSignUp) {
     // New account: send OTP via sign_up email verification path.
@@ -658,6 +673,7 @@ export async function startEmailOTP(email) {
         cookieClient: clientCookie,
         extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
         body: formBody({ strategy: 'email_code' }),
+        signal,
       }
     );
     const mergedClient = clientCookieAfterSetCookieLines(clientCookie, setCookieLines);
@@ -690,6 +706,7 @@ export async function startEmailOTP(email) {
         'Referer': CLERK_REFERER,
       },
       body: formBody({ strategy: 'email_code', email_address_id: emailAddressId }),
+      signal: combineAbortSignals(signal, AbortSignal.timeout(CLERK_REQUEST_TIMEOUT_MS)),
     }
   );
 
@@ -718,8 +735,8 @@ export async function startEmailOTP(email) {
  * @param {string} redirectUrl  e.g. "http://localhost:3001/api/auth/magic-callback?accountId=xxx"
  * @returns {{ signInId, clientCookie, emailAddressId }}
  */
-export async function sendMagicLink(email, redirectUrl) {
-  const { isSignUp, signUpId, signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email);
+export async function sendMagicLink(email, redirectUrl, { signal = null } = {}) {
+  const { isSignUp, signUpId, signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email, { signal });
 
   if (isSignUp) {
     // New account: send magic link via sign_up email verification path.
@@ -729,6 +746,7 @@ export async function sendMagicLink(email, redirectUrl) {
         cookieClient: clientCookie,
         extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
         body: formBody({ strategy: 'email_link', redirect_url: redirectUrl }),
+        signal,
       }
     );
     const mergedClient = clientCookieAfterSetCookieLines(clientCookie, setCookieLines);
@@ -763,6 +781,7 @@ export async function sendMagicLink(email, redirectUrl) {
         email_address_id: emailAddressId,
         redirect_url: redirectUrl,
       }),
+      signal: combineAbortSignals(signal, AbortSignal.timeout(CLERK_REQUEST_TIMEOUT_MS)),
     }
   );
 
@@ -789,7 +808,7 @@ export async function sendMagicLink(email, redirectUrl) {
  * @param {string} clientCookie
  * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
  */
-export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp } = {}) {
+export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp, signal = null } = {}) {
   if (isSignUp) {
     // signInId is actually signUpId when isSignUp=true (repurposed field for backward compat)
     const signUpId = signInId;
@@ -801,6 +820,7 @@ export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp 
         cookieClient: clientCookie,
         extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
         body: formBody({ strategy: 'email_code', code }),
+        signal,
       }
     );
 
@@ -821,6 +841,7 @@ export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp 
             cookieClient: cc,
             extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
             body: formBody({ username }),
+            signal,
           }
         );
         cc = clientCookieAfterSetCookieLines(cc, usl);
@@ -837,7 +858,7 @@ export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp 
     let sessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
 
     if (!sessionCookie && createdSessionId) {
-      const touch = await touchClerkSession(createdSessionId, cc);
+      const touch = await touchClerkSession(createdSessionId, cc, { signal });
       cc = touch.clientCookie;
       sessionCookie = sessionCookieFromSetCookieLines(touch.setCookieLines);
       if (!sessionCookie) sessionCookie = sessionJwtFromClerkClientPayload(touch.data);
@@ -848,6 +869,7 @@ export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp 
         debugPhase: 'signup-otp',
         maxAttempts: GET_CLIENT_MAX_ATTEMPTS_OTP,
         retryMs: GET_CLIENT_RETRY_MS_OTP,
+        signal,
       });
       if (!tokenResult) throw new Error('Sign-up complete but no session returned. Set CLERK_DEBUG_OTP=1 and retry.');
       return tokenResult;
@@ -865,6 +887,7 @@ export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp 
       Referer: CLERK_REFERER,
     },
     body: formBody({ strategy: 'email_code', code }),
+    signal,
   });
 
   if (clerkDebugOtpEnabled()) {
@@ -887,7 +910,7 @@ export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp 
     throw new Error(`Sign-in incomplete after OTP: status=${result.status ?? 'unknown'}`);
   }
 
-  const resolved = await resolveSessionAfterCompletedAttempt(data, setCookieLines, clientCookie, signInId, 'otp');
+  const resolved = await resolveSessionAfterCompletedAttempt(data, setCookieLines, clientCookie, signInId, 'otp', { signal });
   if (!resolved) {
     throw new Error(
       'Clerk sign-in completed after OTP but no __session was returned (Set-Cookie or client payload). Set CLERK_DEBUG_OTP=1 and retry.',
@@ -906,7 +929,7 @@ export async function completeEmailOTP(signInId, code, clientCookie, { isSignUp 
  * @param {string} [clerkTicket] - the __clerk_ticket query param from the redirect URL (if available)
  * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
  */
-export async function completeEmailLink(signInId, clientCookie, clerkTicket, { isSignUp } = {}) {
+export async function completeEmailLink(signInId, clientCookie, clerkTicket, { isSignUp, signal = null } = {}) {
   if (isSignUp) {
     // signInId is actually signUpId for sign_up path
     const signUpId = signInId;
@@ -919,6 +942,7 @@ export async function completeEmailLink(signInId, clientCookie, clerkTicket, { i
         body: clerkTicket
           ? formBody({ strategy: 'email_link', token: clerkTicket })
           : formBody({ strategy: 'email_link' }),
+        signal,
       }
     );
 
@@ -939,6 +963,7 @@ export async function completeEmailLink(signInId, clientCookie, clerkTicket, { i
             cookieClient: cc,
             extraHeaders: { Origin: CLERK_ORIGIN, Referer: CLERK_REFERER },
             body: formBody({ username }),
+            signal,
           }
         );
         cc = clientCookieAfterSetCookieLines(cc, usl);
@@ -954,7 +979,7 @@ export async function completeEmailLink(signInId, clientCookie, clerkTicket, { i
     let sessionCookie = sessionCookieFromSetCookieLines(setCookieLines);
 
     if (!sessionCookie && createdSessionId) {
-      const touch = await touchClerkSession(createdSessionId, cc);
+      const touch = await touchClerkSession(createdSessionId, cc, { signal });
       cc = touch.clientCookie;
       sessionCookie = sessionCookieFromSetCookieLines(touch.setCookieLines);
       if (!sessionCookie) sessionCookie = sessionJwtFromClerkClientPayload(touch.data);
@@ -965,6 +990,7 @@ export async function completeEmailLink(signInId, clientCookie, clerkTicket, { i
         debugPhase: 'signup-magic-link',
         maxAttempts: GET_CLIENT_MAX_ATTEMPTS_OTP,
         retryMs: GET_CLIENT_RETRY_MS_OTP,
+        signal,
       });
       if (!tokenResult) throw new Error('Clerk magic link sign-up completed but no session returned.');
       return tokenResult;
@@ -986,6 +1012,7 @@ export async function completeEmailLink(signInId, clientCookie, clerkTicket, { i
       Referer: CLERK_REFERER,
     },
     body,
+    signal,
   });
 
   if (data.errors?.length) throw new Error(`Magic link error: ${clerkApiErrorText(data.errors)}`);
@@ -996,7 +1023,7 @@ export async function completeEmailLink(signInId, clientCookie, clerkTicket, { i
     throw new Error(`Magic link sign-in incomplete: status=${result.status ?? 'unknown'}`);
   }
 
-  const resolved = await resolveSessionAfterCompletedAttempt(data, setCookieLines, clientCookie, signInId, 'email_link');
+  const resolved = await resolveSessionAfterCompletedAttempt(data, setCookieLines, clientCookie, signInId, 'email_link', { signal });
   if (!resolved) {
     throw new Error('Clerk magic link completed but no __session cookie returned. This may be a Clerk config issue.');
   }
@@ -1011,7 +1038,7 @@ export async function completeEmailLink(signInId, clientCookie, clerkTicket, { i
  * @param {string} clientCookie
  * @returns {{ sessionCookie, clientCookie, sessionExpiry }}
  */
-export async function completeSecondFactor(signInId, totpCode, clientCookie) {
+export async function completeSecondFactor(signInId, totpCode, clientCookie, { signal = null } = {}) {
   const path2 = `client/sign_ins/${encodeURIComponent(signInId)}/attempt_second_factor?_clerk_js_version=${CLERK_JS_VERSION}`;
   const { data, setCookieLines } = await clerkHttpsJson('POST', path2, {
     cookieClient: clientCookie,
@@ -1020,6 +1047,7 @@ export async function completeSecondFactor(signInId, totpCode, clientCookie) {
       Referer: CLERK_REFERER,
     },
     body: formBody({ strategy: 'totp', code: totpCode }),
+    signal,
   });
 
   if (data.errors?.length) throw new Error(`2FA error: ${clerkApiErrorText(data.errors)}`);
@@ -1029,7 +1057,7 @@ export async function completeSecondFactor(signInId, totpCode, clientCookie) {
     throw new Error(`2FA incomplete: status=${result2?.status ?? 'unknown'}`);
   }
 
-  const resolved = await resolveSessionAfterCompletedAttempt(data, setCookieLines, clientCookie, signInId, '2fa');
+  const resolved = await resolveSessionAfterCompletedAttempt(data, setCookieLines, clientCookie, signInId, '2fa', { signal });
   if (!resolved) throw new Error('2FA complete but no session cookie or embedded JWT');
   return resolved;
 }
@@ -1047,21 +1075,24 @@ export async function completeSecondFactor(signInId, totpCode, clientCookie) {
  * @param {string} [sessionCookie] - Optional expired __session cookie (highly recommended for refresh)
  * @returns {{ sessionCookie, clientCookie, sessionExpiry, deadClientCookies? } | null}
  */
-export async function refreshSession(clientCookie, sessionCookie) {
+export async function refreshSession(clientCookie, sessionCookie, { signal = null } = {}) {
   // Exploit #14: If caller passes a stacked array, try newest-first
   if (Array.isArray(clientCookie) && clientCookie.length > 0) {
     const deadClientCookies = [];
     for (const entry of clientCookie) {
+      throwIfAborted(signal);
       try {
         const result = await clerkGetClientSession(entry.cookie, sessionCookie, {
           debugPhase: 'refresh',
           maxAttempts: GET_CLIENT_MAX_ATTEMPTS,
           retryMs: GET_CLIENT_RETRY_MS,
+          signal,
         });
         if (result) {
           return { ...result, deadClientCookies };
         }
       } catch {
+        throwIfAborted(signal);
         // This cookie is dead — record it
       }
       deadClientCookies.push(entry);
@@ -1076,8 +1107,10 @@ export async function refreshSession(clientCookie, sessionCookie) {
       debugPhase: 'refresh',
       maxAttempts: GET_CLIENT_MAX_ATTEMPTS,
       retryMs: GET_CLIENT_RETRY_MS,
+      signal,
     });
   } catch {
+    throwIfAborted(signal);
     return null;
   }
 }
@@ -1107,16 +1140,18 @@ export function isSessionValid(sessionExpiry) {
 /**
  * Validate a session cookie by calling the OpenRouter credits API
  */
-export async function validateSession(sessionCookie) {
+export async function validateSession(sessionCookie, { signal = null } = {}) {
   try {
     const res = await fetch(`${OR_BASE}/api/v1/credits`, {
       headers: {
         'Cookie': `__session=${sessionCookie}`,
         'User-Agent': randomUserAgent(),
       },
+      signal: combineAbortSignals(signal, AbortSignal.timeout(CLERK_REQUEST_TIMEOUT_MS)),
     });
     return res.status !== 401 && res.status !== 403;
   } catch (err) {
+    throwIfAborted(signal);
     logger.error(`[CLERK] Session validation failed: ${err.message}`);
     return false;
   }

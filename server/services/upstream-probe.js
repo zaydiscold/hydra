@@ -11,6 +11,7 @@ export async function probeOpenRouterReachability({ timeoutMs = DEFAULT_TIMEOUT_
   probeInFlight = (async () => {
     const ctrl = new AbortController();
     const timeoutId = setTimeout(() => ctrl.abort(), timeoutMs);
+    timeoutId.unref?.();
     try {
       const res = await fetch(`${OR_BASE}${PROBE_PATH}`, {
         method: 'GET',

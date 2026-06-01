@@ -23,6 +23,7 @@ import * as store from './store.js';
 import { logger } from './logger.js';
 import { getCredits } from './openrouter.js';
 import { runInBatches } from './batch-runner.js';
+import { combineAbortSignals, sleepWithSignal, throwIfAborted } from '../lib/abort.js';
 import {
   cleanupEphemeralProfileDir,
   launchChromiumPersistentContext,
@@ -139,11 +140,12 @@ const SA_KEYWORDS = ['redeem', 'management-keys', 'managementKey', 'createManage
  * fetch each JS bundle, and return an array of 40-char hex candidates
  * found near any of SA_KEYWORDS.
  */
-async function discoverServerActionHashes(pageUrl, accountProxy = null) {
+async function discoverServerActionHashes(pageUrl, accountProxy = null, signal = null) {
   try {
+    throwIfAborted(signal);
     const pageRes = await fetch(pageUrl, fetchOptionsWithAccountProxy({
       headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(15000),
+      signal: combineAbortSignals(signal, AbortSignal.timeout(15000)),
     }, accountProxy));
     if (!pageRes.ok) return [];
     const html = await pageRes.text();
@@ -162,9 +164,10 @@ async function discoverServerActionHashes(pageUrl, accountProxy = null) {
     // Fetch each bundle and grep for hex strings near keywords
     const fetches = scriptUrls.map(async (url) => {
       try {
+        throwIfAborted(signal);
         const jsRes = await fetch(url, fetchOptionsWithAccountProxy({
           headers: { 'User-Agent': USER_AGENT },
-          signal: AbortSignal.timeout(10000),
+          signal: combineAbortSignals(signal, AbortSignal.timeout(10000)),
         }, accountProxy));
         if (!jsRes.ok) {
           dashboardWarn(`[dashboard-api] Hash auto-discovery bundle fetch returned HTTP ${jsRes.status}: ${url}`);
@@ -186,12 +189,14 @@ async function discoverServerActionHashes(pageUrl, accountProxy = null) {
           }
         }
       } catch (err) {
+        throwIfAborted(signal);
         dashboardWarn(`[dashboard-api] Hash auto-discovery bundle fetch failed for ${url}: ${err?.message || err}`);
       }
     });
     await Promise.allSettled(fetches);
     return [...candidates];
   } catch (err) {
+    throwIfAborted(signal);
     dashboardWarn(`[dashboard-api] Hash auto-discovery page fetch failed: ${err.message}`);
     return [];
   }
@@ -205,22 +210,23 @@ async function discoverServerActionHashes(pageUrl, accountProxy = null) {
  * @param {string} body - Request body
  * @returns {string|null} The new hash if found, or null
  */
-async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = null) {
+async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = null, signal = null) {
   const pageUrl = kind === 'redeem'
     ? `${OR_BASE}/redeem`
     : `${OR_BASE}/settings/management-keys`;
 
   dashboardWarn(`[dashboard-api] ⚡ Self-healing ${kind} hash — scanning ${pageUrl} JS bundles…`);
-  const candidates = await discoverServerActionHashes(pageUrl, accountProxy);
+  const candidates = await discoverServerActionHashes(pageUrl, accountProxy, signal);
 
   for (const candidate of candidates) {
+    throwIfAborted(signal);
     try {
       const probeHeaders = { ...baseHeaders, 'Next-Action': candidate };
       const probeRes = await fetch(testUrl, fetchOptionsWithAccountProxy({
         method: 'POST',
         headers: probeHeaders,
         body,
-        signal: AbortSignal.timeout(10000),
+        signal: combineAbortSignals(signal, AbortSignal.timeout(10000)),
       }, accountProxy));
       // Non-404 means the hash was accepted (even if the action returns an
       // application-level error like "invalid code", it confirms the route).
@@ -234,6 +240,7 @@ async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = nul
         return candidate;
       }
     } catch (err) {
+      throwIfAborted(signal);
       dashboardWarn(`[dashboard-api] Self-heal ${kind} hash probe failed for candidate ${candidate}: ${err?.message || err}`);
     }
   }
@@ -446,11 +453,11 @@ function summarizeTrpcFailure(err) {
  * @param {string} keyName - Name for the management key
  * @returns {Promise<string|null>} - The created key or null
  */
-async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute = null) {
+async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute = null, signal = null) {
   dashboardError('[dashboard-api] Attempting Server Action replay for management key creation');
 
   // Get fresh JWT before making the call - OTP sessions have short-lived JWTs (60s)
-  const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+  const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal });
   const jwtToUse = freshJwt || sessionCookie;
 
   if (provisionStepLogEnabled()) {
@@ -501,6 +508,7 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
     const headers = buildHeaders(attempt.contentType);
 
     for (const body of attempt.payloads) {
+      throwIfAborted(signal);
       try {
         if (provisionStepLogEnabled()) {
           dashboardError(`[tryManagementKeyServerActionReplay] POST ${url} with content-type=${attempt.contentType}, body=${body.slice(0, 100)}`);
@@ -510,6 +518,7 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
           method: 'POST',
           headers,
           body,
+          signal,
         }, automationRoute));
 
         const contentType = res.headers.get('content-type') || '';
@@ -529,13 +538,14 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
         // A 404 specifically means the Next-Action hash is stale — try self-healing once
         if (res.status === 404) {
           dashboardWarn('[dashboard-api] Mgmt-key Server Action returned 404 — hash may be stale, attempting self-heal…');
-          const newHash = await selfHealHash('mgmt-key', url, headers, body, automationRoute);
+          const newHash = await selfHealHash('mgmt-key', url, headers, body, automationRoute, signal);
           if (newHash) {
             // Retry with the discovered hash
             const retryRes = await fetch(url, fetchOptionsWithAccountProxy({
               method: 'POST',
               headers: { ...headers, 'Next-Action': newHash },
               body,
+              signal,
             }, automationRoute));
             if (retryRes.ok || retryRes.status === 200) {
               const { text: retryText, error: retryReadErr } = await safeResponseText(retryRes, 50000);
@@ -580,6 +590,7 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
         }
 
       } catch (err) {
+        throwIfAborted(signal);
         dashboardWarn(`[dashboard-api] Server Action replay attempt failed: ${err.message}`);
         if (provisionStepLogEnabled()) {
           dashboardError(`[tryManagementKeyServerActionReplay] Error details:`, err);
@@ -655,7 +666,8 @@ const _jwtCache = new Map(); // sessionCookie → { token, expiresAt }
  * @param {string} clientCookie - Client cookie with __client and Cloudflare cookies
  * @returns {Promise<string|null>} Fresh JWT or null if refresh failed
  */
-export async function getFreshJwt(sessionCookie, clientCookie) {
+export async function getFreshJwt(sessionCookie, clientCookie, { signal = null } = {}) {
+  throwIfAborted(signal);
   const cached = _jwtCache.get(sessionCookie);
   if (cached && Date.now() < cached.expiresAt - 10000) {
     return cached.token;
@@ -673,6 +685,7 @@ export async function getFreshJwt(sessionCookie, clientCookie) {
         'Referer': 'https://openrouter.ai/',
         'User-Agent': USER_AGENT,
       },
+      signal: combineAbortSignals(signal, AbortSignal.timeout(15000)),
     });
     
     if (!res.ok) {
@@ -693,6 +706,7 @@ export async function getFreshJwt(sessionCookie, clientCookie) {
     dashboardError('[getFreshJwt] No JWT in /client response');
     return null;
   } catch (err) {
+    throwIfAborted(signal);
     dashboardError(`[getFreshJwt] Error: ${err.message}`);
     return null;
   }
@@ -731,7 +745,8 @@ function dashboardHeaders(sessionCookie, clientCookie, extra = {}) {
   };
 }
 
-export async function ensureSession(userId, accountId) {
+export async function ensureSession(userId, accountId, { signal = null } = {}) {
+  throwIfAborted(signal);
   const account = await store.getAccountWithKey(userId, accountId);
   const session = await store.getAccountSession(userId, accountId);
 
@@ -753,7 +768,7 @@ export async function ensureSession(userId, accountId) {
       const refreshInput14 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
       if (remainingMs < 5 * 60 * 1000 && (session.clientCookie || session.clientCookies?.length > 0)) {
         logger.info(`[ensureSession] JWT expires in ${Math.round(remainingMs/1000)}s, refreshing proactively`);
-        const refreshed = await refreshSession(refreshInput14, session.sessionCookie);
+        const refreshed = await refreshSession(refreshInput14, session.sessionCookie, { signal });
         if (refreshed) {
           const liveStack = Array.isArray(session.clientCookies) && session.clientCookies.length > 0
             ? (Array.isArray(refreshed.deadClientCookies) && refreshed.deadClientCookies.length > 0
@@ -788,7 +803,7 @@ export async function ensureSession(userId, accountId) {
   const refreshInput14b = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
   if (refreshInput14b) {
     logger.info(`[ensureSession] JWT expired, refreshing via __client cookie(s)`);
-    const refreshed = await refreshSession(refreshInput14b, session.sessionCookie);
+    const refreshed = await refreshSession(refreshInput14b, session.sessionCookie, { signal });
     if (refreshed) {
       const cc = refreshed.clientCookie ?? session.clientCookie;
       const liveStack = Array.isArray(session.clientCookies) && session.clientCookies.length > 0
@@ -810,7 +825,7 @@ export async function ensureSession(userId, accountId) {
   // No usable __client — try password re-auth for password accounts.
   if (account.email && account.password && account.authMethod === 'password') {
     try {
-      const fresh = await signInWithPassword(account.email, account.password);
+      const fresh = await signInWithPassword(account.email, account.password, { signal });
       await store.updateAccountSession(userId, accountId, fresh.sessionCookie, fresh.clientCookie, fresh.sessionExpiry);
       return { sessionCookie: fresh.sessionCookie, clientCookie: fresh.clientCookie };
     } catch (err) {
@@ -953,7 +968,8 @@ const migrationAttempted = new Set();
  * @param {string} clientCookie - Current client cookie
  * @returns {{ sessionCookie, clientCookie, migrated: boolean, message? }}
  */
-async function migrateAccountForCloudflareCookies(userId, accountId, sessionCookie, clientCookie) {
+async function migrateAccountForCloudflareCookies(userId, accountId, sessionCookie, clientCookie, { signal = null } = {}) {
+  throwIfAborted(signal);
   // Prevent repeated migration attempts in the same process
   if (migrationAttempted.has(accountId)) {
     return { sessionCookie, clientCookie, migrated: false, message: 'Migration already attempted in this process' };
@@ -986,7 +1002,7 @@ async function migrateAccountForCloudflareCookies(userId, accountId, sessionCook
     dashboardError(`[dashboard-api] Re-authenticating account ${accountId} to capture Cloudflare cookies...`);
 
     // Force re-login - this will capture fresh cookies including Cloudflare ones
-    const fresh = await signInWithPassword(account.email, account.password);
+    const fresh = await signInWithPassword(account.email, account.password, { signal });
 
     // Validate that we now have Cloudflare cookies
     if (!hasCloudflareCookies(fresh.clientCookie)) {
@@ -1011,6 +1027,7 @@ async function migrateAccountForCloudflareCookies(userId, accountId, sessionCook
       migrated: true,
     };
   } catch (err) {
+    throwIfAborted(signal);
     dashboardError(`[dashboard-api] Migration failed for account ${accountId}: ${err.message}`);
 
     if (err instanceof NeedSecondFactorError) {
@@ -1212,7 +1229,8 @@ function extractHtmlErrorInfo(html) {
 /** Headers merged after defaults; use to override Referer per surface (e.g. redeem vs management keys). */
 export async function trpcCall(route, input, sessionCookie, clientCookie, headerOverrides = {}, options = {}) {
   // Get fresh JWT before making tRPC call - OTP sessions have 60s JWTs
-  const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+  const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal: options.signal });
+  throwIfAborted(options.signal);
   const jwtToUse = freshJwt || sessionCookie; // Fallback to original if refresh failed
   
   if (provisionStepLogEnabled()) {
@@ -1226,6 +1244,7 @@ export async function trpcCall(route, input, sessionCookie, clientCookie, header
     method: 'POST',
     headers: dashboardHeaders(jwtToUse, clientCookie, headerOverrides),
     body,
+    signal: options.signal,
   }, options.accountProxy));
 
   const contentType = res.headers.get('content-type') || '';
@@ -1355,19 +1374,28 @@ export async function trpcCall(route, input, sessionCookie, clientCookie, header
  */
 async function trpcCallWithMigration(route, input, sessionCookie, clientCookie, headerOverrides = {}, context = {}) {
   try {
-    return await trpcCall(route, input, sessionCookie, clientCookie, headerOverrides, { accountProxy: context.accountProxy });
+    return await trpcCall(route, input, sessionCookie, clientCookie, headerOverrides, {
+      accountProxy: context.accountProxy,
+      signal: context.signal,
+    });
   } catch (err) {
+    throwIfAborted(context.signal);
     // Check if this is an HTML error that might be due to missing Cloudflare cookies
     if (err.isHtml && !hasCloudflareCookies(clientCookie)) {
       const { userId, accountId } = context;
       if (userId && accountId) {
         dashboardError(`[dashboard-api] HTML response without CF cookies - attempting migration for ${accountId}`);
-        const migration = await migrateAccountForCloudflareCookies(userId, accountId, sessionCookie, clientCookie);
+        const migration = await migrateAccountForCloudflareCookies(userId, accountId, sessionCookie, clientCookie, {
+          signal: context.signal,
+        });
 
         if (migration.migrated) {
           dashboardError(`[dashboard-api] Migration succeeded, retrying tRPC with fresh cookies`);
           // Retry with fresh cookies from migration
-          return await trpcCall(route, input, migration.sessionCookie, migration.clientCookie, headerOverrides, { accountProxy: context.accountProxy });
+          return await trpcCall(route, input, migration.sessionCookie, migration.clientCookie, headerOverrides, {
+            accountProxy: context.accountProxy,
+            signal: context.signal,
+          });
         } else {
           dashboardError(`[dashboard-api] Migration not possible: ${migration.message || 'unknown reason'}`);
         }
@@ -1524,10 +1552,10 @@ function shouldAbortProvisioning(err) {
  * @param {string} keyName - Name for the new key
  * @returns {Promise<{key?: string, error?: string}>}
  */
-async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute = null) {
+async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute = null, signal = null) {
   try {
     // Get fresh JWT first
-    const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+    const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal });
     const jwtToUse = freshJwt || sessionCookie;
     const cookieHeader = dashboardCookieHeader(jwtToUse, clientCookie);
     
@@ -1540,6 +1568,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
     ];
     
     for (const endpoint of endpoints) {
+      throwIfAborted(signal);
       try {
         dashboardError(`[tryRestApiCreateKey] Trying ${endpoint.method} ${endpoint.url}`);
         
@@ -1553,6 +1582,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
             'User-Agent': USER_AGENT,
           },
           body: JSON.stringify(endpoint.body),
+          signal,
         }, automationRoute));
         
         if (!res.ok) {
@@ -1583,6 +1613,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
           return { key };
         }
       } catch (err) {
+        throwIfAborted(signal);
         dashboardError(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
       }
     }
@@ -1599,6 +1630,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
     ];
 
     for (const endpoint of expandedEndpoints) {
+      throwIfAborted(signal);
       try {
         dashboardError(`[tryRestApiCreateKey] Trying expanded ${endpoint.method} ${endpoint.url}`);
         const res = await fetch(endpoint.url, fetchOptionsWithAccountProxy({
@@ -1611,6 +1643,7 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
             'User-Agent': USER_AGENT,
           },
           body: JSON.stringify(endpoint.body),
+          signal,
         }, automationRoute));
 
         // Log EVERY response status — even 404s tell us what doesn't exist
@@ -1639,12 +1672,14 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
           return { key };
         }
       } catch (err) {
+        throwIfAborted(signal);
         dashboardError(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
       }
     }
 
     return { error: 'All REST endpoints failed' };
   } catch (err) {
+    throwIfAborted(signal);
     dashboardError(`[tryRestApiCreateKey] Fatal error: ${err.message}`);
     return { error: err.message };
   }
@@ -1659,11 +1694,12 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
  * @param {string} code - Redemption code to apply
  * @returns {Promise<{success: boolean, result?: any, error?: string, source: string, probedEndpoints: Array}>}
  */
-async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountProxy = null) {
+async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountProxy = null, signal = null) {
   const probedEndpoints = [];
 
   try {
-    const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+    const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal });
+    throwIfAborted(signal);
     const jwtToUse = freshJwt || sessionCookie;
     const cookieHeader = dashboardCookieHeader(jwtToUse, clientCookie);
 
@@ -1695,6 +1731,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
     ];
 
     for (const endpoint of endpoints) {
+      throwIfAborted(signal);
       try {
         dashboardError(`[tryRestApiRedeemCode] Trying ${endpoint.method} ${endpoint.url} body=${JSON.stringify(endpoint.body)}`);
 
@@ -1709,6 +1746,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
             'User-Agent': USER_AGENT,
           },
           body: JSON.stringify(endpoint.body),
+          signal,
         }, accountProxy));
 
         const probeResult = {
@@ -1725,6 +1763,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
           bodyText = await res.text();
           probeResult.bodyPreview = bodyText.slice(0, 500);
         } catch {
+          throwIfAborted(signal);
           probeResult.bodyPreview = '(unreadable)';
         }
 
@@ -1761,6 +1800,7 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
           }
         }
       } catch (err) {
+        throwIfAborted(signal);
         const probeResult = {
           url: endpoint.url,
           method: endpoint.method,
@@ -1776,13 +1816,14 @@ async function tryRestApiRedeemCode(sessionCookie, clientCookie, code, accountPr
     dashboardError(`[tryRestApiRedeemCode] All REST redemption endpoints failed (${probedEndpoints.length} probed)`);
     return { success: false, error: 'All REST redemption endpoints failed', source: 'rest-api', probedEndpoints };
   } catch (err) {
+    throwIfAborted(signal);
     dashboardError(`[tryRestApiRedeemCode] Fatal error: ${err.message}`);
     return { success: false, error: err.message, source: 'rest-api', probedEndpoints };
   }
 }
 
-export async function createManagementKey(userId, accountId, keyName = 'Hydra Auto Key') {
-  const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
+export async function createManagementKey(userId, accountId, keyName = 'Hydra Auto Key', { signal = null } = {}) {
+  const { sessionCookie, clientCookie } = await ensureSession(userId, accountId, { signal });
   logProvisionOpenRouterBase(accountId, sessionCookie);
   const automationRoute = pickAutomationNetworkRoute();
   if (automationRoute.accountProxy) {
@@ -1792,7 +1833,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   // Try direct HTTP Server Action first — this is the confirmed correct approach.
   // OpenRouter uses Next.js Server Actions (not tRPC) for management key creation.
   // The Next-Action hash and body format were captured from live browser traffic.
-  const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute);
+  const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute, signal);
   if (fromSa) {
     await persistProvisionedManagementKey(userId, accountId, fromSa, 'server-action');
     return { key: fromSa, source: 'server-action' };
@@ -1810,12 +1851,13 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   ];
 
   // Context for Cloudflare cookie migration
-  const migrationContext = { userId, accountId, accountProxy: automationRoute };
+  const migrationContext = { userId, accountId, accountProxy: automationRoute, signal };
 
   let lastTrpcRouteAttempted = null;
   if (endpoint) {
     lastTrpcRouteAttempted = endpoint.route;
     for (const input of mgmtKeyPayloads) {
+      throwIfAborted(signal);
       try {
         const result = await trpcCallWithMigration(endpoint.route, input, sessionCookie, clientCookie, {}, migrationContext);
         const picked =
@@ -1835,6 +1877,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
           return { key, source: 'trpc-cached' };
         }
       } catch (err) {
+        throwIfAborted(signal);
         if (shouldAbortProvisioning(err)) {
           return { success: false, message: err.message, source: 'trpc-cached' };
         }
@@ -1861,6 +1904,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   for (const route of candidates) {
     lastTrpcRouteAttempted = route;
     for (const input of mgmtKeyPayloads) {
+      throwIfAborted(signal);
       try {
         dashboardError(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
         const result = await trpcCallWithMigration(route, input, sessionCookie, clientCookie, {}, migrationContext);
@@ -1882,6 +1926,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
         // No key returned - route exists but wrong payload or unexpected response shape
         dashboardError(`[dashboard-api] tRPC route ${route} returned result but no management key`);
       } catch (err) {
+        throwIfAborted(signal);
         lastTrpcError = err;
         dashboardError(`[dashboard-api] tRPC route ${route} failed: ${err.message} (httpStatus: ${err.httpStatus}, trpcCode: ${err.trpcCode})`);
         if (shouldAbortProvisioning(err)) {
@@ -1897,7 +1942,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   );
 
   // Try REST API with session JWT as Bearer token
-  const restResult = await tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute);
+  const restResult = await tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute, signal);
   if (restResult?.key) {
     dashboardError(`[dashboard-api] Success via REST API`);
     await persistProvisionedManagementKey(userId, accountId, restResult.key, 'rest-api');
@@ -1911,13 +1956,13 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, automationRoute, {
     ...summarizeTrpcFailure(lastTrpcError),
     trpcLastRoute: lastTrpcRouteAttempted,
-  });
+  }, signal);
 }
 
 /** H2: Replay vault session + Clerk device cookies on openrouter.ai. Third-party cookies (e.g. CF) are not in the vault — if tRPC returns 403, re-login in Hydra to refresh. */
-async function playwrightCookiesForOpenRouter(sessionCookie, clientCookie) {
+async function playwrightCookiesForOpenRouter(sessionCookie, clientCookie, signal = null) {
   // Get fresh JWT before setting cookies - OTP sessions have short-lived JWTs (60s)
-  const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+  const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal });
   const jwtToUse = freshJwt || sessionCookie;
   
   if (freshJwt && provisionStepLogEnabled()) {
@@ -2359,7 +2404,8 @@ async function launchManagedChromium(chromium, launchOptions, contextOptions = {
   }
 }
 
-async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, selectedAutomationRoute = null, trpcPhaseSummary = {}) {
+async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, selectedAutomationRoute = null, trpcPhaseSummary = {}, signal = null) {
+  throwIfAborted(signal);
   // playwright-core: API-only package, no auto-downloaded browser bundle.
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
   // The full `playwright` package is dev-only now (see package.json).
@@ -2392,10 +2438,18 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
   let capturedKey = null;
   const networkLogLines = [];
   let traceStarted = false;
+  const closeOnAbort = () => {
+    if (!context) return;
+    void context.close().catch((err) => {
+      dashboardWarn(`[dashboard-api] Provision abort context close failed: ${err?.message || err}`);
+    });
+  };
+  signal?.addEventListener('abort', closeOnAbort, { once: true });
 
   try {
+    throwIfAborted(signal);
     context ??= await browser.newContext(contextOptions);
-    await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
+    await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie, signal));
     try {
       await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: OR_ORIGIN });
     } catch (err) {
@@ -2886,6 +2940,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     }
     throw err;
   } finally {
+    signal?.removeEventListener('abort', closeOnAbort);
     try {
       await browser.close();
     } catch (closeErr) {
@@ -3015,14 +3070,14 @@ async function getScopedRedeemText(page) {
 const REDEEM_FAILURE_UI_RE = /invalid|expired|already used|not valid|could not|unable to redeem/i;
 const REDEEM_SUCCESS_UI_RE = /success|credits?\s*added|redeemed/i;
 
-async function pollCreditsAfterRedeem(managementKey, beforeTotal, attempts = 4, delayMs = 900) {
+async function pollCreditsAfterRedeem(managementKey, beforeTotal, attempts = 4, delayMs = 900, signal = null) {
   for (let i = 0; i < attempts; i++) {
-    if (i === 0) await new Promise((r) => setTimeout(r, 1000));
-    else await new Promise((r) => setTimeout(r, delayMs));
+    await sleepWithSignal(i === 0 ? 1000 : delayMs, signal);
     try {
-      const after = await getCredits(managementKey);
+      const after = await getCredits(managementKey, { signal });
       if (Number(after.total) > Number(beforeTotal)) return after;
     } catch (err) {
+      throwIfAborted(signal);
       dashboardWarn(`[dashboard-api] Redeem credit poll failed (attempt ${i + 1}/${attempts}): ${err?.message || err}`);
     }
   }
@@ -3061,8 +3116,9 @@ function trpcResponsePredicateForRedeemCode(response, code) {
  *
  * @returns {{ success: boolean, result?: any, errorCode?: string, message?: string, source: string }}
  */
-async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, accountProxy = null) {
-  const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, accountProxy = null, signal = null) {
+  const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal });
+  throwIfAborted(signal);
   const jwtToUse = freshJwt || sessionCookie;
 
   const device = clientCookie ? openRouterDashboardDeviceCookies(clientCookie) : '';
@@ -3084,23 +3140,27 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, acco
     method: 'POST',
     headers,
     body: JSON.stringify([code]),
+    signal,
   }, accountProxy));
 
   if (res.status === 404) {
     // ── Self-healing: attempt to discover the new hash and retry ──
-    const newHash = await selfHealHash('redeem', url, headers, JSON.stringify([code]), accountProxy);
+    const newHash = await selfHealHash('redeem', url, headers, JSON.stringify([code]), accountProxy, signal);
+    throwIfAborted(signal);
     if (newHash) {
       // Retry with the healed hash
       const retryRes = await fetch(url, fetchOptionsWithAccountProxy({
         method: 'POST',
         headers: { ...headers, 'Next-Action': newHash },
         body: JSON.stringify([code]),
+        signal,
       }, accountProxy));
       if (retryRes.status !== 404) {
         // Replace `res` so the rest of the function processes the retry response
         // (We read retryRes below instead of `res` by reassigning.)
         // Unfortunately `res` is const, so we fall through to a second parse pass.
         const retryText = await retryRes.text();
+        throwIfAborted(signal);
         for (const line of retryText.split('\n')) {
           const colonIdx = line.indexOf(':');
           if (colonIdx < 0) continue;
@@ -3135,6 +3195,7 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, acco
   }
 
   const text = await res.text();
+  throwIfAborted(signal);
 
   // Parse RSC wire format: find the line with __kind
   for (const line of text.split('\n')) {
@@ -3170,21 +3231,23 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, acco
 }
 
 /** Order: Server Action (fast HTTP) → cached tRPC → tRPC candidates → Playwright fallback */
-export async function redeemCode(userId, accountId, code) {
-  const { sessionCookie, clientCookie } = await ensureSession(userId, accountId);
+export async function redeemCode(userId, accountId, code, { signal = null } = {}) {
+  const { sessionCookie, clientCookie } = await ensureSession(userId, accountId, { signal });
+  throwIfAborted(signal);
   const automationRoute = pickAutomationNetworkRoute();
   if (automationRoute.accountProxy) {
     dashboardWarn(`[dashboard-api] Using account proxy ${describeAutomationNetworkRoute(automationRoute)} for code redemption account=${accountId}`);
   }
 
   // Context for Cloudflare cookie migration
-  const migrationContext = { userId, accountId, accountProxy: automationRoute };
+  const migrationContext = { userId, accountId, accountProxy: automationRoute, signal };
 
   // ── Step 0: Server Action (pure HTTP, confirmed working 2026-04-07) ──────────
   try {
-    const saResult = await redeemCodeViaServerAction(sessionCookie, clientCookie, code, automationRoute);
+    const saResult = await redeemCodeViaServerAction(sessionCookie, clientCookie, code, automationRoute, signal);
     if (saResult.success) return saResult;
   } catch (err) {
+    throwIfAborted(signal);
     const stale = err.message?.includes('stale');
     if (stale) {
       dashboardWarn('[dashboard-api] Redeem Server Action hash stale — falling back to tRPC/Playwright');
@@ -3196,6 +3259,7 @@ export async function redeemCode(userId, accountId, code) {
   }
 
   const endpoints = await store.getDiscoveredEndpoints();
+  throwIfAborted(signal);
   if (endpoints.redeemCode) {
     try {
       const result = await trpcCallWithMigration(endpoints.redeemCode.route, { code }, sessionCookie, clientCookie, REDEEM_TRPC_HEADERS, migrationContext);
@@ -3204,6 +3268,7 @@ export async function redeemCode(userId, accountId, code) {
         return { success: true, result, source: 'trpc-cached' };
       }
     } catch (err) {
+      throwIfAborted(signal);
       if (isPermanentError(err)) {
         return redeemFailurePayload('trpc-cached', err);
       }
@@ -3244,6 +3309,7 @@ export async function redeemCode(userId, accountId, code) {
     'referralCode.redeem',
   ];
   for (const route of candidates) {
+    throwIfAborted(signal);
     try {
       const result = await trpcCallWithMigration(route, { code }, sessionCookie, clientCookie, REDEEM_TRPC_HEADERS, migrationContext);
       if (result !== undefined && result !== null) {
@@ -3251,6 +3317,7 @@ export async function redeemCode(userId, accountId, code) {
         return { success: true, result, source: `trpc-${route}` };
       }
     } catch (err) {
+      throwIfAborted(signal);
       if (isPermanentError(err)) {
         await store.saveDiscoveredEndpoints({ redeemCode: { route, discoveredAt: new Date().toISOString() } });
         return redeemFailurePayload(`trpc-${route}`, err);
@@ -3262,7 +3329,7 @@ export async function redeemCode(userId, accountId, code) {
   // ── EXPLOIT #12: REST API fallback probe for credit redemption ──
   // Try REST endpoints with session JWT as Bearer token before Playwright
   dashboardError('[dashboard-api] All tRPC redeem routes exhausted, trying REST API fallback');
-  const restRedeemResult = await tryRestApiRedeemCode(sessionCookie, clientCookie, code, automationRoute);
+  const restRedeemResult = await tryRestApiRedeemCode(sessionCookie, clientCookie, code, automationRoute, signal);
   if (restRedeemResult?.success) {
     dashboardError(`[dashboard-api] Redemption succeeded via REST API at ${restRedeemResult.probedUrl || 'unknown endpoint'}`);
     return restRedeemResult;
@@ -3278,10 +3345,11 @@ export async function redeemCode(userId, accountId, code) {
 
   dashboardError('[dashboard-api] REST API redemption failed, falling back to Playwright browser automation');
 
-  return await redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, automationRoute);
+  throwIfAborted(signal);
+  return await redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, automationRoute, signal);
 }
 
-async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapshot, managementKey, attempted, code) {
+async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapshot, managementKey, attempted, code, signal = null) {
   const uiFeedback = (await collectRedeemUiFeedback(page)) || undefined;
   const scopeText = await getScopedRedeemText(page);
 
@@ -3311,6 +3379,7 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
         return fail;
       }
     } catch (err) {
+      throwIfAborted(signal);
       dashboardWarn(`[dashboard-api] Redeem tRPC outcome parse failed; falling through to UI/credits: ${err?.message || err}`);
     }
   }
@@ -3328,7 +3397,7 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
   }
 
   if (managementKey && creditsSnapshot != null) {
-    const after = await pollCreditsAfterRedeem(managementKey, creditsSnapshot.total);
+    const after = await pollCreditsAfterRedeem(managementKey, creditsSnapshot.total, 4, 900, signal);
     if (after) {
       const row = {
         success: true,
@@ -3364,7 +3433,8 @@ async function resolvePlaywrightRedeemOutcome(page, trpcResponse, creditsSnapsho
   return row;
 }
 
-async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, selectedAutomationRoute = null) {
+async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, selectedAutomationRoute = null, signal = null) {
+  throwIfAborted(signal);
   // playwright-core: API-only package, no auto-downloaded browser bundle.
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
   // The full `playwright` package is dev-only now (see package.json).
@@ -3385,6 +3455,12 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
     source: 'playwright',
   };
   const attempted = [];
+  const closeOnAbort = () => {
+    void browser.close().catch((err) => {
+      dashboardWarn(`[dashboard-api] Redeem abort browser close failed: ${err?.message || err}`);
+    });
+  };
+  signal?.addEventListener('abort', closeOnAbort, { once: true });
 
   let creditsSnapshot = null;
   let managementKey = null;
@@ -3393,18 +3469,21 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
     if (acct?.managementKey?.trim()) {
       managementKey = acct.managementKey.trim();
       try {
-        creditsSnapshot = await getCredits(managementKey);
+        creditsSnapshot = await getCredits(managementKey, { signal });
       } catch (err) {
+        throwIfAborted(signal);
         dashboardWarn(`[dashboard-api] Redeem credits preflight failed for account=${accountId}: ${err?.message || err}`);
         creditsSnapshot = null;
       }
     }
   } catch (err) {
+    throwIfAborted(signal);
     dashboardWarn(`[dashboard-api] Redeem account lookup failed for account=${accountId}; skipping credits verification: ${err?.message || err}`);
   }
 
   try {
-    await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie));
+    throwIfAborted(signal);
+    await context.addCookies(await playwrightCookiesForOpenRouter(sessionCookie, clientCookie, signal));
     const page = await context.newPage();
 
     page.on('response', async (res) => {
@@ -3485,6 +3564,7 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
         managementKey,
         attempted,
         code,
+        signal,
       );
     } else {
       result = {
@@ -3495,6 +3575,7 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
       };
     }
   } finally {
+    signal?.removeEventListener('abort', closeOnAbort);
     try {
       await browser.close();
     } catch (closeErr) {
@@ -3509,9 +3590,10 @@ export async function bulkRedeemCode(userId, accountIds, code, { signal = null }
   return runInBatches(accountIds, async (id) => {
     try {
       const account = await store.getAccountWithKey(userId, id);
-      const result = await redeemCode(userId, id, code);
+      const result = await redeemCode(userId, id, code, { signal });
       return { accountId: id, alias: account.alias, ...result };
     } catch (err) {
+      throwIfAborted(signal);
       dashboardError('[DASHBOARD] Fetch failed:', err.message);
       const { errorCode, message } = classifyRedeemFailure(err.message, err);
       return { accountId: id, success: false, message, error: message, errorCode };
@@ -3519,9 +3601,11 @@ export async function bulkRedeemCode(userId, accountIds, code, { signal = null }
   }, { signal });
 }
 
-export async function getUserProfile(sessionCookie, clientCookie) {
+export async function getUserProfile(sessionCookie, clientCookie, { signal = null } = {}) {
+  throwIfAborted(signal);
   const res = await fetch(`${OR_BASE}/api/auth/me`, {
     headers: dashboardHeaders(sessionCookie, clientCookie, { Referer: `${OR_ORIGIN}/settings` }),
+    signal: combineAbortSignals(signal, AbortSignal.timeout(15000)),
   });
   if (res.ok) {
     const ct = res.headers.get('content-type') || '';
@@ -3550,8 +3634,9 @@ export async function getUserProfile(sessionCookie, clientCookie) {
   }
 
   try {
-    return await trpcCall('user.me', null, sessionCookie, clientCookie);
+    return await trpcCall('user.me', null, sessionCookie, clientCookie, {}, { signal });
   } catch (err) {
+    throwIfAborted(signal);
     dashboardWarn(`[dashboard-api] getUserProfile tRPC fallback failed: ${err?.message || err}`);
     return null;
   }

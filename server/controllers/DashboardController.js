@@ -5,6 +5,7 @@ import * as openrouter from '../services/openrouter.js';
 import * as clerkAuth from '../services/clerk-auth.js';
 import { logger } from '../services/logger.js';
 import { assertManagementKey } from '../services/key-utils.js';
+import { bindRequestAbort, throwIfAborted } from '../lib/abort.js';
 import pLimit from 'p-limit';
 
 
@@ -50,6 +51,7 @@ class DashboardController extends BaseController {
   }
 
   async getDashboard(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'dashboard request');
     try {
       let accounts = await store.getAllAccountsWithKeys(req.user.id);
       
@@ -77,6 +79,7 @@ class DashboardController extends BaseController {
       let refreshedSessions = false;
       await Promise.all(
         accounts.map(async (account) => {
+          throwIfAborted(requestAbort.signal);
           const meta = metaById.get(account.id);
           const needsRefresh = meta?.sessionStatus === 'expiring';
           if (!needsRefresh) return;
@@ -89,7 +92,9 @@ class DashboardController extends BaseController {
           try {
             // If stacked cookies available, pass the array; otherwise use single cookie
             const refreshInput = (stackedCookies && stackedCookies.length > 0) ? stackedCookies : cc;
-            const refreshed = await clerkAuth.refreshSession(refreshInput, account.sessionCookie);
+            const refreshed = await clerkAuth.refreshSession(refreshInput, account.sessionCookie, {
+              signal: requestAbort.signal,
+            });
             if (refreshed) {
               const nextCc = refreshed.clientCookie ?? (typeof refreshInput === 'string' ? refreshInput : cc);
               const liveStack = Array.isArray(stackedCookies) && stackedCookies.length > 0
@@ -112,6 +117,7 @@ class DashboardController extends BaseController {
               logger.info(`[DASHBOARD] Session refreshed via clientCookie (account=${account.id}, was=${meta.sessionStatus})`);
             }
           } catch (err) {
+            throwIfAborted(requestAbort.signal);
             logger.warn(`[DASHBOARD] Proactive refresh failed (account=${account.id}): ${err.message}`);
           }
         })
@@ -130,6 +136,7 @@ class DashboardController extends BaseController {
       const snapshots = await Promise.all(
         accounts.map((account) =>
           limit(async () => {
+            throwIfAborted(requestAbort.signal);
             const meta = metaById.get(account.id) || {};
             
             // Check cache first (unless account has error status)
@@ -157,7 +164,8 @@ class DashboardController extends BaseController {
               }
               assertManagementKey(account.managementKey, 'account snapshot');
               
-              const snapshot = await openrouter.getAccountSnapshot(account.managementKey);
+              const snapshot = await openrouter.getAccountSnapshot(account.managementKey, { signal: requestAbort.signal });
+              throwIfAborted(requestAbort.signal);
               const result = {
                 id: account.id,
                 alias: account.alias,
@@ -184,6 +192,7 @@ class DashboardController extends BaseController {
               return result;
               
             } catch (err) {
+              throwIfAborted(requestAbort.signal);
               const errorResult = {
                 id: account.id,
                 alias: account.alias,
@@ -254,7 +263,10 @@ class DashboardController extends BaseController {
       });
 
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 }

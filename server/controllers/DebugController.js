@@ -15,6 +15,13 @@ import { OR_BASE } from '../config.js';
 import { logger } from '../services/logger.js';
 import { trpcCall, getFreshJwt } from '../services/dashboard-api.js';
 import { clerkFapiDeviceCookieHeader, openRouterDashboardDeviceCookies, refreshSession } from '../services/clerk-auth.js';
+import { bindRequestAbort, combineAbortSignals, sleepWithSignal, throwIfAborted } from '../lib/abort.js';
+
+const DEBUG_REQUEST_TIMEOUT_MS = 15_000;
+
+function debugFetchSignal(signal) {
+  return combineAbortSignals(signal, AbortSignal.timeout(DEBUG_REQUEST_TIMEOUT_MS));
+}
 
 // ─── tRPC candidate routes to probe ──────────────────────────────────────────
 // Grouped by category for structured output.
@@ -58,7 +65,8 @@ function dashboardCookieHeader(sessionCookie, clientCookie, { includeSession = t
   return parts.join('; ');
 }
 
-async function probeRoute(route, input, sessionCookie, clientCookie, referer = '/settings') {
+async function probeRoute(route, input, sessionCookie, clientCookie, referer = '/settings', signal = null) {
+  throwIfAborted(signal);
   const OR_ORIGIN = new URL(OR_BASE).origin;
   const url = `${OR_BASE}/api/trpc/${route}?batch=1`;
   const body = JSON.stringify({ '0': { json: input } });
@@ -68,9 +76,10 @@ async function probeRoute(route, input, sessionCookie, clientCookie, referer = '
   try {
     const data = await trpcCall(route, input, sessionCookie, clientCookie, {
       'Referer': `${OR_ORIGIN}${referer}`,
-    });
+    }, { signal });
     results.full_auth = { ok: true, trpcResult: { ok: true, data } };
   } catch (err) {
+    throwIfAborted(signal);
     results.full_auth = {
       ok: false,
       isHtml: err.isHtml ?? false,
@@ -86,7 +95,7 @@ async function probeRoute(route, input, sessionCookie, clientCookie, referer = '
   // Tests: is __client cookie alone sufficient for this tRPC route?
   if (clientCookie) {
     try {
-      const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+      const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal });
       const makeHeaders = (cookieStr) => ({
         'Content-Type': 'application/json',
         'Cookie': cookieStr,
@@ -99,6 +108,7 @@ async function probeRoute(route, input, sessionCookie, clientCookie, referer = '
         method: 'POST',
         headers: makeHeaders(dashboardCookieHeader(null, clientCookie, { includeSession: false })),
         body,
+        signal: debugFetchSignal(signal),
       });
       const text = await res.text();
       let parsed = null;
@@ -113,13 +123,14 @@ async function probeRoute(route, input, sessionCookie, clientCookie, referer = '
         note: '__client cookie only — no __session JWT. Success here = JWT optional for this route.',
       };
     } catch (err) {
+      throwIfAborted(signal);
       results.client_only = { error: err.message };
     }
   }
 
   // session_only — __session JWT only (no __client device cookie)
   try {
-    const freshJwt = await getFreshJwt(sessionCookie, clientCookie);
+    const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal });
     const jwtToTest = freshJwt || sessionCookie;
     const makeHeaders = (cookieStr) => ({
       'Content-Type': 'application/json',
@@ -133,6 +144,7 @@ async function probeRoute(route, input, sessionCookie, clientCookie, referer = '
       method: 'POST',
       headers: makeHeaders(`__session=${jwtToTest}`),
       body,
+      signal: debugFetchSignal(signal),
     });
     const text = await res.text();
     let parsed = null;
@@ -146,6 +158,7 @@ async function probeRoute(route, input, sessionCookie, clientCookie, referer = '
       note: '__session JWT only — no __client device cookie.',
     };
   } catch (err) {
+    throwIfAborted(signal);
     results.session_only = { error: err.message };
   }
 
@@ -153,7 +166,8 @@ async function probeRoute(route, input, sessionCookie, clientCookie, referer = '
 }
 
 // ─── Try GET method for tRPC query routes ─────────────────────────────────────
-async function rawTrpcGet(route, input, sessionCookie, clientCookie, referer = '/settings') {
+async function rawTrpcGet(route, input, sessionCookie, clientCookie, referer = '/settings', signal = null) {
+  throwIfAborted(signal);
   const OR_ORIGIN = new URL(OR_BASE).origin;
   const inputEncoded = encodeURIComponent(JSON.stringify({ '0': { json: input } }));
   const url = `${OR_BASE}/api/trpc/${route}?batch=1&input=${inputEncoded}`;
@@ -169,12 +183,14 @@ async function rawTrpcGet(route, input, sessionCookie, clientCookie, referer = '
         'Referer': `${OR_ORIGIN}${referer}`,
         'x-trpc-source': 'nextjs-react',
       },
+      signal: debugFetchSignal(signal),
     });
     const text = await res.text();
     let parsed = null;
     try { parsed = JSON.parse(text); } catch { /* raw */ }
     return { status: res.status, ok: res.ok, trpcResult: extractTrpcResult(parsed), method: 'GET' };
   } catch (err) {
+    throwIfAborted(signal);
     return { error: err.message, method: 'GET' };
   }
 }
@@ -241,8 +257,12 @@ class DebugController extends BaseController {
    * surfaces asymmetries and exploitable fields.
    */
   async trpcProbe(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'debug tRPC probe request');
     const { accountId, categories, includeVampire = false } = req.body ?? {};
-    if (!accountId) return this.error(res, 'accountId required', 400);
+    if (!accountId) {
+      requestAbort.dispose();
+      return this.error(res, 'accountId required', 400);
+    }
 
     try {
       const session = await store.getAccountSession(req.user.id, accountId);
@@ -261,7 +281,7 @@ class DebugController extends BaseController {
       // which may show empty sessions even when the stored JWT is valid. `refreshSession` uses
       // Set-Cookie from Clerk's response which actually gives us a fresh JWT.
       try {
-        const refreshed = await refreshSession(cookieInput, sessionCookie);
+        const refreshed = await refreshSession(cookieInput, sessionCookie, { signal: requestAbort.signal });
         if (refreshed?.sessionCookie) {
           sessionCookie = refreshed.sessionCookie;
           clientCookie = refreshed.clientCookie ?? clientCookie;
@@ -270,6 +290,7 @@ class DebugController extends BaseController {
           logger.info(`[DEBUG] Session pre-refreshed for ${account?.alias}`);
         }
       } catch (err) {
+        throwIfAborted(requestAbort.signal);
         logger.warn(`[DEBUG] Pre-refresh failed (using stored JWT): ${err.message}`);
       }
 
@@ -290,9 +311,9 @@ class DebugController extends BaseController {
 
       for (const chunk of chunks) {
         await Promise.all(chunk.map(async ({ route, input, referer }) => {
-          const authVariants = await probeRoute(route, input, sessionCookie, clientCookie, referer);
+          const authVariants = await probeRoute(route, input, sessionCookie, clientCookie, referer, requestAbort.signal);
           // Also try GET method for this route
-          const getResult = await rawTrpcGet(route, input, sessionCookie, clientCookie, referer);
+          const getResult = await rawTrpcGet(route, input, sessionCookie, clientCookie, referer, requestAbort.signal);
 
           results[route] = {
             ...authVariants,
@@ -312,9 +333,10 @@ class DebugController extends BaseController {
       try {
         const mgmtKey = account?.managementKey;
         if (mgmtKey) {
-          mgmtKeyCredits = await getCredits(mgmtKey);
+          mgmtKeyCredits = await getCredits(mgmtKey, { signal: requestAbort.signal });
         }
       } catch (err) {
+        throwIfAborted(requestAbort.signal);
         mgmtKeyCredits = { error: err.message };
       }
 
@@ -340,8 +362,11 @@ class DebugController extends BaseController {
 
       return this.success(res, { summary, routes: results, findings: allFindings });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       logger.error(`[DEBUG] tRPC probe failed: ${err.message}`);
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -353,8 +378,12 @@ class DebugController extends BaseController {
    * Hypothesis: forces fresh JWT timestamp, extending the 7-day window.
    */
   async vampireMode(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'debug vampire-mode request');
     const { accountId } = req.body ?? {};
-    if (!accountId) return this.error(res, 'accountId required', 400);
+    if (!accountId) {
+      requestAbort.dispose();
+      return this.error(res, 'accountId required', 400);
+    }
 
     try {
       const session = await store.getAccountSession(req.user.id, accountId);
@@ -376,6 +405,7 @@ class DebugController extends BaseController {
             'Referer': `${OR_ORIGIN}/settings`,
             'x-trpc-source': 'nextjs-react',
           },
+          signal: debugFetchSignal(requestAbort.signal),
         });
         if (!profileRes.ok) {
           logger.warn(`[DEBUG] vampire profile preload returned HTTP ${profileRes.status} for account=${accountId}`);
@@ -388,6 +418,7 @@ class DebugController extends BaseController {
         }
         currentBio = profileData?.[0]?.result?.data?.json?.bio ?? '';
       } catch (err) {
+        throwIfAborted(requestAbort.signal);
         logger.warn(`[DEBUG] vampire profile preload failed for account=${accountId}: ${err?.message || err}`);
       }
 
@@ -406,14 +437,16 @@ class DebugController extends BaseController {
               'x-trpc-source': 'nextjs-react',
             },
             body: JSON.stringify({ '0': { json: { bio } } }),
+            signal: debugFetchSignal(requestAbort.signal),
           });
           const text = await r.text();
           let parsed = null;
           try { parsed = JSON.parse(text); } catch { /* raw */ }
           results.push({ bio, status: r.status, result: extractTrpcResult(parsed) });
           // Small delay between mutations
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await sleepWithSignal(200, requestAbort.signal);
         } catch (err) {
+          throwIfAborted(requestAbort.signal);
           results.push({ bio, error: err.message });
         }
       }
@@ -429,7 +462,10 @@ class DebugController extends BaseController {
           : 'updateProfile failed or returned error — vampire mode not viable on this account.',
       });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -441,8 +477,12 @@ class DebugController extends BaseController {
    * Returns the Clerk /v1/client response for this account's stored client cookie.
    */
   async cookieTtl(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'debug cookie TTL request');
     const { accountId } = req.body ?? {};
-    if (!accountId) return this.error(res, 'accountId required', 400);
+    if (!accountId) {
+      requestAbort.dispose();
+      return this.error(res, 'accountId required', 400);
+    }
 
     try {
       const session = await store.getAccountSession(req.user.id, accountId);
@@ -464,6 +504,7 @@ class DebugController extends BaseController {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
           'Origin': 'https://openrouter.ai',
         },
+        signal: debugFetchSignal(requestAbort.signal),
       });
 
       const text = await r.text();
@@ -483,7 +524,10 @@ class DebugController extends BaseController {
         raw: JSON.stringify(parsed).slice(0, 5000),
       });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 }

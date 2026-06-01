@@ -40,7 +40,7 @@ test('session status probes persist fresh Clerk client cookies after live refres
   const storeSrc = read('server/services/store.js');
 
   assert.match(storeSrc, /const cookieStack\s*=\s*normalizeClientCookies\(config\)/);
-  assert.match(storeSrc, /refreshSession\(cookieInput,\s*sessionCookie\)/);
+  assert.match(storeSrc, /refreshSession\(cookieInput,\s*sessionCookie,\s*\{ signal \}\)/);
   assert.match(
     storeSrc,
     /if\s*\(result\s*&&\s*userId\s*&&\s*accountId\)\s*\{[\s\S]*updateAccountSession\([\s\S]*result\.clientCookie[\s\S]*result\.sessionExpiry/s,

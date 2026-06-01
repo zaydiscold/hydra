@@ -8,6 +8,7 @@ import { rotationManager } from '../services/rotation-manager.js';
 import { assertManagementKey, assertStandardKey } from '../services/key-utils.js';
 import { rotateProxySecret } from '../services/local-secrets.js';
 import { logger } from '../services/logger.js';
+import { bindRequestAbort, combineAbortSignals, throwIfAborted } from '../lib/abort.js';
 
 // Cache OpenRouter listKeys results per account — 2 min TTL.
 // Pool Manager hits this on every page load; no need to hammer OR on every visit.
@@ -45,11 +46,13 @@ class PoolController extends BaseController {
    * Also syncs key metadata from OpenRouter to local DB so new keys show up.
    */
   async getPoolData(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'pool data request');
     try {
       const allAccounts = await store.getAllAccountsWithKeys(req.user.id);
 
       const accountResults = await Promise.allSettled(
         allAccounts.map(async (account) => {
+          throwIfAborted(requestAbort.signal);
           if (!account.managementKey) {
             return {
               id: account.id,
@@ -74,7 +77,8 @@ class PoolController extends BaseController {
           // Fetch live key list from OpenRouter — cached 2 min to avoid hammering OR on every page load.
           let liveKeys = getCachedLiveKeys(account.id);
           if (!liveKeys) {
-            const liveKeysRaw = await openrouter.listKeys(account.managementKey);
+            const liveKeysRaw = await openrouter.listKeys(account.managementKey, true, { signal: requestAbort.signal });
+            throwIfAborted(requestAbort.signal);
             liveKeys = Array.isArray(liveKeysRaw) ? liveKeysRaw : [];
             setCachedLiveKeys(account.id, liveKeys);
             // Sync metadata to DB only on cache miss (live fetch)
@@ -111,6 +115,7 @@ class PoolController extends BaseController {
         })
       );
 
+      throwIfAborted(requestAbort.signal);
       const accounts = accountResults.map((r, i) => {
         if (r.status === 'fulfilled') return r.value;
         return {
@@ -135,7 +140,10 @@ class PoolController extends BaseController {
 
       return this.success(res, { accounts, poolStats, modelCache: modelCacheMeta });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -228,6 +236,7 @@ class PoolController extends BaseController {
    * Save (encrypt) a raw API key string provided by the user.
    */
   async registerKeyString(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'pool key registration request');
     try {
       const { hash } = req.params;
       const keyString = req.body?.keyString?.trim();
@@ -240,7 +249,8 @@ class PoolController extends BaseController {
 
       // Validate the pasted key and make sure it matches the target record.
       const orTest = await fetch('https://openrouter.ai/api/v1/auth/key', {
-        headers: { 'Authorization': `Bearer ${keyString}` }
+        headers: { 'Authorization': `Bearer ${keyString}` },
+        signal: combineAbortSignals(requestAbort.signal, AbortSignal.timeout(30_000)),
       });
       if (!orTest.ok) {
         return this.error(res, 'Invalid OpenRouter key. Connection refused or key revoked.', 400);
@@ -265,7 +275,10 @@ class PoolController extends BaseController {
       await rotationManager.reload();
       return this.success(res, { registered: true, hash });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.message.includes('Invalid key') ? 400 : 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -296,6 +309,7 @@ class PoolController extends BaseController {
    * stores it encrypted locally, and marks it as pooled immediately.
    */
   async autoProvision(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'pool auto-provision request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.accountId);
       try {
@@ -305,7 +319,7 @@ class PoolController extends BaseController {
       }
 
       const keyName = `Hydra Pool ${new Date().toISOString().slice(0, 10)}`;
-      const result = await openrouter.createKey(account.managementKey, { name: keyName });
+      const result = await openrouter.createKey(account.managementKey, { name: keyName }, { signal: requestAbort.signal });
 
       // Save key string encrypted in DB (same as KeyController.createKey)
       await store.saveKey(req.user.id, account.id, {
@@ -322,7 +336,10 @@ class PoolController extends BaseController {
 
       return this.success(res, { hash: result.data.hash, name: result.data.name, pooled: true });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -359,6 +376,7 @@ class PoolController extends BaseController {
    * Toggle the enabled/disabled state of a key on OpenRouter.
    */
   async toggleKeyEnabled(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'pool key toggle request');
     try {
       const { hash } = req.params;
       const { disabled } = req.body; // boolean
@@ -369,10 +387,13 @@ class PoolController extends BaseController {
       if (!account) return this.error(res, 'Key not found or access denied', 404);
       assertManagementKey(account.managementKey, 'toggle key enabled');
 
-      await openrouter.updateKey(account.managementKey, hash, { disabled });
+      await openrouter.updateKey(account.managementKey, hash, { disabled }, { signal: requestAbort.signal });
       return this.success(res, { hash, disabled });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -381,18 +402,22 @@ class PoolController extends BaseController {
    * Delete a key from OpenRouter and remove from local DB.
    */
   async deleteKey(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'pool key delete request');
     try {
       const { hash } = req.params;
       const account = await store.getAccountOwnerOfKey(req.user.id, hash);
       if (!account) return this.error(res, 'Key not found or access denied', 404);
       assertManagementKey(account.managementKey, 'delete key');
 
-      await openrouter.deleteKey(account.managementKey, hash);
+      await openrouter.deleteKey(account.managementKey, hash, { signal: requestAbort.signal });
       await store.deleteKey(req.user.id, hash);
       await rotationManager.reload();
       return this.success(res, { deleted: true, hash });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -408,6 +433,7 @@ class PoolController extends BaseController {
 
   // --- NEW-3: Curated Model List Sync ---
   async refreshModels(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'pool model refresh request');
     try {
       const keyEntry = await rotationManager.getNextKey();
       let apiKey = keyEntry?.keyString ?? null;
@@ -422,7 +448,7 @@ class PoolController extends BaseController {
         );
       }
 
-      const result = await modelCatalog.fetchOpenRouterModelsList(apiKey);
+      const result = await modelCatalog.fetchOpenRouterModelsList(apiKey, { signal: requestAbort.signal });
       if (!result.ok) {
         return this.error(res, 'Failed to fetch from OpenRouter', 502);
       }
@@ -430,7 +456,10 @@ class PoolController extends BaseController {
       const count = await modelCatalog.upsertModelsFromUpstream(result.data);
       return this.success(res, { count });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
   // --- NEW-4: Traffic Dashboard ---

@@ -13,6 +13,7 @@ import { updateAccountSession, logAccountEvent, getLatestClientCookie, normalize
 import { refreshSession, extractNewClientCookie } from './clerk-auth.js';
 import { logger } from './logger.js';
 import { decrypt, encryptConfig } from './storage-codec.js';
+import { throwIfAborted } from '../lib/abort.js';
 
 const REFRESH_WINDOW_MS = 24 * 60 * 60 * 1000; // probe within 24h of expiry
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // run every 6h
@@ -24,6 +25,8 @@ let _sweepRunning = false;
 let _sweepPromise = null;
 let _lastSessionProbeAt = 0;
 let _stopping = false;
+let _lifecycleController = null;
+let _sessionProbePromise = null;
 
 async function getConfigForAccount(account) {
   try {
@@ -35,7 +38,7 @@ async function getConfigForAccount(account) {
 }
 
 
-export async function sweepAndRefresh() {
+export async function sweepAndRefresh({ signal = _lifecycleController?.signal ?? null } = {}) {
   if (_sweepRunning) {
     logger.warn('[AUTO-REFRESH] Previous sweep still running; skipping overlap');
     return _sweepPromise;
@@ -44,19 +47,20 @@ export async function sweepAndRefresh() {
 
   // #44: Save the promise so stopSessionRefresher() can await the in-flight
   // sweep instead of only clearing timers and returning immediately.
-  _sweepPromise = _sweepImpl().finally(() => {
+  _sweepPromise = _sweepImpl(signal).finally(() => {
     _sweepRunning = false;
     _sweepPromise = null;
   });
   return _sweepPromise;
 }
 
-async function _sweepImpl() {
+async function _sweepImpl(signal) {
   let swept = 0;
   let refreshed = 0;
   let skipped = 0;
 
   try {
+    throwIfAborted(signal);
     const accounts = await prisma.account.findMany({
       select: {
         id: true,
@@ -71,6 +75,7 @@ async function _sweepImpl() {
 
     for (const account of accounts) {
       try {
+        throwIfAborted(signal);
         const config = await getConfigForAccount(account);
         if (!config) { skipped++; continue; }
 
@@ -100,9 +105,10 @@ async function _sweepImpl() {
         const sessionCookie = config.sessionCookie ?? '';
 
         for (let i = 0; i < liveStack.length; i++) {
+          throwIfAborted(signal);
           const entry = liveStack[i];
           logger.info(`[AUTO-REFRESH] Account ${account.id} trying stacked cookie ${i + 1}/${liveStack.length} (issued ${entry.issuedAt})`);
-          const result = await refreshSession(entry.cookie, sessionCookie);
+          const result = await refreshSession(entry.cookie, sessionCookie, { signal });
           if (result) {
             refreshResult = result;
             break;
@@ -152,12 +158,17 @@ async function _sweepImpl() {
         refreshed++;
         logger.info(`[AUTO-REFRESH] Refreshed session for account=${account.id} (stack has ${liveStack.length} cookie(s))`);
       } catch (err) {
+        throwIfAborted(signal);
         logger.warn(`[AUTO-REFRESH] Failed for account=${account.id}: ${err.message}`);
         skipped++;
       }
     }
   } catch (err) {
-    logger.error(`[AUTO-REFRESH] Sweep failed: ${err.message}`);
+    if (signal?.aborted) {
+      logger.info('[AUTO-REFRESH] Sweep cancelled during shutdown');
+    } else {
+      logger.error(`[AUTO-REFRESH] Sweep failed: ${err.message}`);
+    }
   }
 
   if (swept > 0) {
@@ -168,10 +179,19 @@ async function _sweepImpl() {
   // This is useful instrumentation, but it performs live Clerk refresh probes
   // for every logged-in account. Keep it opt-in so an idle desktop app does not
   // heat the machine just to collect observational lifetime data.
-  if (SESSION_PROBE_ENABLED && Date.now() - _lastSessionProbeAt >= SESSION_PROBE_INTERVAL_MS) {
+  if (!signal?.aborted && !_sessionProbePromise && SESSION_PROBE_ENABLED && Date.now() - _lastSessionProbeAt >= SESSION_PROBE_INTERVAL_MS) {
     _lastSessionProbeAt = Date.now();
-    _runSessionProbe().catch((err) =>
-      logger.warn(`[SESSION_PROBE] Probe pass failed: ${err.message}`));
+    _sessionProbePromise = _runSessionProbe(signal)
+      .catch((err) => {
+        if (signal?.aborted) {
+          logger.info('[SESSION_PROBE] Probe pass cancelled during shutdown');
+        } else {
+          logger.warn(`[SESSION_PROBE] Probe pass failed: ${err.message}`);
+        }
+      })
+      .finally(() => {
+        _sessionProbePromise = null;
+      });
   }
 }
 
@@ -205,7 +225,8 @@ function _redactSid(sid) {
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 }
 
-async function _runSessionProbe() {
+async function _runSessionProbe(signal) {
+  throwIfAborted(signal);
   const accounts = await prisma.account.findMany({
     select: {
       id: true,
@@ -218,6 +239,7 @@ async function _runSessionProbe() {
   const probeAccounts = [];
 
   for (const account of accounts) {
+    throwIfAborted(signal);
     const config = await getConfigForAccount(account);
     if (!config || !config.lastLoginAt) continue; // not logged in yet — nothing to track
     if (config.pendingVerification) continue;      // OTP stub not verified — skip
@@ -233,6 +255,7 @@ async function _runSessionProbe() {
 
   for (const { account, config } of probeAccounts) {
     try {
+      throwIfAborted(signal);
       // ── Decode session ID from stored JWT (stable Clerk identifier) ──────
       let rawJwt = '';
       try {
@@ -255,8 +278,11 @@ async function _runSessionProbe() {
           `login_at=${config.lastLoginAt}`
         );
         const updatedConfig = { ...config, _probeSid: currentSid, _probeSidSince: new Date().toISOString() };
-        prisma.account.update({ where: { id: account.id }, data: { config: encryptConfig(updatedConfig) } })
-          .catch((e) => logger.warn(`[SESSION_PROBE] Failed to persist sid for ${account.id}: ${e.message}`));
+        try {
+          await prisma.account.update({ where: { id: account.id }, data: { config: encryptConfig(updatedConfig) } });
+        } catch (err) {
+          logger.warn(`[SESSION_PROBE] Failed to persist sid for ${account.id}: ${err.message}`);
+        }
       }
 
       const sid         = currentSid || trackedSid || '(no-sid)';
@@ -268,9 +294,10 @@ async function _runSessionProbe() {
       let status = 'no-cookie';
       if (cookieStack.length > 0) {
         try {
-          const result = await refreshSession(cookieStack, rawJwt);
+          const result = await refreshSession(cookieStack, rawJwt, { signal });
           status = result ? 'active' : 'expired';
         } catch (err) {
+          throwIfAborted(signal);
           logger.warn(`[SESSION_PROBE] Live refresh probe failed for account=${account.id}: ${err.message}`);
           status = 'error';
         }
@@ -294,6 +321,7 @@ async function _runSessionProbe() {
         );
       }
     } catch (err) {
+      throwIfAborted(signal);
       logger.warn(`[SESSION_PROBE] Failed for account=${account.id} alias="${_redactAlias(account.alias)}": ${err.message}`);
     }
   }
@@ -318,6 +346,7 @@ function scheduleNextSweep(delayMs = INTERVAL_MS) {
 export function startSessionRefresher() {
   if (_startupTimeoutHandle || _intervalHandle || _sweepRunning) return;
   _stopping = false;
+  _lifecycleController = new AbortController();
   _startupTimeoutHandle = setTimeout(() => {
     _startupTimeoutHandle = null;
     sweepAndRefresh().finally(() => {
@@ -338,6 +367,7 @@ export async function stopSessionRefresher() {
     clearTimeout(_intervalHandle);
     _intervalHandle = null;
   }
+  _lifecycleController?.abort(new Error('Session refresher shutdown requested'));
   // #44: Await the in-flight sweep so DB writes complete before shutdown
   // continues. Without this, stop() could return while a sweep is still
   // writing session updates to the database.
@@ -348,4 +378,9 @@ export async function stopSessionRefresher() {
   } else {
     logger.info('[AUTO-REFRESH] Session refresher stopped');
   }
+  if (_sessionProbePromise) {
+    logger.info('[SESSION_PROBE] Waiting for in-flight probe pass to stop');
+    await _sessionProbePromise;
+  }
+  _lifecycleController = null;
 }

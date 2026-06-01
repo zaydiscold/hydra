@@ -34,6 +34,7 @@ import * as dashboardApi from './dashboard-api.js';
 import { logger } from './logger.js';
 import { taskSupervisor } from './task-supervisor.js';
 import { USER_AGENT, OR_BASE } from '../config.js';
+import { sleepWithSignal, throwIfAborted } from '../lib/abort.js';
 import {
   describeAutomationNetworkRoute,
   mergeAutomationLaunchArgs,
@@ -131,8 +132,10 @@ function trackPromise(task, promise) {
 // ---------------------------------------------------------------------------
 
 async function launchSignupFlowPlaywright(task) {
+  const signal = task.abortController.signal;
   const promise = (async () => {
     try {
+      throwIfAborted(signal);
       taskSupervisor.updateTask(task.taskId, { status: 'launching_browser' });
       const launchArgs = [];
       if (process.env.HYDRA_PLAYWRIGHT_NO_SANDBOX === '1') {
@@ -170,6 +173,7 @@ async function launchSignupFlowPlaywright(task) {
       const browser = context.browser();
       const page = await context.newPage();
       taskSupervisor.attachResources(task.taskId, { browser, context, page });
+      throwIfAborted(signal);
 
       taskSupervisor.updateTask(task.taskId, { status: 'navigating_signup' });
       // Use /sign-up directly (OpenRouter changed from /login?intent=signup)
@@ -285,6 +289,7 @@ async function launchSignupFlowPlaywright(task) {
 }
 
 async function finalizeOtpSubmissionPlaywright(task, otpCode) {
+  const signal = task.abortController.signal;
   const promise = (async () => {
     try {
       const page = task.resources.page;
@@ -351,10 +356,10 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
         logger.info(`[Account Generator] Short-lived session detected (${Math.round((initialExpiryMs - nowMs)/1000)}s), activating long-lived session...`);
 
         // Wait for Clerk propagation (OTP sessions take 2-4 seconds to propagate)
-        await new Promise(r => setTimeout(r, 1000));
+        await sleepWithSignal(1000, signal);
 
         // Try to refresh using the client cookie AND expired session to get a proper session
-        const refreshed = await refreshSession(allDeviceCookies, sessionCookie);
+        const refreshed = await refreshSession(allDeviceCookies, sessionCookie, { signal });
         if (refreshed && refreshed.sessionCookie) {
           const refreshedExpiryMs = new Date(refreshed.sessionExpiry).getTime();
           if (refreshedExpiryMs - nowMs > ONE_HOUR) {
@@ -369,6 +374,7 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
       }
 
       taskSupervisor.updateTask(task.taskId, { status: 'saving_local_profile' });
+      throwIfAborted(signal);
       const accountAlias = task.metadata.email.split('@')[0];
       const newAccount = await store.addAccountWithCredentials(
         task.ownerUserId,
@@ -395,6 +401,7 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
         task.ownerUserId,
         newAccount.id,
         `Hydra Gen ${accountAlias}`,
+        { signal },
       );
       if (provisioned?.success === false) {
         throw new Error(provisioned.message || 'Management key provisioning failed');
@@ -417,14 +424,17 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
 // ---------------------------------------------------------------------------
 
 async function launchSignupFlow(task) {
+  const signal = task.abortController.signal;
   const promise = (async () => {
     try {
+      throwIfAborted(signal);
       taskSupervisor.updateTask(task.taskId, { status: 'detecting_account' });
 
       let authInfo;
       try {
-        authInfo = await detectAuthMethod(task.metadata.email);
+        authInfo = await detectAuthMethod(task.metadata.email, { signal });
       } catch (fapiErr) {
+        throwIfAborted(signal);
         logger.warn(`[Account Generator] FAPI detectAuthMethod failed for ${task.metadata.email}: ${fapiErr.message} — falling back to browser`);
         taskSupervisor.updateTask(task.taskId, { status: 'falling_back_to_browser' });
         return launchSignupFlowPlaywright(task);
@@ -439,8 +449,9 @@ async function launchSignupFlow(task) {
       taskSupervisor.updateTask(task.taskId, { status: 'sending_otp' });
       let otpInfo;
       try {
-        otpInfo = await startEmailOTP(task.metadata.email);
+        otpInfo = await startEmailOTP(task.metadata.email, { signal });
       } catch (fapiErr) {
+        throwIfAborted(signal);
         logger.warn(`[Account Generator] FAPI startEmailOTP failed for ${task.metadata.email}: ${fapiErr.message} — falling back to browser`);
         taskSupervisor.updateTask(task.taskId, { status: 'falling_back_to_browser' });
         return launchSignupFlowPlaywright(task);
@@ -464,6 +475,7 @@ async function launchSignupFlow(task) {
 }
 
 async function finalizeOtpSubmission(task, otpCode) {
+  const signal = task.abortController.signal;
   const promise = (async () => {
     try {
       // HTTP tasks carry signInId/clientCookie in resources. Browser fallback
@@ -479,7 +491,7 @@ async function finalizeOtpSubmission(task, otpCode) {
 
       taskSupervisor.updateTask(task.taskId, { status: 'verifying_otp' });
 
-      const session = await completeEmailOTP(signInId, otpCode, clientCookie, { isSignUp });
+      const session = await completeEmailOTP(signInId, otpCode, clientCookie, { isSignUp, signal });
 
       if (!session?.sessionCookie) {
         throw new Error('OTP verified but no session cookie returned from Clerk');
@@ -495,9 +507,9 @@ async function finalizeOtpSubmission(task, otpCode) {
       const ONE_HOUR = 60 * 60 * 1000;
       if (new Date(initialExpiry).getTime() - Date.now() < ONE_HOUR) {
         taskSupervisor.updateTask(task.taskId, { status: 'activating_session' });
-        await new Promise(r => setTimeout(r, 1000)); // Clerk propagation delay (OTP sessions need 1-4s)
+        await sleepWithSignal(1000, signal); // Clerk propagation delay (OTP sessions need 1-4s)
         const allDeviceCookies = openRouterDashboardDeviceCookies(deviceCookies);
-        const refreshed = await refreshSession(allDeviceCookies, sessionCookie);
+        const refreshed = await refreshSession(allDeviceCookies, sessionCookie, { signal });
         if (refreshed?.sessionCookie &&
             new Date(refreshed.sessionExpiry || 0).getTime() - Date.now() > ONE_HOUR) {
           sessionCookie = refreshed.sessionCookie;
@@ -509,6 +521,7 @@ async function finalizeOtpSubmission(task, otpCode) {
       }
 
       taskSupervisor.updateTask(task.taskId, { status: 'saving_profile' });
+      throwIfAborted(signal);
       // openRouterDashboardDeviceCookies returns [{cookie, issuedAt}] array (Exploit #14 cookie stacking).
       // updateAccountSession expects this array — do NOT join it into a string.
       const allDeviceCookies = openRouterDashboardDeviceCookies(deviceCookies);
@@ -540,6 +553,7 @@ async function finalizeOtpSubmission(task, otpCode) {
         task.ownerUserId,
         newAccount.id,
         `Hydra Gen ${accountAlias}`,
+        { signal },
       );
       if (provisioned?.success === false) {
         throw new Error(provisioned.message || 'Management key provisioning failed');

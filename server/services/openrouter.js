@@ -1,4 +1,5 @@
 import { logger } from './logger.js';
+import { combineAbortSignals, sleepWithSignal, throwIfAborted } from '../lib/abort.js';
 
 const BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -6,9 +7,10 @@ const RETRY_DELAYS = [500, 1000, 2000];
 const DEFAULT_TIMEOUT_MS = 30000;
 
 async function apiRequest(path, managementKey, options = {}) {
-  const { method = 'GET', body, retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const { method = 'GET', body, retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS, signal = null } = options;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    throwIfAborted(signal);
     try {
       const fetchOptions = {
         method,
@@ -22,13 +24,13 @@ async function apiRequest(path, managementKey, options = {}) {
         fetchOptions.body = JSON.stringify(body);
       }
 
-      fetchOptions.signal = AbortSignal.timeout(timeoutMs);
+      fetchOptions.signal = combineAbortSignals(signal, AbortSignal.timeout(timeoutMs));
 
       const response = await fetch(`${BASE_URL}${path}`, fetchOptions);
 
       if (response.status === 429) {
         if (attempt < retries) {
-          await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt] || 2000));
+          await sleepWithSignal(RETRY_DELAYS[attempt] || 2000, signal);
           continue;
         }
         throw new Error('Rate limited by OpenRouter. Please try again later.');
@@ -48,8 +50,9 @@ async function apiRequest(path, managementKey, options = {}) {
 
       return await response.json();
     } catch (err) {
+      throwIfAborted(signal);
       if (attempt < retries && (err.code === 'ECONNRESET' || err.name === 'TimeoutError')) {
-        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt] || 1000));
+        await sleepWithSignal(RETRY_DELAYS[attempt] || 1000, signal);
         continue;
       }
       if (err.name === 'TimeoutError') {
@@ -61,8 +64,8 @@ async function apiRequest(path, managementKey, options = {}) {
 }
 
 // Credits
-export async function getCredits(managementKey) {
-  const result = await apiRequest('/credits', managementKey);
+export async function getCredits(managementKey, options = {}) {
+  const result = await apiRequest('/credits', managementKey, options);
   const d = result.data ?? {};
   const total = d.total_credits ?? d.total ?? 0;
   const used = d.total_usage ?? d.used ?? 0;
@@ -74,28 +77,28 @@ export async function getCredits(managementKey) {
 }
 
 // API Keys
-export async function listKeys(managementKey, includeDisabled = true) {
+export async function listKeys(managementKey, includeDisabled = true, options = {}) {
   const qs = includeDisabled ? '?include_disabled=true' : '';
-  const result = await apiRequest(`/keys${qs}`, managementKey);
+  const result = await apiRequest(`/keys${qs}`, managementKey, options);
   const data = result?.data;
   return Array.isArray(data) ? data : [];
 }
 
-export async function createKey(managementKey, { name, limit, limitReset, includeByokInLimit, expiresAt }) {
+export async function createKey(managementKey, { name, limit, limitReset, includeByokInLimit, expiresAt }, options = {}) {
   const body = { name };
   if (limit !== undefined && limit !== null) body.limit = limit;
   if (limitReset) body.limit_reset = limitReset;
   if (includeByokInLimit !== undefined) body.include_byok_in_limit = includeByokInLimit;
   if (expiresAt) body.expires_at = expiresAt;
 
-  const result = await apiRequest('/keys', managementKey, { method: 'POST', body });
+  const result = await apiRequest('/keys', managementKey, { ...options, method: 'POST', body });
   return { data: result.data, key: result.key };
 }
 
 // GET /keys/{hash} exists upstream but returns metadata only (no secret per OpenRouter OpenAPI).
 // Do not add a wrapper that implies we can "fetch" a lost sk-or-v1 string.
 
-export async function updateKey(managementKey, hash, updates) {
+export async function updateKey(managementKey, hash, updates, options = {}) {
   const body = {};
   if (updates.name !== undefined) body.name = updates.name;
   if (updates.disabled !== undefined) body.disabled = updates.disabled;
@@ -103,23 +106,25 @@ export async function updateKey(managementKey, hash, updates) {
   if (updates.limitReset !== undefined) body.limit_reset = updates.limitReset;
   if (updates.includeByokInLimit !== undefined) body.include_byok_in_limit = updates.includeByokInLimit;
 
-  const result = await apiRequest(`/keys/${hash}`, managementKey, { method: 'PATCH', body });
+  const result = await apiRequest(`/keys/${hash}`, managementKey, { ...options, method: 'PATCH', body });
   return result.data;
 }
 
-export async function deleteKey(managementKey, hash) {
-  const result = await apiRequest(`/keys/${hash}`, managementKey, { method: 'DELETE' });
+export async function deleteKey(managementKey, hash, options = {}) {
+  const result = await apiRequest(`/keys/${hash}`, managementKey, { ...options, method: 'DELETE' });
   return result;
 }
 
 // Full account snapshot (balance + keys)
-export async function getAccountSnapshot(managementKey) {
+export async function getAccountSnapshot(managementKey, { signal = null } = {}) {
   const [credits, keys] = await Promise.all([
-    getCredits(managementKey).catch((err) => {
+    getCredits(managementKey, { signal }).catch((err) => {
+      throwIfAborted(signal);
       logger.warn(`[OpenRouter] Account snapshot credits lookup failed: ${err?.message || err}`);
       return { total: 0, used: 0, remaining: 0 };
     }),
-    listKeys(managementKey).catch((err) => {
+    listKeys(managementKey, true, { signal }).catch((err) => {
+      throwIfAborted(signal);
       logger.warn(`[OpenRouter] Account snapshot key list lookup failed: ${err?.message || err}`);
       return [];
     }),

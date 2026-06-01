@@ -73,25 +73,33 @@ export class AccountController extends BaseController {
   }
 
   async addAccount(req, res) {
-    const { alias, managementKey } = this.validate(req.body, addAccountSchema);
-    
+    const requestAbort = bindRequestAbort(req, res, 'account add request');
     try {
-      assertManagementKey(managementKey, 'account management');
+      const { alias, managementKey } = this.validate(req.body, addAccountSchema);
+
+      try {
+        assertManagementKey(managementKey, 'account management');
+      } catch (err) {
+        err.status = 400;
+        throw err;
+      }
+
+      try {
+        await openrouter.getCredits(managementKey, { signal: requestAbort.signal });
+      } catch (err) {
+        const wrappedErr = new Error(`Invalid management key: ${err.message}`);
+        wrappedErr.status = 400;
+        throw wrappedErr;
+      }
+
+      const account = await store.addAccount(req.user.id, alias, managementKey);
+      return this.success(res, account, 201);
     } catch (err) {
-      err.status = 400;
+      if (requestAbort.signal.aborted) return;
       throw err;
+    } finally {
+      requestAbort.dispose();
     }
-    
-    try {
-      await openrouter.getCredits(managementKey);
-    } catch (err) {
-      const wrappedErr = new Error(`Invalid management key: ${err.message}`);
-      wrappedErr.status = 400;
-      throw wrappedErr;
-    }
-    
-    const account = await store.addAccount(req.user.id, alias, managementKey);
-    return this.success(res, account, 201);
   }
 
   async addAccountWithCredentials(req, res) {
@@ -310,6 +318,7 @@ export class AccountController extends BaseController {
   }
 
   async refreshAccountLogin(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account refresh-login request');
     try {
       const session = await store.getAccountSession(req.user.id, req.params.id);
 
@@ -317,7 +326,9 @@ export class AccountController extends BaseController {
       if (hasRefreshCookie(session)) {
         try {
           const cookieInput244 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
-          const refreshed = await clerkAuth.refreshSession(cookieInput244, session.sessionCookie);
+          const refreshed = await clerkAuth.refreshSession(cookieInput244, session.sessionCookie, {
+            signal: requestAbort.signal,
+          });
           if (refreshed?.sessionToken) {
             const liveStack = pruneDeadClientCookies(session.clientCookies, refreshed);
             await store.updateAccountSession(
@@ -341,16 +352,20 @@ export class AccountController extends BaseController {
       await store.logAccountEvent(req.user.id, req.params.id, 'LOGIN_REFRESH_START', 'Session cleared for fresh re-auth');
       return this.success(res, { success: true, recovered: false, message: 'Session cleared. Please re-authenticate.' });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   async detectAuth(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account auth detection request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
       if (!account.email) return this.error(res, 'Account has no email stored', 400);
       
-      const result = await clerkAuth.detectAuthMethod(account.email);
+      const result = await clerkAuth.detectAuthMethod(account.email, { signal: requestAbort.signal });
       if (result.clientCookie) {
         // Keep existing stored expiry; don't fall back to JWT exp (that's ~2.5 min, not session TTL)
         const sessionExpiry = account.sessionExpiry ?? null;
@@ -364,7 +379,10 @@ export class AccountController extends BaseController {
       }
       return this.success(res, result);
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -382,13 +400,16 @@ export class AccountController extends BaseController {
       );
     }
     
+    const requestAbort = bindRequestAbort(req, res, 'account password login request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
       const usePassword = req.body.password || account.password;
       if (!account.email) return this.error(res, 'No email on this account', 400);
       if (!usePassword) return this.error(res, 'Password required', 400);
 
-      const session = await clerkAuth.signInWithPassword(account.email, usePassword);
+      const session = await clerkAuth.signInWithPassword(account.email, usePassword, {
+        signal: requestAbort.signal,
+      });
       await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry, { isNewLogin: true });
       await store.updateAccountLastSync(req.user.id, req.params.id);
       await store.logAccountEvent(req.user.id, req.params.id, 'LOGIN_SUCCESS', 'Signed in via Password');
@@ -398,6 +419,7 @@ export class AccountController extends BaseController {
 
       return this.success(res, { sessionExpiry: session.sessionExpiry, status: 'active' });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       if (err.name === 'NeedSecondFactorError' && err.signInId && err.clientCookie) {
         await store.updateAccountSession(req.user.id, req.params.id, null, err.clientCookie, null);
         await store.logAccountEvent(req.user.id, req.params.id, 'OTP_REQUIRED', 'Password accepted, OTP required');
@@ -413,6 +435,8 @@ export class AccountController extends BaseController {
         return res.status(202).json({ success: true, requiresTwoFactor: true }); // intentional raw — see above
       }
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -430,12 +454,15 @@ export class AccountController extends BaseController {
       );
     }
     
+    const requestAbort = bindRequestAbort(req, res, 'account OTP start request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
       const email = req.body.email || account.email;
       if (!email) return this.error(res, 'Email required', 400);
 
-      const { signInId, clientCookie, isSignUp } = await clerkAuth.startEmailOTP(email);
+      const { signInId, clientCookie, isSignUp } = await clerkAuth.startEmailOTP(email, {
+        signal: requestAbort.signal,
+      });
       await store.updateAccountSession(req.user.id, req.params.id, undefined, clientCookie, undefined, {
         preserveSessionToken: true,
       });
@@ -448,11 +475,15 @@ export class AccountController extends BaseController {
         remainingAttempts: loginCheck.remaining,
       });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   async verifyOTP(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account OTP verify request');
     try {
       const { signInId, code, totpSecondFactor, isSignUp } = this.validate(req.body, otpVerifySchema);
 
@@ -472,8 +503,11 @@ export class AccountController extends BaseController {
         );
       }
       const session = totpSecondFactor
-        ? await clerkAuth.completeSecondFactor(signInId, code, storedClient)
-        : await clerkAuth.completeEmailOTP(signInId, code, storedClient, { isSignUp: isSignUp ?? false });
+        ? await clerkAuth.completeSecondFactor(signInId, code, storedClient, { signal: requestAbort.signal })
+        : await clerkAuth.completeEmailOTP(signInId, code, storedClient, {
+            isSignUp: isSignUp ?? false,
+            signal: requestAbort.signal,
+          });
       await store.updateAccountSession(req.user.id, req.params.id, session.sessionCookie, session.clientCookie, session.sessionExpiry, { isNewLogin: true });
       await store.updateAccountLastSync(req.user.id, req.params.id);
       await store.logAccountEvent(req.user.id, req.params.id, 'OTP_VERIFIED', 'Signed in via OTP');
@@ -498,7 +532,9 @@ export class AccountController extends BaseController {
         if (existingKeys.length === 0) {
           autoProvision = 'started';
           // SYNCHRONOUS - OTP sessions expire too fast for background processing
-          provisionResult = await dashboardApi.createManagementKey(userId, accountId);
+          provisionResult = await dashboardApi.createManagementKey(userId, accountId, undefined, {
+            signal: requestAbort.signal,
+          });
           if (provisionResult?.key) {
             autoProvision = 'completed';
             logger.info(`[ACCOUNT] Auto-provisioned management key after OTP (account=${accountId})`);
@@ -512,6 +548,7 @@ export class AccountController extends BaseController {
           logger.info(`[ACCOUNT] Skipping auto-provision - ${existingKeys.length} key(s) already in ManagementKey table`);
         }
       } catch (checkErr) {
+        throwIfAborted(requestAbort.signal);
         autoProvision = 'error';
         logger.warn(`[ACCOUNT] Auto-provision after OTP failed (account=${accountId}): ${checkErr.message}`);
       }
@@ -523,16 +560,22 @@ export class AccountController extends BaseController {
         managementKey: provisionResult?.key ? true : false
       });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       logger.warn(`[ACCOUNT] verifyOTP failed (account=${req.params.id}): ${err.message}`);
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   async refresh(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account session refresh request');
     try {
       const session = await store.getAccountSession(req.user.id, req.params.id);
       const cookieInput448 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
-      const refreshed = await clerkAuth.refreshSession(cookieInput448, session.sessionCookie);
+      const refreshed = await clerkAuth.refreshSession(cookieInput448, session.sessionCookie, {
+        signal: requestAbort.signal,
+      });
       if (!refreshed) return this.error(res, 'Session refresh failed — please log in again', 401);
       const cc = refreshed.clientCookie ?? latestClientCookie(session);
       const liveStack = pruneDeadClientCookies(session.clientCookies, refreshed);
@@ -542,7 +585,10 @@ export class AccountController extends BaseController {
       await store.logAccountEvent(req.user.id, req.params.id, 'SESSION_REFRESHED', 'Session refreshed via Clerk API');
       return this.success(res, { sessionExpiry: refreshed.sessionExpiry, status: 'active' });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -561,11 +607,14 @@ export class AccountController extends BaseController {
   }
 
   async provision(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account provisioning request');
     try {
       const keyName = req.body?.keyName;
       let result;
       try {
-        result = await dashboardApi.createManagementKey(req.user.id, req.params.id, keyName);
+        result = await dashboardApi.createManagementKey(req.user.id, req.params.id, keyName, {
+          signal: requestAbort.signal,
+        });
       } catch (err) {
         if (isAuthoritativeSessionFailure(err)) {
           invalidateSnapshotCache(req.params.id);
@@ -590,6 +639,7 @@ export class AccountController extends BaseController {
       
       return this.success(res, result);
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       if (err instanceof ProvisionKeyNotCapturedError || err?.code === 'PROVISION_KEY_NOT_CAPTURED') {
         const debugDir = err.provisionDetails?.debugDir ?? join(tmpdir(), 'hydra-provision-debug');
         return this.error(res, err.message, err.status || 500, err.code || 'PROVISION_KEY_NOT_CAPTURED', {
@@ -613,6 +663,8 @@ export class AccountController extends BaseController {
         });
       }
       return this.error(res, msg, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -645,9 +697,10 @@ export class AccountController extends BaseController {
           const signal = combineAbortSignals(requestAbort.signal, task.abortController.signal);
           return runInBatches(eligible, async (account) => {
             try {
-              const result = await dashboardApi.createManagementKey(req.user.id, account.id);
+              const result = await dashboardApi.createManagementKey(req.user.id, account.id, undefined, { signal });
               return { id: account.id, alias: account.alias, ...result };
             } catch (err) {
+              throwIfAborted(signal);
               return { id: account.id, alias: account.alias, success: false, error: err.message };
             }
           }, { signal });
@@ -656,6 +709,7 @@ export class AccountController extends BaseController {
       );
       return this.success(res, { results, skipped });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500);
     } finally {
       requestAbort.dispose();
@@ -663,6 +717,7 @@ export class AccountController extends BaseController {
   }
 
   async updateAccount(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account update request');
     try {
       const validated = this.validate(req.body, updateAccountSchema);
       if (validated.managementKey) {
@@ -672,7 +727,7 @@ export class AccountController extends BaseController {
           return this.error(res, err.message, 400);
         }
         try {
-          await openrouter.getCredits(validated.managementKey);
+          await openrouter.getCredits(validated.managementKey, { signal: requestAbort.signal });
         } catch (err) {
           return this.error(res, `Invalid management key: ${err.message}`, 400);
         }
@@ -680,7 +735,10 @@ export class AccountController extends BaseController {
       const result = await store.updateAccount(req.user.id, req.params.id, validated);
       return this.success(res, result);
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -707,6 +765,7 @@ export class AccountController extends BaseController {
   }
 
   async getSnapshot(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account snapshot request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
       
@@ -720,7 +779,7 @@ export class AccountController extends BaseController {
       } catch (err) {
         return this.error(res, err.message, 400);
       }
-      const snapshot = await openrouter.getAccountSnapshot(bestKey.key);
+      const snapshot = await openrouter.getAccountSnapshot(bestKey.key, { signal: requestAbort.signal });
       await store.updateAccountLastSync(req.user.id, req.params.id);
 
       // Merge local plaintext key strings into snapshot keys (same pattern as KeyController.listKeys)
@@ -739,7 +798,10 @@ export class AccountController extends BaseController {
         : null;
       return this.success(res, { id: account.id, alias: account.alias, email: account.email, managementKeyPreview: mgmtPreview, ...snapshot });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -819,6 +881,7 @@ export class AccountController extends BaseController {
   }
 
   async getBalance(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account balance request');
     try {
       const { getBestKey } = await import('../services/management-key-store.js');
       const { getCredits } = await import('../services/openrouter.js');
@@ -828,14 +891,18 @@ export class AccountController extends BaseController {
         return this.error(res, 'No active management key — provision one first', 404);
       }
 
-      const credits = await getCredits(keyRecord.key);
+      const credits = await getCredits(keyRecord.key, { signal: requestAbort.signal });
       return this.success(res, { credits, keyId: keyRecord.id });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   async testKey(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account key test request');
     try {
       const { id, hash } = req.params;
       const localKeys = await store.getLocalKeys(req.user.id, id);
@@ -845,6 +912,7 @@ export class AccountController extends BaseController {
       }
       const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
         headers: { 'Authorization': `Bearer ${localKey.key}` },
+        signal: combineAbortSignals(requestAbort.signal, AbortSignal.timeout(30_000)),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -853,12 +921,16 @@ export class AccountController extends BaseController {
       }
       return this.success(res, { valid: true, ...data });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   // P6 — Send Clerk magic link (email_link strategy) for one account
   async sendMagicLink(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'account magic-link request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.id);
       const email = req.body.email || account.email;
@@ -870,7 +942,11 @@ export class AccountController extends BaseController {
       const callbackUrl = `${proto}://${host}/api/auth/magic-callback?signInId=__SIGN_IN_ID__&accountId=${account.id}`;
       // Note: we replace __SIGN_IN_ID__ placeholder after we get it from Clerk
 
-      const { signInId, clientCookie, isSignUp } = await clerkAuth.sendMagicLink(email, callbackUrl.replace('__SIGN_IN_ID__', 'pending'));
+      const { signInId, clientCookie, isSignUp } = await clerkAuth.sendMagicLink(
+        email,
+        callbackUrl.replace('__SIGN_IN_ID__', 'pending'),
+        { signal: requestAbort.signal },
+      );
 
       // Build real callback URL — include isSignUp so the callback handler routes correctly
       const isSignUpParam = isSignUp ? '&isSignUp=1' : '';
@@ -895,8 +971,11 @@ export class AccountController extends BaseController {
         message: `Magic link sent to ${email} — check inbox and click the link`,
       });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       logger.warn(`[ACCOUNT] sendMagicLink failed (account=${req.params.id}): ${err.message}`);
       return this.error(res, err.message, err.status || 500, 'MAGIC_LINK_ERROR');
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -915,8 +994,11 @@ export class AccountController extends BaseController {
    * contrast with getSessionStatus (cached, fast) used by the main dashboard list.
    */
   async checkSession(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'live session probe request');
     try {
-      const payload = await store.probeSessionLive(req.user.id, req.params.id);
+      const payload = await store.probeSessionLive(req.user.id, req.params.id, {
+        signal: requestAbort.signal,
+      });
       return this.success(res, {
         status: payload.status,
         sessionExpiry: payload.sessionExpiry,
@@ -926,7 +1008,10 @@ export class AccountController extends BaseController {
         observedAt: payload.observedAt,
       });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -935,6 +1020,7 @@ export class AccountController extends BaseController {
    * Use POST /refresh-login if you want to clear session and be prompted to re-auth.
    */
   async silentRefreshOnly(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'silent session refresh request');
     try {
       const session = await store.getAccountSession(req.user.id, req.params.id);
 
@@ -945,8 +1031,11 @@ export class AccountController extends BaseController {
       let refreshed;
       try {
         const cookieInput851 = session.clientCookies?.length > 0 ? session.clientCookies : session.clientCookie;
-        refreshed = await clerkAuth.refreshSession(cookieInput851, session.sessionCookie);
+        refreshed = await clerkAuth.refreshSession(cookieInput851, session.sessionCookie, {
+          signal: requestAbort.signal,
+        });
       } catch (err) {
+        if (requestAbort.signal.aborted) return;
         logger.warn(`[ACCOUNT] Silent refresh failed (account=${req.params.id}): ${err.message}`);
         return this.error(res, 'Silent refresh failed — use Sign In to re-authenticate', 400);
       }
@@ -967,7 +1056,10 @@ export class AccountController extends BaseController {
 
       return this.success(res, { success: true, sessionExpiry: refreshed.sessionExpiry });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 }

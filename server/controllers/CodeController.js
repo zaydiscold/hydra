@@ -4,7 +4,7 @@ import * as dashboardApi from '../services/dashboard-api.js';
 import { z } from 'zod';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { addRedemptionRecord, getRedemptionRecords } from '../services/redemption-log.js';
-import { bindRequestAbort, combineAbortSignals, runInBatches } from '../services/batch-runner.js';
+import { bindRequestAbort, combineAbortSignals, runInBatches, throwIfAborted } from '../services/batch-runner.js';
 import { logger } from '../services/logger.js';
 
 const redeemSchema = z.object({
@@ -44,13 +44,15 @@ async function recordRedemptionAttempt(userId, { code, accountId, accountAlias, 
 
 class CodeController extends BaseController {
   async redeem(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'code redemption request');
     try {
       const { accountId, code } = this.validate(req.body, redeemSchema);
-      const result = await dashboardApi.redeemCode(req.user.id, accountId, code);
+      const result = await dashboardApi.redeemCode(req.user.id, accountId, code, { signal: requestAbort.signal });
       // P16 — log redemption
       await recordRedemptionAttempt(req.user.id, { code, accountId, success: !!result?.success, message: result?.message, creditsAdded: result?.creditsAdded ?? null });
       return this.success(res, result);
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       const status = err.status || 500;
       if (status === 400) {
         return this.error(res, err.message, 400, 'VALIDATION_ERROR');
@@ -60,6 +62,8 @@ class CodeController extends BaseController {
         errorCode === dashboardApi.REDEEM_ERROR_CODES.SESSION ? 'REDEEM_SESSION' : 'INTERNAL_ERROR';
       const http = errorCode === dashboardApi.REDEEM_ERROR_CODES.SESSION ? 401 : status;
       return this.error(res, err.message, http, code);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -85,6 +89,7 @@ class CodeController extends BaseController {
       );
       return this.success(res, results);
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
     } finally {
       requestAbort.dispose();
@@ -104,12 +109,13 @@ class CodeController extends BaseController {
             const { accountId, code } = assignment;
             try {
               const account = await store.getAccountWithKey(req.user.id, accountId);
-              const result = await dashboardApi.redeemCode(req.user.id, accountId, code);
+              const result = await dashboardApi.redeemCode(req.user.id, accountId, code, { signal });
               const payload = { accountId, alias: account.alias, code, ...result, status: 'fulfilled' };
               // P16 — log success
               await recordRedemptionAttempt(req.user.id, { code, accountId, accountAlias: account.alias, success: true, message: result?.message, creditsAdded: result?.creditsAdded ?? null });
               return payload;
             } catch (err) {
+              throwIfAborted(signal);
               const { errorCode, message } = dashboardApi.classifyRedeemFailure(err.message, err);
               const payload = {
                 accountId,
@@ -140,6 +146,7 @@ class CodeController extends BaseController {
             }
       ));
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
     } finally {
       requestAbort.dispose();

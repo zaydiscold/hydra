@@ -1,5 +1,6 @@
 import { OR_BASE, config } from '../config.js';
 import { prisma } from './db.js';
+import { combineAbortSignals } from '../lib/abort.js';
 
 const MODELS_PATH = '/api/v1/models';
 const MODEL_LIST_TIMEOUT_MS = 30000;
@@ -74,13 +75,13 @@ function modelsReferer() {
  * GET OpenRouter /api/v1/models with a standard API key.
  * @returns {{ ok: true, data: object[], raw: object } | { ok: false, status: number, data: null }}
  */
-export async function fetchOpenRouterModelsList(apiKey) {
+export async function fetchOpenRouterModelsList(apiKey, { signal = null } = {}) {
   const res = await fetch(`${OR_BASE}${MODELS_PATH}`, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'HTTP-Referer': modelsReferer(),
     },
-    signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS),
+    signal: combineAbortSignals(signal, AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS)),
   });
   if (!res.ok) {
     return { ok: false, status: res.status, data: null, raw: null };

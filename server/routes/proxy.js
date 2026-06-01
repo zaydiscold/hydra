@@ -18,6 +18,7 @@ import { logger } from '../services/logger.js';
 import { rotationManager } from '../services/rotation-manager.js';
 import { getMasterProxyKey, getGenericProxyKey } from '../services/store.js';
 import { enqueueRequestLog, getRequestLogBufferSnapshot } from '../services/request-log-buffer.js';
+import { bindRequestAbort } from '../lib/abort.js';
 
 const router = Router();
 const MAX_RETRIES = 3;
@@ -579,6 +580,7 @@ async function handleFreeModels(req, res) {
 }
 
 async function handleModelList(req, res, { freeOnly = false } = {}) {
+  const requestAbort = bindRequestAbort(req, res, 'proxy model list request');
   try {
     const cached = await getCachedClientModels({ freeOnly });
 
@@ -597,7 +599,7 @@ async function handleModelList(req, res, { freeOnly = false } = {}) {
       return res.json({ object: 'list', data: STATIC_MODELS });
     }
 
-    const result = await fetchOpenRouterModelsList(keyEntry.keyString);
+    const result = await fetchOpenRouterModelsList(keyEntry.keyString, { signal: requestAbort.signal });
     if (!result.ok) {
       logger.warn(`[PROXY] Live model list fetch returned HTTP ${result.status}; serving static model fallback`);
       res.setHeader('X-Hydra-Models-Source', 'static');
@@ -612,9 +614,12 @@ async function handleModelList(req, res, { freeOnly = false } = {}) {
     res.setHeader('X-Hydra-Models-Source', 'live');
     return res.json(result.raw);
   } catch (err) {
+    if (requestAbort.signal.aborted) return;
     logger.warn(`[PROXY] Model list fallback used because live/cache lookup failed: ${err?.message || err}`);
     res.setHeader('X-Hydra-Models-Source', 'static');
     return res.json({ object: 'list', data: STATIC_MODELS });
+  } finally {
+    requestAbort.dispose();
   }
 }
 

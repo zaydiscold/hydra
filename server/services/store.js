@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import { refreshSession, SESSION_EXPIRING_SOON_MS, validateSession } from './clerk-auth.js';
 import { clerkFapiDeviceCookieHeader } from '../utils/cookie-utils.js';
 import { isOtpAuthMethod } from '../utils/auth-method.js';
+import { throwIfAborted } from '../lib/abort.js';
 import {
   backfillLegacyManagementKey,
   getBestManagementKey,
@@ -52,7 +53,7 @@ export function resolveEffectiveSessionExpiry(config, _sessionTokenPlain) {
  * @param {string|null} userId - owner user id; when provided, persists fresh cookies returned by Clerk
  * @returns {Promise<string>} session status: 'active', 'expiring', 'expired', 'none', 'error', 'unknown'
  */
-async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFailed, accountId = null, userId = null, { bypassCache = false } = {}) {
+async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFailed, accountId = null, userId = null, { bypassCache = false, signal = null } = {}) {
   if (sessionDecryptFailed) return 'error';
 
   const sessionCookie = sessionTokenPlain || config.sessionCookie || '';
@@ -76,9 +77,10 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
     let result;
     try {
       const cookieInput = cookieStack;
-      result = await refreshSession(cookieInput, sessionCookie);
+      result = await refreshSession(cookieInput, sessionCookie, { signal });
       status = result ? 'active' : 'expired';
     } catch (err) {
+      throwIfAborted(signal);
       logger.warn(`[SESSION] Live refresh probe failed for account=${accountId || 'unknown'}: ${err.message}`);
       status = 'error';
     }
@@ -106,7 +108,7 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
   }
 
   // No __client cookie — fall back to direct JWT validation.
-  const isValid = await validateSession(sessionCookie);
+  const isValid = await validateSession(sessionCookie, { signal });
   return isValid ? 'active' : 'expired';
 }
 
@@ -354,13 +356,13 @@ export async function getStoredSessionStatusPayload(userId, id) {
  * Use for `GET /api/accounts/:id/session-check` (manual re-check button).
  * More expensive than getStoredSessionStatusPayload — only call on user demand.
  */
-export async function probeSessionLive(userId, id) {
+export async function probeSessionLive(userId, id, { signal = null } = {}) {
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
   const config = readConfig(account);
   const { plain, decryptFailed } = readSessionPlainResult(account);
   // bypassCache: true — skip the in-memory TTL so Clerk is always queried
-  const status = await getSessionStatusAsync(config, plain, decryptFailed, id, userId, { bypassCache: true });
+  const status = await getSessionStatusAsync(config, plain, decryptFailed, id, userId, { bypassCache: true, signal });
   const refreshedAccount = await prisma.account.findFirst({ where: { id, userId } });
   if (!refreshedAccount) throw new Error('Account not found');
   const refreshedConfig = readConfig(refreshedAccount);

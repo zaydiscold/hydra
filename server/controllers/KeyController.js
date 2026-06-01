@@ -3,6 +3,7 @@ import * as store from '../services/store.js';
 import * as openrouter from '../services/openrouter.js';
 import { assertManagementKey } from '../services/key-utils.js';
 import { invalidateSnapshotCache } from './DashboardController.js';
+import { bindRequestAbort } from '../lib/abort.js';
 import { z } from 'zod';
 
 const createKeySchema = z.object({
@@ -23,6 +24,7 @@ const updateKeySchema = z.object({
 
 class KeyController extends BaseController {
   async listKeys(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'key list request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.accountId);
       try {
@@ -30,7 +32,7 @@ class KeyController extends BaseController {
       } catch (err) {
         return this.error(res, err.message, 400);
       }
-      const liveKeysRaw = await openrouter.listKeys(account.managementKey);
+      const liveKeysRaw = await openrouter.listKeys(account.managementKey, true, { signal: requestAbort.signal });
       const liveKeys = Array.isArray(liveKeysRaw) ? liveKeysRaw : [];
       const localKeys = await store.getLocalKeys(req.user.id, account.id);
       const localMap = new Map(localKeys.map((k) => [k.hash, k]));
@@ -46,12 +48,16 @@ class KeyController extends BaseController {
       });
       return this.success(res, merged);
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       const status = err.message === 'Account not found' ? 404 : 500;
       return this.error(res, err.message, status);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   async createKey(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'key create request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.accountId);
       try {
@@ -60,7 +66,7 @@ class KeyController extends BaseController {
         return this.error(res, err.message, 400);
       }
       const data = this.validate(req.body, createKeySchema);
-      const result = await openrouter.createKey(account.managementKey, data);
+      const result = await openrouter.createKey(account.managementKey, data, { signal: requestAbort.signal });
       
       // SAVE TO LOCAL VAULT (ENCRYPTED)
       await store.saveKey(req.user.id, account.id, {
@@ -76,11 +82,15 @@ class KeyController extends BaseController {
 
       return this.success(res, { data: result.data, key: result.key }, 201);
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   async updateKey(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'key update request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.accountId);
       try {
@@ -89,18 +99,22 @@ class KeyController extends BaseController {
         return this.error(res, err.message, 400);
       }
       const data = this.validate(req.body, updateKeySchema);
-      const result = await openrouter.updateKey(account.managementKey, req.params.hash, data);
+      const result = await openrouter.updateKey(account.managementKey, req.params.hash, data, { signal: requestAbort.signal });
       
       // Invalidate dashboard cache since key state changed
       invalidateSnapshotCache(account.id);
       
       return this.success(res, result);
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   async deleteKey(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'key delete request');
     try {
       const account = await store.getAccountWithKey(req.user.id, req.params.accountId);
       try {
@@ -108,14 +122,17 @@ class KeyController extends BaseController {
       } catch (err) {
         return this.error(res, err.message, 400);
       }
-      await openrouter.deleteKey(account.managementKey, req.params.hash);
+      await openrouter.deleteKey(account.managementKey, req.params.hash, { signal: requestAbort.signal });
       
       // Invalidate dashboard cache since key count changed
       invalidateSnapshotCache(account.id);
       
       return this.success(res, { deleted: true });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 

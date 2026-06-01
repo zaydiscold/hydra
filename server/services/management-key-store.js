@@ -285,12 +285,12 @@ export async function hasManagementKey(accountId) {
  * @param {string} accountId
  * @param {string} name
  */
-export async function provisionAndStoreKey(deviceId, accountId, name) {
+export async function provisionAndStoreKey(deviceId, accountId, name, { signal = null } = {}) {
   // Import dashboard API
   const { createManagementKey } = await import('./dashboard-api.js');
 
   // Create key via Playwright
-  const result = await createManagementKey(deviceId, accountId, name);
+  const result = await createManagementKey(deviceId, accountId, name, { signal });
 
   if (!result.key) {
     throw new Error(`Provisioning failed: ${result.message}`);
