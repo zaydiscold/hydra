@@ -1965,3 +1965,16 @@ This evidence file is not release-complete by itself. The release remains not co
   and Spotlight resolving only
   `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`. No bundle or Trash
   backup was deleted.
+- Conservative public-`v1.4.6` dogfood manifest refresh: all six versioned
+  desktop artifacts were downloaded from the public GitHub release and
+  matched GitHub SHA-256 digests before
+  `docs/DOGFOOD_EVIDENCE.json` was regenerated. The checked-in manifest is
+  sanitized and asserts only `packaged-gui-launch`: LaunchServices opened the
+  canonical app without a browser, CoreGraphics saw one `Hydra — Dashboard`
+  window at `1440x900`, Spotlight resolved only the canonical bundle, strict
+  deep codesign passed, and the settled doctor snapshot reported four
+  Hydra-owned processes, zero stale profiles, and `0.0%` aggregate CPU. The
+  manifest deliberately leaves window controls, splash/unlock review, route
+  navigation, Touch ID fingerprint approval, live account flows, screenshot
+  review, and interactive Windows launch unchecked. Closed-app audit remains
+  `31 ok / 5 deferred / 0 missing / 0 blockers`.

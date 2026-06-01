@@ -43,7 +43,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | 8 | Per-task encrypted random account-proxy rotation | Settings/API encrypted storage, empty-list fallback, signup, browser redemption, HTTP redemption, and shared route reuse are covered by integration/contracts and measured dispatcher reuse. | Verified |
 | 9 | README clean, navigable, no Remotion references; audit anchors match | README navigation and release docs are reconciled; `rg -n "Remotion\|remotion" README.md` returns no matches; CLI audit remains `31 ok / 5 deferred / 0 missing / 0 blockers`. | Verified |
 | 10 | Every named long-running path measured or justified | Embedded server, proxy/router, automation, request-log buffering, health polling, and dashboard refresh are mapped with measurements below. | Verified |
-| 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | Canonical `v1.4.6` package proof passed full `npm run test:ci`, `npm run lint`, `npm run gate` (`12/12`), `npm run test:cli` (`46/46`), `npm run test:dogfood-evidence` (`1/1`), `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep codesign, and embedded-source inspection. Public release run `26778847890` passed the cross-platform desktop matrix; CI run `26778835658` passed; Docker run `26778835668` passed runtime smoke and registry push. Post-release `[skip-bump]` documentation checkpoint `fc36ede` kept Auto-version run `26780138966` skipped while CI run `26780138872` and Docker run `26780139206` passed. | Verified |
+| 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | Canonical `v1.4.6` package proof passed full `npm run test:ci`, `npm run lint`, `npm run gate` (`12/12`), `npm run test:cli` (`46/46`), `npm run test:dogfood-evidence` (`1/1`), `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep codesign, and embedded-source inspection. Public release run `26778847890` passed the cross-platform desktop matrix; CI run `26778835658` passed; Docker run `26778835668` passed runtime smoke and registry push. Post-release `[skip-bump]` documentation checkpoint `fc8e873` kept Auto-version run `26780700690` skipped while CI run `26780700621` and Docker run `26780700648` passed. | Verified |
 | 12 | Final dogfood evidence refreshed with packaged-app screenshots | The exact public `v1.1.4` package has native-window captures for first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a synthetic-data Traffic console, plus rendered privacy-safe CLI captures for `hydra status`, `hydra proxy status`, and a compact `hydra doctor --json` excerpt. The exact-public `v1.3.0` canonical app adds a native CoreGraphics Dashboard privacy proof with all content below the titlebar pixelated before check-in. OCR found zero credential-shaped or endpoint-shaped hits and ImageMagick reported nonblank color variance. Computer Use still could not attach to Hydra, so the full interactive visual review remains explicit. | Partial — interactive human visual review required |
 
 ## Current Verified Evidence
@@ -2378,5 +2378,21 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   --no-shell`, then Docker Desktop exited and BuildKit returned
   `Unavailable: error reading from server: EOF`. This is recorded as local
   Docker Desktop instability rather than a Hydra runtime pass. Hosted workflow
-  `26780139206` remains the current final-commit Docker proof: both `Build &
+  `26780700648` remains the current final-commit Docker proof: both `Build &
   Push` and `Runtime Smoke` completed successfully.
+- 2026-06-01 conservative public-`v1.4.6` dogfood manifest refresh: all six
+  versioned desktop artifacts were downloaded from the public GitHub release
+  into a temporary verification directory and matched GitHub SHA-256 digests.
+  `npm run dogfood:final -- --write-evidence=docs/DOGFOOD_EVIDENCE.json
+  --version=1.4.6 --artifact-dir=<temporary-public-release-download>
+  --app=release/mac-arm64/Hydra.app --manual=packaged-gui-launch` regenerated
+  the checked-in redacted manifest. Machine-specific paths were sanitized
+  before check-in. LaunchServices opened the canonical app without a browser;
+  CoreGraphics saw one `Hydra — Dashboard` window at `1440x900`, Spotlight
+  resolved only `release/mac-arm64/Hydra.app`, strict deep codesign passed,
+  and the settled doctor snapshot reported four Hydra-owned processes, zero
+  stale Hydra Playwright profiles, and `0.0%` aggregate CPU. Audit remains
+  intentionally honest at `31 ok / 5 deferred / 0 missing / 0 blockers`.
+  Window controls, splash/unlock review, route navigation, Touch ID fingerprint
+  approval, live account flows, final redacted screenshot review, and
+  interactive Windows launch remain explicit manual boundaries.
