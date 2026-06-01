@@ -29,18 +29,26 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const copiedResetTimerRef = useRef(null);
+  const refreshAbortRef = useRef(null);
   const { clearOwnedTimeout, setOwnedTimeout } = useOwnedTimeouts('Diagnostics.copy');
 
   const inElectron = isElectron();
 
   const fetchData = useCallback(async () => {
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+    const { signal } = controller;
+    const isCurrent = () => refreshAbortRef.current === controller && !signal.aborted;
+
     setLoading(true);
     setDiagnosticsError('');
     try {
       const [healthRes, proxyRes] = await Promise.allSettled([
-        api.getSystemHealth(),
-        api.getProxyStatus(),
+        api.getSystemHealth(signal),
+        api.getProxyStatus(signal),
       ]);
+      if (!isCurrent()) return;
       if (healthRes.status === 'fulfilled') {
         setHealth(healthRes.value?.data ?? healthRes.value ?? {});
       } else {
@@ -57,6 +65,7 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
       }
       setLastRefreshedAt(new Date());
     } catch (err) {
+      if (!isCurrent()) return;
       const message = err.message || 'Diagnostics refresh failed';
       console.warn('[DIAGNOSTICS] Refresh failed:', message);
       setDiagnosticsError(message);
@@ -73,13 +82,23 @@ export function DiagnosticsPanel({ addToast, embedded = false }) {
         tryNative(native.appPaths),
         tryNative(native.authTokenStatus),
       ]);
+      if (!isCurrent()) return;
       setNativeInfo({ version, platform, paths });
       setAuthTokenStatus(tokenStatus);
     }
-    setLoading(false);
+    if (isCurrent()) {
+      refreshAbortRef.current = null;
+      setLoading(false);
+    }
   }, [addToast, inElectron]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    return () => {
+      refreshAbortRef.current?.abort();
+      refreshAbortRef.current = null;
+    };
+  }, [fetchData]);
 
   useEffect(() => () => {
     clearOwnedTimeout(copiedResetTimerRef.current);

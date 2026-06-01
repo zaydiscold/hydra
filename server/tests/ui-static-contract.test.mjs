@@ -631,6 +631,11 @@ test('diagnostics are embedded in settings and present real server facts', () =>
   assert.match(diagnostics, /Server PID:\s*\$\{health\.pid\}/);
   assert.match(diagnostics, /Available \(dev runtime\)/);
   assert.doesNotMatch(diagnostics, /Placeholder/);
+  assert.match(diagnostics, /const refreshAbortRef = useRef\(null\)/);
+  assert.match(diagnostics, /refreshAbortRef\.current\?\.abort\(\)/);
+  assert.match(diagnostics, /api\.getSystemHealth\(signal\)/);
+  assert.match(diagnostics, /api\.getProxyStatus\(signal\)/);
+  assert.match(diagnostics, /if \(!isCurrent\(\)\) return/);
 
   assert.match(systemController, /const uptime = process\.uptime\(\);/);
   assert.match(systemController, /const serverNow = new Date\(\);/);
