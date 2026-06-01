@@ -1477,6 +1477,23 @@ closed-app CLI commands, tests, and repo-local documentation.
   11 samples at `0.0-0.1%` CPU (`0.009%` average, `0.0%` end) with
   `514457600 -> 516734976` bytes RSS (`+2277376`). This does not claim the
   README/audit source patch is already released.
+- The final-source literal-chain retry for `c705753` passed lint, full
+  `npm test`, and gate before ARM smoke correctly required a distributable zip
+  absent from the intentionally cleaned local release tree. The exact public
+  `Hydra-1.4.7-mac-arm64.zip` was downloaded into
+  `/private/tmp/hydra-v147-public-arm-smoke-retry-20260601T231534Z`; local
+  SHA-256
+  `0d4ea5946c547a8d9cfb0df578e41d1850fe95dbb903346f41f3de94b79989c1`
+  matched GitHub's published digest. A temporary release-tree symlink let ARM
+  package smoke pass and then moved back into the evidence directory. Strict
+  deep codesign passed. Docker Desktop was started only long enough for local
+  Docker smoke to pass compose validation, image build, and a real
+  containerized Playwright Chromium launch; the run left no Hydra container or
+  network, and Docker stopped again. OpenAPI regeneration retained `84`
+  operations with no tracked drift. `release/` again contains only the
+  canonical `mac-arm64/Hydra.app`; Spotlight resolves exactly that one app;
+  `hydra doctor --json` reports four owned processes, `0.0%` CPU, and zero
+  stale profiles.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

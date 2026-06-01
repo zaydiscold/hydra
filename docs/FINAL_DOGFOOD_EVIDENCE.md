@@ -2114,3 +2114,17 @@ This evidence file is not release-complete by itself. The release remains not co
   `0.0%` end), and `514457600 -> 516734976` bytes RSS (`+2277376`). This is
   running-package no-regression evidence; the source/docs patch is not claimed
   as released.
+- Final-source literal-chain retry for `c705753`: lint, full `npm test`, and
+  gate passed. The intentionally cleaned local release tree did not contain an
+  ARM zip, so the exact public `Hydra-1.4.7-mac-arm64.zip` was downloaded into
+  `/private/tmp/hydra-v147-public-arm-smoke-retry-20260601T231534Z`. Its local
+  SHA-256
+  `0d4ea5946c547a8d9cfb0df578e41d1850fe95dbb903346f41f3de94b79989c1`
+  matched GitHub's published digest. A temporary release-tree symlink allowed
+  ARM package smoke to pass and then moved back into the evidence directory;
+  strict deep codesign passed. Docker Desktop was started only for
+  `npm run docker:smoke`, which passed image build and a real containerized
+  Playwright Chromium launch, left no Hydra container or network, and was
+  stopped again. OpenAPI regeneration retained `84` operations without tracked
+  drift. Final state: one canonical Spotlight-visible app, four Hydra-owned
+  processes, `0.0%` CPU, and zero stale profiles.
