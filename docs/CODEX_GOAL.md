@@ -1531,6 +1531,18 @@ closed-app CLI commands, tests, and repo-local documentation.
   operations, no tracked drift), and local Docker smoke with a real
   containerized Playwright Chromium launch. `docker desktop stop` removed the
   Desktop runtime helpers in one second; no `hydra_default` network remained.
+- Magic-link cleanup early-disarm follow-up: callback completion now
+  recalculates the demand-driven expiry timer instead of leaving a 15-minute
+  timeout armed after the final pending link is forgotten. The deterministic
+  benchmark under
+  `/private/tmp/hydra-magic-link-cleanup-early-disarm-20260601T235215Z`
+  records `scheduled=false -> true -> false` across idle, tracked-link, and
+  early-completion states, avoiding one residual wakeup. Real Express API
+  integration passed `11/11`, background ownership contracts passed `33/33`,
+  and lint passed. The durable note is
+  `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`. Rebuilt-package profiling
+  remains required before this source refinement counts as packaged-runtime
+  evidence.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

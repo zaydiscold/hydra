@@ -2397,6 +2397,20 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   teardown left no `hydra_default` network, `docker desktop stop` removed the
   Desktop runtime helpers in one second, and Hydra returned to four owned
   processes at `0.0%` CPU with zero stale profiles.
+- 2026-06-01 magic-link cleanup early-disarm follow-up: source tracing found
+  that callback completion removed both pending-link indexes through
+  `forgetPendingMagicLink()` but left the previously armed 15-minute expiry
+  timeout in place. The manager now recalculates cleanup after external
+  removals; batch expiry sweeps suppress per-row reschedules and perform one
+  final reschedule after the sweep. A read-only
+  `getMagicLinkCleanupSnapshot()` surface and the deterministic benchmark under
+  `/private/tmp/hydra-magic-link-cleanup-early-disarm-20260601T235215Z`
+  prove `scheduled=false -> true -> false` across idle, tracked-link, and
+  early-completion states, avoiding one residual wakeup after the last link
+  completes. Real Express API integration passed `11/11`, background
+  ownership contracts passed `33/33`, lint passed, and `hydra audit --json`
+  remains `31 ok / 5 deferred / 0 missing / 0 blockers`. The durable note is
+  `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`.
 - 2026-06-01 post-release literal-gate recheck: `npm run lint`, full
   `npm test`, and `npm run gate` (`12/12`) passed against the docs-reconciled
   `v1.4.6` tree. Bare `HYDRA_BUILD_TARGET=darwin-arm64 npm run

@@ -39,8 +39,11 @@ const { recordUpstreamSuccess } = await import('../services/upstream-health.js')
 const {
   claimPendingMagicLinkCallback,
   forgetPendingMagicLink,
+  getMagicLinkCleanupSnapshot,
   pendingMagicLinkCallbacks,
   pendingMagicLinks,
+  startMagicLinkCleanup,
+  stopMagicLinkCleanup,
   sweepExpiredMagicLinks,
   trackPendingMagicLink,
 } = await import('../services/magic-link-manager.js');
@@ -219,6 +222,29 @@ test('magic-link callback indexes clear together on completion and expiry', () =
   forgetPendingMagicLink('signin-complete');
   assert.equal(pendingMagicLinks.has('signin-complete'), false);
   assert.equal(pendingMagicLinkCallbacks.has('callback-complete'), false);
+});
+
+test('magic-link cleanup timer disarms after the last pending link is forgotten early', () => {
+  stopMagicLinkCleanup();
+  pendingMagicLinks.clear();
+  pendingMagicLinkCallbacks.clear();
+  startMagicLinkCleanup();
+
+  trackPendingMagicLink('signin-early-complete', { linkId: 'callback-early-complete' });
+  assert.deepEqual(getMagicLinkCleanupSnapshot(), {
+    started: true,
+    scheduled: true,
+    pending: 1,
+    callbacks: 1,
+  });
+
+  forgetPendingMagicLink('signin-early-complete');
+  assert.deepEqual(getMagicLinkCleanupSnapshot(), {
+    started: true,
+    scheduled: false,
+    pending: 0,
+    callbacks: 0,
+  });
 });
 
 test('bulk OTP stubs skip duplicate saved emails unless forceReplace is explicit', async () => {

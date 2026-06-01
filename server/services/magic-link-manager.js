@@ -14,10 +14,11 @@ export function sweepExpiredMagicLinks(now = Date.now()) {
   let removed = 0;
   for (const [k, v] of pendingMagicLinks) {
     if (v.createdAt < cutoff) {
-      forgetPendingMagicLink(k);
+      forgetPendingMagicLink(k, { reschedule: false });
       removed++;
     }
   }
+  scheduleMagicLinkCleanup();
   return removed;
 }
 
@@ -43,7 +44,6 @@ function scheduleMagicLinkCleanup() {
   cleanupTimer = setTimeout(() => {
     cleanupTimer = null;
     sweepExpiredMagicLinks();
-    scheduleMagicLinkCleanup();
   }, delayMs);
   cleanupTimer.unref?.();
 }
@@ -61,10 +61,11 @@ export function trackPendingMagicLink(signInId, entry) {
   scheduleMagicLinkCleanup();
 }
 
-export function forgetPendingMagicLink(signInId) {
+export function forgetPendingMagicLink(signInId, { reschedule = true } = {}) {
   const pending = pendingMagicLinks.get(signInId);
   pendingMagicLinks.delete(signInId);
   if (pending?.linkId) pendingMagicLinkCallbacks.delete(pending.linkId);
+  if (reschedule) scheduleMagicLinkCleanup();
 }
 
 export function claimPendingMagicLinkCallback(linkId) {
@@ -83,4 +84,13 @@ export function stopMagicLinkCleanup() {
   cleanupStarted = false;
   if (cleanupTimer) clearTimeout(cleanupTimer);
   cleanupTimer = null;
+}
+
+export function getMagicLinkCleanupSnapshot() {
+  return {
+    started: cleanupStarted,
+    scheduled: Boolean(cleanupTimer),
+    pending: pendingMagicLinks.size,
+    callbacks: pendingMagicLinkCallbacks.size,
+  };
 }

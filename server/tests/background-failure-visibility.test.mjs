@@ -211,8 +211,9 @@ test('magic-link cleanup timer is owned by server lifecycle', () => {
   assert.match(manager, /export function stopMagicLinkCleanup\(\)/);
   assert.match(manager, /export function trackPendingMagicLink\(signInId, entry\)/);
   assert.match(manager, /export const pendingMagicLinkCallbacks = new Map\(\)/);
-  assert.match(manager, /export function forgetPendingMagicLink\(signInId\)/);
+  assert.match(manager, /export function forgetPendingMagicLink\(signInId, \{ reschedule = true \} = \{\}\)/);
   assert.match(manager, /export function claimPendingMagicLinkCallback\(linkId\)/);
+  assert.match(manager, /export function getMagicLinkCleanupSnapshot\(\)/);
   assert.match(manager, /function scheduleMagicLinkCleanup\(\)/);
   assert.match(manager, /nextCleanupDelayMs/);
   assert.match(manager, /cleanupTimer = setTimeout\(\(\) => \{/);
@@ -271,7 +272,8 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.doesNotMatch(retention, /clearInterval/);
   assert.match(magicLinks, /cleanupTimer = setTimeout\(\(\) => \{/);
   assert.match(magicLinks, /trackPendingMagicLink\(signInId, entry\)/);
-  assert.match(magicLinks, /forgetPendingMagicLink\(k\)/);
+  assert.match(magicLinks, /forgetPendingMagicLink\(k, \{ reschedule: false \}\)/);
+  assert.match(magicLinks, /if \(reschedule\) scheduleMagicLinkCleanup\(\)/);
   assert.doesNotMatch(magicLinks, /setInterval/);
   assert.doesNotMatch(magicLinks, /clearInterval/);
   assert.match(retention, /startupTimer\.unref\?\.\(\)/);

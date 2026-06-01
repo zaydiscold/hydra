@@ -1838,6 +1838,18 @@ This evidence file is not release-complete by itself. The release remains not co
   operations, no drift), and local Docker smoke with a real containerized
   Playwright Chromium launch. `docker desktop stop` removed Docker Desktop
   runtime helpers in one second; no `hydra_default` network remained.
+- Magic-link cleanup early-disarm follow-up: callback completion now
+  recalculates the demand-driven expiry timer instead of leaving a 15-minute
+  timeout armed after the final pending link is forgotten. The deterministic
+  benchmark under
+  `/private/tmp/hydra-magic-link-cleanup-early-disarm-20260601T235215Z`
+  records `scheduled=false -> true -> false` across idle, tracked-link, and
+  early-completion states, avoiding one residual wakeup. Real Express API
+  integration passed `11/11`, background ownership contracts passed `33/33`,
+  and lint passed. The durable note is
+  `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`. Rebuilt-package profiling
+  remains required before this source refinement counts as packaged-runtime
+  evidence.
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under
   `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`
