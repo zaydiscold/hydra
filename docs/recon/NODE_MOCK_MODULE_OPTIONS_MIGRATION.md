@@ -47,6 +47,15 @@ changed test files: 13
 The only remaining module-mock message is Node's expected experimental-feature
 warning.
 
+The shared test-chain completeness suite now recursively scans `server/tests`,
+`electron/tests`, and `scripts` for either deprecated spelling. A stale option
+cannot silently return without failing the first step of `npm test`.
+
+The focused completeness suite passed `2/2` after the guard was added. The
+complete source chain then passed full `npm test`, lint, build, integration
+gate (`12/12`), OpenAPI generation (`83 operations`), dogfood preflight, audit,
+and diff check.
+
 ## Reproduce
 
 Run:
@@ -62,7 +71,8 @@ git diff --check
 ```
 
 The first command shows the pre-migration checkpoint. The second should return
-no current-source matches.
+no current-source matches. The full test command begins with the static
+regression guard.
 
 ## Release Boundary
 

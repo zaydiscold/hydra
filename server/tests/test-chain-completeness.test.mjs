@@ -18,6 +18,16 @@ function listTestFiles(dir) {
     .sort();
 }
 
+function listSourceFiles(dir) {
+  return readdirSync(join(ROOT, dir), { withFileTypes: true })
+    .flatMap(entry => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return listSourceFiles(path);
+      return /\.(?:mjs|js)$/.test(entry.name) ? [path] : [];
+    })
+    .sort();
+}
+
 function collectReachableScripts(scripts, rootScript) {
   const reachable = new Set();
   const queue = [rootScript];
@@ -50,4 +60,24 @@ test('npm test reaches every normal server and Electron test file', () => {
   const missing = requiredFiles.filter(file => !reachableCommands.includes(file));
 
   assert.deepEqual(missing, [], `test files not reachable from npm test: ${missing.join(', ')}`);
+});
+
+test('test harness does not use deprecated mock.module option spellings', () => {
+  const deprecatedOptions = [
+    ['named', 'Exports'].join(''),
+    ['default', 'Export'].join(''),
+  ];
+  const sourceFiles = [
+    ...listSourceFiles('server/tests'),
+    ...listSourceFiles('electron/tests'),
+    ...listSourceFiles('scripts'),
+  ];
+  const violations = sourceFiles.flatMap(file => {
+    const source = readFileSync(join(ROOT, file), 'utf-8');
+    return deprecatedOptions
+      .filter(option => source.includes(option))
+      .map(option => `${file}: ${option}`);
+  });
+
+  assert.deepEqual(violations, [], `deprecated mock.module options found:\n${violations.join('\n')}`);
 });

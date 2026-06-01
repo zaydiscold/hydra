@@ -1202,9 +1202,24 @@ closed-app CLI commands, tests, and repo-local documentation.
 - Node module mocks now use the current `exports` object and
   `exports.default` spelling throughout the harness. Deprecated
   `namedExports` and `defaultExport` occurrences dropped `68 -> 0` across
-  `13` test files. The affected suites pass with only Node's expected
+  `13` test files. The shared test-chain completeness suite now recursively
+  rejects either stale spelling across `server/tests`, `electron/tests`, and
+  `scripts`. The focused completeness suite passed `2/2`; the complete source
+  chain then passed full `npm test`, lint, build, integration gate (`12/12`),
+  OpenAPI generation (`83 operations`), dogfood preflight, audit, and diff
+  check. Affected module-mock suites retain only Node's expected
   experimental-module warning. The recon note is
   `docs/recon/NODE_MOCK_MODULE_OPTIONS_MIGRATION.md`.
+- Empty-pool health-pinger checkpoint
+  `d844e1015e39939f2214b3eda9ec25295aa56ce6` used `[skip-bump]`;
+  Auto-version run `26737565499` skipped, CI run `26737565488` passed, and
+  Docker workflow run `26737565491` passed runtime smoke and registry image
+  push.
+- Node module-mock harness checkpoint
+  `655273c1e7042f75dea7783c05e7b1adea274c18` used `[skip-bump]`;
+  Auto-version run `26737753990` skipped, CI run `26737754008` passed, and
+  Docker workflow run `26737754000` passed runtime smoke and registry image
+  push.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

@@ -1648,5 +1648,20 @@ This evidence file is not release-complete by itself. The release remains not co
 - The Node module-mock harness now uses current `exports` and
   `exports.default` options throughout. Deprecated `namedExports` and
   `defaultExport` occurrences dropped `68 -> 0` across `13` test files; the
-  affected suites pass with only Node's expected experimental-module warning.
+  shared test-chain completeness suite now recursively rejects either stale
+  spelling across `server/tests`, `electron/tests`, and `scripts`. The focused
+  completeness suite passed `2/2`; the complete source chain then passed full
+  `npm test`, lint, build, integration gate (`12/12`), OpenAPI generation
+  (`83 operations`), dogfood preflight, audit, and diff check. Affected
+  module-mock suites retain only Node's expected experimental-module warning.
   The recon note is `docs/recon/NODE_MOCK_MODULE_OPTIONS_MIGRATION.md`.
+- Empty-pool health-pinger checkpoint
+  `d844e1015e39939f2214b3eda9ec25295aa56ce6` used `[skip-bump]`;
+  Auto-version run `26737565499` skipped, CI run `26737565488` passed, and
+  Docker workflow run `26737565491` passed runtime smoke and registry image
+  push.
+- Node module-mock harness checkpoint
+  `655273c1e7042f75dea7783c05e7b1adea274c18` used `[skip-bump]`;
+  Auto-version run `26737753990` skipped, CI run `26737754008` passed, and
+  Docker workflow run `26737754000` passed runtime smoke and registry image
+  push.
