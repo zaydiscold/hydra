@@ -1368,3 +1368,53 @@ This evidence file is not release-complete by itself. The release remains not co
   Auto-version run `26732648111` skipped, CI run `26732648116` passed, and
   Docker workflow run `26732648112` passed both runtime smoke and registry
   image push.
+- Shared health probes now bind renderer disconnects without breaking
+  deduplication: abandoned callers reject immediately, the shared OpenRouter
+  fetch stays alive while any subscriber remains, and the final subscriber
+  owns upstream abort. The benchmark under
+  `/private/tmp/hydra-health-probe-disconnect-benchmark-20260601T031358Z/summary.txt`
+  reduced detached settlement from `503.711ms` to `23.931ms` for `200`
+  abandoned surfaces.
+- Settings Diagnostics now aborts superseded and unmounted health/proxy
+  requests and suppresses late native bridge writes after navigation. The
+  benchmark under
+  `/private/tmp/hydra-diagnostics-unmount-benchmark-20260601T032542Z/summary.txt`
+  reduced `400` pending requests to `0`, aborted all `400`, and suppressed
+  `200` stale page writes.
+- The rebuilt Diagnostics package exposed a separate recurring compositor
+  wakeup honestly recorded under
+  `/private/tmp/hydra-v140-diagnostics-post-rebuild-idle-20260601T033118Z`:
+  four Hydra processes and zero Hydra Playwright profiles remained stable,
+  but CPU averaged `6.818%` and ended at `9.400%`. Routine 30-second
+  background health refreshes were mounting the animated foreground progress
+  bar. The app now uses a quiet health helper for that background path while
+  foreground requests retain loading feedback. The unused `.edm-bar`
+  infinite-animation rule was removed.
+- The loading-event benchmark under
+  `/private/tmp/hydra-background-health-loading-benchmark-20260601T033914Z/summary.txt`
+  removes `400` loading events and `200` animated progress mounts across
+  `200` background polls.
+- Quiet-health shutdown evidence is under
+  `/private/tmp/hydra-v140-quiet-health-rebuild-shutdown-20260601T034025Z`;
+  four package processes exited immediately. Current-source ARM rebuild,
+  package smoke, strict deep `codesign`, bundle version (`1.4.0`), embedded
+  source-map inspection, and LaunchServices relaunch passed. The local zip
+  SHA-256 was
+  `f4bead3fafecd3c3f45ddd4d27783579f78ef479d0028155934e65521f80231b`.
+  Launch evidence is under
+  `/private/tmp/hydra-v140-quiet-health-current-source-launch-20260601T034214Z`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-quiet-health-current-source-package-20260601T034844Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one bundle, and local Docker is stopped.
+- The final untouched profile under
+  `/private/tmp/hydra-v140-quiet-health-post-rebuild-idle-20260601T034327Z`
+  retained four Hydra processes and zero Hydra Playwright profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.100%`, averaged
+  `0.009%`, and ended at `0.000%`; RSS moved from `605104 KiB` to
+  `607424 KiB` (`+2320 KiB`).
+- Checkpoints `2348d0268fd9957d2243d665be07c54fdf378d70`,
+  `a7376c66803833d58e95ef256a55d7bbc5f0d24e`, and
+  `e583326c89f35da0d8f30a81fc4d16625395546c` used `[skip-bump]`.
+  The newest CI run `26733857394` passed, and Docker workflow
+  `26733857387` passed runtime smoke and registry image push.

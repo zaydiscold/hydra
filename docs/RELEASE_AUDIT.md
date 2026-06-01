@@ -1546,3 +1546,64 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   image push. GitHub again emitted its upstream Node 20 action-runtime
   deprecation warning for the current Docker helper actions while forcing
   them onto Node 24; the Hydra-owned workflow remains green.
+- 2026-06-01 shared health-probe ownership hardening: `/api/system/health`
+  now binds renderer disconnects and passes an abort signal into the deduped
+  OpenRouter reachability probe. The probe tracks live subscribers, rejects
+  abandoned callers immediately, preserves a shared fetch while any caller
+  remains, and aborts upstream only when its final subscriber detaches.
+  Focused OpenRouter cancellation tests passed `5/5`; API integration passed
+  `7/7`; background visibility contracts passed `32/32`; and the complete
+  no-Docker source chain passed lint, full `npm test`, Vite build, gate
+  (`12/12`), OpenAPI generation (`83 operations`), and diff check.
+- 2026-06-01 health-surface disconnect benchmark:
+  `/private/tmp/hydra-health-probe-disconnect-benchmark-20260601T031358Z/summary.txt`
+  exercised `200` abandoned health surfaces. The prior shared fetch remained
+  alive for `503.711ms`; the subscriber-owned path rejected all `200`
+  callers, stopped in `23.931ms`, and removed `479.780ms` of detached tail.
+- 2026-06-01 Diagnostics route ownership hardening: Settings Diagnostics now
+  aborts its previous health and proxy requests before starting a refresh,
+  aborts pending HTTP work on unmount, and suppresses late native bridge state
+  writes after navigation. Its deterministic teardown benchmark at
+  `/private/tmp/hydra-diagnostics-unmount-benchmark-20260601T032542Z/summary.txt`
+  reduced `400` pending post-unmount requests to `0`, aborted all `400`, and
+  suppressed `200` stale page writes.
+- 2026-06-01 quiet background health loading hardening: package profiling
+  exposed routine upstream polling mounting the animated foreground progress
+  bar every 30 seconds. The background banner now uses a quiet health helper;
+  foreground requests and user-triggered Diagnostics refreshes retain loading
+  feedback. Dead `.edm-bar` infinite-animation CSS with no renderer owner was
+  removed. The event benchmark at
+  `/private/tmp/hydra-background-health-loading-benchmark-20260601T033914Z/summary.txt`
+  removes `400` loading events and `200` animated progress mounts across
+  `200` background polls.
+- 2026-06-01 quiet-health current-source package proof: native quit removed
+  all four prior package processes immediately with inventories under
+  `/private/tmp/hydra-v140-quiet-health-rebuild-shutdown-20260601T034025Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), embedded source-map inspection, and LaunchServices relaunch
+  passed. The local zip SHA-256 was
+  `f4bead3fafecd3c3f45ddd4d27783579f78ef479d0028155934e65521f80231b`;
+  it is local current-source proof, not a replacement public asset.
+  LaunchServices evidence is under
+  `/private/tmp/hydra-v140-quiet-health-current-source-launch-20260601T034214Z`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-quiet-health-current-source-package-20260601T034844Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one bundle, and local Docker remains stopped.
+- 2026-06-01 quiet-health post-rebuild profile:
+  `/private/tmp/hydra-v140-quiet-health-post-rebuild-idle-20260601T034327Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across 11 untouched samples over five minutes. CPU ranged from `0.000%` to
+  `0.100%`, averaged `0.009%`, and ended at `0.000%`; RSS moved from
+  `605104 KiB` to `607424 KiB` (`+2320 KiB`). This replaces the intermediate
+  Diagnostics-build profile under
+  `/private/tmp/hydra-v140-diagnostics-post-rebuild-idle-20260601T033118Z`,
+  which honestly recorded a `6.818%` average and `9.400%` ending CPU before
+  the quiet-loading fix.
+- Health-probe checkpoint `2348d0268fd9957d2243d665be07c54fdf378d70`,
+  Diagnostics checkpoint `a7376c66803833d58e95ef256a55d7bbc5f0d24e`,
+  and quiet-loading checkpoint
+  `e583326c89f35da0d8f30a81fc4d16625395546c` used `[skip-bump]`.
+  Their Auto-version runs skipped. The newest CI run `26733857394` passed,
+  and newest Docker workflow `26733857387` passed runtime smoke and registry
+  image push.

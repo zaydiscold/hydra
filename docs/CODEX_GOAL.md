@@ -930,6 +930,48 @@ closed-app CLI commands, tests, and repo-local documentation.
   Auto-version run `26732648111` skipped, CI run `26732648116` passed, and
   Docker workflow run `26732648112` passed runtime smoke and registry image
   push. Local Docker remains stopped after verification.
+- The remaining health-surface ownership sweep found and fixed three concrete
+  paths. Deduped OpenRouter reachability probes now bind request subscribers
+  and abort upstream when their final renderer leaves. Settings Diagnostics
+  aborts superseded and unmounted health/proxy requests and suppresses stale
+  native bridge state writes. Authenticated background upstream polling now
+  uses a quiet request helper instead of mounting the animated foreground
+  progress bar every 30 seconds. Dead `.edm-bar` infinite-animation CSS with
+  no renderer owner was removed.
+- Deterministic evidence is preserved under
+  `/private/tmp/hydra-health-probe-disconnect-benchmark-20260601T031358Z/summary.txt`,
+  `/private/tmp/hydra-diagnostics-unmount-benchmark-20260601T032542Z/summary.txt`,
+  and
+  `/private/tmp/hydra-background-health-loading-benchmark-20260601T033914Z/summary.txt`.
+  The shared-probe fix removed `479.780ms` of detached tail for `200`
+  abandoned surfaces. Diagnostics teardown reduced `400` pending requests to
+  `0` and suppressed `200` stale page writes. Quiet background polling
+  removes `400` loading events and `200` animated progress mounts across
+  `200` synthetic polls.
+- The intermediate Diagnostics-build profile under
+  `/private/tmp/hydra-v140-diagnostics-post-rebuild-idle-20260601T033118Z`
+  retained clean ownership but honestly exposed recurring graphics work:
+  CPU averaged `6.818%` and ended at `9.400%`. After the quiet-loading fix,
+  native shutdown removed all four package processes immediately, ARM
+  rebuild, package smoke, strict deep `codesign`, bundle version (`1.4.0`),
+  embedded inspection, and LaunchServices relaunch passed. The current local
+  zip SHA-256 was
+  `f4bead3fafecd3c3f45ddd4d27783579f78ef479d0028155934e65521f80231b`.
+- The final five-minute untouched profile under
+  `/private/tmp/hydra-v140-quiet-health-post-rebuild-idle-20260601T034327Z`
+  retained four Hydra processes and zero Hydra Playwright profiles across 11
+  samples. CPU ranged from `0.000%` to `0.100%`, averaged `0.009%`, and ended
+  at `0.000%`; RSS moved from `605104 KiB` to `607424 KiB` (`+2320 KiB`).
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-quiet-health-current-source-package-20260601T034844Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one bundle, and local Docker is stopped.
+- Health-probe checkpoint `2348d0268fd9957d2243d665be07c54fdf378d70`,
+  Diagnostics checkpoint `a7376c66803833d58e95ef256a55d7bbc5f0d24e`,
+  and quiet-loading checkpoint
+  `e583326c89f35da0d8f30a81fc4d16625395546c` used `[skip-bump]`.
+  The newest CI run `26733857394` passed, and Docker workflow
+  `26733857387` passed runtime smoke and registry image push.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
