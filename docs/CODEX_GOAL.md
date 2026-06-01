@@ -1199,6 +1199,12 @@ closed-app CLI commands, tests, and repo-local documentation.
   retained four Hydra-owned processes and zero stale profiles across 11
   five-minute samples. CPU ranged from `0.000%` to `0.300%`, averaged
   `0.027%`, and ended at `0.300%`; RSS changed by `+4512 KiB`.
+- Node module mocks now use the current `exports` object and
+  `exports.default` spelling throughout the harness. Deprecated
+  `namedExports` and `defaultExport` occurrences dropped `68 -> 0` across
+  `13` test files. The affected suites pass with only Node's expected
+  experimental-module warning. The recon note is
+  `docs/recon/NODE_MOCK_MODULE_OPTIONS_MIGRATION.md`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

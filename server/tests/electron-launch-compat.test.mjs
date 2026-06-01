@@ -82,7 +82,7 @@ const quietLogger = { info: noop, error: noop, warn: noop, debug: noop };
 
 // Config module ------------------------------------------------
 mock.module(new URL('../config.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     config: mockConfig,
     validateConfig: () => true,
     USER_AGENT: 'test-compat-agent',
@@ -96,33 +96,32 @@ mock.module(new URL('../config.js', import.meta.url).href, {
 
 // Logger module ------------------------------------------------
 mock.module(new URL('../services/logger.js', import.meta.url).href, {
-  namedExports: { logger: quietLogger },
-  defaultExport: quietLogger,
+  exports: { default: quietLogger, logger: quietLogger },
 });
 
 // Database module (PrismaClient instantiation) -----------------
 mock.module(new URL('../services/db.js', import.meta.url).href, {
-  namedExports: { prisma: {} },
+  exports: { prisma: {} },
 });
 
 // Auth middleware (needs services/auth.js import) --------------
 mock.module(new URL('../middleware/auth.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     requireUnlocked: (req, res, next) => next(),
   },
 });
 
 // Background services ------------------------------------------
 mock.module(new URL('../services/health-pinger.js', import.meta.url).href, {
-  namedExports: { startPinger: noop, stopPinger: noop },
+  exports: { startPinger: noop, stopPinger: noop },
 });
 
 mock.module(new URL('../services/request-log-retention.js', import.meta.url).href, {
-  namedExports: { startRequestLogRetention: noop, stopRequestLogRetention: noop },
+  exports: { startRequestLogRetention: noop, stopRequestLogRetention: noop },
 });
 
 mock.module(new URL('../services/task-supervisor.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     taskSupervisor: {
       start: noop,
       shutdown: async () => {},
@@ -131,13 +130,13 @@ mock.module(new URL('../services/task-supervisor.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../services/legacy-storage.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     enforceLegacyStorageReset: async () => {},
   },
 });
 
 mock.module(new URL('../services/store.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     getMasterProxyKey:        () => 'sk-hydra-test',
     getGenericProxyKey:       () => 'sk-hydra-test',
     invalidateSessionStatusCache: noop,
@@ -145,11 +144,11 @@ mock.module(new URL('../services/store.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../services/session-refresher.js', import.meta.url).href, {
-  namedExports: { startSessionRefresher: noop, stopSessionRefresher: noop },
+  exports: { startSessionRefresher: noop, stopSessionRefresher: noop },
 });
 
 mock.module(new URL('../services/magic-link-manager.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     startMagicLinkCleanup: noop,
     stopMagicLinkCleanup: noop,
     pendingMagicLinks: new Map(),
@@ -157,13 +156,13 @@ mock.module(new URL('../services/magic-link-manager.js', import.meta.url).href, 
 });
 
 mock.module(new URL('../services/proxy-gate.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     proxyGate: { enabled: true },
   },
 });
 
 mock.module(new URL('../services/rotation-manager.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     rotationManager: {
       reload: async () => {},
       cancelReload: () => {},
@@ -175,17 +174,17 @@ mock.module(new URL('../services/rotation-manager.js', import.meta.url).href, {
 
 // Route modules — mock as empty routers so controller/service
 // chains aren't triggered at import time.
-mock.module(new URL('../routes/auth.js',      import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/accounts.js',  import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/keys.js',      import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/dashboard.js', import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/codes.js',     import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/generator.js', import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/pool.js',      import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/proxy.js',     import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/webhooks.js',  import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/system.js',    import.meta.url).href, { defaultExport: Router() });
-mock.module(new URL('../routes/debug.js',     import.meta.url).href, { defaultExport: Router() });
+mock.module(new URL('../routes/auth.js',      import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/accounts.js',  import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/keys.js',      import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/dashboard.js', import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/codes.js',     import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/generator.js', import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/pool.js',      import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/proxy.js',     import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/webhooks.js',  import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/system.js',    import.meta.url).href, { exports: { default: Router() } });
+mock.module(new URL('../routes/debug.js',     import.meta.url).href, { exports: { default: Router() } });
 
 // Error handler middleware (imports logger — already mocked) ----
 // No mock needed, it works fine.

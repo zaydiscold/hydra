@@ -99,7 +99,7 @@ const quietLogger = {
 };
 
 mock.module(new URL('../config.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     config: mockConfig,
     validateConfig: () => true,
     USER_AGENT: 'test-gzip-agent',
@@ -112,30 +112,29 @@ mock.module(new URL('../config.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../services/logger.js', import.meta.url).href, {
-  namedExports: { logger: quietLogger },
-  defaultExport: quietLogger,
+  exports: { default: quietLogger, logger: quietLogger },
 });
 
 mock.module(new URL('../services/db.js', import.meta.url).href, {
-  namedExports: { prisma: {} },
+  exports: { prisma: {} },
 });
 
 mock.module(new URL('../middleware/auth.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     requireUnlocked: (_req, _res, next) => next(),
   },
 });
 
 mock.module(new URL('../services/health-pinger.js', import.meta.url).href, {
-  namedExports: { startPinger() {}, stopPinger() {} },
+  exports: { startPinger() {}, stopPinger() {} },
 });
 
 mock.module(new URL('../services/request-log-retention.js', import.meta.url).href, {
-  namedExports: { startRequestLogRetention() {}, stopRequestLogRetention() {} },
+  exports: { startRequestLogRetention() {}, stopRequestLogRetention() {} },
 });
 
 mock.module(new URL('../services/task-supervisor.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     taskSupervisor: {
       start() {},
       shutdown: async () => {},
@@ -144,30 +143,30 @@ mock.module(new URL('../services/task-supervisor.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../services/legacy-storage.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     enforceLegacyStorageReset: async () => {},
   },
 });
 
 mock.module(new URL('../services/store.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     getMasterProxyKey: () => 'sk-hydra-test',
     getGenericProxyKey: () => 'sk-hydra-test',
   },
 });
 
 mock.module(new URL('../services/session-refresher.js', import.meta.url).href, {
-  namedExports: { startSessionRefresher() {}, stopSessionRefresher: async () => {} },
+  exports: { startSessionRefresher() {}, stopSessionRefresher: async () => {} },
 });
 
 mock.module(new URL('../services/proxy-gate.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     proxyGate: { enabled: true },
   },
 });
 
 mock.module(new URL('../services/rotation-manager.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     rotationManager: {
       reload: async () => {},
       cancelReload() {},
@@ -178,11 +177,11 @@ mock.module(new URL('../services/rotation-manager.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../routes/auth.js', import.meta.url).href, {
-  defaultExport: makeRouterWithStatus(),
+  exports: { default: makeRouterWithStatus() },
 });
 for (const route of ['accounts', 'keys', 'dashboard', 'codes', 'generator', 'pool', 'proxy', 'webhooks', 'system', 'debug']) {
   mock.module(new URL(`../routes/${route}.js`, import.meta.url).href, {
-    defaultExport: emptyRouter(),
+    exports: { default: emptyRouter() },
   });
 }
 

@@ -3,7 +3,7 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 mock.module('electron', {
-  namedExports: {
+  exports: {
     app: {
       isPackaged: false,
       getAppPath() {

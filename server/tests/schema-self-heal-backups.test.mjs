@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 mock.module('electron', {
-  namedExports: {
+  exports: {
     app: {
       getPath(name) {
         assert.equal(name, 'userData');

@@ -1895,3 +1895,9 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   across all 11 untouched samples over five minutes. CPU ranged from `0.000%`
   to `0.300%`, averaged `0.027%`, and ended at `0.300%`; RSS moved from
   `604464 KiB` to `608976 KiB` (`+4512 KiB`).
+- 2026-06-01 Node module-mock harness migration: all test mocks now use the
+  current `exports` object and `exports.default` spelling instead of Node's
+  deprecated `namedExports` and `defaultExport` options. Repository search
+  records deprecated option occurrences `68 -> 0` across `13` test files.
+  Affected suites pass with only Node's expected experimental-module warning.
+  The recon note is `docs/recon/NODE_MOCK_MODULE_OPTIONS_MIGRATION.md`.

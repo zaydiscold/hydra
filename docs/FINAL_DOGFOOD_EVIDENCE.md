@@ -1645,3 +1645,8 @@ This evidence file is not release-complete by itself. The release remains not co
   retained four Hydra-owned processes and zero stale profiles across 11
   five-minute samples. CPU ranged from `0.000%` to `0.300%`, averaged
   `0.027%`, and ended at `0.300%`; RSS changed by `+4512 KiB`.
+- The Node module-mock harness now uses current `exports` and
+  `exports.default` options throughout. Deprecated `namedExports` and
+  `defaultExport` occurrences dropped `68 -> 0` across `13` test files; the
+  affected suites pass with only Node's expected experimental-module warning.
+  The recon note is `docs/recon/NODE_MOCK_MODULE_OPTIONS_MIGRATION.md`.

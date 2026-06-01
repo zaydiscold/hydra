@@ -22,10 +22,10 @@ before(() => {
   const mm = (name) => resolve(`./middleware/${name}.js`);
   const rm = (name) => resolve(`./routes/${name}.js`);
 
-  mock.module(sm('logger'), { namedExports: { logger: { info() {}, warn() {}, error() {}, debug() {} } } });
+  mock.module(sm('logger'), { exports: { logger: { info() {}, warn() {}, error() {}, debug() {} } } });
 
   mock.module(resolve('./config.js'), {
-    namedExports: {
+    exports: {
       config: {
         PORT: 0,
         NODE_ENV: 'test',
@@ -38,21 +38,21 @@ before(() => {
     },
   });
 
-  mock.module(sm('health-pinger'), { namedExports: { startPinger() {}, stopPinger() {} } });
-  mock.module(sm('request-log-retention'), { namedExports: { startRequestLogRetention() {}, stopRequestLogRetention() {} } });
-  mock.module(sm('session-refresher'), { namedExports: { startSessionRefresher() {}, stopSessionRefresher() {} } });
-  mock.module(sm('magic-link-manager'), { namedExports: { startMagicLinkCleanup() {}, stopMagicLinkCleanup() {}, pendingMagicLinks: new Map() } });
-  mock.module(sm('legacy-storage'), { namedExports: { enforceLegacyStorageReset() { return Promise.resolve(); } } });
-  mock.module(sm('task-supervisor'), { namedExports: { taskSupervisor: { start() {}, shutdown() { return Promise.resolve(); } } } });
-  mock.module(sm('rotation-manager'), { namedExports: { rotationManager: { reload() { return Promise.resolve(); }, cancelReload() {} } } });
-  mock.module(sm('store'), { namedExports: { getMasterProxyKey() { return '***'; }, getGenericProxyKey() { return 'sk-or-test'; } } });
-  mock.module(sm('proxy-gate'), { namedExports: { proxyGate: { enabled: true } } });
-  mock.module(mm('error-handler'), { namedExports: { errorHandler(e,r,re,n) { n(); } } });
-  mock.module(mm('auth'), { namedExports: { requireUnlocked(r,re,n) { n(); } } });
+  mock.module(sm('health-pinger'), { exports: { startPinger() {}, stopPinger() {} } });
+  mock.module(sm('request-log-retention'), { exports: { startRequestLogRetention() {}, stopRequestLogRetention() {} } });
+  mock.module(sm('session-refresher'), { exports: { startSessionRefresher() {}, stopSessionRefresher() {} } });
+  mock.module(sm('magic-link-manager'), { exports: { startMagicLinkCleanup() {}, stopMagicLinkCleanup() {}, pendingMagicLinks: new Map() } });
+  mock.module(sm('legacy-storage'), { exports: { enforceLegacyStorageReset() { return Promise.resolve(); } } });
+  mock.module(sm('task-supervisor'), { exports: { taskSupervisor: { start() {}, shutdown() { return Promise.resolve(); } } } });
+  mock.module(sm('rotation-manager'), { exports: { rotationManager: { reload() { return Promise.resolve(); }, cancelReload() {} } } });
+  mock.module(sm('store'), { exports: { getMasterProxyKey() { return '***'; }, getGenericProxyKey() { return 'sk-or-test'; } } });
+  mock.module(sm('proxy-gate'), { exports: { proxyGate: { enabled: true } } });
+  mock.module(mm('error-handler'), { exports: { errorHandler(e,r,re,n) { n(); } } });
+  mock.module(mm('auth'), { exports: { requireUnlocked(r,re,n) { n(); } } });
 
   const stubRouter = (req, res, next) => next();
   for (const name of ['auth','accounts','keys','dashboard','codes','generator','pool','proxy','webhooks','system','debug']) {
-    mock.module(rm(name), { defaultExport: stubRouter, namedExports: {} });
+    mock.module(rm(name), { exports: { default: stubRouter } });
   }
 });
 

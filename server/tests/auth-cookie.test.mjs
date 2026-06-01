@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 const validateCalls = [];
 
 mock.module(new URL('../services/auth.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     validateToken: async (token) => {
       validateCalls.push(token);
       return token === 'valid-cookie-token' ? { id: 'user-1', username: 'admin' } : null;

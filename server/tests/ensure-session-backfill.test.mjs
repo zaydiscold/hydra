@@ -31,7 +31,7 @@ test('ensureSession backfills null sessionExpiry when JWT is still valid', async
   const updateAccountSession = mock.fn(async () => {});
 
   mock.module(STORE_SPEC, {
-    namedExports: {
+    exports: {
       resolveEffectiveSessionExpiry,
       getAccountWithKey: mock.fn(async () => ({
         email: 'otp-only@example.test',

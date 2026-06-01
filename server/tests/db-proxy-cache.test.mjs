@@ -26,8 +26,10 @@ class FakePrismaClient {
 }
 
 mock.module(PRISMA_SPEC, {
-  defaultExport: { PrismaClient: FakePrismaClient },
-  namedExports: { PrismaClient: FakePrismaClient },
+  exports: {
+    default: { PrismaClient: FakePrismaClient },
+    PrismaClient: FakePrismaClient,
+  },
 });
 
 const { prisma, disconnectPrisma } = await import('../services/db.js');

@@ -16,7 +16,7 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const rows = [];
 
 mock.module(DB_SPEC, {
-  namedExports: {
+  exports: {
     prisma: {
       managementKey: {
         findFirst: mock.fn(async ({ where }) => rows.find((row) => row.accountId === where.accountId) || null),
@@ -42,7 +42,7 @@ mock.module(DB_SPEC, {
 });
 
 mock.module(CODEC_SPEC, {
-  namedExports: {
+  exports: {
     encrypt: (value) => `enc:${value}`,
     decrypt: (value) => String(value).startsWith('enc:') ? String(value).slice(4) : String(value),
   },

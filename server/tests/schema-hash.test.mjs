@@ -8,7 +8,7 @@ import path from 'node:path';
 const userDataDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'hydra-schema-hash-'));
 
 mock.module('electron', {
-  namedExports: {
+  exports: {
     app: {
       isPackaged: false,
       getPath(name) {

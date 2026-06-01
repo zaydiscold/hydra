@@ -7,16 +7,16 @@ import { readFileSync } from 'node:fs';
 const warnings = [];
 
 mock.module(new URL('../services/logger.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     logger: {
       warn(message) {
         warnings.push(message);
       },
     },
-  },
-  defaultExport: {
-    warn(message) {
-      warnings.push(message);
+    default: {
+      warn(message) {
+        warnings.push(message);
+      },
     },
   },
 });

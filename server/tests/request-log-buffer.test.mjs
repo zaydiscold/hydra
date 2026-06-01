@@ -27,7 +27,7 @@ const fakeRequestLog = {
 };
 
 mock.module(new URL('../services/db.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     prisma: {
       requestLog: fakeRequestLog,
     },
@@ -35,7 +35,7 @@ mock.module(new URL('../services/db.js', import.meta.url).href, {
 });
 
 mock.module(new URL('../services/logger.js', import.meta.url).href, {
-  namedExports: {
+  exports: {
     logger: {
       warn: (message) => warnings.push(String(message)),
       error: (message) => errors.push(String(message)),

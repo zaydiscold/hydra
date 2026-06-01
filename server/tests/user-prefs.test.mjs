@@ -9,7 +9,7 @@ import path from 'node:path';
 const userDataDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'hydra-user-prefs-'));
 
 mock.module('electron', {
-  namedExports: {
+  exports: {
     app: {
       getPath(name) {
         if (name === 'userData') return userDataDir;
