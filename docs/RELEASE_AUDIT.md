@@ -2366,6 +2366,27 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `31 ok / 5 deferred / 0 missing / 0 blockers`. The root-cause evidence and
   shutdown contract remain documented in
   `docs/recon/ELECTRON_LIFECYCLE_KEEPALIVE_AND_QUIT_TRACING.md`.
+- 2026-06-01 lifecycle-timeout rebuilt-package proof: native quit moved the
+  previous exact-public `v1.4.7` package `4 -> 0` in one second with zero stale
+  profiles before preserving it reversibly under
+  `~/.Trash/hydra-v147-public-before-keepalive-timeout-20260601T233950Z`.
+  The current-source ARM rebuild passed package smoke, strict deep codesign,
+  and embedded-source inspection: packaged `electron/main.js` hashes exactly
+  with source and contains `LIFECYCLE_KEEPALIVE_RENEW_MS = 24 * 60 * 60 *
+  1000`, the timeout arm, and no recurring keepalive interval. The local ARM
+  zip SHA-256 before reversible metadata cleanup was
+  `e1a72cf3cf5dfe99c6a141a82e3756041e3284f3de4543a37fac0ebebdacb8b3`.
+  Native LaunchServices evidence under
+  `/private/tmp/hydra-v147-keepalive-timeout-launch-20260601T234132Z`
+  records one `keepalive-started` line with `renewMs=86400000`, splash CPU
+  decay `226.9% -> 1.5% -> 0.0%`, bounded `72/72` shatter completion, timers
+  `0`, inactive RAF, disabled portal collisions, lifted portal entry, and
+  cleared Matter state. Broad before/after process inventories are preserved
+  there. The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v147-keepalive-timeout-idle-profile-20260601T234217Z`
+  retained exactly four Hydra-owned processes and zero stale profiles across
+  all 11 30-second samples: CPU stayed `0.0-0.1%`, averaged `0.036%`, and
+  ended at `0.0%`; RSS moved `617644032 -> 607289344` bytes (`-10354688`).
 - 2026-06-01 post-release literal-gate recheck: `npm run lint`, full
   `npm test`, and `npm run gate` (`12/12`) passed against the docs-reconciled
   `v1.4.6` tree. Bare `HYDRA_BUILD_TARGET=darwin-arm64 npm run

@@ -1821,9 +1821,18 @@ This evidence file is not release-complete by itself. The release remains not co
   no-op interval every minute. A deterministic one-day scheduler comparison
   records `1440 -> 1` keepalive wakeups (`-1439`, `99.931%` reduction).
   `npm run test:electron-main-process` passed `31/31`, including the contract
-  that rejects a recurring keepalive interval. This source refinement still
-  requires a rebuilt-package LaunchServices profile before it counts as
-  packaged-runtime evidence.
+  that rejects a recurring keepalive interval. The rebuilt ARM package passed
+  package smoke, strict deep codesign, and embedded-source hash equality.
+  Native LaunchServices evidence under
+  `/private/tmp/hydra-v147-keepalive-timeout-launch-20260601T234132Z`
+  records one `keepalive-started` line with `renewMs=86400000`, splash CPU
+  decay `226.9% -> 1.5% -> 0.0%`, bounded `72/72` teardown, timers `0`,
+  inactive RAF, and cleared Matter state. The untouched rebuilt-package profile
+  under
+  `/private/tmp/hydra-v147-keepalive-timeout-idle-profile-20260601T234217Z`
+  retained four Hydra-owned processes and zero stale profiles across all 11
+  samples: CPU stayed `0.0-0.1%`, averaged `0.036%`, and ended at `0.0%`; RSS
+  moved `617644032 -> 607289344` bytes (`-10354688`).
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under
   `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`

@@ -103,6 +103,21 @@ Deterministic one-day scheduler comparison:
 }
 ```
 
+Rebuilt-package verification:
+
+```text
+/private/tmp/hydra-v147-keepalive-timeout-launch-20260601T234132Z
+/private/tmp/hydra-v147-keepalive-timeout-idle-profile-20260601T234217Z
+```
+
+The local ARM rebuild passed package smoke, strict deep codesign, and
+embedded-source hash equality. LaunchServices logging recorded one
+`keepalive-started` line with `renewMs=86400000`. Splash teardown remained
+finite, and the following 11-sample five-minute idle profile retained exactly
+four Hydra-owned processes and zero stale profiles at `0.0-0.1%` CPU
+(`0.036%` average, `0.0%` end). RSS moved from `617644032` to `607289344`
+bytes (`-10354688`).
+
 `electron/main.js`, `electron/app/windows.js`, and `electron/app/ipc.js` now
 log source-level lifecycle paths:
 
