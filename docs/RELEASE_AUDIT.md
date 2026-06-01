@@ -1713,3 +1713,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   stale profiles. Evidence is under
   `/private/tmp/hydra-v140-recovery-frame-cua-retry-20260601T043921Z`.
   Fingerprint approval and interactive route review remain manual.
+- Recovery-frame checkpoint `4f87073cfeee4be4406763270c00659004cbe3df`
+  used `[skip-bump]`; Auto-version run `26735571431` skipped, CI run
+  `26735571409` passed, and Docker workflow run `26735571435` passed runtime
+  smoke and registry image push.
