@@ -148,6 +148,15 @@ test('actionable recovery frames settle instead of sweeping forever', () => {
   assert.match(recoveryMeter, /animation:\s*none/);
 });
 
+test('fallback recovery frames do not allocate permanently hidden glyph DOM', () => {
+  const app = readRepoFile('src/App.jsx');
+  const css = readRepoFile('src/index.css');
+
+  assert.doesNotMatch(app, /hydra-letter-rain/);
+  assert.doesNotMatch(app, /length:\s*compact\s*\?\s*18\s*:\s*34/);
+  assert.doesNotMatch(css, /\.hydra-letter-rain/);
+});
+
 test('splash owns one throttled physics and render loop', () => {
   const windowsJs = readRepoFile('electron/app/windows.js');
   const splashLabels = [...windowsJs.matchAll(/\{ text: '([^']+)',\s+tag: '(?:brand|model)'/g)]

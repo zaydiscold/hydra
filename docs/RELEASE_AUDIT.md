@@ -1717,3 +1717,42 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   used `[skip-bump]`; Auto-version run `26735571431` skipped, CI run
   `26735571409` passed, and Docker workflow run `26735571435` passed runtime
   smoke and registry image push.
+- 2026-06-01 hidden fallback-glyph cleanup: the React `HydraLoadFrame`
+  fallback used by offline, restart-required, and shutdown surfaces no longer
+  allocates a permanently hidden letter-rain subtree. The removed code built
+  `34` hidden spans for a default frame and `18` for a compact frame even
+  though `.hydra-letter-rain { display: none; }` prevented either subtree
+  from rendering. The real Electron splash remains separate and unchanged at
+  its bounded `72`-word target. The deterministic benchmark under
+  `/private/tmp/hydra-hidden-fallback-glyph-benchmark-20260601T045446616Z/summary.json`
+  records default fallback hidden nodes `34 -> 0`, compact fallback hidden
+  nodes `18 -> 0`, dead CSS removal, and the untouched real splash. UI static
+  contracts now pass `42/42`; lint, full `npm test`, build, gate (`12/12`),
+  OpenAPI generation (`83 operations`), audit, and diff check passed before
+  the package rebuild.
+- 2026-06-01 hidden fallback-glyph current-source package proof: native quit
+  removed all four prior package processes immediately with evidence under
+  `/private/tmp/hydra-v140-hidden-glyph-rebuild-shutdown-20260601T045550Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), packaged renderer inspection for the absent hidden-glyph path,
+  and packaged splash inspection for the retained `HYDRA_SPLASH_TARGET=72`
+  passed. The local ARM zip SHA-256 was
+  `cba6300b961fe2aded319a0e015a7a45986f165e9f910915720f2ab0f88cc1a0`;
+  it is current-source local proof, not a replacement public asset.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-hidden-fallback-glyph-package-20260601T045724Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`.
+- 2026-06-01 hidden fallback-glyph post-rebuild profile:
+  `/private/tmp/hydra-v140-hidden-glyph-post-rebuild-idle-20260601T050012Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across 11 untouched samples over five minutes. CPU ranged from `0.000%` to
+  `4.100%`, averaged `1.655%`, and ended at `1.000%`; RSS moved from
+  `606160 KiB` to `610528 KiB` (`+4368 KiB`). This does not claim an idle-CPU
+  reduction from DOM removal. A short attribution pass under
+  `/private/tmp/hydra-v140-hidden-glyph-transient-attribution-20260601T050202Z`
+  found brief low pulses and otherwise-zero snapshots; an eight-second native
+  main-process sample under
+  `/private/tmp/hydra-v140-hidden-glyph-main-stack-20260601T050302Z` was
+  idle-dominant. The follow-up sweep found a separate server-side cost:
+  `TaskSupervisor` still arms a 30-second expiry timeout while its task map is
+  empty. That demand-driven scheduler repair is the next code checkpoint.

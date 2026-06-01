@@ -3307,10 +3307,6 @@ select:-webkit-autofill {
   animation: none;
 }
 
-.hydra-letter-rain {
-  display: none;
-}
-
 @keyframes hydra-meter-sweep {
   0% { transform: translateX(-115%); }
   58% { transform: translateX(108%); }
@@ -3338,7 +3334,6 @@ select:-webkit-autofill {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hydra-letter-rain span,
   .hydra-load-meter i {
     animation: none !important;
   }

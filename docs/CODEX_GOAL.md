@@ -1061,6 +1061,36 @@ closed-app CLI commands, tests, and repo-local documentation.
   used `[skip-bump]`; Auto-version run `26735571431` skipped, CI run
   `26735571409` passed, and Docker workflow `26735571435` passed runtime
   smoke and registry image push.
+- Fallback recovery frames received another structural cleanup: offline,
+  restart-required, and shutdown states no longer materialize a hidden glyph
+  subtree that CSS permanently suppresses. The deterministic benchmark under
+  `/private/tmp/hydra-hidden-fallback-glyph-benchmark-20260601T045446616Z/summary.json`
+  records default fallback hidden nodes `34 -> 0` and compact fallback hidden
+  nodes `18 -> 0`; the separate Electron splash remains unchanged at its
+  bounded `72`-word target. UI static contracts now pass `42/42`, and the
+  complete source chain passed before rebuilding.
+- The hidden-glyph package rebuild passed ARM smoke, strict deep `codesign`,
+  bundle version (`1.4.0`), packaged renderer inspection for the absent
+  hidden-glyph path, and packaged splash inspection for the retained target.
+  The current-source local ARM zip SHA-256 was
+  `cba6300b961fe2aded319a0e015a7a45986f165e9f910915720f2ab0f88cc1a0`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-hidden-fallback-glyph-package-20260601T045724Z`; `release/`
+  again contains only `mac-arm64/Hydra.app`.
+- The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v140-hidden-glyph-post-rebuild-idle-20260601T050012Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `4.100%`, averaged
+  `1.655%`, and ended at `1.000%`; RSS changed by `+4368 KiB`. The DOM cleanup
+  is recorded as a structural reduction rather than mislabeled as an idle-CPU
+  win. Short attribution under
+  `/private/tmp/hydra-v140-hidden-glyph-transient-attribution-20260601T050202Z`
+  and an eight-second native sample under
+  `/private/tmp/hydra-v140-hidden-glyph-main-stack-20260601T050302Z` found
+  bounded pulses with an idle-dominant main process. The follow-up sweep found
+  that `TaskSupervisor` still arms a 30-second expiry timer against an empty
+  task map; converting that scheduler to demand-driven ownership is the next
+  code checkpoint.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

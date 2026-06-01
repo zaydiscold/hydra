@@ -1505,3 +1505,32 @@ This evidence file is not release-complete by itself. The release remains not co
   used `[skip-bump]`; Auto-version run `26735571431` skipped, CI run
   `26735571409` passed, and Docker workflow `26735571435` passed runtime
   smoke and registry image push.
+- Offline, restart-required, and shutdown fallback frames no longer allocate
+  permanently hidden glyph spans. The benchmark under
+  `/private/tmp/hydra-hidden-fallback-glyph-benchmark-20260601T045446616Z/summary.json`
+  records default fallback hidden nodes `34 -> 0` and compact fallback hidden
+  nodes `18 -> 0`; the separate real Electron splash remains unchanged at its
+  bounded `72`-word target. UI static contracts now pass `42/42`.
+- Native shutdown evidence is under
+  `/private/tmp/hydra-v140-hidden-glyph-rebuild-shutdown-20260601T045550Z`;
+  four package processes exited immediately. The current-source ARM package
+  rebuilt and passed package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), packaged renderer inspection for the absent hidden-glyph path,
+  and packaged splash inspection for the retained target. The local ARM zip
+  SHA-256 was
+  `cba6300b961fe2aded319a0e015a7a45986f165e9f910915720f2ab0f88cc1a0`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-hidden-fallback-glyph-package-20260601T045724Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`.
+- The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v140-hidden-glyph-post-rebuild-idle-20260601T050012Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `4.100%`, averaged
+  `1.655%`, and ended at `1.000%`; RSS changed by `+4368 KiB`. The structural
+  DOM cleanup is not presented as an idle-CPU reduction. Short transient
+  attribution is under
+  `/private/tmp/hydra-v140-hidden-glyph-transient-attribution-20260601T050202Z`,
+  and an idle-dominant eight-second main-process sample is under
+  `/private/tmp/hydra-v140-hidden-glyph-main-stack-20260601T050302Z`. The
+  follow-up sweep found a separate empty-task `TaskSupervisor` expiry wakeup
+  to remove in the next code checkpoint.

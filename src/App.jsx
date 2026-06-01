@@ -96,33 +96,8 @@ function UpstreamStatusBanner({ upstream }) {
 }
 
 function HydraLoadFrame({ tone = 'normal', title = 'HYDRA', status = 'INITIALIZING', detail, compact = false }) {
-  const letters = 'HYDRA PROXY 01011'.replaceAll(' ', '').split('');
-  const glyphs = Array.from({ length: compact ? 18 : 34 }, (_, i) => {
-    const char = letters[i % letters.length];
-    const x = 4 + ((i * 19) % 92);
-    const fall = 5.8 + ((i % 7) * 0.52);
-    const delay = -((i * 0.37) % 5.2);
-    const size = 18 + ((i % 5) * 7);
-    const spin = (i % 2 === 0 ? -1 : 1) * (8 + (i % 6) * 5);
-    return (
-      <span
-        key={`${char}-${i}`}
-        style={{
-          '--x': x,
-          '--fall': `${fall}s`,
-          '--delay': `${delay}s`,
-          '--size': `${size}px`,
-          '--spin': `${spin}deg`,
-        }}
-      >
-        {char}
-      </span>
-    );
-  });
-
   return (
     <div className={`hydra-load-frame hydra-load-frame--${tone}${compact ? ' hydra-load-frame--compact' : ''}`}>
-      <div className="hydra-letter-rain" aria-hidden="true">{glyphs}</div>
       <div className="hydra-load-card">
         <div className="hydra-load-mark" aria-hidden="true">
           <div className="hydra-load-mark-core">H</div>
