@@ -56,6 +56,11 @@ complete source chain then passed full `npm test`, lint, build, integration
 gate (`12/12`), OpenAPI generation (`83 operations`), dogfood preflight, audit,
 and diff check.
 
+The enforced-guard checkpoint
+`9d9afb50a9776a9f356e9b9f18ad7c4f86e313dc` used `[skip-bump]`;
+Auto-version run `26737940920` skipped, CI run `26737940926` passed, and Docker
+workflow run `26737940921` passed runtime smoke and registry image push.
+
 ## Reproduce
 
 Run:

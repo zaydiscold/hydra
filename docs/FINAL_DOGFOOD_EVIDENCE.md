@@ -1665,3 +1665,8 @@ This evidence file is not release-complete by itself. The release remains not co
   Auto-version run `26737753990` skipped, CI run `26737754008` passed, and
   Docker workflow run `26737754000` passed runtime smoke and registry image
   push.
+- Node module-mock guard checkpoint
+  `9d9afb50a9776a9f356e9b9f18ad7c4f86e313dc` used `[skip-bump]`;
+  Auto-version run `26737940920` skipped, CI run `26737940926` passed, and
+  Docker workflow run `26737940921` passed runtime smoke and registry image
+  push.
