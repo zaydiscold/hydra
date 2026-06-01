@@ -106,6 +106,14 @@ isolated documentation checkpoints while the remaining manual packaged-GUI
 evidence is collected. Do not produce a second minor bump merely to record
 manual evidence.
 
+The post-`v1.4.0` stabilization tranche now includes source fixes that must
+reach public desktop artifacts: request-owned cancellation and shutdown joins,
+bounded Windows lifecycle smoke, hardened Docker browser fallback, passive
+renderer observer cleanup, idle task-expiry disarming, idle request-log
+retention write avoidance, and empty-pool health-pinger disarming. Keep the
+tested `v1.4.0` tag immutable and close artifact parity with the normal patch
+lane as `v1.4.1`.
+
 Operationally:
 
 1. Push source, docs, and test checkpoints to `master` with `[skip-bump]`.
