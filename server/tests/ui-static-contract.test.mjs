@@ -287,21 +287,53 @@ test('renderer visible refresh work aborts when hidden or unmounted', () => {
   assert.match(api, /function wait\(ms, signal\)/);
   assert.match(api, /clearTrackedTimeout\(timer\)/);
   assert.match(api, /getDashboard = \(signal\) => request\('\/dashboard', \{ signal \}\)/);
+  assert.match(api, /getDashboardQuiet = \(signal\) => request\('\/dashboard', \{ signal, trackLoading: false \}\)/);
   assert.match(api, /getSessionStatus = \(id, signal\) => request\(`\/accounts\/\$\{id\}\/session-status`, \{ signal \}\)/);
+  assert.match(api, /getSessionStatusQuiet = \(id, signal\) =>\s*request\(`\/accounts\/\$\{id\}\/session-status`, \{ signal, trackLoading: false \}\)/);
   assert.match(api, /getTraffic = \(signal\) => request\('\/pool\/traffic', \{ signal \}\)/);
+  assert.match(api, /getTrafficQuiet = \(signal\) => request\('\/pool\/traffic', \{ signal, trackLoading: false \}\)/);
   assert.match(api, /getSystemHealth = \(signal\) => request\('\/system\/health', \{ signal \}\)/);
   assert.match(api, /getSystemHealthQuiet = \(signal\) => request\('\/system\/health', \{ signal, trackLoading: false \}\)/);
 
   assert.match(app, /api\.getSystemHealthQuiet\(signal\)/);
   assert.match(metrics, /requestAbortRef\.current\?\.abort\(\)/);
-  assert.match(metrics, /api\.getDashboard\(controller\.signal\)/);
-  assert.match(metrics, /api\.getSessionStatus\(acct\.id, controller\.signal\)/);
+  assert.match(metrics, /quietLoading \? api\.getDashboardQuiet : api\.getDashboard/);
+  assert.match(metrics, /quietLoading \? api\.getPoolSyncStatusQuiet : api\.getPoolSyncStatus/);
+  assert.match(metrics, /api\.getSessionStatusQuiet\(acct\.id, controller\.signal\)/);
+  assert.match(metrics, /fetchDashboard\(true, signal, true\)/);
   assert.match(traffic, /requestAbortRef\.current\?\.abort\(\)/);
-  assert.match(traffic, /api\.getTraffic\(controller\.signal\)/);
+  assert.match(traffic, /quietLoading \? api\.getTrafficQuiet : api\.getTraffic/);
+  assert.match(traffic, /fetchTraffic\(true, signal, true\)/);
   assert.match(vault, /loadAbortRef\.current\?\.abort\(\)/);
   assert.match(vault, /probeAbortRef\.current\?\.abort\(\)/);
-  assert.match(vault, /api\.getDashboard\(controller\.signal\)/);
-  assert.match(vault, /api\.getSessionStatus\(acct\.id, controller\.signal\)/);
+  assert.match(vault, /quietLoading \? api\.getDashboardQuiet : api\.getDashboard/);
+  assert.match(vault, /api\.getSessionStatusQuiet\(acct\.id, controller\.signal\)/);
+  assert.match(vault, /loadAccounts\(true, signal, true\)/);
+});
+
+test('passive background observers avoid foreground loading animation', () => {
+  const api = readRepoFile('src/api.js');
+  const bulkAuth = readRepoFile('src/hooks/useBulkAuth.js');
+  const codeRedemption = readRepoFile('src/pages/CodeRedemption.jsx');
+  const generator = readRepoFile('src/pages/Generator.jsx');
+
+  assert.match(api, /const \{ method = 'GET', body, skipAuth = false, signal, keepalive = false, trackLoading = true \} = options/);
+  assert.match(api, /checkSessionLive = \(id, signal\) => request\(`\/accounts\/\$\{id\}\/session-check`, \{ signal \}\)/);
+  assert.match(api, /checkSessionLiveQuiet = \(id, signal\) =>\s*request\(`\/accounts\/\$\{id\}\/session-check`, \{ signal, trackLoading: false \}\)/);
+  assert.match(api, /getMagicLinkStatusQuiet = \(id, signInId, signal\) =>\s*request\(`\/accounts\/\$\{id\}\/magic-link\/status\/\$\{encodeURIComponent\(signInId\)\}`, \{ signal, trackLoading: false \}\)/);
+  assert.match(api, /getGeneratorJobStatusQuiet = \(taskId, signal\) =>\s*request\(`\/generator\/status\/\$\{taskId\}`, \{ signal, trackLoading: false \}\)/);
+  assert.match(api, /heartbeatGeneratorJobQuiet = \(taskId, signal\) =>\s*request\(`\/generator\/\$\{taskId\}\/heartbeat`, \{ method: 'POST', signal, trackLoading: false \}\)/);
+  assert.match(api, /getPoolSyncStatusQuiet = \(signal\) => request\('\/pool\/sync-status', \{ signal, trackLoading: false \}\)/);
+  assert.match(api, /preflightRedeemAccountsQuiet = \(accountIds, signal\) =>\s*request\('\/codes\/preflight', \{ method: 'POST', body: \{ accountIds \}, signal, trackLoading: false \}\)/);
+  assert.match(api, /getRedemptionLogsQuiet = \(signal\) => request\('\/codes\/history', \{ signal, trackLoading: false \}\)/);
+  assert.match(bulkAuth, /api\.getMagicLinkStatusQuiet\(poll\.accountId, poll\.signInId, signal\)/);
+  assert.match(bulkAuth, /api\.checkSessionLiveQuiet\(poll\.accountId, signal\)/);
+  assert.doesNotMatch(bulkAuth, /api\.getMagicLinkStatus\(poll\.accountId, poll\.signInId, signal\)/);
+  assert.match(codeRedemption, /api\.preflightRedeemAccountsQuiet\(ids, signal\)/);
+  assert.match(codeRedemption, /fetchHistory\(signal, true\)/);
+  assert.match(codeRedemption, /quietLoading \? api\.getRedemptionLogsQuiet : api\.getRedemptionLogs/);
+  assert.match(generator, /api\.getGeneratorJobStatusQuiet\(taskId, controller\.signal\)/);
+  assert.match(generator, /api\.heartbeatGeneratorJobQuiet\(taskId, controller\.signal\)/);
 });
 
 test('Pool Manager aborts status probes on refresh and unmount', () => {

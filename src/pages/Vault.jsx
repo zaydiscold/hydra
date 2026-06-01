@@ -71,7 +71,7 @@ export default function Vault({ addToast }) {
       while (!controller.signal.aborted && queue.length) {
         const acct = queue.shift();
         try {
-          const r = await api.getSessionStatus(acct.id, controller.signal);
+          const r = await api.getSessionStatusQuiet(acct.id, controller.signal);
           results[acct.id] = r?.data?.status ?? r?.status ?? 'unknown';
         } catch (err) {
           if (controller.signal.aborted) return;
@@ -96,7 +96,7 @@ export default function Vault({ addToast }) {
   }, [addToast]);
 
   // ── Load accounts from dashboard endpoint ──
-  const loadAccounts = useCallback(async (silent = false, externalSignal) => {
+  const loadAccounts = useCallback(async (silent = false, externalSignal, quietLoading = false) => {
     if (loadInFlightRef.current || unmountedRef.current) return;
     const controller = new AbortController();
     const forwardAbort = () => controller.abort();
@@ -105,7 +105,8 @@ export default function Vault({ addToast }) {
     loadInFlightRef.current = true;
     if (!silent) setLoading(true);
     try {
-      const res = await api.getDashboard(controller.signal);
+      const getDashboard = quietLoading ? api.getDashboardQuiet : api.getDashboard;
+      const res = await getDashboard(controller.signal);
       if (unmountedRef.current || controller.signal.aborted) return;
       const accts = res?.data?.accounts ?? [];
       setAccounts(accts);
@@ -163,7 +164,7 @@ export default function Vault({ addToast }) {
 
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
-  const refreshVisibleVault = useCallback((signal) => loadAccounts(true, signal), [loadAccounts]);
+  const refreshVisibleVault = useCallback((signal) => loadAccounts(true, signal, true), [loadAccounts]);
   useVisibleRecurringTask('Vault.autoRefresh', refreshVisibleVault, 10 * 60 * 1000);
 
   // ── Provision management key ──

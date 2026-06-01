@@ -295,6 +295,7 @@ export function hasToken() {
 
 // Dashboard
 export const getDashboard = (signal) => request('/dashboard', { signal });
+export const getDashboardQuiet = (signal) => request('/dashboard', { signal, trackLoading: false });
 
 // Accounts
 export const getAccounts = (signal) => request('/accounts', { signal });
@@ -330,7 +331,11 @@ export const refreshAccountLogin = (id) =>
 export const silentRefreshSession = (id) =>
   request(`/accounts/${id}/refresh`, { method: 'POST' });
 export const getSessionStatus = (id, signal) => request(`/accounts/${id}/session-status`, { signal });
+export const getSessionStatusQuiet = (id, signal) =>
+  request(`/accounts/${id}/session-status`, { signal, trackLoading: false });
 export const checkSessionLive = (id, signal) => request(`/accounts/${id}/session-check`, { signal });
+export const checkSessionLiveQuiet = (id, signal) =>
+  request(`/accounts/${id}/session-check`, { signal, trackLoading: false });
 export const silentRefreshOnly = (id) => request(`/accounts/${id}/silent-refresh`, { method: 'POST' });
 
 // Magic link (email_link strategy)
@@ -338,6 +343,8 @@ export const sendMagicLink = (id, email, signal) =>
   request(`/accounts/${id}/magic-link/send`, { method: 'POST', body: { email }, signal });
 export const getMagicLinkStatus = (id, signInId, signal) =>
   request(`/accounts/${id}/magic-link/status/${encodeURIComponent(signInId)}`, { signal });
+export const getMagicLinkStatusQuiet = (id, signInId, signal) =>
+  request(`/accounts/${id}/magic-link/status/${encodeURIComponent(signInId)}`, { signal, trackLoading: false });
 
 // Provisioning
 export const provisionManagementKey = (id, keyName) =>
@@ -363,16 +370,23 @@ export const bulkMatrixRedeem = (assignments, signal) =>
   request('/codes/bulk-matrix', { method: 'POST', body: { assignments }, signal });
 export const preflightRedeemAccounts = (accountIds, signal) =>
   request('/codes/preflight', { method: 'POST', body: { accountIds }, signal });
+export const preflightRedeemAccountsQuiet = (accountIds, signal) =>
+  request('/codes/preflight', { method: 'POST', body: { accountIds }, signal, trackLoading: false });
 export const getDiscoveredEndpoints = () => request('/codes/endpoints');
 export const getRedemptionLogs = (signal) => request('/codes/history', { signal });
+export const getRedemptionLogsQuiet = (signal) => request('/codes/history', { signal, trackLoading: false });
 
 // Generator
 export const startGeneratorJob = (emailTemplate, password, count) => 
   request('/generator/start', { method: 'POST', body: { emailTemplate, password, count } });
 export const getGeneratorJobStatus = (taskId, signal) => 
   request(`/generator/status/${taskId}`, { signal });
+export const getGeneratorJobStatusQuiet = (taskId, signal) =>
+  request(`/generator/status/${taskId}`, { signal, trackLoading: false });
 export const heartbeatGeneratorJob = (taskId, signal) =>
   request(`/generator/${taskId}/heartbeat`, { method: 'POST', signal });
+export const heartbeatGeneratorJobQuiet = (taskId, signal) =>
+  request(`/generator/${taskId}/heartbeat`, { method: 'POST', signal, trackLoading: false });
 export const submitGeneratorOtp = (taskId, otp) => 
   request(`/generator/verify/${taskId}`, { method: 'POST', body: { otp } });
 export const cleanupGeneratorJob = (taskId, reason = 'cancelled', options = {}) => 
@@ -400,8 +414,10 @@ export const disablePoolKey = (hash, disabled) =>
 export const deletePoolKey = (hash) =>
   request(`/pool/key/${hash}`, { method: 'DELETE' });
 export const getTraffic = (signal) => request('/pool/traffic', { signal });
+export const getTrafficQuiet = (signal) => request('/pool/traffic', { signal, trackLoading: false });
 export const getPoolModels = (signal) => request('/pool/models', { signal });
 export const getPoolSyncStatus = (signal) => request('/pool/sync-status', { signal });
+export const getPoolSyncStatusQuiet = (signal) => request('/pool/sync-status', { signal, trackLoading: false });
 export const rotateMasterKey = () => request('/pool/rotate-master-key', { method: 'POST' });
 
 // System

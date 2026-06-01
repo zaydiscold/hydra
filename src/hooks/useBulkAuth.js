@@ -123,7 +123,7 @@ export function useBulkAuth(addToast) {
           await Promise.all(pollEntries.map(async ([email, poll]) => {
             poll.inFlight = true;
             try {
-              const res = await api.getMagicLinkStatus(poll.accountId, poll.signInId, signal);
+              const res = await api.getMagicLinkStatusQuiet(poll.accountId, poll.signInId, signal);
               if (signal.aborted || unmountedRef.current) return;
               poll.consecutiveFailures = 0;
               const st = res?.data?.status ?? res?.status;
@@ -145,7 +145,7 @@ export function useBulkAuth(addToast) {
 
           await Promise.all(completed.map(async ([email, poll]) => {
             try {
-              const res = await api.checkSessionLive(poll.accountId, signal);
+              const res = await api.checkSessionLiveQuiet(poll.accountId, signal);
               if (signal.aborted || unmountedRef.current) return;
               const status = res?.data?.status ?? res?.status;
               if (status === 'active') {
@@ -201,7 +201,7 @@ export function useBulkAuth(addToast) {
       if (!poll || (doneSignInId && doneSignInId !== poll.signInId)) return;
 
       updateEmailLinkRow(email, { status: 'sent', message: 'Link clicked — confirming session…' });
-      void api.checkSessionLive(poll.accountId, signal)
+      void api.checkSessionLiveQuiet(poll.accountId, signal)
         .then((res) => {
           if (signal.aborted || unmountedRef.current) return;
           const status = res?.data?.status ?? res?.status;

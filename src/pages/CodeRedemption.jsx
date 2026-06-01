@@ -90,10 +90,11 @@ export default function CodeRedemption({ addToast }) {
     };
   }, []);
 
-  function fetchHistory(signal = lifecycleAbortRef.current?.signal) {
+  function fetchHistory(signal = lifecycleAbortRef.current?.signal, quietLoading = false) {
     if (!signal || signal.aborted) return;
     setHistoryError('');
-    api.getRedemptionLogs(signal)
+    const getRedemptionLogs = quietLoading ? api.getRedemptionLogsQuiet : api.getRedemptionLogs;
+    getRedemptionLogs(signal)
       .then(res => {
         if (signal.aborted) return;
         setHistoryLogs(Array.isArray(res?.data) ? res.data : []);
@@ -158,7 +159,7 @@ export default function CodeRedemption({ addToast }) {
       if (signal.aborted) return;
       setSessionPreflight((p) => ({ ...p, loading: true, error: null }));
       const ids = [...selectedAccountIds];
-      api.preflightRedeemAccounts(ids, signal)
+      api.preflightRedeemAccountsQuiet(ids, signal)
         .then((res) => {
           if (cancelled || signal.aborted) return;
           const d = res.data;
@@ -313,7 +314,7 @@ export default function CodeRedemption({ addToast }) {
     if (historyRefreshTimerRef.current) clearTrackedTimeout(historyRefreshTimerRef.current);
     historyRefreshTimerRef.current = setTrackedTimeout('CodeRedemption.historyRefresh', () => {
       historyRefreshTimerRef.current = null;
-      fetchHistory(signal);
+      fetchHistory(signal, true);
     }, 400);
   }
 

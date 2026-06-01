@@ -77,7 +77,7 @@ export default function Generator({ addToast }) {
       if (cancelled || statusPollInFlightRef.current) return;
       statusPollInFlightRef.current = true;
       try {
-        const res = await api.getGeneratorJobStatus(taskId, controller.signal);
+        const res = await api.getGeneratorJobStatusQuiet(taskId, controller.signal);
         applyTaskPayload(res?.data ?? res ?? {});
       } catch (err) {
         if (controller.signal.aborted) return;
@@ -116,7 +116,7 @@ export default function Generator({ addToast }) {
       if (cancelled || heartbeatInFlightRef.current) return;
       heartbeatInFlightRef.current = true;
       try {
-        await api.heartbeatGeneratorJob(taskId, controller.signal);
+        await api.heartbeatGeneratorJobQuiet(taskId, controller.signal);
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error('[GENERATOR] Heartbeat failed:', err.message);

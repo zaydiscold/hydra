@@ -20,7 +20,7 @@ export function useMetrics({ addToast }) {
   const requestAbortRef = useRef(null);
   const unmountedRef = useRef(false);
 
-  const fetchDashboard = useCallback(async (silent = false, externalSignal) => {
+  const fetchDashboard = useCallback(async (silent = false, externalSignal, quietLoading = false) => {
     if (inFlightRef.current || unmountedRef.current) return;
     const controller = new AbortController();
     const forwardAbort = () => controller.abort();
@@ -31,9 +31,11 @@ export function useMetrics({ addToast }) {
     else setLoading(true);
 
     try {
+      const getDashboard = quietLoading ? api.getDashboardQuiet : api.getDashboard;
+      const getPoolSyncStatus = quietLoading ? api.getPoolSyncStatusQuiet : api.getPoolSyncStatus;
       const [res, syncRes] = await Promise.all([
-        api.getDashboard(controller.signal),
-        api.getPoolSyncStatus(controller.signal).catch((err) => {
+        getDashboard(controller.signal),
+        getPoolSyncStatus(controller.signal).catch((err) => {
           if (controller.signal.aborted) return { data: {} };
           console.warn('[METRICS] Pool sync status unavailable:', err.message);
           return { data: {} };
@@ -105,7 +107,7 @@ export function useMetrics({ addToast }) {
           while (!cancelled && !controller.signal.aborted && active < CONCURRENCY && idx < accounts.length) {
             const acct = accounts[idx++];
             active++;
-            api.getSessionStatus(acct.id, controller.signal)
+            api.getSessionStatusQuiet(acct.id, controller.signal)
               .then((res) => {
                 if (!cancelled) results[acct.id] = res?.data?.status || res?.data;
               })
@@ -147,7 +149,7 @@ export function useMetrics({ addToast }) {
     }
   }, [data?.accounts, liveStatuses, addToast]);
 
-  const refreshVisibleDashboard = useCallback((signal) => fetchDashboard(true, signal), [fetchDashboard]);
+  const refreshVisibleDashboard = useCallback((signal) => fetchDashboard(true, signal, true), [fetchDashboard]);
   useVisibleRecurringTask('useMetrics.autoRefresh', refreshVisibleDashboard, 5 * 60 * 1000);
 
   const handleProvision = useCallback(async (accountId) => {

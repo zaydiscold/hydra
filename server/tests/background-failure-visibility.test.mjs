@@ -90,8 +90,9 @@ test('code redeemer aborts route-owned work and superseded preflights', () => {
   assert.match(source, /controller\.abort\(\)/);
   assert.match(source, /lifecycleSignal\.addEventListener\('abort', abort, \{ once: true \}\)/);
   assert.match(source, /api\.getAccounts\(signal\)/);
-  assert.match(source, /api\.getRedemptionLogs\(signal\)/);
-  assert.match(source, /api\.preflightRedeemAccounts\(ids, signal\)/);
+  assert.match(source, /quietLoading \? api\.getRedemptionLogsQuiet : api\.getRedemptionLogs/);
+  assert.match(source, /getRedemptionLogs\(signal\)/);
+  assert.match(source, /api\.preflightRedeemAccountsQuiet\(ids, signal\)/);
   assert.match(source, /api\.preflightRedeemAccounts\(accountIdsToRun, signal\)/);
   assert.match(source, /api\.bulkMatrixRedeem\(assignments, signal\)/);
 });
@@ -538,8 +539,8 @@ test('bulk magic-link polling confirms completed links with a live Clerk session
   assert.match(poller, /await Promise\.all\(pollEntries\.map/);
   assert.match(poller, /await Promise\.all\(completed\.map/);
   assert.match(poller, /completed\.map\(async \(\[email, poll\]\) => \{\s*try \{/);
-  assert.match(poller, /api\.getMagicLinkStatus\(poll\.accountId, poll\.signInId, signal\)/);
-  assert.match(poller, /api\.checkSessionLive\(poll\.accountId, signal\)/);
+  assert.match(poller, /api\.getMagicLinkStatusQuiet\(poll\.accountId, poll\.signInId, signal\)/);
+  assert.match(poller, /api\.checkSessionLiveQuiet\(poll\.accountId, signal\)/);
   assert.match(poller, /status === 'active'/);
   assert.match(poller, /Link expired or session was not confirmed/);
   assert.doesNotMatch(poller, /api\.getAccounts\(\)/);

@@ -11,7 +11,7 @@ export function useTraffic({ addToast }) {
   const requestAbortRef = useRef(null);
   const unmountedRef = useRef(false);
 
-  const fetchTraffic = useCallback(async (silent = false, externalSignal) => {
+  const fetchTraffic = useCallback(async (silent = false, externalSignal, quietLoading = false) => {
     if (inFlightRef.current || unmountedRef.current) return;
     const controller = new AbortController();
     const forwardAbort = () => controller.abort();
@@ -20,7 +20,8 @@ export function useTraffic({ addToast }) {
     inFlightRef.current = true;
     if (silent) setRefreshing(true);
     try {
-      const res = await api.getTraffic(controller.signal);
+      const getTraffic = quietLoading ? api.getTrafficQuiet : api.getTraffic;
+      const res = await getTraffic(controller.signal);
       if (unmountedRef.current || controller.signal.aborted) return;
       setData(res.data);
     } catch (err) {
@@ -56,7 +57,7 @@ export function useTraffic({ addToast }) {
     fetchTraffic();
   }, [fetchTraffic]);
 
-  const refreshVisibleTraffic = useCallback((signal) => fetchTraffic(true, signal), [fetchTraffic]);
+  const refreshVisibleTraffic = useCallback((signal) => fetchTraffic(true, signal, true), [fetchTraffic]);
   useVisibleRecurringTask('useTraffic.autoRefresh', refreshVisibleTraffic, 30000);
 
   return {
