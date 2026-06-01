@@ -1856,3 +1856,16 @@ This evidence file is not release-complete by itself. The release remains not co
   lifecycle check, artifact uploads, and macOS updater metadata merge. CI run
   `26745750087`, Docker workflow run `26745750037`, and Auto-version run
   `26745750077` also completed successfully.
+- Post-release `v1.4.3` closeout verification: docs closeout commit
+  `92b159adc233ee3a7fe8231f40129d77f627a45f` kept version `1.4.3` and used
+  `[skip-bump]`; Auto-version run `26746458475` skipped, CI run `26746458503`
+  passed, and Docker workflow run `26746458547` passed both `Build & Push` and
+  `Runtime Smoke`. A fresh read-only five-minute profile of the already-running
+  packaged app under
+  `/private/tmp/hydra-v143-post-release-readonly-profile-20260601T092809Z`
+  retained four Hydra-owned processes and zero stale profiles across all 11
+  samples. CPU ranged `0.0-0.2%`, averaged `0.036%`, and ended at `0.0%`; RSS
+  moved from `482131968` to `485949440` bytes (`+3817472`). Strict deep
+  `codesign` still passed for `release/mac-arm64/Hydra.app`, and the bundle
+  reports `1.4.3`. Manual packaged GUI, live-flow, screenshot, Touch ID hardware,
+  and real Windows UX dogfood boundaries remain explicit.
