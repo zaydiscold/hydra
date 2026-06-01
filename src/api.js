@@ -156,7 +156,7 @@ function updateLoadingState() {
 }
 
 async function request(path, options = {}) {
-  const { method = 'GET', body, skipAuth = false, signal, keepalive = false } = options;
+  const { method = 'GET', body, skipAuth = false, signal, keepalive = false, trackLoading = true } = options;
   const normalizedMethod = String(method || 'GET').toUpperCase();
   const headers = { 'Content-Type': 'application/json' };
   if (!skipAuth) {
@@ -167,8 +167,10 @@ async function request(path, options = {}) {
   if (body) fetchOptions.body = JSON.stringify(body);
   const attempts = isRetryableRequest(normalizedMethod) ? 2 : 1;
 
-  activeRequests++;
-  updateLoadingState();
+  if (trackLoading) {
+    activeRequests++;
+    updateLoadingState();
+  }
 
   try {
     for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -252,8 +254,10 @@ async function request(path, options = {}) {
       return data;
     }
   } finally {
-    activeRequests--;
-    updateLoadingState();
+    if (trackLoading) {
+      activeRequests--;
+      updateLoadingState();
+    }
   }
 }
 
@@ -404,6 +408,7 @@ export const rotateMasterKey = () => request('/pool/rotate-master-key', { method
 export const getSystemTasks = () => request('/system/tasks');
 export const cancelSystemTask = (taskId, reason = 'operator_cancelled') => request(`/system/tasks/${taskId}/cancel`, { method: 'POST', body: { reason } });
 export const getSystemHealth = (signal) => request('/system/health', { signal });
+export const getSystemHealthQuiet = (signal) => request('/system/health', { signal, trackLoading: false });
 export const getProxyStatus = (signal) => request('/system/proxy-status', { signal });
 export const toggleProxy = (enabled) => request('/system/proxy-toggle', { method: 'POST', body: { enabled } });
 export const getAccountProxies = () => request('/system/account-proxies');

@@ -122,6 +122,8 @@ test('ambient app chrome animations settle after launch instead of running forev
   assert.match(css, /\.app-shell--ambient-motion \.meteor\s*\{[\s\S]*?animation:\s*meteorFall linear infinite;/);
   assert.match(css, /\.app-shell--ambient-motion \.sidebar-logo-icon\s*\{[\s\S]*?animation:\s*logo-breathing 4s ease-in-out infinite;/);
   assert.match(css, /\.app-shell--motion-settled \.meteor-container\s*\{[\s\S]*?display:\s*none;/);
+  assert.doesNotMatch(css, /\.edm-bar\s*\{/);
+  assert.doesNotMatch(css, /@keyframes edm-flow/);
 });
 
 test('steady status dots keep their glow without perpetual compositor animation', () => {
@@ -288,8 +290,9 @@ test('renderer visible refresh work aborts when hidden or unmounted', () => {
   assert.match(api, /getSessionStatus = \(id, signal\) => request\(`\/accounts\/\$\{id\}\/session-status`, \{ signal \}\)/);
   assert.match(api, /getTraffic = \(signal\) => request\('\/pool\/traffic', \{ signal \}\)/);
   assert.match(api, /getSystemHealth = \(signal\) => request\('\/system\/health', \{ signal \}\)/);
+  assert.match(api, /getSystemHealthQuiet = \(signal\) => request\('\/system\/health', \{ signal, trackLoading: false \}\)/);
 
-  assert.match(app, /api\.getSystemHealth\(signal\)/);
+  assert.match(app, /api\.getSystemHealthQuiet\(signal\)/);
   assert.match(metrics, /requestAbortRef\.current\?\.abort\(\)/);
   assert.match(metrics, /api\.getDashboard\(controller\.signal\)/);
   assert.match(metrics, /api\.getSessionStatus\(acct\.id, controller\.signal\)/);
@@ -685,6 +688,9 @@ test('frontend API failures surface backend-down recovery guidance', () => {
   assert.match(api, /Hydra API unavailable\. Check that the local server is running\./);
   assert.match(api, /err\.hydraCopyCommand\s*=\s*HYDRA_DEV_START_COMMAND/);
   assert.match(api, /updateLoadingState\(\)/);
+  assert.match(api, /trackLoading = true/);
+  assert.match(api, /if \(trackLoading\) \{[\s\S]*activeRequests\+\+;[\s\S]*updateLoadingState\(\);[\s\S]*\}/);
+  assert.match(api, /if \(trackLoading\) \{[\s\S]*activeRequests--;[\s\S]*updateLoadingState\(\);[\s\S]*\}/);
   assert.match(api, /INVALID_API_RESPONSE/);
   assert.match(api, /Hydra API returned an invalid response from \$\{path\} \(\$\{res\.status\}\)/);
   assert.match(api, /err\.cause = parseErr/);
@@ -699,7 +705,7 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   const api = readRepoFile('src/api.js');
   const visibleRecurring = readRepoFile('src/hooks/useVisibleRecurringTask.js');
 
-  assert.match(api, /export const getSystemHealth = \(signal\) => request\('\/system\/health', \{ signal \}\)/);
+  assert.match(api, /export const getSystemHealthQuiet = \(signal\) => request\('\/system\/health', \{ signal, trackLoading: false \}\)/);
   assert.match(app, /function UpstreamStatusBanner\(\{ upstream \}\)/);
   assert.match(app, /OPENROUTER OFFLINE/);
   assert.match(app, /OPENROUTER STATUS UNKNOWN/);
@@ -708,7 +714,7 @@ test('authenticated app shell surfaces upstream offline state without hiding cac
   assert.match(app, /const \[upstreamHealth, setUpstreamHealth\] = useState\(null\)/);
   assert.match(app, /if \(authState !== 'app'\)/);
   assert.match(app, /authStateRef\.current !== 'app'/);
-  assert.match(app, /api\.getSystemHealth\(signal\)/);
+  assert.match(app, /api\.getSystemHealthQuiet\(signal\)/);
   assert.match(app, /useVisibleRecurringTask\('App\.upstreamHealth', refreshUpstreamHealth, 30_000, \{ enabled: authState === 'app' \}\)/);
   assert.match(visibleRecurring, /if \(document\.hidden\) \{[\s\S]*clear\(\);[\s\S]*abort\(\);/);
   assert.match(visibleRecurring, /clearTrackedTimeout\(timer\)/);

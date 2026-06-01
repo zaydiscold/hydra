@@ -3496,22 +3496,6 @@ select:-webkit-autofill {
   box-shadow: inset -12px -12px 0 rgba(0, 255, 255, 0.4), 6px 6px 0 rgba(0,0,0,1);
 }
 
-/* ========= EDM NEON ELEMENTS ========= */
-.edm-bar {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 6px;
-  background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
-  background-size: 300% 100%;
-  animation: edm-flow 2.3s linear infinite;
-  z-index: 9999;
-}
-
-@keyframes edm-flow {
-  0% { background-position: 0% 50%; }
-  100% { background-position: -300% 50%; }
-}
-
 /* ========= COMPONENT OVERRIDES & UTILITIES ========= */
 
 .stats-grid-compact {

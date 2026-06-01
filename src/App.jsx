@@ -743,7 +743,7 @@ export default function App() {
     if (authState !== 'app' || authStateRef.current !== 'app' || upstreamHealthInFlightRef.current) return;
     upstreamHealthInFlightRef.current = true;
     try {
-      const res = await api.getSystemHealth(signal);
+      const res = await api.getSystemHealthQuiet(signal);
       if (authStateRef.current !== 'app') return;
       const payload = res?.data ?? res ?? {};
       setUpstreamHealth(payload.upstream ?? null);
