@@ -104,9 +104,10 @@ export function setupLogging() {
       origError(...args);
     };
 
-    // Flush + close on quit so the last lines aren't lost in the kernel
-    // page cache when the process exits hard.
-    app.once('before-quit', () => {
+    // Flush + close late in the quit cycle so lifecycle code registered after
+    // setupLogging() can still write before-quit breadcrumbs. Closing this on
+    // before-quit made legitimate shutdown diagnostics vanish from main.log.
+    app.once('will-quit', () => {
       try { _logStream?.end(); } catch (e) { rawConsoleWarn('[env] log stream close failed:', e?.message ?? e); }
       _logStream = null;
     });

@@ -36,13 +36,6 @@ function clerkDebugOtpExtra() {
   };
 }
 
-function pruneDeadClientCookies(stack, refreshed) {
-  if (!Array.isArray(stack) || stack.length === 0) return [];
-  if (!Array.isArray(refreshed?.deadClientCookies) || refreshed.deadClientCookies.length === 0) return stack;
-  const deadSet = new Set(refreshed.deadClientCookies.map((entry) => entry.cookie));
-  return stack.filter((entry) => !deadSet.has(entry.cookie));
-}
-
 function latestClientCookie(session) {
   const stacked = Array.isArray(session?.clientCookies)
     ? session.clientCookies.find((entry) => entry?.cookie && String(entry.cookie).trim() !== 'undefined')
@@ -330,7 +323,7 @@ export class AccountController extends BaseController {
             signal: requestAbort.signal,
           });
           if (refreshed?.sessionToken) {
-            const liveStack = pruneDeadClientCookies(session.clientCookies, refreshed);
+            const liveStack = store.removeDeadClientCookies(session.clientCookies, refreshed.deadClientCookies);
             await store.updateAccountSession(
               req.user.id, req.params.id,
               refreshed.sessionToken,
@@ -348,7 +341,10 @@ export class AccountController extends BaseController {
       }
 
       // No recovery possible — clear session so UI prompts re-auth
-      await store.updateAccountSession(req.user.id, req.params.id, null, null, null);
+      await store.updateAccountSession(req.user.id, req.params.id, null, null, null, {
+        replaceClientCookies: [],
+        markSessionRefreshed: false,
+      });
       await store.logAccountEvent(req.user.id, req.params.id, 'LOGIN_REFRESH_START', 'Session cleared for fresh re-auth');
       return this.success(res, { success: true, recovered: false, message: 'Session cleared. Please re-authenticate.' });
     } catch (err) {
@@ -375,6 +371,7 @@ export class AccountController extends BaseController {
           account.sessionCookie,
           result.clientCookie,
           sessionExpiry,
+          { markSessionRefreshed: false },
         );
       }
       return this.success(res, result);
@@ -421,7 +418,9 @@ export class AccountController extends BaseController {
     } catch (err) {
       if (requestAbort.signal.aborted) return;
       if (err.name === 'NeedSecondFactorError' && err.signInId && err.clientCookie) {
-        await store.updateAccountSession(req.user.id, req.params.id, null, err.clientCookie, null);
+        await store.updateAccountSession(req.user.id, req.params.id, null, err.clientCookie, null, {
+          markSessionRefreshed: false,
+        });
         await store.logAccountEvent(req.user.id, req.params.id, 'OTP_REQUIRED', 'Password accepted, OTP required');
         // 202 + top-level requiresTwoFactor: api.js checks data?.requiresTwoFactor directly.
         // Cannot use this.success() (wraps in data: {}) without updating the frontend check.
@@ -465,6 +464,7 @@ export class AccountController extends BaseController {
       });
       await store.updateAccountSession(req.user.id, req.params.id, undefined, clientCookie, undefined, {
         preserveSessionToken: true,
+        markSessionRefreshed: false,
       });
       await store.logAccountEvent(req.user.id, req.params.id, 'OTP_SENT', `OTP requested for ${email}${isSignUp ? ' (new account signup)' : ''}`);
 
@@ -578,7 +578,7 @@ export class AccountController extends BaseController {
       });
       if (!refreshed) return this.error(res, 'Session refresh failed — please log in again', 401);
       const cc = refreshed.clientCookie ?? latestClientCookie(session);
-      const liveStack = pruneDeadClientCookies(session.clientCookies, refreshed);
+      const liveStack = store.removeDeadClientCookies(session.clientCookies, refreshed.deadClientCookies);
       await store.updateAccountSession(req.user.id, req.params.id, refreshed.sessionCookie, cc, refreshed.sessionExpiry, {
         replaceClientCookies: liveStack,
       });
@@ -1049,7 +1049,7 @@ export class AccountController extends BaseController {
         refreshed.sessionToken,
         refreshed.clientCookie ?? latestClientCookie(session),
         refreshed.sessionExpiry ?? null,
-        { replaceClientCookies: pruneDeadClientCookies(session.clientCookies, refreshed) },
+        { replaceClientCookies: store.removeDeadClientCookies(session.clientCookies, refreshed.deadClientCookies) },
       );
       await store.logAccountEvent(req.user.id, req.params.id, 'SILENT_REFRESH', 'Session refreshed silently via client cookie');
       invalidateSnapshotCache(req.params.id);

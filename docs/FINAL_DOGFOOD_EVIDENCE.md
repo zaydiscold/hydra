@@ -1794,3 +1794,55 @@ This evidence file is not release-complete by itself. The release remains not co
   retained four processes and zero profiles across 11 samples. CPU ranged
   `0.000-0.400%`, averaged `0.055%`, and ended at `0.000%`; RSS changed by
   `+5144576` bytes.
+- Touch ID unlock-token order refinement for `v1.4.3`: source inspection and
+  contracts now require native token presence and expiry validation before a
+  biometric prompt can appear. Expected operator behavior is explicit: Touch
+  ID prompts once per relaunch only while a valid 24-hour saved token exists;
+  missing, expired, unavailable, or cancelled paths fall back to password.
+  Focused verification passed `test:electron-ipc-contract` (`5/5`),
+  `test:electron-main-process` (`29/29`), `test:ui-static` (`42/42`), and
+  `test:cli` (`46/46`). Hardware approval remains a user-run manual boundary.
+- Packaged lifecycle hardening for `v1.4.3`: LaunchServices dogfood found a
+  zero-code voluntary app exit with no crash report and no source-level
+  breadcrumb. Follow-up tracing showed the file log stream closed on
+  `before-quit`, hiding shutdown evidence. The app now keeps the log stream
+  open until `will-quit`, records app/window/IPC/process lifecycle sources, and
+  starts one ref'd one-minute lifecycle keepalive in the lock-holder process so
+  packaged Hydra cannot exit just because idle timers are unref'd. Temporary
+  no-biometric comparison evidence lives under
+  `/private/tmp/hydra-v143-no-biometric-soak-20260601T.UZsfzO` and
+  `/private/tmp/hydra-v143-instrumented-exit-trace-20260601T.bVyT25`.
+  Focused contracts passed `test:electron-main-process` (`29/29`) and
+  `test:ui-static` (`42/42`). The recon note is
+  `docs/recon/ELECTRON_LIFECYCLE_KEEPALIVE_AND_QUIT_TRACING.md`.
+- Close-to-background release blocker for `v1.4.3`: the controlled background
+  soak under
+  `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`
+  proved the remaining app disappearance was the normal window-close modal
+  selecting `Quit Hydra`, not a crash. Normal close is now background-only,
+  logs `close-kept-running-in-background`, hides the macOS Dock icon, destroys
+  the renderer to free Chromium memory, and leaves full shutdown to explicit
+  tray/menu/sidebar Quit actions. `test:electron-main-process` now includes a
+  regression contract for no close-modal quit path and passed `30/30`.
+- Final `v1.4.3` local package proof: native baseline had zero Hydra-owned
+  processes and zero stale profiles, the prior local bundle moved reversibly to
+  `~/.Trash/hydra-v143-before-close-background-rebuild-20260601T085913Z`, and
+  the rebuilt ARM package passed `HYDRA_BUILD_TARGET=darwin-arm64 npm run
+  electron:smoke`, strict deep `codesign`, bundle version `1.4.3`, and embedded
+  source inspection for the Touch ID token-order gate, explicit reauth cookie
+  stack reset, metadata-only session writes, lifecycle keepalive, and
+  close-to-background marker. The local ARM zip SHA-256 before byproduct cleanup
+  was `e6411adac7db1586ff49548bd45e6c2e694eb5797e195e616ac93da259ea1b7a`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-v143-final-package-byproducts-20260601T090057Z`; `release/`
+  again contains only `mac-arm64/Hydra.app`.
+- Final `v1.4.3` LaunchServices soak:
+  `/private/tmp/hydra-v143-final-close-background-launch-20260601T.Mb2rht`
+  records the rebuilt package launched through `open -n` and staying at exactly
+  four Hydra-owned processes for all 11 samples over the five-minute idle
+  window, with zero Hydra Playwright profiles. CPU ranged `0.0-6.8%`, averaged
+  `0.8%`, and ended at `0.0%`; RSS changed by `-183943168` bytes. The final
+  splash diagnostics reported the bounded 16-second splash, 72 queued/shattered
+  words, zero duplicate shatter skips, timers `0`, inactive RAF, collision-free
+  lifted portal entry, and cleared Matter state. The final log window contains
+  no new close-dialog quit path after the rebuilt launch.

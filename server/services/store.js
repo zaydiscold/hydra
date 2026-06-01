@@ -637,6 +637,7 @@ export async function logAccountEvent(userId, id, type, message) {
  * @param {string|null|undefined} sessionCookie - JWT or empty; `null` clears; `undefined` with `preserveSessionToken` leaves vault token unchanged
  * @param {object} [options]
  * @param {boolean} [options.preserveSessionToken] - If true, do not write `sessionToken` (e.g. OTP start: refresh device cookie only)
+ * @param {boolean} [options.markSessionRefreshed] - Set false for metadata-only writes that must not masquerade as a silent renewal
  * @param {Record<string, number>} [options.cfCookieExpirations] - Cloudflare cookie expiration timestamps {cookieName: timestampMs}
  * @param {Array<{cookie: string, issuedAt?: string}>} [options.replaceClientCookies] - Replace stored cookie stack before optional append
  */

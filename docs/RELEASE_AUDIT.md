@@ -2060,3 +2060,60 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   retained four processes and zero profiles across 11 samples. CPU ranged
   `0.000-0.400%`, averaged `0.055%`, and ended at `0.000%`; RSS changed by
   `+5144576` bytes.
+- 2026-06-01 Touch ID unlock-token order refinement for `v1.4.3`: the native
+  auth-token IPC now validates that `renderer-auth-token.json` exists, contains
+  a non-empty token, and is inside its 24-hour expiry before prompting Touch
+  ID. This preserves the expected per-relaunch Touch ID gate while a saved
+  token is valid, but avoids a pointless prompt followed by password when the
+  token is missing or expired. Source contracts passed:
+  `npm run test:electron-ipc-contract` (`5/5`),
+  `npm run test:electron-main-process` (`29/29`),
+  `npm run test:ui-static` (`42/42`), and `npm run test:cli` (`46/46`).
+  The recon note is `docs/recon/TOUCH_ID_UNLOCK_TOKEN_ORDER.md`.
+- 2026-06-01 packaged lifecycle hardening for `v1.4.3`: LaunchServices dogfood
+  found a zero-code voluntary app exit without a crash report. `main.log` also
+  hid shutdown breadcrumbs because the file tee closed on `before-quit` before
+  later lifecycle handlers could write. The log stream now closes on
+  `will-quit`, Electron logs app/window/IPC/process lifecycle sources, and the
+  lock-holder process keeps one ref'd one-minute lifecycle timer so the
+  packaged app cannot fall out of the Node event loop after idle timers are
+  intentionally unref'd. Focused contracts passed
+  `npm run test:electron-main-process` (`29/29`) and
+  `npm run test:ui-static` (`42/42`). The recon note is
+  `docs/recon/ELECTRON_LIFECYCLE_KEEPALIVE_AND_QUIT_TRACING.md`.
+- 2026-06-01 close-to-background hardening for `v1.4.3`: the controlled
+  background soak under
+  `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`
+  proved the remaining `4 -> 0` process drop came from the main-window close
+  modal selecting `Quit Hydra` (`close-dialog-response` `1`), not from a crash
+  or event-loop fallthrough. The normal close handler is now background-only:
+  it prevents default close, logs `close-kept-running-in-background`, hides the
+  macOS Dock icon, destroys the renderer, and keeps the embedded proxy alive.
+  Full shutdown still requires explicit tray/menu/sidebar Quit actions. Focused
+  `npm run test:electron-main-process` passed `30/30` with a regression that
+  forbids the close modal from reappearing.
+- 2026-06-01 final `v1.4.3` source, package, and LaunchServices proof:
+  full `npm run test:ci` passed all scripts, including session-refresh,
+  session-pruning, CLI (`46/46`), UI static (`42/42`), Docker workflow
+  contracts, dogfood evidence, workflow contracts, gzip, error-boundary,
+  backward-compat, and Electron contracts. `npm run lint`, `npm run build`,
+  `npm run gate` (`12/12` after the intentionally sequential rerun), OpenAPI
+  generation (`83 operations`), `npm run test:dogfood-evidence`, `npm run
+  test:workflow-contract`, and `git diff --check` passed on the final source.
+  The rebuilt ARM package passed `HYDRA_BUILD_TARGET=darwin-arm64 npm run
+  electron:smoke`, strict deep `codesign`, bundle version `1.4.3`, and embedded
+  production-source inspection for the Touch ID token-order gate, explicit
+  reauth cookie-stack reset, `markSessionRefreshed: false` metadata writes,
+  lifecycle keepalive, and `close-kept-running-in-background`. The local ARM
+  zip SHA-256 before byproduct cleanup was
+  `e6411adac7db1586ff49548bd45e6c2e694eb5797e195e616ac93da259ea1b7a`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-v143-final-package-byproducts-20260601T090057Z`, leaving
+  `release/` with only the canonical unpacked app. LaunchServices soak evidence
+  under `/private/tmp/hydra-v143-final-close-background-launch-20260601T.Mb2rht`
+  kept exactly four Hydra-owned processes and zero Hydra Playwright profiles for
+  all 11 samples over the five-minute idle window; CPU ranged `0.0-6.8%`,
+  averaged `0.8%`, and ended at `0.0%`; RSS changed by `-183943168` bytes.
+  Splash teardown remained finite with 72 queued/shattered words, zero duplicate
+  shatter skips, timers `0`, inactive RAF, lifted collision-free portal entry,
+  and cleared Matter state.

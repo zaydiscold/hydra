@@ -54,8 +54,12 @@ test('ensureSession backfills null sessionExpiry when JWT is still valid', async
   assert.equal(out.sessionCookie, sessionCookie);
   assert.equal(out.clientCookie, '__client=mock');
   assert.equal(updateAccountSession.mock.calls.length, 1);
-  const [, , persistedCookie, persistedClient, persistedExpiry] = updateAccountSession.mock.calls[0].arguments;
-  assert.equal(persistedCookie, sessionCookie);
-  assert.equal(persistedClient, '__client=mock');
+  const [, , persistedCookie, persistedClient, persistedExpiry, persistedOptions] = updateAccountSession.mock.calls[0].arguments;
+  assert.equal(persistedCookie, undefined);
+  assert.equal(persistedClient, undefined);
   assert.match(String(persistedExpiry), /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(persistedOptions, {
+    preserveSessionToken: true,
+    markSessionRefreshed: false,
+  });
 });

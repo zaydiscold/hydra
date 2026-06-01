@@ -7,8 +7,9 @@
  *   1. User enables in Settings — we persist `biometricEnabled=true` and
  *      keep the existing auth-token-on-disk flow.
  *   2. On next launch, the renderer asks the bridge for the auth token.
- *      If `biometricEnabled === true`, we Touch-ID-prompt FIRST. Only
- *      after approval does the token come back.
+ *      The bridge first verifies a usable, unexpired token exists. If
+ *      `biometricEnabled === true`, it then prompts Touch ID and only
+ *      returns the token after approval.
  *   3. On denial / cancel, we return null and the user falls back to
  *      typing their password.
  *

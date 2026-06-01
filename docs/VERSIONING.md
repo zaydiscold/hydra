@@ -14,9 +14,10 @@ comparisons, the restored two-layer README media stack, request-owned
 cancellation and shutdown joins, bounded Windows lifecycle smoke, renderer
 observer cleanup, and demand-driven idle schedulers.
 
-Tracked `package.json` and `package-lock.json` now stay aligned with published
-`v1.4.2`. New isolated fixes advance from the active `1.4.x` lane: the next
-normal patch release is `1.4.3`, not another `1.0.x` or `1.1.x` release.
+Tracked `package.json` and `package-lock.json` now target `1.4.3` for the
+Touch ID/session/lifecycle closeout. This remains the active `1.4.x` lane: the
+next normal public patch release is `v1.4.3`, not another `1.0.x` or `1.1.x`
+release.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -105,19 +106,19 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.2` is published. Continue using `[skip-bump]` for audit, dogfood, and
-isolated documentation checkpoints while the remaining manual packaged-GUI
-evidence is collected. Do not produce a second minor bump merely to record
-manual evidence.
+`v1.4.2` is published and `v1.4.3` is the next patch release candidate. Continue
+using `[skip-bump]` for audit, dogfood, and isolated documentation checkpoints
+after this patch ships unless a real source fix must go to users. Do not produce
+a second minor bump merely to record manual evidence.
 
 The post-`v1.4.0` stabilization tranche reached public desktop artifacts as
 `v1.4.2`: request-owned cancellation and shutdown joins, bounded Windows
 lifecycle smoke, hardened Docker browser fallback, passive renderer observer
 cleanup, idle task-expiry disarming, idle request-log retention write
 avoidance, and empty-pool health-pinger disarming. Keep the tested `v1.4.0`,
-failed `v1.4.1`, and published `v1.4.2` tags immutable. Follow-up refinements,
-including demand-driven request-log retention scheduling after empty startup,
-remain `[skip-bump]` checkpoints until the next normal patch lane is selected.
+failed `v1.4.1`, and published `v1.4.2` tags immutable. The `v1.4.3` patch adds
+the Touch ID token-order fix, session-refresh timestamp cleanup, dead-cookie
+stack pruning, lifecycle tracing, and close-to-background hardening.
 
 The first `v1.4.1` tag exposed a pre-publication gate cycle before any desktop
 artifact uploaded: `hydra audit` correctly reported that current-version Intel

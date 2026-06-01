@@ -125,6 +125,13 @@ test('enabled biometric auth-token gate fails closed when prompting is unavailab
   const handler = ipcHandlerBlocks(ipcSrc).find(({ channel }) => channel === 'native:auth-token:get');
 
   assert.ok(handler, 'expected native:auth-token:get handler');
+  assert.match(handler.body, /const parsed = await readAuthTokenRecord\(\)/);
+  assert.match(handler.body, /if \(!parsed\) return ok\(null\)/);
+  assert.match(handler.body, /const expiresAt = authTokenExpiryFromRecord\(parsed\)/);
+  assert.ok(
+    handler.body.indexOf('const parsed = await readAuthTokenRecord()') < handler.body.indexOf("const biometricOn = await getPref('biometricEnabled')"),
+    'auth-token get must check token presence and expiry before prompting Touch ID',
+  );
   assert.match(handler.body, /const biometricOn = await getPref\('biometricEnabled'\)/);
   assert.match(handler.body, /if \(biometricOn\) \{/);
   assert.match(handler.body, /await promptBiometric\('Unlock Hydra'\)/);

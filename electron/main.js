@@ -31,6 +31,68 @@ import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
+const LIFECYCLE_KEEPALIVE_MS = 60_000;
+
+let lifecycleKeepAliveTimer = null;
+
+function lifecycleSnapshot(extra = {}) {
+  const mainWindow = getMainWindow();
+  const splashWindow = getSplashWindow();
+  const tray = getTray();
+  return {
+    forceQuit: getForceQuit(),
+    shuttingDown: getShuttingDown(),
+    bootingSplash: getBootingSplash(),
+    mainWindow: mainWindow && !mainWindow.isDestroyed(),
+    splashWindow: splashWindow && !splashWindow.isDestroyed(),
+    tray: tray && !tray.isDestroyed(),
+    activeHandles: typeof process._getActiveHandles === 'function' ? process._getActiveHandles().length : null,
+    ...extra,
+  };
+}
+
+function logLifecycle(event, extra = {}) {
+  try {
+    console.warn(`[electron] lifecycle:${event} ${JSON.stringify(lifecycleSnapshot(extra))}`);
+  } catch (err) {
+    console.warn(`[electron] lifecycle:${event} log failed: ${err?.message || err}`);
+  }
+}
+
+function startLifecycleKeepAlive() {
+  if (lifecycleKeepAliveTimer) return;
+  // Electron native objects should be enough to keep a packaged app alive, but
+  // LaunchServices dogfood exposed a voluntary zero-code exit without any app
+  // quit/window/IPC path firing. A single ref'd timer is a negligible safety
+  // belt that prevents the main process from ending just because every other
+  // Node-side timer was intentionally unref'd for idle efficiency.
+  lifecycleKeepAliveTimer = setInterval(() => {}, LIFECYCLE_KEEPALIVE_MS);
+  lifecycleKeepAliveTimer.ref?.();
+  logLifecycle('keepalive-started', { intervalMs: LIFECYCLE_KEEPALIVE_MS });
+}
+
+function stopLifecycleKeepAlive() {
+  if (!lifecycleKeepAliveTimer) return;
+  clearInterval(lifecycleKeepAliveTimer);
+  lifecycleKeepAliveTimer = null;
+  logLifecycle('keepalive-stopped');
+}
+
+function registerProcessExitDiagnostics() {
+  process.on('beforeExit', (code) => {
+    logLifecycle('process-beforeExit', { code });
+  });
+  process.on('exit', (code) => {
+    logLifecycle('process-exit', { code });
+  });
+  for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+    process.on(signal, () => {
+      logLifecycle('process-signal', { signal });
+      setForceQuit(true);
+      app.quit();
+    });
+  }
+}
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 app.setName('Hydra');
@@ -50,6 +112,7 @@ setupPlatform();
 // "second instance briefly flashes a window before dying" bugs.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
+  logLifecycle('single-instance-denied');
   app.quit();
 } else {
   setupEnvironment(app);
@@ -60,6 +123,8 @@ if (!gotLock) {
 // can skip it cleanly. Splitting the file into "what runs always" vs
 // "what runs only for the lock-holder" is what makes the gate reliable.
 function registerLifecycle() {
+startLifecycleKeepAlive();
+registerProcessExitDiagnostics();
 
 // ─── Tray ───────────────────────────────────────────────────────────────────
 function createTray() {
@@ -82,7 +147,7 @@ function createTray() {
       { label: 'Open Data Folder', click: () => { openTrayFolder('userData'); } },
       { type: 'separator' },
       { label: 'Hide Window', click: () => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.hide(); } },
-      { label: 'Quit Hydra Completely', click: () => { setForceQuit(true); app.quit(); } },
+      { label: 'Quit Hydra Completely', click: () => { logLifecycle('tray-quit-click'); setForceQuit(true); app.quit(); } },
     ]));
   };
   rebuildMenu();
@@ -293,7 +358,7 @@ app.whenReady().then(async () => {
       getServerUrl: () => getWindowURL(),
       showAndFocusMainWindow,
       hideWindow: () => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.hide(); },
-      quitCompletely: () => { setForceQuit(true); app.quit(); },
+      quitCompletely: () => { logLifecycle('menu-quit-completely'); setForceQuit(true); app.quit(); },
       navigateToSettings: () => {
         showAndFocusMainWindow();
         const mw = getMainWindow();
@@ -470,11 +535,14 @@ app.whenReady().then(async () => {
       stack: e?.stack || null,
       phase: 'whenReady-bootstrap',
     });
+    logLifecycle('startup-failure-quit');
     app.quit();
   }
 });
 
-app.on('window-all-closed', () => {});
+app.on('window-all-closed', () => {
+  logLifecycle('window-all-closed');
+});
 
 app.on('activate', () => {
   // GATE: during the splash → main boot sequence the strict-serialization
@@ -520,14 +588,27 @@ app.on('activate', () => {
 
 // ─── Shutdown ──────────────────────────────────────────────────────────────
 app.on('before-quit', (event) => {
+  logLifecycle('before-quit');
   event.preventDefault();
-  if (getShuttingDown()) return;
+  if (getShuttingDown()) {
+    logLifecycle('before-quit-already-shutting-down');
+    return;
+  }
   setShuttingDown(true);
+  stopLifecycleKeepAlive();
   shutdownEverything({
     reason: 'before-quit',
     trackedChildren,
     gracefulShutdown: getGracefulShutdown(),
   }).finally(() => app.exit(0));
+});
+
+app.on('will-quit', (_event) => {
+  logLifecycle('will-quit');
+});
+
+app.on('quit', (_event, exitCode) => {
+  logLifecycle('quit', { exitCode });
 });
 
 process.on('uncaughtException', async (err) => {

@@ -414,7 +414,7 @@ export default function Settings({ addToast }) {
           </div>
           <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 10px' }}>
             {resolvedBiometricInfo.available
-              ? `Use ${resolvedBiometricInfo.label} to unlock the vault on this device. Your password is still required for sensitive operations.`
+              ? `Use ${resolvedBiometricInfo.label} to release the saved 24-hour unlock token on this device. If the token is missing, expired, or the prompt is cancelled, Hydra goes straight to password.`
               : (resolvedBiometricInfo.reason || `${resolvedBiometricInfo.label} is not available on this device.`)}
           </p>
           <div className="settings-toggle-row">

@@ -32,6 +32,7 @@ const MENU_JS = resolve(ELECTRON_DIR, 'menus', 'appMenu.js');
 const CLEANUP_JS = resolve(ELECTRON_DIR, 'utils', 'cleanupAuxProcesses.js');
 const MIGRATE_LEGACY_JS = resolve(ELECTRON_DIR, 'utils', 'migrateLegacyData.js');
 const STARTUP_ERROR_JS = resolve(APP_DIR, 'startupError.js');
+const WINDOWS_JS = resolve(APP_DIR, 'windows.js');
 const WINDOW_ACTIONS_JS = resolve(APP_DIR, 'windowActions.js');
 const AUTO_UPDATE_JS = resolve(APP_DIR, 'autoUpdate.js');
 const SPLASH_PRELOAD_JS = resolve(ELECTRON_DIR, 'splashPreload.js');
@@ -195,6 +196,19 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(surface.includes('shutdownEverything({'), 'before-quit must route through shutdownEverything');
     assert.ok(surface.includes('trackedChildren'), 'shutdown must receive tracked child processes');
     assert.ok(surface.includes('getGracefulShutdown()'), 'shutdown must receive the embedded server shutdown function');
+  });
+
+  it('keeps normal window close in the background without a quit prompt', () => {
+    const windows = readFileSync(WINDOWS_JS, 'utf-8');
+
+    assert.ok(windows.includes("win.on('close', (event) => {"), 'main window close must be synchronously guarded');
+    assert.ok(windows.includes('event.preventDefault()'), 'normal window close must not quit the app');
+    assert.ok(windows.includes("logWindowLifecycle('close-kept-running-in-background')"), 'background close path must leave lifecycle evidence');
+    assert.ok(windows.includes('app.dock?.hide()'), 'normal close should hide the macOS dock icon');
+    assert.ok(windows.includes('win.destroy()'), 'normal close should free the renderer while the proxy stays alive');
+    assert.ok(!windows.includes('Keep Running in Background'), 'normal close must not show a modal choice');
+    assert.ok(!windows.includes('close-dialog-quit-selected'), 'normal close must not be able to select Quit Hydra');
+    assert.ok(!windows.includes('dialog.showMessageBox(win'), 'window close must not depend on a modal prompt');
   });
 
   it('shutdown sweeps auxiliary processes, stale Playwright profiles, and tray state', () => {
@@ -408,6 +422,10 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(ipc.includes('biometric auth-token gate denied release'), 'auth-token gate denial must leave log evidence');
     assert.ok(ipc.includes("promptErr?.code || 'BIOMETRIC_DENIED'"), 'auth-token gate denial must preserve the biometric failure code');
     assert.ok(ipc.includes('return ok(null); // user cancelled, failed, or unavailable'), 'auth-token gate denial must still fall back to password');
+    assert.ok(
+      ipc.indexOf('const parsed = await readAuthTokenRecord()') < ipc.indexOf("const biometricOn = await getPref('biometricEnabled')"),
+      'Touch ID should only prompt after a usable persisted token exists',
+    );
     assert.ok(biometric.includes('Touch ID availability check failed'), 'Touch ID availability probe failures must be logged');
     assert.ok(biometric.includes('Touch ID prompt failed (${e.code})'), 'Touch ID prompt failures must be logged with typed codes');
     assert.ok(!biometric.includes('} catch {\n    return false;'), 'Touch ID availability failures must not be silently swallowed');

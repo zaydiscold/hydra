@@ -786,7 +786,10 @@ export async function ensureSession(userId, accountId, { signal = null } = {}) {
       }
 
       if (!session.sessionExpiry && derivedExpiry) {
-        await store.updateAccountSession(userId, accountId, session.sessionCookie, session.clientCookie, derivedExpiry);
+        await store.updateAccountSession(userId, accountId, undefined, undefined, derivedExpiry, {
+          preserveSessionToken: true,
+          markSessionRefreshed: false,
+        });
       }
       return { sessionCookie: session.sessionCookie, clientCookie: session.clientCookie };
     }

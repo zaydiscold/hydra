@@ -166,10 +166,22 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('native:auth-token:get', async () => {
     try {
-      // #11 — biometric gate: if the user enabled biometric unlock, the
+      const parsed = await readAuthTokenRecord();
+      if (!parsed) return ok(null);
+      const token = typeof parsed?.token === 'string' ? parsed.token : null;
+      if (!token) return ok(null);
+      const expiresAt = authTokenExpiryFromRecord(parsed);
+      if (!expiresAt || expiresAt <= Date.now()) {
+        await rm(authTokenPath(), { force: true });
+        return ok(null);
+      }
+
+      // #11 — biometric gate: if the user enabled biometric unlock, a usable
       // auth-token-on-disk only releases AFTER a successful Touch ID prompt.
-      // On denial or cancel we return null so the renderer falls back to
-      // the password screen (no error toast — denial is a normal flow).
+      // Check token presence/expiry first so a missing, corrupt, or expired
+      // token never creates a pointless Touch ID prompt followed by password.
+      // On denial or cancel we return null so the renderer falls back to the
+      // password screen (no error toast — denial is a normal flow).
       const biometricOn = await getPref('biometricEnabled');
       if (biometricOn) {
         try {
@@ -182,15 +194,6 @@ export function registerIpcHandlers() {
           );
           return ok(null); // user cancelled, failed, or unavailable — fall back to password
         }
-      }
-      const parsed = await readAuthTokenRecord();
-      if (!parsed) return ok(null);
-      const token = typeof parsed?.token === 'string' ? parsed.token : null;
-      if (!token) return ok(null);
-      const expiresAt = authTokenExpiryFromRecord(parsed);
-      if (!expiresAt || expiresAt <= Date.now()) {
-        await rm(authTokenPath(), { force: true });
-        return ok(null);
       }
       return ok(token);
     } catch (e) {
@@ -251,6 +254,7 @@ export function registerIpcHandlers() {
     const win = getMainWindow();
     if (!win || win.isDestroyed()) return err('main window not available', 'NO_WINDOW');
     try {
+      console.warn('[ipc] native:hide-window requested');
       win.hide();
       // On macOS we also drop the dock icon — matches the user's "keep
       // running in background" expectation. Tray icon stays so the user
@@ -265,6 +269,7 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('native:quit-app', async () => {
     try {
+      console.warn('[ipc] native:quit-app requested');
       // Force-quit semantics: bypass the close-handler dialog in
       // windows.js (which would otherwise re-prompt with Keep
       // Running / Quit). The user already opted into Quit by invoking
@@ -306,6 +311,7 @@ export function registerIpcHandlers() {
     const win = getMainWindow();
     if (!win || win.isDestroyed()) return err('main window not available', 'NO_WINDOW');
     try {
+      console.warn('[ipc] native:window:close requested');
       win.close();
       return ok(true);
     } catch (e) {

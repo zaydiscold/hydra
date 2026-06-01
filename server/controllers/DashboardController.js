@@ -98,12 +98,7 @@ class DashboardController extends BaseController {
             if (refreshed) {
               const nextCc = refreshed.clientCookie ?? (typeof refreshInput === 'string' ? refreshInput : cc);
               const liveStack = Array.isArray(stackedCookies) && stackedCookies.length > 0
-                ? (refreshed.deadClientCookies && refreshed.deadClientCookies.length > 0
-                  ? (() => {
-                    const deadSet = new Set(refreshed.deadClientCookies.map((e) => e.cookie));
-                    return stackedCookies.filter((entry) => !deadSet.has(entry.cookie));
-                  })()
-                  : stackedCookies)
+                ? store.removeDeadClientCookies(stackedCookies, refreshed.deadClientCookies)
                 : [];
               await store.updateAccountSession(
                 req.user.id,

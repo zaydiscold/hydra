@@ -162,7 +162,10 @@ async function _sweepImpl(signal) {
             null, // don't update session cookie again
             freshClientCookie,
             null, // don't update session expiry again
-            { preserveSessionToken: true },
+            {
+              preserveSessionToken: true,
+              markSessionRefreshed: false,
+            },
           );
         }
 

@@ -4,7 +4,7 @@
  * Splash: clean brand grid with model names, subtle animation.
  * Main window: navigation guards + security options.
  */
-import { app, BrowserWindow, dialog, screen } from 'electron';
+import { app, BrowserWindow, screen } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -12,8 +12,8 @@ import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { isDev, ICON_PATH, isAllowedLocalUiUrl } from './env.js';
 import {
-  getMainWindow, getWindowURL, getForceQuit, getShuttingDown, getClosePromptPending,
-  setSplashWindow, setMainWindow, setForceQuit, setClosePromptPending,
+  getMainWindow, getWindowURL, getForceQuit, getShuttingDown,
+  setSplashWindow, setMainWindow,
 } from './state.js';
 import { openExternalUrl } from './windowActions.js';
 
@@ -913,37 +913,54 @@ export function createMainWindow({ show = false } = {}) {
     show,
   });
 
-  win.on('close', async (event) => {
-    if (getForceQuit() || getShuttingDown()) return;
-    event.preventDefault();
-    if (getClosePromptPending()) return;
-    setClosePromptPending(true);
+  const logWindowLifecycle = (event, extra = {}) => {
+    try {
+      console.warn(`[electron] main-window:${event} ${JSON.stringify({
+        forceQuit: getForceQuit(),
+        shuttingDown: getShuttingDown(),
+        destroyed: win.isDestroyed(),
+        visible: !win.isDestroyed() && win.isVisible(),
+        minimized: !win.isDestroyed() && win.isMinimized(),
+        ...extra,
+      })}`);
+    } catch (err) {
+      console.warn(`[electron] main-window:${event} log failed: ${err?.message || err}`);
+    }
+  };
 
-    const { response } = await dialog.showMessageBox(win, {
-      type: 'question',
-      buttons: ['Keep Running in Background', 'Quit Hydra'],
-      defaultId: 0,
-      cancelId: 0,
-      title: 'Hydra',
-      message: 'The proxy server keeps running when the window is closed.',
-      detail: 'Choose "Keep Running" to close the window (proxy stays online; click the tray icon to reopen).\nChoose "Quit" to shut down the proxy and exit completely.',
+  win.on('show', () => logWindowLifecycle('show'));
+  win.on('hide', () => logWindowLifecycle('hide'));
+  win.on('closed', () => {
+    logWindowLifecycle('closed');
+    if (getMainWindow() === win) setMainWindow(null);
+  });
+  win.on('unresponsive', () => logWindowLifecycle('unresponsive'));
+  win.webContents.on('render-process-gone', (_event, details) => {
+    logWindowLifecycle('render-process-gone', {
+      reason: details?.reason || 'unknown',
+      exitCode: details?.exitCode,
     });
+  });
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    logWindowLifecycle('did-fail-load', {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      isMainFrame,
+    });
+  });
 
-    setClosePromptPending(false);
-
-    if (response === 1) {
-      // User picked Quit — flag it so the second close pass bypasses the
-      // dialog, and ask the app to fully quit (triggers before-quit →
-      // shutdownEverything → server graceful → app.exit).
-      setForceQuit(true);
-      app.quit();
+  win.on('close', (event) => {
+    logWindowLifecycle('close-requested');
+    if (getForceQuit() || getShuttingDown()) {
+      logWindowLifecycle('close-allowed-for-quit');
       return;
     }
-
-    // User picked Keep Running — destroy the renderer entirely (frees
-    // ~250 MB of Chromium renderer memory) and hide the dock icon. The
-    // Express server stays alive (window-all-closed is a no-op on macOS).
-    // Tray icon stays in the menu bar; clicking it respawns a fresh window.
+    event.preventDefault();
+    // Normal window close is background-only. Full shutdown is intentionally
+    // reserved for explicit native quit actions (tray/menu/sidebar), which set
+    // forceQuit before calling app.quit().
+    logWindowLifecycle('close-kept-running-in-background');
     if (process.platform === 'darwin') app.dock?.hide();
     win.destroy();  // unconditional close — bypasses the close handler we're inside
   });

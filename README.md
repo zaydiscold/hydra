@@ -2,9 +2,9 @@
 
 <p align="center">
   <a href="https://github.com/zaydiscold/hydra/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/zaydiscold/hydra/actions/workflows/ci.yml/badge.svg?branch=master"></a>
-  <a href="https://github.com/zaydiscold/hydra/actions/workflows/electron-smoke.yml"><img alt="Electron Smoke" src="https://github.com/zaydiscold/hydra/actions/workflows/electron-smoke.yml/badge.svg?branch=master"></a>
+  <a href="https://github.com/zaydiscold/hydra/actions/workflows/release.yml"><img alt="Desktop Release" src="https://github.com/zaydiscold/hydra/actions/workflows/release.yml/badge.svg"></a>
+  <a href="https://github.com/zaydiscold/hydra/actions/workflows/docker.yml"><img alt="Docker Runtime" src="https://github.com/zaydiscold/hydra/actions/workflows/docker.yml/badge.svg?branch=master"></a>
   <a href="https://github.com/zaydiscold/hydra/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/zaydiscold/hydra"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/zaydiscold/hydra"></a>
 </p>
 
 <p align="center">
@@ -57,7 +57,7 @@ It is designed for operators who want a native control plane without shipping ac
 - **Key pool management**: rotate across pooled keys, cool down rate-limited keys, disable unhealthy keys, and expose a single local Hydra proxy key.
 - **Account proxy pool**: optional encrypted account-task proxy list for browser-backed signup, key, and code flows.
 - **Promo-code workflows**: preflight readiness, redeem against selected accounts, and keep redemption history.
-- **Local-first security**: local vault password, encrypted secrets, owner-only data directories, redacted CLI output, and loopback-first network binding.
+- **Local-first security**: local vault password, optional Touch ID unlock gate, encrypted secrets, owner-only data directories, redacted CLI output, and loopback-first network binding.
 - **Scriptable operator CLI**: JSON-friendly commands for automation, diagnostics, imports/exports, fleet scans, and router lifecycle control.
 - **Release-oriented quality gates**: linting, Electron packaging checks, API integration tests, UI static contracts, OpenAPI coverage, Docker smoke checks, and Windows path compatibility checks.
 
@@ -100,8 +100,21 @@ npm run gate
 ## Desktop App
 
 The desktop app is the primary operator surface. It starts the embedded API server, stores secrets in the local vault, exposes tray/menu lifecycle controls, and keeps app data in the platform user-data directory instead of the source checkout.
+Closing the main window keeps the proxy alive in the background; full shutdown
+is reserved for explicit Quit actions in the tray, menu, or sidebar so a normal
+window close cannot accidentally take down local routing.
 
-Settings includes local security controls, router settings, biometric status when available, and the encrypted account proxy pool. The proxy pool accepts one proxy per line in `ip:port:user:pass` format. Empty pools are valid; account tasks continue without proxies when no saved proxy is available.
+Settings includes local security controls, router settings, Touch ID status when
+available, and the encrypted account proxy pool. Touch ID is opt-in: Settings
+shows availability, an enable toggle, and a test-prompt button. A successful
+password unlock persists for up to 24 hours on the device; when Touch ID is
+enabled and a valid saved token exists, Hydra prompts once per relaunch before
+releasing that token. If the token is missing, expired, cancelled, or
+unavailable, Hydra goes straight to the password screen.
+
+The proxy pool accepts one proxy per line in `ip:port:user:pass` format. Empty
+pools are valid; account tasks continue without proxies when no saved proxy is
+available.
 
 ## CLI
 
@@ -182,7 +195,7 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, the current refined desktop release is `v1.4.2`, and
+first as `v1.1.0`, the current refined desktop release is `v1.4.3`, and
 remaining manual dogfood evidence stays explicit in the audit.
 
 Current release-train docs:

@@ -235,6 +235,8 @@ function buildAudit() {
   const systemController = safeRead('server/controllers/SystemController.js');
   const systemRoutes = safeRead('server/routes/system.js');
   const poolController = safeRead('server/controllers/PoolController.js');
+  const accountController = safeRead('server/controllers/AccountController.js');
+  const dashboardController = safeRead('server/controllers/DashboardController.js');
   const rendererApi = safeRead('src/api.js');
   const runtimeDiagnostics = safeRead('src/lib/runtimeDiagnostics.js');
   const proximityField = safeRead('src/hooks/useProximityField.js');
@@ -509,6 +511,12 @@ function buildAudit() {
         && readme.includes('ip:port:user:pass')
         && readme.includes('The README avoids embedding real account data, full API keys, or live secrets')
         && !/Remotion|remotion/.test(readme)
+        && readme.includes('actions/workflows/release.yml/badge.svg')
+        && readme.includes('actions/workflows/docker.yml/badge.svg?branch=master')
+        && !readme.includes('actions/workflows/electron-smoke.yml/badge.svg?branch=master')
+        && !readme.includes('img.shields.io/github/license')
+        && readme.includes('Touch ID is opt-in')
+        && /A successful\s+password unlock persists for up to 24 hours on the device/.test(readme)
         && readme.includes('[docs/VERSIONING.md](docs/VERSIONING.md)')
         && readme.includes(`current refined desktop release is \`v${version}\``)
         && readme.includes('the active `1.4.x` lane')
@@ -518,7 +526,7 @@ function buildAudit() {
         && versioningDoc.includes('x-axis value affects horizontal gravity, spawn')
         && versioningDoc.includes('Exact MacBook lid-angle tilt is not exposed through a standard Electron API')
         && goalDoc.includes('cut the release as a minor bump using `[bump:minor]`'),
-      'README.md has top navigation, grouped CLI/router/hardening/release sections, proxy-pool docs, versioning policy, splash tilt notes, no Remotion references, and packaged-Electron screenshot secrecy guidance',
+      'README.md has truthful CI/Desktop Release/Docker badges, top navigation, grouped CLI/router/hardening/release sections, explicit Touch ID and 24-hour unlock-token behavior, proxy-pool docs, versioning policy, splash tilt notes, no Remotion references, and packaged-Electron screenshot secrecy guidance',
     ),
     check(
       'dependency-audit',
@@ -565,6 +573,12 @@ function buildAudit() {
         && dashboardApi.includes('cleanupEphemeralProfileDir(profileDir)')
         && requestLogBuffer.includes('timer = setTimeout')
         && !requestLogBuffer.includes('timer = setInterval')
+        && electronMain.includes('const LIFECYCLE_KEEPALIVE_MS = 60_000')
+        && electronMain.includes('lifecycleKeepAliveTimer.ref?.()')
+        && electronMain.includes("logLifecycle('process-beforeExit'")
+        && electronMain.includes("logLifecycle('process-signal'")
+        && electronEnv.includes("app.once('will-quit'")
+        && !electronEnv.includes("app.once('before-quit'")
         && proxyRoute.includes('const requestLogPromise = createRequestLog(')
         && proxyRoute.includes('requestLogPromise.then')
         && !proxyRoute.includes('const requestLog = await createRequestLog(')
@@ -603,6 +617,14 @@ function buildAudit() {
         && sessionRefresher.includes('replaceClientCookies: liveStack')
         && sessionRefresher.includes('markSessionRefreshed: false')
         && !sessionRefresher.includes('setInterval')
+        && accountController.includes('store.removeDeadClientCookies(session.clientCookies, refreshed.deadClientCookies)')
+        && !accountController.includes('function pruneDeadClientCookies')
+        && accountController.includes('replaceClientCookies: []')
+        && accountController.includes('markSessionRefreshed: false')
+        && dashboardController.includes('store.removeDeadClientCookies(stackedCookies, refreshed.deadClientCookies)')
+        && dashboardApi.includes('undefined, undefined, derivedExpiry')
+        && dashboardApi.includes('preserveSessionToken: true')
+        && dashboardApi.includes('markSessionRefreshed: false')
         && taskSupervisor.includes('scheduleNextSweep(delayMs = TASK_SWEEP_INTERVAL_MS)')
         && taskSupervisor.includes('this.timer = setTimeout')
         && taskSupervisor.includes('this.sweepPromise = this.expireTasks().catch')
@@ -1000,15 +1022,18 @@ function buildAudit() {
     check(
       'biometric-fail-closed',
       'Biometric auth-token gate fails closed',
-      electronIpc.includes("if (biometricOn) {")
+      electronIpc.includes('const parsed = await readAuthTokenRecord()')
+        && electronIpc.indexOf('const parsed = await readAuthTokenRecord()') < electronIpc.indexOf("const biometricOn = await getPref('biometricEnabled')")
+        && electronIpc.includes("if (biometricOn) {")
         && electronIpc.includes("await promptBiometric('Unlock Hydra')")
         && electronIpc.includes('biometric auth-token gate denied release')
         && electronBiometric.includes('Touch ID availability check failed')
         && electronBiometric.includes('Touch ID prompt failed (${e.code})')
         && !electronIpc.includes('biometricOn && canPromptBiometric()')
         && electronIpcContractTest.includes('enabled biometric auth-token gate fails closed')
+        && electronIpcContractTest.includes('check token presence and expiry before prompting Touch ID')
         && electronMainProcessTest.includes('keeps biometric auth-token fallback failures visible while failing closed'),
-      'native auth-token release requires the biometric prompt whenever biometricEnabled is true and logs prompt/availability failures',
+      'native auth-token release validates token presence/expiry before prompting, then requires biometric approval when enabled and logs prompt/availability failures',
     ),
   ];
 

@@ -219,3 +219,24 @@ zero Hydra Playwright profiles, `0.055%` average CPU, `0.000%` end CPU, and
 `/private/tmp/hydra-v142-session-pruning-current-source-launch-20260601T.ykgIT2`
 and
 `/private/tmp/hydra-v142-session-pruning-post-rebuild-idle-20260601T.2OCWjF`.
+
+## 2026-06-01 Timestamp Semantics
+
+`sessionRefreshedAt` records a completed stored renewal, not any write to the
+encrypted account session document. Metadata-only writes now explicitly leave
+it unchanged:
+
+- auth-method detection cookie capture
+- OTP request cookie capture
+- password sign-in awaiting second factor
+- explicit session clearing before fresh re-auth, including failed
+  device-cookie stack removal
+- derived JWT-expiry backfill, narrowed to an expiry-only metadata write
+- auto-refresh follow-up device-cookie append
+
+Completed password login, OTP verification, magic-link verification, forced
+live probes, explicit silent renewal, and successful automation renewals still
+advance the clock. `AccountController` and `DashboardController` also use the
+shared Clerk-identity pruning helper, so transient dashboard or Cloudflare
+cookie churn cannot preserve a dead Clerk device identity. The recon note is
+`docs/recon/SESSION_REFRESH_TIMESTAMP_SEMANTICS.md`.

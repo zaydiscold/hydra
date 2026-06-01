@@ -330,7 +330,10 @@ function isHydraOwnedProcess(command) {
   // Long-running Hydra CLI/server modes are Hydra-owned. Short diagnostic
   // commands such as `hydra doctor` are intentionally excluded.
   if (/\bbin\/hydra\.mjs\s+(serve|start|proxy|mcp)\b/.test(value)) return true;
-  if (value.includes(root) && /(server\/standalone\.js|launch\.js|electron\/main\.js)/.test(value)) return true;
+  if (
+    value.includes(root)
+    && /(?:^|\s)\S*(?:server\/standalone\.js|scripts\/launch\.js|electron\/main\.js)(?:\s|$)/.test(value)
+  ) return true;
 
   return false;
 }

@@ -176,6 +176,29 @@ test('session controllers use the normalized latest cookie, not only legacy clie
   assert.doesNotMatch(accountController, /if \(!session\.clientCookie\)/);
 });
 
+test('refresh controllers prune dead Clerk identities through the shared store helper', () => {
+  const accountController = read('server/controllers/AccountController.js');
+  const dashboardController = read('server/controllers/DashboardController.js');
+
+  assert.match(accountController, /store\.removeDeadClientCookies\(session\.clientCookies, refreshed\.deadClientCookies\)/);
+  assert.doesNotMatch(accountController, /function pruneDeadClientCookies/);
+  assert.match(dashboardController, /store\.removeDeadClientCookies\(stackedCookies, refreshed\.deadClientCookies\)/);
+  assert.doesNotMatch(dashboardController, /const deadSet = new Set\(refreshed\.deadClientCookies/);
+});
+
+test('metadata-only session writes do not masquerade as silent renewal', () => {
+  const accountController = read('server/controllers/AccountController.js');
+  const dashboardApi = read('server/services/dashboard-api.js');
+  const refresher = read('server/services/session-refresher.js');
+
+  assert.match(accountController, /updateAccountSession\(req\.user\.id, req\.params\.id, null, null, null, \{\s*replaceClientCookies: \[\],\s*markSessionRefreshed: false/);
+  assert.match(accountController, /account\.sessionCookie,\s*result\.clientCookie,\s*sessionExpiry,\s*\{ markSessionRefreshed: false \}/);
+  assert.match(accountController, /updateAccountSession\(req\.user\.id, req\.params\.id, null, err\.clientCookie, null, \{\s*markSessionRefreshed: false/);
+  assert.match(accountController, /preserveSessionToken: true,\s*markSessionRefreshed: false/);
+  assert.match(dashboardApi, /undefined, undefined, derivedExpiry, \{\s*preserveSessionToken: true,\s*markSessionRefreshed: false/);
+  assert.match(refresher, /freshClientCookie,\s*null, \/\/ don't update session expiry again\s*\{\s*preserveSessionToken: true,\s*markSessionRefreshed: false/);
+});
+
 test('debug tRPC probes serialize normalized dashboard device cookies', () => {
   const debugController = read('server/controllers/DebugController.js');
 
