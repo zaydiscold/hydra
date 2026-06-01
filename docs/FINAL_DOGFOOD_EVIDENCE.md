@@ -1451,3 +1451,20 @@ This evidence file is not release-complete by itself. The release remains not co
   closed-app audit matchers; the corrected predicate and CLI regression
   restore `31 ok / 5 deferred / 0 missing / 0 blockers` with
   `complete=false`.
+- After audit/docs checkpoint `9d5db1c6a7b4c470460e59d8d18fb9d1863f5b88`,
+  the ARM package rebuilt once more from the final desktop payload and passed
+  package smoke, strict deep `codesign`, bundle version (`1.4.0`), and
+  embedded renderer map inspection. The final local ARM zip SHA-256 was
+  `d568d3394737b7dd541de1148e99f74efa3bf6163980b2ae5c1b09b59e648cea`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-passive-observer-final-package-20260601T041500Z`.
+  Launch evidence is under
+  `/private/tmp/hydra-v140-passive-observer-final-launch-20260601T041500Z`:
+  `0 -> 4` processes in three seconds, then four processes at `0.0%` CPU and
+  zero Hydra Playwright profiles after settling. Packaged `docs/` and `bin/`
+  are intentionally excluded, so this documentation-only note does not stale
+  the desktop payload.
+- Audit/docs checkpoint `9d5db1c6a7b4c470460e59d8d18fb9d1863f5b88`
+  used `[skip-bump]`; Auto-version run `26734703372` skipped, CI run
+  `26734703373` passed, and Docker workflow `26734703374` passed runtime
+  smoke and registry image push.

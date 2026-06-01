@@ -218,3 +218,25 @@ push. The source update exposed stale closed-app audit predicates for the
 older helper names. The predicate and CLI regression now require the quiet
 form and return `31 ok / 5 deferred / 0 missing / 0 blockers` with
 `complete=false`.
+
+After audit/docs checkpoint `9d5db1c6a7b4c470460e59d8d18fb9d1863f5b88`,
+the ARM desktop payload rebuilt once more. Package smoke, strict deep
+`codesign`, bundle version (`1.4.0`), and embedded renderer-map inspection
+passed. The final local ARM zip SHA-256 was:
+
+```text
+d568d3394737b7dd541de1148e99f74efa3bf6163980b2ae5c1b09b59e648cea
+```
+
+Generated archive byproducts moved reversibly to
+`~/.Trash/hydra-passive-observer-final-package-20260601T041500Z`. Final
+LaunchServices evidence is under
+`/private/tmp/hydra-v140-passive-observer-final-launch-20260601T041500Z`:
+the app launched `0 -> 4` processes in three seconds and settled with four
+processes at `0.0%` CPU plus zero Hydra Playwright profiles. Packaged `docs/`
+and `bin/` are intentionally excluded, so this documentation-only note does
+not stale the desktop payload.
+
+Auto-version run `26734703372` skipped, CI run `26734703373` passed, and
+Docker workflow run `26734703374` passed runtime smoke and registry image
+push.
