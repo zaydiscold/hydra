@@ -1345,3 +1345,62 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `docker/login-action@v3`, `docker/metadata-action@v5`, and
   `docker/setup-buildx-action@v3` releases while forcing them onto Node 24;
   the Hydra-owned workflow remains green.
+- 2026-06-01 multi-proxy selector verification hardening: the account proxy
+  pool already selected one automation route per task and threaded it through
+  signup, management-key Server Action and REST paths, redemption Server
+  Action retries, tRPC migration calls, REST probes, API-key sync, and
+  Playwright fallback. Its unit proof only stored one proxy, however, so it
+  could not deterministically demonstrate multi-entry distribution.
+  `server/services/account-proxy-pool.js` now exposes the small
+  `pickProxyIndex(proxyCount, entropy)` boundary while production
+  `pickAccountProxy()` still supplies `randomBytes(4)` per new task. The proxy
+  regression passes controlled entropy values ending in `0` and `1` through a
+  two-entry encrypted pool, proving both entries are selectable; it also
+  rejects short entropy and retains the empty-pool behavior. Focused proxy
+  tests passed `5/5`, background visibility contracts passed `32/32`, CLI
+  tests passed `46/46`, and closed-app audit remained honest at `31 ok / 5
+  deferred / 0 missing / 0 blockers`. The complete no-Docker source chain
+  passed: lint, full `npm test`, Vite build, gate (`12/12`), OpenAPI generation
+  (`83 operations`), and diff check.
+- 2026-06-01 multi-proxy selector current-source package proof: broad
+  before/after `ps -ax | grep -iE
+  'chrome|chromium|playwright|electron|hydra'` shutdown inventories are
+  preserved under
+  `/private/tmp/hydra-v140-proxy-selector-rebuild-shutdown-20260531T183049Z`.
+  Native app quit removed all packaged Hydra-owned processes in two seconds;
+  unrelated Chrome and MCP browser processes remain visible in both broad
+  captures. The current-source arm64 package rebuilt successfully. ARM package
+  smoke, strict deep `codesign`, bundle-version inspection (`1.4.0`), and
+  embedded-source inspection passed; the local zip hashed to
+  `5e9eaa8927814110a601582c3f083377ce0652dfb899795ada1f1b8cfc7f322c`.
+  That zip is local rebuild evidence, not a replacement for the public
+  `v1.4.0` asset. LaunchServices relaunch evidence is under
+  `/private/tmp/hydra-v140-proxy-selector-current-source-launch-20260531T183234Z`.
+  Generated zip, blockmap, updater metadata, and builder-debug byproducts were
+  moved reversibly to
+  `~/.Trash/hydra-proxy-selector-current-source-package-20260531T183913Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`.
+- 2026-06-01 multi-proxy selector post-rebuild profile:
+  `/private/tmp/hydra-v140-proxy-selector-post-rebuild-quiet-idle-20260531T183255Z`
+  sampled the untouched rebuilt package every 30 seconds for five minutes
+  after a 30-second splash-settle window. All 11 samples retained four
+  Hydra-owned processes and zero active Hydra Playwright profiles. Aggregate
+  Hydra CPU stayed between `0.000%` and `0.700%` (`0.073%` average, `0.000%`
+  ending); RSS moved from `632720 KiB` to `608544 KiB` (`-24176 KiB`) while
+  launch allocations settled. Broad before/after inventories are preserved in
+  that profile directory.
+- 2026-06-01 multi-proxy selector literal local chain: the final ordered
+  local verification passed lint, full `npm test`, gate (`12/12`), ARM package
+  smoke, Docker smoke with a rebuilt production image and successful isolated
+  full-Chromium Playwright launch, OpenAPI generation (`83 operations`), and
+  diff check. Strict deep `codesign` passed after the chain. The package smoke
+  used reversible workspace symlinks to the current-source local zip and
+  blockmap already preserved under
+  `~/.Trash/hydra-proxy-selector-current-source-package-20260531T183913Z`;
+  those temporary links were moved back out of the workspace to
+  `~/.Trash/hydra-proxy-selector-final-smoke-link-20260601T014406Z` and
+  `~/.Trash/hydra-proxy-selector-final-smoke-blockmap-link-20260601T014406Z`.
+  `docker compose ps --all` returned no services, no `hydra_default` network
+  remained, Docker Desktop stopped cleanly in one second, and `release/` again
+  contains only `mac-arm64/Hydra.app`. Spotlight resolves exactly that one
+  `com.zayd.hydra` bundle.

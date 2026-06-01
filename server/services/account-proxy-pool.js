@@ -171,10 +171,18 @@ export function setAccountProxyPool(text) {
   };
 }
 
-export function pickAccountProxy() {
+export function pickProxyIndex(proxyCount, entropy) {
+  if (!Number.isInteger(proxyCount) || proxyCount < 1) return null;
+  if (!Buffer.isBuffer(entropy) || entropy.length < 4) {
+    throw new Error('Proxy selection entropy must contain at least four bytes');
+  }
+  return entropy.readUInt32BE(0) % proxyCount;
+}
+
+export function pickAccountProxy(entropy = null) {
   const proxies = parseProxyLines(loadStoredLines().join('\n'));
   if (proxies.length === 0) return null;
-  const index = randomBytes(4).readUInt32BE(0) % proxies.length;
+  const index = pickProxyIndex(proxies.length, entropy ?? randomBytes(4));
   return proxies[index];
 }
 

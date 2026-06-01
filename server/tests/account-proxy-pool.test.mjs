@@ -21,6 +21,7 @@ const {
   parseProxyLine,
   parseProxyLines,
   pickAccountProxy,
+  pickProxyIndex,
   setAccountProxyPool,
   toPlaywrightProxy,
 } = await import('../services/account-proxy-pool.js');
@@ -90,6 +91,22 @@ test('stores proxy pool encrypted and returns masked public state', () => {
   const cleared = setAccountProxyPool('');
   assert.equal(cleared.count, 0);
   assert.equal(pickAccountProxy(), null);
+});
+
+test('maps cryptographic entropy across a multi-entry proxy pool', () => {
+  setAccountProxyPool(`
+10.0.0.1:9000:first:secret
+10.0.0.2:9001:second:secret
+`);
+
+  assert.equal(pickProxyIndex(0, Buffer.alloc(4)), null);
+  assert.equal(pickProxyIndex(2, Buffer.from([0, 0, 0, 0])), 0);
+  assert.equal(pickProxyIndex(2, Buffer.from([0, 0, 0, 1])), 1);
+  assert.throws(() => pickProxyIndex(2, Buffer.alloc(3)), /at least four bytes/);
+  assert.equal(pickAccountProxy(Buffer.from([0, 0, 0, 0])).host, '10.0.0.1');
+  assert.equal(pickAccountProxy(Buffer.from([0, 0, 0, 1])).host, '10.0.0.2');
+
+  setAccountProxyPool('');
 });
 
 test('automation network route is explicit for account proxies and direct mode', () => {

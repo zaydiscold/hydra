@@ -793,6 +793,45 @@ closed-app CLI commands, tests, and repo-local documentation.
   image push. GitHub's remaining Node 20 action-runtime warning belongs to the
   current upstream Docker helper actions, which GitHub forced onto Node 24;
   the Hydra-owned workflow remains green.
+- Multi-proxy selector verification now has deterministic two-entry proof.
+  Production still uses `randomBytes(4)` for each new task route; the new
+  selector boundary lets the regression prove entropy values ending in `0`
+  and `1` select both stored proxies, rejects short entropy, and keeps an
+  empty pool valid. Focused proxy tests passed `5/5`, background visibility
+  contracts passed `32/32`, CLI tests passed `46/46`, and the full no-Docker
+  source chain passed lint, full `npm test`, Vite build, gate (`12/12`),
+  OpenAPI generation (`83 operations`), and diff check.
+- Broad shutdown inventories for the pre-rebuild package are preserved under
+  `/private/tmp/hydra-v140-proxy-selector-rebuild-shutdown-20260531T183049Z`.
+  Native quit removed all packaged Hydra-owned processes in two seconds.
+  Current-source arm64 package rebuild, package smoke, strict deep `codesign`,
+  bundle version (`1.4.0`), and embedded-selector inspection passed. The local
+  zip SHA-256 is
+  `5e9eaa8927814110a601582c3f083377ce0652dfb899795ada1f1b8cfc7f322c`;
+  it is local rebuild proof, not a new public artifact. LaunchServices relaunch
+  evidence is under
+  `/private/tmp/hydra-v140-proxy-selector-current-source-launch-20260531T183234Z`.
+  Generated packaging byproducts were moved reversibly to Trash; `release/`
+  again contains only `mac-arm64/Hydra.app`.
+- The untouched post-rebuild profile under
+  `/private/tmp/hydra-v140-proxy-selector-post-rebuild-quiet-idle-20260531T183255Z`
+  sampled the rebuilt package every 30 seconds for five minutes after a
+  30-second splash-settle window. All 11 samples retained four Hydra-owned
+  processes and zero active Hydra Playwright profiles. CPU stayed between
+  `0.000%` and `0.700%` (`0.073%` average, `0.000%` ending); RSS moved from
+  `632720 KiB` to `608544 KiB` (`-24176 KiB`).
+- The multi-proxy selector final literal local chain passed lint, full
+  `npm test`, gate (`12/12`), ARM package smoke, Docker smoke with a rebuilt
+  production image and successful isolated full-Chromium Playwright launch,
+  OpenAPI generation (`83 operations`), and diff check in order. Strict deep
+  `codesign` passed afterward. Temporary package-smoke symlinks to the local
+  current-source zip and blockmap were moved reversibly to
+  `~/.Trash/hydra-proxy-selector-final-smoke-link-20260601T014406Z` and
+  `~/.Trash/hydra-proxy-selector-final-smoke-blockmap-link-20260601T014406Z`.
+  Compose retained no services or `hydra_default` network, Docker Desktop
+  stopped cleanly in one second, `release/` again contains only
+  `mac-arm64/Hydra.app`, and Spotlight resolves exactly that one installed
+  Hydra bundle.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
