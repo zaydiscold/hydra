@@ -29,6 +29,7 @@ export const bulkOtpStubsSchema = z.object({
     )
     .min(1, 'At least one email is required')
     .max(MAX_BULK_OTP_STUBS, `At most ${MAX_BULK_OTP_STUBS} emails per request`),
+  forceReplace: z.boolean().default(false),
 });
 
 export const updateAccountSchema = z

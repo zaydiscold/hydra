@@ -2150,3 +2150,36 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   reports version `1.4.3`. This refresh does not close the remaining manual
   packaged GUI, live-flow, screenshot, Touch ID hardware, or real Windows UX
   dogfood items.
+- 2026-06-01 `v1.4.4` Bulk Auth import repair: the user-visible failure was
+  traced to two real wiring defects. First, Bulk Email Link created local OTP
+  stubs and then fired one high-cost Clerk email-link send per row, which let a
+  normal 13-row paste self-trigger Hydra's `12/min` high-cost limiter and then
+  upstream Clerk rate limits. Second, the email-link `redirect_url` used the
+  local Hydra host, but OpenRouter's Clerk instance rejects localhost callback
+  URLs for OpenRouter-origin `email_link` requests. The repair adds
+  `GET /api/accounts/magic-link/capability`, preflights Email Link before any
+  row is created or replaced, requires `HYDRA_MAGIC_LINK_CALLBACK_ORIGIN` to be
+  public HTTPS before contacting Clerk, sends Email Link rows one at a time
+  with a `6500ms` spacing, removes the high-cost limiter from the local
+  `/api/accounts/bulk-otp-stubs` vault-write route, preserves repeated pasted
+  emails in the text box, and adds a shared Force Replace toggle that converts
+  an existing account back to a pending OTP stub while preserving management-key
+  records and invalidating stale session-status cache. The direct OTP tab
+  remains the pure HTTPS import path.
+- 2026-06-01 `v1.4.4` Bulk Auth verification: focused contracts passed
+  `npm run test:background-failure-visibility` (`33/33`),
+  `npm run test:ui-static` (`44/44`), `npm run test:api-integration` (`9/9`),
+  `npm run test:session-refresh-contract` (`14/14`), `npm run test:auth-status`
+  plus `npm run test:auth-cookie` (`1/1` + `9/9`), and `npm run test:cli`
+  (`46/46`). The full `npm test` chain passed after the new OpenAPI route was
+  added to `scripts/generate-hydra-openapi.mjs`; `npm run lint`, `npm run
+  build`, `npm run gate` (`12/12`), `npm run openapi:hydra` (`84 operations`),
+  `git diff --check`, and `HYDRA_DOCKER_BUILD_TIMEOUT_MS=3600000 npm run
+  docker:smoke` also passed. Local packaging rebuilt `release/mac-arm64/Hydra.app`
+  as version `1.4.4`; `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`,
+  strict deep `codesign --verify --deep --strict`, embedded server/renderer
+  source inspection for the capability endpoint and UI copy, and LaunchServices
+  relaunch all passed. After splash settled, the local four-process app tree
+  sampled at approximately `0.0-0.6%` per owned process, with no extra browser
+  process opened. The local ARM zip SHA-256 before cleanup was
+  `eaca25ec73182672456b0fe09c1031e0a4f5b8200efad648b7e9fa7014a6310f`.

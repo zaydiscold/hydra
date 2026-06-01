@@ -4,14 +4,44 @@
 
 export function parseEmails(text) {
   if (!text) return [];
-  return [
-    ...new Set(
-      text
-        .split(/[\n,;]+/)
-        .map((s) => s.trim().toLowerCase())
-        .filter((s) => s.includes('@')),
-    ),
-  ];
+  return parseEmailEntries(text).emails;
+}
+
+export function parseEmailEntries(text) {
+  const tokens = String(text || '')
+    .split(/[\n,;]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.includes('@'));
+  const seen = new Set();
+  const emails = [];
+  const duplicates = [];
+
+  for (const token of tokens) {
+    if (seen.has(token)) {
+      duplicates.push(token);
+      continue;
+    }
+    seen.add(token);
+    emails.push(token);
+  }
+
+  return { emails, duplicates, tokens };
+}
+
+export function remainingEmailTextAfterUse(text, usedEmails = []) {
+  const used = new Set(usedEmails.map((email) => String(email || '').trim().toLowerCase()).filter(Boolean));
+  const consumed = new Set();
+  const remaining = [];
+
+  for (const token of String(text || '').split(/[\n,;]+/).map((s) => s.trim().toLowerCase()).filter((s) => s.includes('@'))) {
+    if (used.has(token) && !consumed.has(token)) {
+      consumed.add(token);
+      continue;
+    }
+    remaining.push(token);
+  }
+
+  return remaining.join('\n');
 }
 
 export function clerkErrorHint(message) {

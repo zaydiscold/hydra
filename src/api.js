@@ -306,8 +306,10 @@ export const addAccountWithCredentials = (alias, email, password, authMethod) =>
 export const bulkAddAccounts = (lines, signal) =>
   request('/accounts/bulk', { method: 'POST', body: { lines }, signal });
 /** Create OTP-only vault rows from emails only (Bulk Auth wizard). */
-export const bulkOtpStubs = (emails, signal) =>
-  request('/accounts/bulk-otp-stubs', { method: 'POST', body: { emails }, signal });
+export const bulkOtpStubs = (emails, signal, { forceReplace = false } = {}) =>
+  request('/accounts/bulk-otp-stubs', { method: 'POST', body: { emails, forceReplace }, signal });
+export const getMagicLinkCapability = (signal) =>
+  request('/accounts/magic-link/capability', { signal, trackLoading: false });
 export const updateAccount = (id, updates) =>
   request(`/accounts/${id}`, { method: 'PATCH', body: updates });
 export const deleteAccount = (id) => request(`/accounts/${id}`, { method: 'DELETE' });

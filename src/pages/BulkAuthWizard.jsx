@@ -6,7 +6,7 @@ import OtpTab from '../components/OtpTab';
 
 const TABS = [
   { id: 'otp', label: '# OTP', subtitle: 'Enter 6-digit code' },
-  { id: 'email-link', label: '✉ Email Link', subtitle: 'One click link' },
+  { id: 'email-link', label: '✉ Email Link', subtitle: 'Public callback' },
 ];
 
 export default function BulkAuthWizard({ addToast }) {
@@ -19,8 +19,8 @@ export default function BulkAuthWizard({ addToast }) {
         <div>
           <AnimeText as="h2" mode="lines" variant="scanline" delay={36} style={{ margin: 0 }}>Bulk Account Import</AnimeText>
           <p className="page-header__lede">
-            Import OpenRouter accounts into Hydra. Choose <strong>Email Link</strong> for a one-click sign-in (no
-            code needed), or <strong>OTP</strong> to enter a 6-digit code per account.
+            Import OpenRouter accounts into Hydra. Use <strong>OTP</strong> for direct HTTPS code import, or{' '}
+            <strong>Email Link</strong> when Hydra has a public Clerk callback configured.
           </p>
         </div>
       </header>
@@ -79,6 +79,8 @@ export default function BulkAuthWizard({ addToast }) {
           logLines={auth.emailLinkLog}
           localError={auth.localError}
           errorCopyCommand={auth.errorCopyCommand}
+          forceReplace={auth.bulkForceReplace}
+          setForceReplace={auth.setBulkForceReplace}
           onSend={auth.handleSendMagicLinks}
           onResend={auth.handleResendMagicLink}
         />
@@ -103,6 +105,8 @@ export default function BulkAuthWizard({ addToast }) {
           busy={auth.otpBusy}
           mergeBusy={auth.otpMergeBusy}
           fetchingKeys={auth.otpFetchingKeys}
+          forceReplace={auth.bulkForceReplace}
+          setForceReplace={auth.setBulkForceReplace}
           localError={auth.localError}
           errorCopyCommand={auth.errorCopyCommand}
           setCurrentIdx={auth.setOtpCurrentIdx}

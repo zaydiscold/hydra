@@ -195,7 +195,7 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, the current refined desktop release is `v1.4.3`, and
+first as `v1.1.0`, the current refined desktop release is `v1.4.4`, and
 remaining manual dogfood evidence stays explicit in the audit.
 
 Current release-train docs:
@@ -209,6 +209,9 @@ Current release-train docs:
   Matter.js/RAF/sensor cleanup.
 - [Session Truth](docs/SESSION_TRUTH.md): login-session versus management-key
   state, live Clerk probes, bounded device-cookie identity memory, and OTP aliases.
+- [Bulk Auth Import Redirect And Dedupe](docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md):
+  Email Link callback limits, direct-HTTPS OTP import, duplicate handling, and
+  Force Replace behavior.
 - [Release Audit](docs/RELEASE_AUDIT.md): measured performance evidence,
   packaged-app evidence, and the remaining manual dogfood blockers.
 - [Accessibility Profiling Distortion](docs/ACCESSIBILITY_PROFILING_DISTORTION.md):

@@ -144,6 +144,90 @@ test('account proxy pool endpoints store encrypted proxies and return masked pub
   assert.match(invalid.json.error, /Line 1: Proxy port/);
 });
 
+test('magic-link capability fails closed unless a public HTTPS callback is configured', async () => {
+  const token = await getAuthToken();
+  const previous = process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN;
+
+  try {
+    delete process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN;
+    const missing = await getJson('/api/accounts/magic-link/capability', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(missing.res.status, 200);
+    assert.equal(missing.json.success, true);
+    assert.equal(missing.json.data.available, false);
+    assert.equal(missing.json.data.code, 'MAGIC_LINK_CALLBACK_UNAVAILABLE');
+    assert.equal(missing.json.data.fallback, 'otp');
+
+    process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN = 'http://127.0.0.1:3001';
+    const local = await getJson('/api/accounts/magic-link/capability', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(local.res.status, 200);
+    assert.equal(local.json.data.available, false);
+
+    process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN = 'https://hydra.example.test/public';
+    const configured = await getJson('/api/accounts/magic-link/capability', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(configured.res.status, 200);
+    assert.equal(configured.json.data.available, true);
+    assert.equal(configured.json.data.callbackOrigin, 'https://hydra.example.test/public');
+    assert.equal(configured.json.data.callbackPath, '/api/auth/magic-callback');
+  } finally {
+    if (previous === undefined) delete process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN;
+    else process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN = previous;
+  }
+});
+
+test('bulk OTP stubs skip duplicate saved emails unless forceReplace is explicit', async () => {
+  const token = await getAuthToken();
+  const headers = {
+    'content-type': 'application/json',
+    authorization: `Bearer ${token}`,
+  };
+
+  const created = await getJson('/api/accounts/with-credentials', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      alias: 'bulk-duplicate-source',
+      email: 'duplicate@example.test',
+      authMethod: 'otp',
+    }),
+  });
+  assert.equal(created.res.status, 201);
+
+  const skipped = await getJson('/api/accounts/bulk-otp-stubs', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      emails: ['duplicate@example.test', 'fresh@example.test'],
+      forceReplace: false,
+    }),
+  });
+  assert.equal(skipped.res.status, 201);
+  assert.equal(skipped.json.success, true);
+  const skippedRows = skipped.json.data.results;
+  assert.equal(skippedRows.length, 2);
+  assert.equal(skippedRows.find((row) => row.email === 'duplicate@example.test')?.skipped, 'duplicate_email');
+  assert.equal(skippedRows.find((row) => row.email === 'fresh@example.test')?.success, true);
+
+  const replaced = await getJson('/api/accounts/bulk-otp-stubs', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      emails: ['duplicate@example.test'],
+      forceReplace: true,
+    }),
+  });
+  assert.equal(replaced.res.status, 201);
+  assert.equal(replaced.json.success, true);
+  assert.equal(replaced.json.data.results[0].success, true);
+  assert.equal(replaced.json.data.results[0].replaced, true);
+  assert.equal(replaced.json.data.results[0].account.email, 'duplicate@example.test');
+});
+
 test('protected account routes reject anonymous requests', async () => {
   const { res, json } = await getJson('/api/accounts');
 

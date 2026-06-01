@@ -59,6 +59,32 @@ function isAuthoritativeSessionFailure(errLike) {
   );
 }
 
+function magicLinkCallbackUnavailableError() {
+  const err = new Error(
+    'Email Link needs a public Clerk-allowed callback URL. OpenRouter Clerk rejects Hydra localhost callbacks; use OTP for pure HTTPS bulk import or set HYDRA_MAGIC_LINK_CALLBACK_ORIGIN to a public HTTPS origin that forwards /api/auth/magic-callback to this Hydra instance.',
+  );
+  err.status = 409;
+  err.code = 'MAGIC_LINK_CALLBACK_UNAVAILABLE';
+  err.extra = {
+    hint: 'The OTP tab uses direct Clerk HTTPS calls and does not need a public callback URL.',
+    fallback: 'otp',
+  };
+  return err;
+}
+
+function resolveMagicLinkCallbackOrigin() {
+  const configured = process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN?.trim();
+  if (!configured) throw magicLinkCallbackUnavailableError();
+  let url;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw magicLinkCallbackUnavailableError();
+  }
+  if (url.protocol !== 'https:') throw magicLinkCallbackUnavailableError();
+  return `${url.origin}${url.pathname.replace(/\/$/, '')}`;
+}
+
 export class AccountController extends BaseController {
   async getAccounts(req, res) {
     const accounts = await store.getAccounts(req.user.id);
@@ -190,7 +216,7 @@ export class AccountController extends BaseController {
   async bulkOtpStubs(req, res) {
     const requestAbort = bindRequestAbort(req, res, 'bulk OTP stub request');
     try {
-      const { emails: rawEmails } = this.validate(req.body, bulkOtpStubsSchema);
+      const { emails: rawEmails, forceReplace } = this.validate(req.body, bulkOtpStubsSchema);
       throwIfAborted(requestAbort.signal);
 
       // Expand *@domain wildcards to random aliases (e.g. *@zayd.wtf → nova4821@zayd.wtf)
@@ -222,7 +248,7 @@ export class AccountController extends BaseController {
       // Fetch existing accounts once so we can look up on 409 dedup
       let allAccounts = [];
       try {
-        allAccounts = await store.getAccounts(req.user.id);
+        allAccounts = await store.getAccounts(req.user.id, { includePending: true });
       } catch (err) {
         logger.warn(`[ACCOUNT] Bulk OTP dedup preload failed; duplicate emails may not reuse existing rows: ${err.message}`);
       }
@@ -270,11 +296,22 @@ export class AccountController extends BaseController {
                 const normalizedEmail = String(email || '').toLowerCase();
                 const existing = allAccounts.find((a) => String(a.email || '').toLowerCase() === normalizedEmail);
                 if (existing) {
+                  if (forceReplace) {
+                    const replaced = await store.replaceAccountWithOtpStub(req.user.id, existing.id, normalizedEmail);
+                    results.push({
+                      email,
+                      success: true,
+                      replaced: true,
+                      account: { id: replaced.id, alias: replaced.alias, email, authMethod: replaced.authMethod || 'otp' },
+                    });
+                    created = true;
+                    break;
+                  }
                   results.push({
                     email,
-                    success: true,
-                    reused: true, // existing account — not a new stub
-                    account: { id: existing.id, alias: existing.alias, email, authMethod: existing.authMethod || 'otp' },
+                    success: false,
+                    skipped: 'duplicate_email',
+                    existing: { id: existing.id, alias: existing.alias, email },
                   });
                 } else {
                   results.push({
@@ -436,6 +473,25 @@ export class AccountController extends BaseController {
       return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
     } finally {
       requestAbort.dispose();
+    }
+  }
+
+  async magicLinkCapability(_req, res) {
+    try {
+      const callbackOrigin = resolveMagicLinkCallbackOrigin();
+      return this.success(res, {
+        available: true,
+        callbackOrigin,
+        callbackPath: '/api/auth/magic-callback',
+      });
+    } catch (err) {
+      return this.success(res, {
+        available: false,
+        code: err.code || 'MAGIC_LINK_CALLBACK_UNAVAILABLE',
+        message: err.message,
+        hint: err.extra?.hint,
+        fallback: err.extra?.fallback || 'otp',
+      });
     }
   }
 
@@ -936,10 +992,10 @@ export class AccountController extends BaseController {
       const email = req.body.email || account.email;
       if (!email) return this.error(res, 'Email required for magic link', 400);
 
-      // Build the callback URL Hydra will receive after the user clicks
-      const proto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
-      const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3001';
-      const callbackUrl = `${proto}://${host}/api/auth/magic-callback?signInId=__SIGN_IN_ID__&accountId=${account.id}`;
+      // Clerk rejects localhost callback URLs for OpenRouter-origin email_link requests.
+      // Only send magic links when the operator has configured a public HTTPS callback.
+      const callbackOrigin = resolveMagicLinkCallbackOrigin();
+      const callbackUrl = `${callbackOrigin}/api/auth/magic-callback?signInId=__SIGN_IN_ID__&accountId=${account.id}`;
       // Note: we replace __SIGN_IN_ID__ placeholder after we get it from Clerk
 
       const { signInId, clientCookie, isSignUp } = await clerkAuth.sendMagicLink(
@@ -950,7 +1006,7 @@ export class AccountController extends BaseController {
 
       // Build real callback URL — include isSignUp so the callback handler routes correctly
       const isSignUpParam = isSignUp ? '&isSignUp=1' : '';
-      const realCallback = `${proto}://${host}/api/auth/magic-callback?signInId=${encodeURIComponent(signInId)}&accountId=${account.id}${isSignUpParam}`;
+      const realCallback = `${callbackOrigin}/api/auth/magic-callback?signInId=${encodeURIComponent(signInId)}&accountId=${account.id}${isSignUpParam}`;
       // We store the pending entry so the callback can look it up
       const { trackPendingMagicLink } = await import('../services/magic-link-manager.js');
       trackPendingMagicLink(signInId, {
@@ -973,7 +1029,7 @@ export class AccountController extends BaseController {
     } catch (err) {
       if (requestAbort.signal.aborted) return;
       logger.warn(`[ACCOUNT] sendMagicLink failed (account=${req.params.id}): ${err.message}`);
-      return this.error(res, err.message, err.status || 500, 'MAGIC_LINK_ERROR');
+      return this.error(res, err.message, err.status || 500, err.code || 'MAGIC_LINK_ERROR', err.extra || {});
     } finally {
       requestAbort.dispose();
     }

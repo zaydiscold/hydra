@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { parseEmails, clerkErrorHint } from '../utils/auth';
+import { parseEmailEntries, clerkErrorHint } from '../utils/auth';
 import DevBackendHint from '../components/DevBackendHint';
 import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 
@@ -21,6 +21,8 @@ export default function OtpTab({
   busy,
   mergeBusy,
   fetchingKeys,
+  forceReplace,
+  setForceReplace,
   localError,
   errorCopyCommand,
   setCurrentIdx,
@@ -79,8 +81,7 @@ export default function OtpTab({
 
   const handleCreateStubs = (e) => {
     e.preventDefault();
-    const emails = parseEmails(pasteText);
-    onCreateStubs(emails);
+    onCreateStubs(parseEmailEntries(pasteText));
   };
 
   async function handleCopyExport() {
@@ -113,6 +114,23 @@ export default function OtpTab({
             spellCheck={false}
             style={{ fontFamily: 'var(--font-mono)', minHeight: 100 }}
           />
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 'var(--space-sm)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.82rem',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={forceReplace}
+              onChange={(e) => setForceReplace(e.target.checked)}
+            />
+            Force replace matching saved emails
+          </label>
           {localError && !queue.length && <DevBackendHint message={localError} copyCommand={errorCopyCommand} />}
           <button
             type="submit"
@@ -159,6 +177,7 @@ export default function OtpTab({
           <span style={{ fontWeight: 800, color: 'var(--status-success)', marginRight: 8 }}>[STUB RUN]</span>
           New <strong>{stubSummary.created}</strong>
           {stubSummary.reused > 0 && <> · Re-auth <strong>{stubSummary.reused}</strong></>}
+          {stubSummary.replaced > 0 && <> · Replaced <strong>{stubSummary.replaced}</strong></>}
           {stubSummary.duplicateEmail > 0 && <> · Dup skip <strong>{stubSummary.duplicateEmail}</strong></>}
           {stubSummary.failed > 0 && <> · Errors <strong>{stubSummary.failed}</strong></>}
           <span style={{ color: 'var(--text-tertiary)', marginLeft: 8 }}>({stubSummary.inputLines} unique emails parsed; queue keeps pasted order after dedup)</span>

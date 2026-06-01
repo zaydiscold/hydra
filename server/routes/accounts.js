@@ -11,7 +11,8 @@ router.get('/', requireUnlocked, controller.catchAsync(controller.getAccounts));
 router.post('/', requireUnlocked, controller.catchAsync(controller.addAccount));
 router.post('/with-credentials', requireUnlocked, controller.catchAsync(controller.addAccountWithCredentials));
 router.post('/bulk', requireUnlocked, highCostRouteLimiter, controller.catchAsync(controller.bulkAdd));
-router.post('/bulk-otp-stubs', requireUnlocked, highCostRouteLimiter, controller.catchAsync(controller.bulkOtpStubs));
+router.post('/bulk-otp-stubs', requireUnlocked, controller.catchAsync(controller.bulkOtpStubs));
+router.get('/magic-link/capability', requireUnlocked, controller.catchAsync(controller.magicLinkCapability));
 
 router.post('/:id/detect-auth', requireUnlocked, highCostRouteLimiter, controller.catchAsync(controller.detectAuth));
 router.post('/:id/login', requireUnlocked, highCostRouteLimiter, controller.catchAsync(controller.login));

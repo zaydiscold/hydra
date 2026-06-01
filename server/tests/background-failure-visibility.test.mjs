@@ -351,7 +351,9 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(bulkAuth, /const lifecycleAbortRef = useRef\(null\)/);
   assert.match(bulkAuth, /controller\.abort\(\)/);
   assert.match(bulkAuth, /clearTrackedTimeout\(timer\)/);
-  assert.match(bulkAuth, /waitForMagicLinkSendDelay\(idx \* 400\)/);
+  assert.match(bulkAuth, /BULK_MAGIC_LINK_SEND_DELAY_MS = 6500/);
+  assert.match(bulkAuth, /waitForMagicLinkSendDelay\(idx === 0 \? 0 : BULK_MAGIC_LINK_SEND_DELAY_MS\)/);
+  assert.match(bulkAuth, /MAGIC_LINK_CALLBACK_UNAVAILABLE/);
   assert.doesNotMatch(metrics, /setInterval\(\(\) => \{[\s\S]{0,80}fetchDashboard/);
   assert.doesNotMatch(traffic, /setInterval\(\(\) => \{[\s\S]{0,80}fetchTraffic/);
   assert.doesNotMatch(vault, /setInterval\(\(\) => \{[\s\S]{0,80}loadAccounts/);
@@ -568,6 +570,37 @@ test('bulk magic-link polling confirms completed links with a live Clerk session
   assert.match(poller, /status === 'active'/);
   assert.match(poller, /Link expired or session was not confirmed/);
   assert.doesNotMatch(poller, /api\.getAccounts\(\)/);
+});
+
+test('bulk import avoids local self-rate-limit and handles duplicate replacement explicitly', () => {
+  const routes = readRepoFile('server/routes/accounts.js');
+  const validator = readRepoFile('server/validators/account.js');
+  const store = readRepoFile('server/services/store.js');
+  const controller = readRepoFile('server/controllers/AccountController.js');
+  const bulkAuth = readRepoFile('src/hooks/useBulkAuth.js');
+  const emailTab = readRepoFile('src/components/EmailLinkTab.jsx');
+  const otpTab = readRepoFile('src/components/OtpTab.jsx');
+  const authUtils = readRepoFile('src/utils/auth.js');
+
+  assert.match(routes, /router\.post\('\/bulk-otp-stubs', requireUnlocked, controller\.catchAsync\(controller\.bulkOtpStubs\)\)/);
+  assert.doesNotMatch(routes, /router\.post\('\/bulk-otp-stubs', requireUnlocked, highCostRouteLimiter/);
+  assert.match(routes, /router\.get\('\/magic-link\/capability', requireUnlocked, controller\.catchAsync\(controller\.magicLinkCapability\)\)/);
+  assert.match(validator, /forceReplace: z\.boolean\(\)\.default\(false\)/);
+  assert.match(store, /export async function getAccounts\(userId, \{ includePending = false \} = \{\}\)/);
+  assert.match(store, /export async function replaceAccountWithOtpStub\(userId, id, email\)/);
+  assert.match(store, /invalidateSessionStatusCache\(id\)/);
+  assert.match(controller, /store\.getAccounts\(req\.user\.id, \{ includePending: true \}\)/);
+  assert.match(controller, /store\.replaceAccountWithOtpStub\(req\.user\.id, existing\.id, normalizedEmail\)/);
+  assert.match(controller, /async magicLinkCapability/);
+  assert.match(controller, /MAGIC_LINK_CALLBACK_UNAVAILABLE/);
+  assert.match(bulkAuth, /api\.getMagicLinkCapability\(signal\)/);
+  assert.match(bulkAuth, /Email Link unavailable before queue creation/);
+  assert.match(bulkAuth, /remainingEmailTextAfterUse\(prev, usedEmails\)/);
+  assert.match(emailTab, /Force replace matching saved emails/);
+  assert.match(emailTab, /r\.canRetry !== false/);
+  assert.match(otpTab, /Force replace matching saved emails/);
+  assert.match(authUtils, /export function parseEmailEntries/);
+  assert.match(authUtils, /export function remainingEmailTextAfterUse/);
 });
 
 test('account generator browser signup uses the encrypted proxy pool when present', () => {

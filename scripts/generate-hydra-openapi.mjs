@@ -129,6 +129,7 @@ const routeDefs = [
   op('post', '/api/accounts/with-credentials', { tag: 'accounts', summary: 'Add an account with login credentials', requestBody: body('Account credentials') }),
   op('post', '/api/accounts/bulk', { tag: 'accounts', summary: 'Create multiple accounts', requestBody: body('Bulk account payload') }),
   op('post', '/api/accounts/bulk-otp-stubs', { tag: 'accounts', summary: 'Create bulk OTP account stubs', requestBody: body('Bulk OTP stub payload') }),
+  op('get', '/api/accounts/magic-link/capability', { tag: 'accounts', summary: 'Check magic-link callback capability' }),
   op('post', '/api/accounts/provision-all', { tag: 'accounts', summary: 'Provision keys for all eligible accounts' }),
   op('post', '/api/accounts/{id}/detect-auth', { tag: 'accounts', summary: 'Detect account auth state', parameters: [idParam('id')] }),
   op('post', '/api/accounts/{id}/login', { tag: 'accounts', summary: 'Start account login', parameters: [idParam('id')], requestBody: body('Login options') }),

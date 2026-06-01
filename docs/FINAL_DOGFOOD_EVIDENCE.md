@@ -1869,3 +1869,14 @@ This evidence file is not release-complete by itself. The release remains not co
   `codesign` still passed for `release/mac-arm64/Hydra.app`, and the bundle
   reports `1.4.3`. Manual packaged GUI, live-flow, screenshot, Touch ID hardware,
   and real Windows UX dogfood boundaries remain explicit.
+- `v1.4.4` Bulk Auth package proof: the canonical local macOS ARM package was
+  rebuilt from the Bulk Auth redirect/dedupe patch and relaunched through
+  LaunchServices. `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`,
+  strict deep codesign, bundle version `1.4.4`, and embedded source inspection
+  all passed. The launched package exposes the new
+  `/api/accounts/magic-link/capability` server route and the renderer bundle
+  contains the `Public callback`, `direct HTTPS code import`, `Force replace
+  matching saved emails`, and `Use OTP or configure a public callback` UI copy.
+  A settled process snapshot after splash reported the expected four Hydra-owned
+  processes with low aggregate CPU. The local ARM zip SHA-256 before cleanup was
+  `eaca25ec73182672456b0fe09c1031e0a4f5b8200efad648b7e9fa7014a6310f`.

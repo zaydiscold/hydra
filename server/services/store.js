@@ -385,7 +385,7 @@ export async function probeSessionLive(userId, id, { signal = null } = {}) {
  * Sessions marked as 'expiring' will be validated via API before use.
  * For ACTUAL session validation, use getStoredSessionStatus() or ensureSession().
  */
-export async function getAccounts(userId) {
+export async function getAccounts(userId, { includePending = false } = {}) {
   const accounts = await prisma.account.findMany({ where: { userId } });
 
   const shaped = await Promise.all(accounts.map(async (account) => {
@@ -395,7 +395,7 @@ export async function getAccounts(userId) {
   }));
 
   // Hide OTP stub accounts that haven't completed sign-in yet.
-  return shaped.filter((a) => !a.pendingVerification);
+  return includePending ? shaped : shaped.filter((a) => !a.pendingVerification);
 }
 
 function shapeAccountMetadata(account, config, managementKey, sessionTokenPlain, sessionDecryptFailed) {
@@ -526,6 +526,42 @@ export async function addAccountWithCredentials(userId, alias, email, password, 
   }
 
   return { id: account.id, alias, email, authMethod: config.authMethod, createdAt: account.createdAt };
+}
+
+export async function replaceAccountWithOtpStub(userId, id, email) {
+  const account = await prisma.account.findFirst({ where: { id, userId } });
+  if (!account) throw new Error('Account not found');
+
+  const config = readConfig(account);
+  const normalizedEmail = String(email || config.email || '').trim().toLowerCase();
+  if (!normalizedEmail) throw new Error('Email is required to replace an account auth stub');
+
+  config.email = normalizedEmail;
+  config.password = null;
+  config.authMethod = 'otp';
+  config.pendingVerification = true;
+  delete config.clientCookie;
+  delete config.clientCookies;
+  delete config.sessionExpiry;
+  delete config.sessionRefreshedAt;
+  delete config.lastLoginAt;
+
+  const updated = await prisma.account.update({
+    where: { id },
+    data: {
+      sessionToken: encrypt(''),
+      config: encryptConfig(config),
+    },
+  });
+  invalidateSessionStatusCache(id);
+
+  return {
+    id: updated.id,
+    alias: updated.alias,
+    email: normalizedEmail,
+    authMethod: 'otp',
+    createdAt: updated.createdAt,
+  };
 }
 
 /**

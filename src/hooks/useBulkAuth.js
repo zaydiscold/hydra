@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import * as api from '../api';
 import { accountNeedsSession } from '../utils/accountSession';
 import { isOtpAuthMethod } from '../utils/authMethod';
+import { remainingEmailTextAfterUse } from '../utils/auth';
 import {
   clearTrackedInterval,
   clearTrackedTimeout,
@@ -10,6 +11,7 @@ import {
 } from '../lib/runtimeDiagnostics.js';
 
 const POLL_INTERVAL = 5000;
+const BULK_MAGIC_LINK_SEND_DELAY_MS = 6500;
 
 function normalizeBulkOtpStubResults(response) {
   const payload = response?.data;
@@ -30,6 +32,7 @@ export function useBulkAuth(addToast) {
   const [creating, setCreating] = useState(false);
   const [localError, setLocalError] = useState('');
   const [errorCopyCommand, setErrorCopyCommand] = useState('');
+  const [bulkForceReplace, setBulkForceReplace] = useState(false);
 
   // Email Link (Magic Link) Tab State
   const [emailLinkRows, setEmailLinkRows] = useState([]);
@@ -235,66 +238,128 @@ export function useBulkAuth(addToast) {
     };
   }, [addToast, appendEmailLinkLog, stopMagicLinkPolling, updateEmailLinkRow]);
 
-  const handleSendMagicLinks = useCallback(async (emails) => {
+  const handleSendMagicLinks = useCallback(async ({ emails, duplicates = [] }) => {
     if (!emails.length) { setLocalError('Paste at least one email.'); return; }
     const signal = lifecycleAbortRef.current?.signal;
     if (!signal || signal.aborted || unmountedRef.current) return;
     resetErrors();
     setCreating(true);
+    if (duplicates.length) {
+      appendEmailLinkLog(`Skipped repeated pasted email(s): ${[...new Set(duplicates)].join(', ')}`);
+    }
 
     try {
-      const res = await api.bulkOtpStubs(emails, signal);
+      const capabilityRes = await api.getMagicLinkCapability(signal);
+      if (signal.aborted || unmountedRef.current) return;
+      const capability = capabilityRes?.data ?? capabilityRes;
+      if (!capability?.available) {
+        const message = capability?.message || 'Email Link is unavailable until Hydra has a public Clerk callback configured.';
+        setLocalError(message);
+        setEmailLinkRows(emails.map((email) => ({
+          email,
+          id: `unavailable-${email}`,
+          signInId: null,
+          status: 'error',
+          message: 'Use OTP or configure a public callback',
+          canRetry: false,
+        })));
+        appendEmailLinkLog(`Email Link unavailable before queue creation: ${message}`);
+        return;
+      }
+
+      const res = await api.bulkOtpStubs(emails, signal, { forceReplace: bulkForceReplace });
       if (signal.aborted || unmountedRef.current) return;
       const stubResults = normalizeBulkOtpStubResults(res);
+      const skippedEmails = stubResults
+        .filter(r => !r.account)
+        .map(r => r.email)
+        .filter(Boolean);
       const newRows = stubResults
         .filter(r => r.account)
-        .map(r => ({ email: r.account.email, id: r.account.id, signInId: null, status: 'idle', message: '' }));
+        .map(r => ({
+          email: r.account.email,
+          id: r.account.id,
+          signInId: null,
+          status: 'idle',
+          message: r.replaced ? 'Replacing existing account sign-in…' : '',
+          replaced: !!r.replaced,
+        }));
 
       if (!newRows.length) {
-        setLocalError('No queue rows were returned. Check server logs for bulk-otp-stubs processing.');
+        const duplicateSkips = stubResults.filter(r => r.skipped === 'duplicate_email').map(r => r.email).filter(Boolean);
+        setLocalError(duplicateSkips.length
+          ? `All pasted rows already exist. Enable Force replace to rebuild those sign-in stubs: ${duplicateSkips.join(', ')}`
+          : 'No queue rows were returned. Check server logs for bulk-otp-stubs processing.');
         setCreating(false);
         return;
       }
 
       setEmailLinkRows(newRows);
-      appendEmailLinkLog(`Created ${newRows.length} account stub(s) — sending magic links in parallel…`);
+      const replacedCount = newRows.filter((r) => r.replaced).length;
+      if (skippedEmails.length) appendEmailLinkLog(`Skipped existing email(s): ${skippedEmails.join(', ')}`);
+      appendEmailLinkLog(`Prepared ${newRows.length} account row(s)${replacedCount ? ` (${replacedCount} replaced)` : ''} — sending one at a time with rate-limit pacing…`);
 
-      await Promise.all(
-        newRows.map((row, idx) =>
-          waitForMagicLinkSendDelay(idx * 400).then(async (shouldSend) => {
-            if (!shouldSend || signal.aborted || unmountedRef.current) return;
-            updateEmailLinkRow(row.email, { status: 'sending', message: 'Sending…' });
-            try {
-              const res = await api.sendMagicLink(row.id, row.email, signal);
-              if (signal.aborted || unmountedRef.current) return;
-              const signInId = res?.data?.signInId ?? res?.signInId;
-              updateEmailLinkRow(row.email, { status: 'sent', signInId, message: '📧 Check inbox — click the link' });
-              appendEmailLinkLog(`magic link sent → ${row.email}`);
-              if (signInId) startMagicLinkPolling(row.email, row.id, signInId);
-            } catch (err) {
-              if (signal.aborted || unmountedRef.current) return;
-              const errMsg = api.formatApiErrorMessage(err);
-              updateEmailLinkRow(row.email, { status: 'error', message: errMsg });
-              appendEmailLinkLog(`✗ magic link failed → ${row.email}: ${errMsg}`);
+      const usedEmails = [];
+      for (let idx = 0; idx < newRows.length; idx += 1) {
+        const row = newRows[idx];
+        const shouldSend = await waitForMagicLinkSendDelay(idx === 0 ? 0 : BULK_MAGIC_LINK_SEND_DELAY_MS);
+        if (!shouldSend || signal.aborted || unmountedRef.current) return;
+        updateEmailLinkRow(row.email, { status: 'sending', message: 'Sending…' });
+        try {
+          const res = await api.sendMagicLink(row.id, row.email, signal);
+          if (signal.aborted || unmountedRef.current) return;
+          const signInId = res?.data?.signInId ?? res?.signInId;
+          updateEmailLinkRow(row.email, { status: 'sent', signInId, message: 'Check inbox — click the link' });
+          appendEmailLinkLog(`magic link sent → ${row.email}`);
+          usedEmails.push(row.email);
+          if (signInId) startMagicLinkPolling(row.email, row.id, signInId);
+        } catch (err) {
+          if (signal.aborted || unmountedRef.current) return;
+          const errMsg = api.formatApiErrorMessage(err);
+          updateEmailLinkRow(row.email, { status: 'error', message: errMsg });
+          appendEmailLinkLog(`✗ magic link failed → ${row.email}: ${errMsg}`);
+          if (err.code === 'MAGIC_LINK_CALLBACK_UNAVAILABLE') {
+            setLocalError(errMsg);
+            for (const pendingRow of newRows.slice(idx + 1)) {
+              updateEmailLinkRow(pendingRow.email, {
+                status: 'error',
+                message: 'Email Link unavailable until HYDRA_MAGIC_LINK_CALLBACK_ORIGIN is configured',
+              });
             }
-          })
-        )
-      );
+            break;
+          }
+        }
+      }
       if (signal.aborted || unmountedRef.current) return;
-      addToast?.(`Sent magic links to ${newRows.length} account(s)`, 'info');
+      if (usedEmails.length) setPasteText((prev) => remainingEmailTextAfterUse(prev, usedEmails));
+      addToast?.(`Magic-link send finished: ${usedEmails.length}/${newRows.length} sent`, usedEmails.length ? 'info' : 'warning');
     } catch (err) {
       if (signal.aborted || unmountedRef.current) return;
       setLocalError(api.formatApiErrorMessage(err));
     } finally {
       if (!unmountedRef.current) setCreating(false);
     }
-  }, [addToast, appendEmailLinkLog, resetErrors, startMagicLinkPolling, updateEmailLinkRow, waitForMagicLinkSendDelay]);
+  }, [addToast, appendEmailLinkLog, bulkForceReplace, resetErrors, setPasteText, startMagicLinkPolling, updateEmailLinkRow, waitForMagicLinkSendDelay]);
 
   const handleResendMagicLink = useCallback(async (row) => {
     const signal = lifecycleAbortRef.current?.signal;
     if (!signal || signal.aborted || unmountedRef.current) return;
     updateEmailLinkRow(row.email, { status: 'sending', message: 'Re-sending…' });
     try {
+      const capabilityRes = await api.getMagicLinkCapability(signal);
+      if (signal.aborted || unmountedRef.current) return;
+      const capability = capabilityRes?.data ?? capabilityRes;
+      if (!capability?.available) {
+        const message = capability?.message || 'Email Link is unavailable until Hydra has a public Clerk callback configured.';
+        setLocalError(message);
+        updateEmailLinkRow(row.email, {
+          status: 'error',
+          message: 'Use OTP or configure a public callback',
+          canRetry: false,
+        });
+        appendEmailLinkLog(`Email Link unavailable before retry: ${message}`);
+        return;
+      }
       const res = await api.sendMagicLink(row.id, row.email, signal);
       if (signal.aborted || unmountedRef.current) return;
       const signInId = res?.data?.signInId ?? res?.signInId;
@@ -309,7 +374,7 @@ export function useBulkAuth(addToast) {
 
   // --- OTP Logic ---
 
-  const handleCreateOtpStubs = useCallback(async (emails) => {
+  const handleCreateOtpStubs = useCallback(async ({ emails, duplicates = [] }) => {
     if (!emails.length) { setLocalError('Add at least one email.'); return; }
     const signal = lifecycleAbortRef.current?.signal;
     if (!signal || signal.aborted || unmountedRef.current) return;
@@ -318,16 +383,22 @@ export function useBulkAuth(addToast) {
     setOtpStubSummary(null);
     setOtpSignInId('');
     setOtpCode('');
+    if (duplicates.length) {
+      appendOtpLog(`Skipped repeated pasted email(s): ${[...new Set(duplicates)].join(', ')}`);
+    }
     try {
-      const res = await api.bulkOtpStubs(emails, signal);
+      const res = await api.bulkOtpStubs(emails, signal, { forceReplace: bulkForceReplace });
       if (signal.aborted || unmountedRef.current) return;
       const results = normalizeBulkOtpStubResults(res);
-      let created = 0, reused = 0, dup = 0, failed = 0;
+      let created = 0, reused = 0, replaced = 0, dup = 0, failed = 0;
       const nextQueue = [];
+      const usedEmails = [];
       for (const row of results) {
         if (row.account) {
-          if (row.reused) reused++;
+          if (row.replaced) replaced++;
+          else if (row.reused) reused++;
           else created++;
+          usedEmails.push(row.account.email);
           nextQueue.push({
             id: row.account.id,
             alias: row.account.alias,
@@ -336,6 +407,7 @@ export function useBulkAuth(addToast) {
             skipped: false,
             managementKey: null,
             reused: !!row.reused,
+            replaced: !!row.replaced,
             fromExisting: !!row.reused,
           });
         } else {
@@ -346,8 +418,9 @@ export function useBulkAuth(addToast) {
       }
       setOtpQueue(nextQueue);
       setOtpCurrentIdx(0);
-      setOtpStubSummary({ created, reused, duplicateEmail: dup, failed, inputLines: emails.length, resultRows: results.length });
-      appendOtpLog(`Queue built in pasted order: ${created} new, ${reused} reused, ${dup} dup-skip, ${failed} errors`);
+      setOtpStubSummary({ created, reused, replaced, duplicateEmail: dup, failed, inputLines: emails.length, resultRows: results.length });
+      appendOtpLog(`Queue built in pasted order: ${created} new, ${reused} reused, ${replaced} replaced, ${dup} dup-skip, ${failed} errors`);
+      if (usedEmails.length) setPasteText((prev) => remainingEmailTextAfterUse(prev, usedEmails));
       if (nextQueue.length) addToast?.(`Created ${nextQueue.length} OTP row(s)`, 'success');
     } catch (err) {
       if (signal.aborted || unmountedRef.current) return;
@@ -356,7 +429,7 @@ export function useBulkAuth(addToast) {
     } finally {
       if (!unmountedRef.current) setCreating(false);
     }
-  }, [addToast, appendOtpLog, resetErrors]);
+  }, [addToast, appendOtpLog, bulkForceReplace, resetErrors, setPasteText]);
 
   const handleSendOtpCode = useCallback(async (current) => {
     if (!current) return;
@@ -534,6 +607,8 @@ export function useBulkAuth(addToast) {
   return {
     pasteText, setPasteText,
     creating,
+    bulkForceReplace,
+    setBulkForceReplace,
     localError, resetErrors,
     errorCopyCommand,
 

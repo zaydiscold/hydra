@@ -39,6 +39,29 @@ function cssRuleBlock(css, selector) {
   return tail.slice(0, end + 2);
 }
 
+test('bulk email parsing preserves duplicate remainders when used rows are cleared', async () => {
+  const { parseEmailEntries, remainingEmailTextAfterUse } = await import('../../src/utils/auth.js');
+  const parsed = parseEmailEntries('A@Example.com\na@example.com\nb@example.com');
+
+  assert.deepEqual(parsed.emails, ['a@example.com', 'b@example.com']);
+  assert.deepEqual(parsed.duplicates, ['a@example.com']);
+  assert.equal(
+    remainingEmailTextAfterUse('a@example.com\na@example.com\nb@example.com', ['a@example.com']),
+    'a@example.com\nb@example.com',
+  );
+});
+
+test('bulk import copy points email link users at callback setup instead of parallel sending', () => {
+  const page = readRepoFile('src/pages/BulkAuthWizard.jsx');
+  const tab = readRepoFile('src/components/EmailLinkTab.jsx');
+
+  assert.match(page, /Public callback/);
+  assert.match(page, /direct HTTPS code import/);
+  assert.match(tab, /2\. Send status/);
+  assert.doesNotMatch(page, /One click link/);
+  assert.doesNotMatch(tab, /Parallel status/);
+});
+
 test('Electron app chrome draws its own drag strip on macOS with traffic-light clearance', () => {
   const app = readRepoFile('src/App.jsx');
   const css = readRepoFile('src/index.css');

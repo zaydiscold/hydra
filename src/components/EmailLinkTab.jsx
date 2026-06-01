@@ -1,5 +1,5 @@
 import React from 'react';
-import { parseEmails } from '../utils/auth';
+import { parseEmailEntries } from '../utils/auth';
 import DevBackendHint from '../components/DevBackendHint';
 
 export default function EmailLinkTab({
@@ -10,13 +10,14 @@ export default function EmailLinkTab({
   logLines,
   localError,
   errorCopyCommand,
+  forceReplace,
+  setForceReplace,
   onSend,
   onResend
 }) {
   const handleCreate = (e) => {
     e.preventDefault();
-    const emails = parseEmails(pasteText);
-    onSend(emails);
+    onSend(parseEmailEntries(pasteText));
   };
 
   return (
@@ -34,6 +35,23 @@ export default function EmailLinkTab({
             spellCheck={false}
             style={{ fontFamily: 'var(--font-mono)', minHeight: 100 }}
           />
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 'var(--space-sm)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.82rem',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={forceReplace}
+              onChange={(e) => setForceReplace(e.target.checked)}
+            />
+            Force replace matching saved emails
+          </label>
           {localError && <DevBackendHint message={localError} copyCommand={errorCopyCommand} />}
           <button
             type="submit"
@@ -42,14 +60,14 @@ export default function EmailLinkTab({
             style={{ marginTop: 'var(--space-sm)' }}
             disabled={creating}
           >
-            {creating ? 'Creating stubs & sending…' : 'Send all Magic Links'}
+            {creating ? 'Preparing queue…' : 'Send Magic Links'}
           </button>
         </form>
       </section>
 
       {rows.length > 0 && (
         <section className="card">
-          <h2 style={{ fontSize: '1rem', marginBottom: 'var(--space-sm)' }}>2. Parallel status</h2>
+          <h2 style={{ fontSize: '1rem', marginBottom: 'var(--space-sm)' }}>2. Send status</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {rows.map((r) => (
               <div
@@ -76,7 +94,7 @@ export default function EmailLinkTab({
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 }}>{r.message}</div>
                 </div>
-                {r.status === 'error' && (
+                {r.status === 'error' && r.canRetry !== false && (
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => onResend(r)}>
                     Retry
                   </button>
