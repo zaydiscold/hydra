@@ -1489,8 +1489,9 @@ closed-app CLI commands, tests, and repo-local documentation.
   deep codesign passed. Docker Desktop was started only long enough for local
   Docker smoke to pass compose validation, image build, and a real
   containerized Playwright Chromium launch; the run left no Hydra container or
-  network, and Docker stopped again. OpenAPI regeneration retained `84`
-  operations with no tracked drift. `release/` again contains only the
+  network. The daemon socket stopped first; `docker desktop stop` then removed
+  the remaining Desktop helper processes in one second. OpenAPI regeneration
+  retained `84` operations with no tracked drift. `release/` again contains only the
   canonical `mac-arm64/Hydra.app`; Spotlight resolves exactly that one app;
   `hydra doctor --json` reports four owned processes, `0.0%` CPU, and zero
   stale profiles.

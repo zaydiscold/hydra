@@ -2124,7 +2124,8 @@ This evidence file is not release-complete by itself. The release remains not co
   ARM package smoke to pass and then moved back into the evidence directory;
   strict deep codesign passed. Docker Desktop was started only for
   `npm run docker:smoke`, which passed image build and a real containerized
-  Playwright Chromium launch, left no Hydra container or network, and was
-  stopped again. OpenAPI regeneration retained `84` operations without tracked
-  drift. Final state: one canonical Spotlight-visible app, four Hydra-owned
+  Playwright Chromium launch and left no Hydra container or network. The
+  daemon socket stopped first; `docker desktop stop` then removed the remaining
+  Desktop helper processes in one second. OpenAPI regeneration retained `84`
+  operations without tracked drift. Final state: one canonical Spotlight-visible app, four Hydra-owned
   processes, `0.0%` CPU, and zero stale profiles.
