@@ -1336,3 +1336,12 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   0 missing / 0 blockers`), and diff check passed. The complete no-Docker
   source chain then passed: lint, full `npm test`, gate (`12/12`), OpenAPI
   generation (`83 operations`), and diff check.
+- Docker-audit-predicate checkpoint
+  `81989ec6766c1d82f464d99905b521dea03728ea` used `[skip-bump]`;
+  Auto-version run `26730171287` skipped, CI run `26730171273` passed, and
+  Docker workflow run `26730171272` passed both runtime smoke and registry
+  image push. GitHub emitted its upstream Node 20 action-runtime deprecation
+  warning for the current `docker/build-push-action@v6`,
+  `docker/login-action@v3`, `docker/metadata-action@v5`, and
+  `docker/setup-buildx-action@v3` releases while forcing them onto Node 24;
+  the Hydra-owned workflow remains green.

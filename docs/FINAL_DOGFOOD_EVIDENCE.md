@@ -1220,3 +1220,10 @@ This evidence file is not release-complete by itself. The release remains not co
   and diff check passed. The complete no-Docker source chain then passed:
   lint, full `npm test`, gate (`12/12`), OpenAPI generation (`83 operations`),
   and diff check.
+- Docker-audit-predicate checkpoint
+  `81989ec6766c1d82f464d99905b521dea03728ea` used `[skip-bump]`;
+  Auto-version run `26730171287` skipped, CI run `26730171273` passed, and
+  Docker workflow run `26730171272` passed both runtime smoke and registry
+  image push. GitHub's remaining Node 20 action-runtime warning belongs to the
+  current upstream Docker helper actions, which GitHub forced onto Node 24;
+  the Hydra-owned workflow remains green.
