@@ -2091,3 +2091,15 @@ This evidence file is not release-complete by itself. The release remains not co
   follow-up profile after the adjacent grammar lock retained four processes
   and zero stale profiles across 11 more samples at `0.0-0.4%` CPU (`0.073%`
   average, `0.0%` end) with `509345792 -> 513179648` bytes RSS (`+3833856`).
+- Account-proxy acceptance copy recheck: Settings now tells operators that the
+  encrypted per-task pool applies to direct HTTPS and browser fallback paths,
+  matching the existing shared `automationRoute` wiring. Focused proxy tests
+  passed `5/5`, background contracts passed `33/33`, real Express integration
+  passed `10/10`, and renderer static coverage passed `46/46`. The read-only
+  post-copy profile under
+  `/private/tmp/hydra-v147-post-proxy-copy-profile-20260601T230014Z` sampled
+  the still-installed exact-public `v1.4.7` package 11 times: four owned
+  processes, zero stale profiles, `0.0-0.3%` CPU (`0.036%` average,
+  `0.0%` end), and `513490944 -> 513835008` bytes RSS (`+344064`). This is
+  running-package no-regression evidence; the source copy patch is not claimed
+  as released.

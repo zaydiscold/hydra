@@ -434,6 +434,7 @@ test('settings exposes encrypted account proxy pool controls', () => {
   assert.match(settings, /ip:port:user:pass/);
   assert.match(settings, /Save Proxies/);
   assert.match(settings, /Stored encrypted/);
+  assert.match(settings, /including direct HTTPS and browser fallback/);
   assert.match(settings, /api\.getAccountProxies\(\)/);
   assert.match(settings, /api\.setAccountProxies\(accountProxies\)/);
   assert.match(api, /getAccountProxies/);

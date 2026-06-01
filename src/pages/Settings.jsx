@@ -295,7 +295,7 @@ export default function Settings({ addToast }) {
               {proxySaving ? <><div className="spinner-sm" /> Saving...</> : 'Save Proxies'}
             </button>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
-              Used randomly for new account signup, browser provisioning, and browser code redemption. Stored encrypted.
+              Used randomly per signup, provisioning, and redemption task, including direct HTTPS and browser fallback. Stored encrypted.
             </span>
           </SettingsActionGroup>
         </div>
