@@ -1450,7 +1450,10 @@ closed-app CLI commands, tests, and repo-local documentation.
   11 samples at `0.0-0.4%` CPU (`0.036%` average, `0.0%` end) with
   `621101056 -> 523845632` bytes RSS (`-97255424`). This does not claim the
   copy-only source patch is already released. The durable note is
-  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`.
+  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`. A second read-only
+  profile after the grammar lock retained four processes and zero stale
+  profiles across 11 samples at `0.0-0.4%` CPU (`0.073%` average, `0.0%` end)
+  with `509345792 -> 513179648` bytes RSS (`+3833856`).
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

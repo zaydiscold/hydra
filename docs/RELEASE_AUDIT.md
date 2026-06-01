@@ -2568,4 +2568,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `621101056 -> 523845632` bytes RSS (`-97255424`). This is honest
   no-regression evidence for the running public package; the copy-only source
   patch is not claimed as released. The durable note is
-  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`.
+  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`. A second read-only
+  follow-up profile after the adjacent grammar lock sampled the same installed
+  package 11 times with four owned processes, zero stale profiles,
+  `0.0-0.4%` CPU (`0.073%` average, `0.0%` end), and
+  `509345792 -> 513179648` bytes RSS (`+3833856`).

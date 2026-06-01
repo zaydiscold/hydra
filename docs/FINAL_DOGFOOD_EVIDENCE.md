@@ -2087,4 +2087,7 @@ This evidence file is not release-complete by itself. The release remains not co
   four owned processes, zero stale profiles, `0.0-0.4%` CPU (`0.036%`
   average, `0.0%` end), and `621101056 -> 523845632` bytes RSS
   (`-97255424`). This records running-package no-regression evidence without
-  claiming that the copy-only source patch has shipped.
+  claiming that the copy-only source patch has shipped. A second read-only
+  follow-up profile after the adjacent grammar lock retained four processes
+  and zero stale profiles across 11 more samples at `0.0-0.4%` CPU (`0.073%`
+  average, `0.0%` end) with `509345792 -> 513179648` bytes RSS (`+3833856`).

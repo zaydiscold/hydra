@@ -149,3 +149,10 @@ profiles throughout; CPU stayed within `0.0-0.4%`, averaged `0.036%`, and
 ended at `0.0%`; RSS moved `621101056 -> 523845632` bytes (`-97255424`).
 This is conservative no-regression evidence for the running public package,
 not a claim that the copy-only source patch has already shipped.
+
+After the adjacent grammar lock, the read-only follow-up profile under
+`/private/tmp/hydra-v147-post-bulk-grammar-profile-20260601T225030Z`
+sampled the same still-installed exact-public package 11 more times at
+30-second intervals. It retained four Hydra-owned processes and zero stale
+profiles throughout; CPU stayed within `0.0-0.4%`, averaged `0.073%`, and
+ended at `0.0%`; RSS moved `509345792 -> 513179648` bytes (`+3833856`).
