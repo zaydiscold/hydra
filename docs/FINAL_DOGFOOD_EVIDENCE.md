@@ -1468,3 +1468,36 @@ This evidence file is not release-complete by itself. The release remains not co
   used `[skip-bump]`; Auto-version run `26734703372` skipped, CI run
   `26734703373` passed, and Docker workflow `26734703374` passed runtime
   smoke and registry image push.
+- Persistent offline and restart-required recovery frames now settle to a
+  completed static meter instead of sweeping forever. Normal loading states
+  keep the indeterminate meter. The benchmark under
+  `/private/tmp/hydra-recovery-frame-animation-benchmark-20260601T042618Z`
+  records `2 -> 0` persistent recovery-meter animations while preserving the
+  loading cue; UI static contracts passed `41/41`.
+- Native shutdown evidence is under
+  `/private/tmp/hydra-v140-recovery-frame-rebuild-shutdown-20260601T042730Z`;
+  four package processes exited immediately. The current-source ARM package
+  rebuilt and passed package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), and embedded renderer CSS inspection. The local ARM zip SHA-256
+  was
+  `873f89009841808a761ceb276de34e8471eceb024d5e1a2c2191718dcbbf4641`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-recovery-frame-package-20260601T042948Z`; `release/` again
+  contains only `mac-arm64/Hydra.app`, Spotlight resolves exactly one Hydra
+  bundle, and Docker is stopped.
+- The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v140-recovery-frame-idle-reprofile-20260601T043139Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across 11 five-minute samples. CPU ranged from `0.000%` to `0.100%`,
+  averaged `0.009%`, and ended at `0.000%`; RSS moved from `606336 KiB` to
+  `610896 KiB` (`+4560 KiB`).
+- Rebuilt-package inspection verified the Touch ID bridge, fail-closed token
+  gate, native macOS prompt path, Settings controls, and 24-hour password
+  token wording. The focused desktop isolation chain passed `28/28`.
+  Hardware approval remains manual: a post-baseline Computer Use retry again
+  timed out after `120s`, left external `SkyComputerUseService` at `28.9%`
+  CPU, and drove Hydra's main process to `67.3%` through HIServices
+  accessibility enumeration. Terminating only the external helper restored
+  the unchanged four-process app immediately to `0.0%` CPU with zero stale
+  profiles. Raw owner-only evidence is under
+  `/private/tmp/hydra-v140-recovery-frame-cua-retry-20260601T043921Z`.

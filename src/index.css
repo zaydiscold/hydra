@@ -3299,6 +3299,14 @@ select:-webkit-autofill {
   color: var(--status-warning);
 }
 
+.hydra-load-frame--error .hydra-load-meter i,
+.hydra-load-frame--warning .hydra-load-meter i {
+  width: 100%;
+  opacity: 0.72;
+  transform: translateX(0);
+  animation: none;
+}
+
 .hydra-letter-rain {
   display: none;
 }

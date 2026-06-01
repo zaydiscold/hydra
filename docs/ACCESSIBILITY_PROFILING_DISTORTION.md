@@ -141,3 +141,34 @@ because the timed-out session never became active, and an AppKit-foregrounded
 Quartz `CGEvent` scan across the safe navigation band left the packaged native
 window title unchanged. Keep native interactive route review manual on this
 machine unless the Computer Use accessibility attach is repaired.
+
+## Current-Source Recovery-Frame Retry
+
+The rebuilt local `v1.4.0` recovery-frame package reproduced the same
+environment boundary on 2026-06-01 after an uncontaminated five-minute idle
+profile. `get_app_state("com.zayd.hydra")` timed out after `120s`; external
+`SkyComputerUseService` held `28.9%` CPU; and Hydra's otherwise-idle main
+process held `67.3%`. GPU, network, and renderer helpers remained idle.
+
+Fresh five-second stack samples again traversed HIServices and AppKit
+accessibility enumeration, including `_AXXMIGCopyAttributeNames`,
+`_XCopyMultipleAttributeValues`, `mshMIGPerform`, and
+`NSAccessibilityEntryPointAttributeNames`.
+
+Terminating only the external helper restored the unchanged four-process
+Hydra tree immediately to `0.0%` aggregate CPU with zero stale Hydra
+Playwright profiles. Raw evidence is under:
+
+```text
+/private/tmp/hydra-v140-recovery-frame-cua-retry-20260601T043921Z
+```
+
+The pre-attach anchored idle profile is under:
+
+```text
+/private/tmp/hydra-v140-recovery-frame-idle-reprofile-20260601T043139Z
+```
+
+This keeps native route review and Touch ID fingerprint approval manual. It
+does not weaken the current-source package proof or indicate a Hydra-owned
+idle regression.

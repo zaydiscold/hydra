@@ -1669,3 +1669,47 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   used `[skip-bump]`; Auto-version run `26734703372` skipped, CI run
   `26734703373` passed, and Docker workflow run `26734703374` passed runtime
   smoke and registry image push.
+- 2026-06-01 actionable recovery-frame animation hardening: persistent
+  offline and restart-required load frames no longer keep the indeterminate
+  meter sweeping forever. Error and warning tones settle to a completed
+  static meter while ordinary loading states retain the bounded visual cue.
+  `server/tests/ui-static-contract.test.mjs` locks the distinction down.
+  The deterministic benchmark under
+  `/private/tmp/hydra-recovery-frame-animation-benchmark-20260601T042618Z`
+  reduces persistent recovery-meter animations from `2` to `0` while
+  preserving the normal loading animation. UI static contracts passed
+  `41/41`; lint, full `npm test`, build, gate (`12/12`), OpenAPI generation
+  (`83 operations`), audit, and diff check passed before the package rebuild.
+- 2026-06-01 recovery-frame current-source package proof: native quit removed
+  the prior four package processes immediately with evidence under
+  `/private/tmp/hydra-v140-recovery-frame-rebuild-shutdown-20260601T042730Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), and embedded renderer CSS inspection passed. The local ARM zip
+  SHA-256 was
+  `873f89009841808a761ceb276de34e8471eceb024d5e1a2c2191718dcbbf4641`;
+  it is current-source local proof, not a replacement public asset.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-recovery-frame-package-20260601T042948Z`; `release/` again
+  contains only `mac-arm64/Hydra.app`, Spotlight resolves exactly that one
+  bundle, and local Docker remains stopped.
+- 2026-06-01 recovery-frame post-rebuild profile:
+  `/private/tmp/hydra-v140-recovery-frame-idle-reprofile-20260601T043139Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across 11 untouched samples over five minutes. CPU ranged from `0.000%` to
+  `0.100%`, averaged `0.009%`, and ended at `0.000%`; RSS moved from
+  `606336 KiB` to `610896 KiB` (`+4560 KiB`).
+- 2026-06-01 rebuilt-package Touch ID inspection and Computer Use retry: the
+  packaged preload, IPC handlers, and biometric implementation still expose
+  the fail-closed auth-token gate, macOS `canPromptTouchID()` /
+  `promptTouchID()` path, Settings status, opt-in toggle, `Test Prompt`, and
+  24-hour unlock-token copy. The focused desktop isolation chain passed
+  `28/28`. After the clean idle profile, one controlled
+  `get_app_state("com.zayd.hydra")` retry again timed out after `120s`.
+  External `SkyComputerUseService` held `28.9%` CPU and Hydra's otherwise
+  idle main process held `67.3%`; its GPU, network, and renderer helpers
+  stayed idle. Five-second samples traversed HIServices accessibility
+  attribute enumeration. Terminating only the external helper restored the
+  unchanged four-process Hydra tree immediately to `0.0%` CPU with zero
+  stale profiles. Evidence is under
+  `/private/tmp/hydra-v140-recovery-frame-cua-retry-20260601T043921Z`.
+  Fingerprint approval and interactive route review remain manual.

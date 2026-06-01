@@ -138,6 +138,16 @@ test('steady status dots keep their glow without perpetual compositor animation'
   assert.doesNotMatch(cssRuleBlock(css, '\n.status-dot.loading {'), /infinite/);
 });
 
+test('actionable recovery frames settle instead of sweeping forever', () => {
+  const css = readRepoFile('src/index.css');
+
+  const selector = '.hydra-load-frame--error .hydra-load-meter i,\n.hydra-load-frame--warning .hydra-load-meter i {';
+  const recoveryMeter = cssRuleBlock(css, selector);
+  assert.match(recoveryMeter, /width:\s*100%/);
+  assert.match(recoveryMeter, /transform:\s*translateX\(0\)/);
+  assert.match(recoveryMeter, /animation:\s*none/);
+});
+
 test('splash owns one throttled physics and render loop', () => {
   const windowsJs = readRepoFile('electron/app/windows.js');
   const splashLabels = [...windowsJs.matchAll(/\{ text: '([^']+)',\s+tag: '(?:brand|model)'/g)]

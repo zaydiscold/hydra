@@ -1027,6 +1027,36 @@ closed-app CLI commands, tests, and repo-local documentation.
   hash note does not stale the desktop payload. Auto-version run
   `26734703372` skipped, CI run `26734703373` passed, and Docker workflow
   `26734703374` passed runtime smoke and registry image push.
+- Persistent recovery frames received one more current-source efficiency
+  refinement: offline and restart-required frames now settle to a static
+  completed meter instead of sweeping forever, while ordinary loading keeps
+  its progress animation. The deterministic benchmark under
+  `/private/tmp/hydra-recovery-frame-animation-benchmark-20260601T042618Z`
+  records `2 -> 0` persistent recovery animations. UI static contracts now
+  pass `41/41`; the complete source chain passed before rebuilding.
+- The recovery-frame package rebuild passed ARM smoke, strict deep
+  `codesign`, bundle version (`1.4.0`), and embedded CSS inspection. The
+  current-source local ARM zip SHA-256 was
+  `873f89009841808a761ceb276de34e8471eceb024d5e1a2c2191718dcbbf4641`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-recovery-frame-package-20260601T042948Z`; `release/`
+  contains only `mac-arm64/Hydra.app`, Spotlight resolves exactly one Hydra
+  bundle, and Docker is stopped.
+- The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v140-recovery-frame-idle-reprofile-20260601T043139Z`
+  retained four Hydra-owned processes and zero stale profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.100%`, averaged
+  `0.009%`, and ended at `0.000%`; RSS changed by `+4560 KiB`.
+- Rebuilt-package Touch ID inspection confirmed the complete bridge,
+  fail-closed token gate, Settings controls, native macOS prompt path, and
+  24-hour password-token wording. The focused desktop isolation chain passed
+  `28/28`. A controlled Computer Use retry after the clean baseline still
+  timed out after `120s`; external `SkyComputerUseService` held `28.9%` CPU
+  and forced Hydra's main process to `67.3%` through HIServices accessibility
+  enumeration. Terminating only that helper restored the unchanged four-PID
+  app to `0.0%` CPU with zero stale profiles. Raw evidence is under
+  `/private/tmp/hydra-v140-recovery-frame-cua-retry-20260601T043921Z`.
+  Native interactive review and Touch ID fingerprint approval remain manual.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
