@@ -732,7 +732,7 @@ export async function startEmailOTP(email, { signal = null } = {}) {
  * Hydra's callback handler (`GET /api/auth/magic-callback`) completes the sign-in.
  *
  * @param {string} email
- * @param {string} redirectUrl  e.g. "http://localhost:3001/api/auth/magic-callback?accountId=xxx"
+ * @param {string} redirectUrl  owner-allowlisted HTTPS callback carrying Hydra's opaque linkId
  * @returns {{ signInId, clientCookie, emailAddressId }}
  */
 export async function sendMagicLink(email, redirectUrl, { signal = null } = {}) {

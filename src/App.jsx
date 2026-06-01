@@ -584,6 +584,7 @@ export default function App() {
   const [upstreamHealth, setUpstreamHealth] = useState(null);
   const recentToastsRef = useRef(new Map());
   const authStateRef = useRef(authState);
+  const authBootstrapRef = useRef(0);
   const upstreamHealthInFlightRef = useRef(false);
   const { setOwnedTimeout } = useOwnedTimeouts('App.toasts');
   const navigate = useNavigate();
@@ -647,49 +648,76 @@ export default function App() {
   }, []);
 
   const checkAuth = useCallback(async () => {
-    try {
-      const storedToken = await api.hydrateToken();
-      const res = await api.getAuthStatus();
-      const payload = res?.data ?? res ?? {};
+    const bootstrapId = ++authBootstrapRef.current;
+    const isCurrentBootstrap = () => bootstrapId === authBootstrapRef.current;
+    const transitionAuthState = (nextState, nextError = null) => {
+      if (!isCurrentBootstrap()) return 'stale';
+      authStateRef.current = nextState;
+      setAuthError(nextError);
+      setAuthState(nextState);
+      return nextState;
+    };
+    const renderAuthPayload = (payload) => {
       // Server wraps response: { success, data: { setup, authenticated }, timestamp }
       const { setup, authenticated, error, needsRestart } = payload || {};
 
-      if (storedToken && !authenticated) {
-        await api.clearToken();
-      }
-
       if (needsRestart) {
-        setAuthError('Hydra requires a restart to regenerate local secrets after a reset.');
-        setAuthState('restart');
-        return;
+        return transitionAuthState('restart', 'Hydra requires a restart to regenerate local secrets after a reset.');
       }
 
       if (error) {
-        setAuthError('Hydra backend is unavailable or storage is unreadable. Please restart the server.');
-        setAuthState('offline');
+        return transitionAuthState('offline', 'Hydra backend is unavailable or storage is unreadable. Please restart the server.');
+      }
+
+      if (authenticated) return transitionAuthState('app');
+      return transitionAuthState(setup ? 'login' : 'setup');
+    };
+
+    try {
+      // Render the server-known state before waiting on the optional native
+      // Touch ID gate. A pending macOS prompt must never leave the main window
+      // as an empty background; password fallback remains usable immediately.
+      const initialRes = await api.getAuthStatus();
+      if (!isCurrentBootstrap()) return;
+      const initialPayload = initialRes?.data ?? initialRes ?? {};
+      const initialState = renderAuthPayload(initialPayload);
+      if (initialState !== 'login') return;
+
+      let storedToken = null;
+      try {
+        storedToken = await api.hydrateToken();
+      } catch (err) {
+        logger.warn('Persisted desktop unlock unavailable:', err.message);
+        await api.clearToken().catch((clearErr) => {
+          logger.warn('Failed to clear unusable persisted desktop unlock:', clearErr.message);
+        });
         return;
       }
 
-      if (authenticated) {
-        setAuthError(null);
-        setAuthState('app');
-      } else if (setup) {
-        // Account exists — show login
-        setAuthError(null);
-        setAuthState('login');
-      } else {
-        // No account yet — show first-time setup
-        setAuthError(null);
-        setAuthState('setup');
+      // The user may have typed their password while the biometric prompt was
+      // open. Do not let a late native-token result overwrite that newer login.
+      if (!storedToken || !isCurrentBootstrap() || authStateRef.current !== 'login') return;
+
+      try {
+        const hydratedRes = await api.getAuthStatus();
+        if (!isCurrentBootstrap() || authStateRef.current !== 'login') return;
+        const hydratedPayload = hydratedRes?.data ?? hydratedRes ?? {};
+        const hydratedState = renderAuthPayload(hydratedPayload);
+        if (hydratedState !== 'app') await api.clearToken();
+      } catch (err) {
+        logger.warn('Persisted desktop unlock validation failed:', err.message);
+        await api.clearToken().catch((clearErr) => {
+          logger.warn('Failed to clear rejected persisted desktop unlock:', clearErr.message);
+        });
       }
     } catch (err) {
       logger.warn('Auth check failed:', err.message);
-      setAuthError(
+      transitionAuthState(
+        'offline',
         import.meta.env.DEV
           ? 'Hydra backend is offline. From the project folder run npm run dev (starts API + UI), then refresh this page.'
           : 'Hydra backend is offline. Start the local server and refresh this page.',
       );
-      setAuthState('offline');
     }
   }, []);
 
@@ -766,12 +794,18 @@ export default function App() {
     return off;
   }, [addToast]);
 
-  const handleAuthSuccess = useCallback(() => setAuthState('app'), []);
+  const setManualAuthState = useCallback((nextState) => {
+    authBootstrapRef.current += 1;
+    authStateRef.current = nextState;
+    setAuthState(nextState);
+  }, []);
+
+  const handleAuthSuccess = useCallback(() => setManualAuthState('app'), [setManualAuthState]);
 
   const handleRestartRequired = useCallback((message) => {
     if (message) setAuthError(message);
-    setAuthState('restart');
-  }, []);
+    setManualAuthState('restart');
+  }, [setManualAuthState]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -781,9 +815,9 @@ export default function App() {
       addToast('Server logout failed; local session was cleared.', 'warning');
     }
     await api.clearToken();
-    setAuthState('login');
+    setManualAuthState('login');
     navigate('/dashboard');
-  }, [addToast, navigate]);
+  }, [addToast, navigate, setManualAuthState]);
 
   const handleShutdown = useCallback(() => setShutdownConfirm(true), []);
   const handleHideToBackground = useCallback(async () => {
@@ -811,7 +845,7 @@ export default function App() {
   }, []);
   const handleShutdownConfirmed = useCallback(async () => {
     setShutdownConfirm(false);
-    setAuthState('shutdown');
+    setManualAuthState('shutdown');
     // Bug fix: prior code called api.shutdownServer() THEN window.close().
     // In Electron that triggered the windows.js close-handler — which then
     // re-prompted the user with "Keep Running / Quit" *after* the API
@@ -833,7 +867,7 @@ export default function App() {
       logger.warn('API shutdown request failed before window close:', err.message);
     }
     window.close();
-  }, []);
+  }, [setManualAuthState]);
 
   const navigateToAccount = useCallback((accountId) => {
     navigate(`/account/${accountId}`);

@@ -1,5 +1,6 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import BaseController from './BaseController.js';
 import * as store from '../services/store.js';
 import * as openrouter from '../services/openrouter.js';
@@ -61,7 +62,7 @@ function isAuthoritativeSessionFailure(errLike) {
 
 function magicLinkCallbackUnavailableError() {
   const err = new Error(
-    'Email Link needs a public Clerk-allowed callback URL. OpenRouter Clerk rejects Hydra localhost callbacks; use OTP for pure HTTPS bulk import or set HYDRA_MAGIC_LINK_CALLBACK_ORIGIN to a public HTTPS origin that forwards /api/auth/magic-callback to this Hydra instance.',
+    'Email Link is unavailable for OpenRouter Clerk unless the Clerk tenant owner has allowlisted a public HTTPS relay. Hydra cannot safely register a localhost or arbitrary tunnel callback against OpenRouter. Use OTP for the direct HTTPS bulk import flow.',
   );
   err.status = 409;
   err.code = 'MAGIC_LINK_CALLBACK_UNAVAILABLE';
@@ -74,7 +75,8 @@ function magicLinkCallbackUnavailableError() {
 
 function resolveMagicLinkCallbackOrigin() {
   const configured = process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN?.trim();
-  if (!configured) throw magicLinkCallbackUnavailableError();
+  const allowlistConfirmed = process.env.HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED === '1';
+  if (!configured || !allowlistConfirmed) throw magicLinkCallbackUnavailableError();
   let url;
   try {
     url = new URL(configured);
@@ -993,23 +995,22 @@ export class AccountController extends BaseController {
       if (!email) return this.error(res, 'Email required for magic link', 400);
 
       // Clerk rejects localhost callback URLs for OpenRouter-origin email_link requests.
-      // Only send magic links when the operator has configured a public HTTPS callback.
+      // Only send magic links when the Clerk tenant owner has allowlisted the relay.
       const callbackOrigin = resolveMagicLinkCallbackOrigin();
-      const callbackUrl = `${callbackOrigin}/api/auth/magic-callback?signInId=__SIGN_IN_ID__&accountId=${account.id}`;
-      // Note: we replace __SIGN_IN_ID__ placeholder after we get it from Clerk
+      const linkId = randomBytes(24).toString('base64url');
+      const callbackUrl = `${callbackOrigin}/api/auth/magic-callback?linkId=${encodeURIComponent(linkId)}`;
 
       const { signInId, clientCookie, isSignUp } = await clerkAuth.sendMagicLink(
         email,
-        callbackUrl.replace('__SIGN_IN_ID__', 'pending'),
+        callbackUrl,
         { signal: requestAbort.signal },
       );
 
-      // Build real callback URL — include isSignUp so the callback handler routes correctly
-      const isSignUpParam = isSignUp ? '&isSignUp=1' : '';
-      const realCallback = `${callbackOrigin}/api/auth/magic-callback?signInId=${encodeURIComponent(signInId)}&accountId=${account.id}${isSignUpParam}`;
-      // We store the pending entry so the callback can look it up
+      // Keep the Clerk attempt server-side. The emailed callback only carries an
+      // opaque one-time correlation key, not account or Clerk attempt identifiers.
       const { trackPendingMagicLink } = await import('../services/magic-link-manager.js');
       trackPendingMagicLink(signInId, {
+        linkId,
         accountId: account.id,
         userId: req.user.id,
         clientCookie,
@@ -1023,7 +1024,6 @@ export class AccountController extends BaseController {
       return this.success(res, {
         signInId,
         email,
-        callbackUrl: realCallback,
         message: `Magic link sent to ${email} — check inbox and click the link`,
       });
     } catch (err) {

@@ -68,11 +68,13 @@ Bulk magic-link rows are complete only after `checkSessionLive()` confirms an
 active Clerk login. A clicked, expired, or missing pending link is not enough.
 Because OpenRouter's Clerk instance rejects localhost `email_link` redirect
 URLs, Hydra now sends magic links only when `HYDRA_MAGIC_LINK_CALLBACK_ORIGIN`
-points at a public HTTPS origin that forwards `/api/auth/magic-callback` to the
-running Hydra API. The Bulk Email Link UI checks this capability before creating
-or replacing any pending account rows, so an unconfigured local desktop build
-does not create stubs or burn Clerk requests. Bulk OTP remains the pure
-direct-HTTPS import path.
+points at a public HTTPS relay and
+`HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED=1` explicitly records that the
+Clerk tenant owner allowlisted it. A generic public tunnel is not sufficient.
+The Bulk Email Link UI checks this capability before creating or replacing any
+pending account rows, so an unconfigured local desktop build does not create
+stubs or burn Clerk requests. Bulk OTP remains the supported pure direct-HTTPS
+OpenRouter import path.
 Each row handles live-confirmation failures independently so one upstream
 failure does not poison the whole batch.
 

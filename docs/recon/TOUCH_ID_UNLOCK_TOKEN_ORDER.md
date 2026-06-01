@@ -29,6 +29,15 @@ are removed without prompting. If Touch ID is enabled and the token is usable,
 Hydra still prompts once per relaunch before releasing that token; cancel,
 denial, or unavailable hardware still fails closed to password.
 
+The packaged `v1.4.6` launch review found a second ordering issue in the
+renderer: `src/App.jsx` awaited that optional native-token release before
+rendering the server-known password fallback. A Touch ID prompt left pending
+during unattended review therefore made the main window look blank even
+though the server was healthy. Bootstrap now renders `/api/auth/status` first,
+shows login immediately when the vault exists, then lets Touch ID restore the
+saved token in the background. A late biometric result is ignored after a
+newer password login, so the convenience path cannot overwrite fresh auth.
+
 The Settings and README copy now say this explicitly:
 
 - Password unlock persists for up to 24 hours on-device.
@@ -54,5 +63,7 @@ The Settings and README copy now say this explicitly:
   expiry check occur before biometric prompting.
 - `electron/tests/main-process.test.mjs` asserts the main-process source keeps
   that order while preserving fail-closed biometric logging.
+- `server/tests/ui-static-contract.test.mjs` asserts renderer bootstrap renders
+  server status before waiting on native Touch ID token release and guards
+  against late prompt results.
 - `bin/commands/audit.js` includes the same order as a release audit contract.
-

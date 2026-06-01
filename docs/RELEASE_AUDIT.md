@@ -2261,3 +2261,36 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   macOS arm64 build/smoke/upload, macOS Intel build/smoke/upload, Windows NSIS
   build/smoke plus hosted unpacked and NSIS-installed executable lifecycle
   check, and final macOS updater metadata merge.
+- 2026-06-01 `v1.4.6` Email Link truthfulness and callback hardening: the final
+  source review found that the dormant Email Link sender still passed Clerk a
+  callback containing `signInId=pending`, then constructed the real callback
+  only after Clerk had already sent the email. The repair generates a random
+  24-byte base64url `linkId` before sending, keeps account and Clerk attempt
+  identifiers server-side, indexes pending work by both renderer-poll
+  `signInId` and callback `linkId`, atomically claims the public callback, and
+  clears both indexes together after completion, failure, or expiry. Capability preflight now also requires
+  `HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED=1`; a syntactically valid
+  public tunnel is no longer presented as sufficient. This matches Clerk's
+  tenant-owner redirect allowlist and same-device/browser security model.
+  OpenRouter users are directed to Bulk OTP, which remains the supported direct
+  HTTPS import lane. Focused source verification passed syntax checks,
+  `npm run test:background-failure-visibility` (`33/33`), `npm run
+  test:ui-static` (`45/45`), `npm run test:api-integration --
+  --test-name-pattern='magic-link capability|magic-link callback indexes|bulk
+  OTP'` (`10/10`), `npm run openapi:hydra` (`84 operations`), and `git diff
+  --check`. Packaged runtime proof follows after the canonical ARM rebuild.
+- 2026-06-01 `v1.4.6` canonical ARM package proof: full `npm run test:ci`,
+  `npm run lint`, `npm run gate` (`12/12`), `npm run test:cli` (`46/46`),
+  `npm run test:dogfood-evidence` (`1/1`), and
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke` passed. The rebuilt
+  local app reports bundle version `1.4.6`; strict deep
+  `codesign --verify --deep --strict` passed, and embedded-source inspection
+  confirmed the allowlist-confirmation gate, opaque callback `linkId`, and
+  atomic one-time callback claim shipped inside the bundle. The local ARM zip
+  SHA-256 before reversible byproduct cleanup was
+  `6947a5134ef02a508c84195580a94ec5377e42dfbb480f62dc7193aec16f0482`.
+  LaunchServices opened the canonical app without a browser. CoreGraphics saw
+  one `Hydra — Dashboard` window at `1440x900`; after the expected startup
+  compositor tail settled, `hydra doctor` reported exactly four Hydra-owned
+  processes, `0.4%` aggregate CPU, `600.50 MB` RSS, and zero stale Hydra
+  Playwright profiles.

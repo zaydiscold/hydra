@@ -322,7 +322,9 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.doesNotMatch(windows, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
     assert.match(windows, /m\.kind="shattered";hydraSplashDiagnostics\.shatteredWordCount\+\+/);
     assert.match(windows, /shuffle\(items\)\.slice\(0,Math\.min\(n,items\.length\)\)/);
-    assert.match(windows, /dial-cell dial-cell--cross dial-cell--center/);
+    assert.match(windows, /<div class="aperture" aria-hidden="true"><\/div>/);
+    assert.match(windows, /\.aperture::before/);
+    assert.doesNotMatch(windows, /dial-cell/);
     assert.match(windows, /baseFontSize\*\(0\.86\+Math\.random\(\)\*1\.04\)/);
     assert.match(windows, /const delay=34\+Math\.random\(\)\*112\+\(Math\.random\(\)<0\.16\?Math\.random\(\)\*150:0\)/);
     assert.match(windows, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);

@@ -53,11 +53,12 @@ inside a single Matter collision batch. Without that one-shot guard, the same
 label can clone its letters and colors repeatedly before the removed body
 leaves the event list.
 
-The welcome overlay uses a nine-cell dial-pad grid. The north, west, center,
-east, and south cells form a denser glass cross behind the product state. The
-four corners stay translucent so the portal remains legible around the launch
-rectangle. The center cell carries the strongest material and glow, keeping the
-greeting readable without flattening the animation into an opaque modal.
+The welcome overlay uses one faceted glass aperture instead of a square card or
+a dial-pad grid. Its clipped outer shell and tapered translucent side wings
+leave the portal legible at the edges. A darker inset center protects the
+greeting and startup state without drawing a literal symbol over the animation.
+The implementation uses one element plus two pseudo-elements, so the visual
+refinement does not add a DOM or compositor-heavy grid during splash work.
 
 The background branches use irregular short line segments rather than smooth
 Bezier splines. Each recursively forked branch keeps a broad bend plus bounded

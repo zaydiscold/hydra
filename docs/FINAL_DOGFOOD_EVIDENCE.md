@@ -1890,6 +1890,16 @@ This evidence file is not release-complete by itself. The release remains not co
   `latest.yml`, and Linux `latest-linux.yml`; the release workflow also passed
   the hosted Windows unpacked and NSIS-installed executable lifecycle check plus
   the final macOS updater metadata merge.
+- `v1.4.6` callback hardening source proof: Hydra no longer advertises a generic
+  public tunnel as an OpenRouter Email Link fix. Clerk callback enablement
+  requires both a public HTTPS relay and explicit tenant-owner allowlist
+  confirmation; the OpenRouter desktop lane remains Bulk OTP over direct HTTPS.
+  The dormant compatible-tenant callback path now sends a pre-generated opaque
+  `linkId`, keeps Clerk and account identifiers server-side, atomically claims
+  the callback, and clears its callback and renderer-poll indexes together.
+  Dynamic API integration coverage
+  proves paired cleanup on both expiry and successful completion. The tracked
+  OpenAPI callback contract now exposes only `linkId`.
 - `v1.4.5` Bulk Auth UI gate proof: the local package was rebuilt from the
   Email Link capability-banner patch. The Email Link tab now surfaces
   `magicLinkCapability`, offers `Recheck`, and disables `Send Magic Links` with
@@ -1914,3 +1924,16 @@ This evidence file is not release-complete by itself. The release remains not co
   `latest.yml`, and Linux `latest-linux.yml`; the release workflow also passed
   the hosted Windows unpacked and NSIS-installed executable lifecycle check plus
   the final macOS updater metadata merge.
+- Final `v1.4.6` local package proof: the canonical macOS ARM bundle rebuilt
+  from the faceted splash-overlay, Touch ID bootstrap, and Email Link
+  truthfulness patch. Full `npm run test:ci`, lint, gate `12/12`, CLI `46/46`,
+  dogfood-evidence `1/1`, package smoke, strict deep codesign, bundle version
+  `1.4.6`, and embedded-source inspection all passed. The embedded compatible-
+  tenant Email Link path contains the explicit tenant-owner allowlist gate,
+  random opaque callback `linkId`, and atomic one-time callback claim. The local
+  ARM zip SHA-256 before reversible cleanup was
+  `6947a5134ef02a508c84195580a94ec5377e42dfbb480f62dc7193aec16f0482`.
+  LaunchServices opened the packaged app without a browser; CoreGraphics saw
+  one `Hydra — Dashboard` window at `1440x900`. After startup settled,
+  `hydra doctor` reported the expected four Hydra-owned processes, `0.4%`
+  aggregate CPU, `600.50 MB` RSS, and zero stale Hydra Playwright profiles.

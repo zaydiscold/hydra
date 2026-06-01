@@ -1100,19 +1100,10 @@
         "security": [],
         "parameters": [
           {
-            "name": "signInId",
+            "name": "linkId",
             "in": "query",
             "required": false,
-            "description": "Pending Clerk sign-in id",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "accountId",
-            "in": "query",
-            "required": false,
-            "description": "Hydra account id",
+            "description": "Opaque one-time Hydra callback identifier",
             "schema": {
               "type": "string"
             }

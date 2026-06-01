@@ -121,7 +121,7 @@ const routeDefs = [
     tag: 'auth',
     summary: 'Complete OpenRouter/Clerk magic-link callback',
     security: [],
-    parameters: [query('signInId', 'Pending Clerk sign-in id'), query('accountId', 'Hydra account id')],
+    parameters: [query('linkId', 'Opaque one-time Hydra callback identifier')],
   }),
 
   op('get', '/api/accounts', { tag: 'accounts', summary: 'List stored accounts' }),

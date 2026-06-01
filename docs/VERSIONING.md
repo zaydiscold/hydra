@@ -9,6 +9,12 @@ artifact-parity hardening patch shipped as `v1.4.2` on 2026-06-01 after the
 immutable `v1.4.1` release-bootstrap failure was repaired. The Bulk Auth
 redirect/dedupe repair shipped as `v1.4.4`, and `1.4.5` is the callback-status
 UI gate that makes Email Link unavailability visible before a batch can start.
+`1.4.6` is the final splash-overlay and Bulk Auth truthfulness refinement: the
+rigid nine-cell launch grid is replaced by a lower-node faceted glass aperture
+with translucent side wings, the renderer no longer blanks while native Touch
+ID token release is pending, and Email Link no longer advertises an arbitrary
+public-tunnel setup that OpenRouter's Clerk tenant will reject. OTP remains the
+supported direct-HTTPS OpenRouter bulk-import lane.
 The current public lane builds on the `v1.3.0` splash, proximity-field,
 Settings, artwork,
 auth/session, and cross-platform packaging tranche with scoped renderer
@@ -17,8 +23,8 @@ comparisons, the restored two-layer README media stack, request-owned
 cancellation and shutdown joins, bounded Windows lifecycle smoke, renderer
 observer cleanup, and demand-driven idle schedulers.
 
-Tracked `package.json` and `package-lock.json` now target `1.4.5` for the
-Bulk Auth Email Link callback-status patch. This remains the active `1.4.x`
+Tracked `package.json` and `package-lock.json` now target `1.4.6` for the
+faceted splash-overlay patch. This remains the active `1.4.x`
 lane: normal public patch releases continue as `v1.4.x`, not another `1.0.x`
 or `1.1.x` release.
 
@@ -109,7 +115,7 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.5` is published. Continue
+`v1.4.6` is the active release candidate. Continue
 using `[skip-bump]` for audit, dogfood, and isolated documentation checkpoints
 after this patch ships unless a real source fix must go to users. Do not produce
 a second minor bump merely to record manual evidence.
@@ -123,6 +129,11 @@ failed `v1.4.1`, and published `v1.4.2` tags immutable. The `v1.4.3` and
 `v1.4.4` patches add the Touch ID/session/lifecycle closeout and Bulk Auth
 redirect/dedupe hardening; `v1.4.5` is the narrow UI gate that prevents the
 same Email Link callback failure from being started accidentally.
+`v1.4.6` replaces the rigid splash dial-pad overlay with a faceted aperture
+whose translucent wings preserve portal visibility without adding runtime
+loops, renders the password fallback while native Touch ID token release is
+pending, and requires explicit tenant-owner allowlist confirmation before the
+dormant Email Link relay path can activate.
 
 The first `v1.4.1` tag exposed a pre-publication gate cycle before any desktop
 artifact uploaded: `hydra audit` correctly reported that current-version Intel

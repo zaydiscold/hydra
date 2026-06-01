@@ -210,6 +210,9 @@ test('magic-link cleanup timer is owned by server lifecycle', () => {
   assert.match(manager, /export function startMagicLinkCleanup\(\)/);
   assert.match(manager, /export function stopMagicLinkCleanup\(\)/);
   assert.match(manager, /export function trackPendingMagicLink\(signInId, entry\)/);
+  assert.match(manager, /export const pendingMagicLinkCallbacks = new Map\(\)/);
+  assert.match(manager, /export function forgetPendingMagicLink\(signInId\)/);
+  assert.match(manager, /export function claimPendingMagicLinkCallback\(linkId\)/);
   assert.match(manager, /function scheduleMagicLinkCleanup\(\)/);
   assert.match(manager, /nextCleanupDelayMs/);
   assert.match(manager, /cleanupTimer = setTimeout\(\(\) => \{/);
@@ -268,6 +271,7 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.doesNotMatch(retention, /clearInterval/);
   assert.match(magicLinks, /cleanupTimer = setTimeout\(\(\) => \{/);
   assert.match(magicLinks, /trackPendingMagicLink\(signInId, entry\)/);
+  assert.match(magicLinks, /forgetPendingMagicLink\(k\)/);
   assert.doesNotMatch(magicLinks, /setInterval/);
   assert.doesNotMatch(magicLinks, /clearInterval/);
   assert.match(retention, /startupTimer\.unref\?\.\(\)/);
@@ -593,6 +597,10 @@ test('bulk import avoids local self-rate-limit and handles duplicate replacement
   assert.match(controller, /store\.replaceAccountWithOtpStub\(req\.user\.id, existing\.id, normalizedEmail\)/);
   assert.match(controller, /async magicLinkCapability/);
   assert.match(controller, /MAGIC_LINK_CALLBACK_UNAVAILABLE/);
+  assert.match(controller, /HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED/);
+  assert.match(controller, /randomBytes\(24\)\.toString\('base64url'\)/);
+  assert.match(controller, /\/api\/auth\/magic-callback\?linkId=\$\{encodeURIComponent\(linkId\)\}/);
+  assert.doesNotMatch(controller, /__SIGN_IN_ID__/);
   assert.match(bulkAuth, /api\.getMagicLinkCapability\(signal\)/);
   assert.match(bulkAuth, /magicLinkCapability/);
   assert.match(bulkAuth, /refreshMagicLinkCapability/);
@@ -647,6 +655,10 @@ test('OpenRouter model-list cache requests are timeout bounded', () => {
 test('auth callback best-effort provisioning and opener notification failures are logged', () => {
   const authRoute = readRepoFile('server/routes/auth.js');
 
+  assert.match(authRoute, /const \{ linkId, __clerk_ticket: clerkTicket \} = req\.query/);
+  assert.match(authRoute, /claimPendingMagicLinkCallback\(linkId\)/);
+  assert.match(authRoute, /forgetPendingMagicLink\(pending\.signInId\)/);
+  assert.doesNotMatch(authRoute, /pendingMagicLinks\.get\(signInId\)/);
   assert.match(authRoute, /magic-link management-key auto-provision failed for account=\$\{pending\.accountId\}/);
   assert.doesNotMatch(authRoute, /catch \{ \/\* non-fatal \*\/ \}/);
   assert.match(authRoute, /magic-link opener notification failed:/);

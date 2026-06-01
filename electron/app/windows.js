@@ -353,21 +353,28 @@ export function createSplashWindow() {
     // shower owns the intro; the welcome rectangle enters only after the
     // settled glyph bodies start spiraling around viewport center.
     + '.card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.94);'
-    + 'width:540px;height:400px;border-radius:16px;'
+    + 'width:560px;height:380px;border-radius:24px;'
+    + 'clip-path:polygon(7% 0,93% 0,100% 13%,100% 87%,93% 100%,7% 100%,0 87%,0 13%);'
     + 'background:rgba(8,4,18,.24);'
     + 'backdrop-filter:blur(12px) saturate(145%);-webkit-backdrop-filter:blur(12px) saturate(145%);'
     + 'border:1px solid rgba(255,255,255,.12);'
     + 'box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.10);'
     + 'overflow:hidden;z-index:4;opacity:0}'
-    // Nine-cell dial-pad glass: the center cross forms the stable launch
-    // surface while the corners stay translucent enough for the portal to
-    // remain visible underneath.
-    + '.dial-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);z-index:1;pointer-events:none}'
-    + '.dial-cell{border-right:1px solid rgba(190,242,255,.08);border-bottom:1px solid rgba(190,242,255,.08);background:rgba(8,4,18,.18)}'
-    + '.dial-cell:nth-child(3n){border-right:0}.dial-cell:nth-child(n+7){border-bottom:0}'
-    + '.dial-cell--corner{background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(8,4,18,.20));}'
-    + '.dial-cell--cross{background:linear-gradient(145deg,rgba(12,7,28,.84),rgba(8,4,18,.74));box-shadow:inset 0 0 0 1px rgba(255,255,255,.025),inset 0 0 34px rgba(168,85,247,.08)}'
-    + '.dial-cell--center{background:linear-gradient(145deg,rgba(18,8,38,.96),rgba(8,4,18,.92));box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),inset 0 0 44px rgba(168,85,247,.18),0 0 30px rgba(168,85,247,.14)}'
+    // Faceted launch aperture: a denser center protects the greeting while
+    // tapered translucent wings leave the portal legible at both sides.
+    // This avoids the rigid nine-cell plus shape while still breaking the
+    // launch surface out of a plain rectangle.
+    + '.aperture{position:absolute;left:24px;right:24px;top:78px;bottom:78px;z-index:1;pointer-events:none;'
+    + 'clip-path:polygon(0 28%,8% 0,92% 0,100% 28%,100% 72%,92% 100%,8% 100%,0 72%);'
+    + 'background:linear-gradient(90deg,rgba(168,85,247,.035) 0%,rgba(8,4,18,.22) 14%,rgba(12,7,28,.82) 38%,rgba(18,8,38,.94) 50%,rgba(12,7,28,.82) 62%,rgba(8,4,18,.22) 86%,rgba(96,165,250,.035) 100%);'
+    + 'border:1px solid rgba(190,242,255,.11);box-shadow:inset 0 0 46px rgba(168,85,247,.10),0 0 42px rgba(0,0,0,.16)}'
+    + '.aperture::before{content:"";position:absolute;inset:14px 20%;'
+    + 'clip-path:polygon(7% 0,93% 0,100% 20%,100% 80%,93% 100%,7% 100%,0 80%,0 20%);'
+    + 'background:linear-gradient(145deg,rgba(20,9,42,.93),rgba(8,4,18,.88));'
+    + 'border:1px solid rgba(255,255,255,.075);box-shadow:inset 0 0 36px rgba(168,85,247,.14),0 0 28px rgba(168,85,247,.10)}'
+    + '.aperture::after{content:"";position:absolute;inset:8px 12%;'
+    + 'clip-path:polygon(4% 0,96% 0,100% 18%,100% 82%,96% 100%,4% 100%,0 82%,0 18%);'
+    + 'border-top:1px solid rgba(236,72,153,.18);border-bottom:1px solid rgba(96,165,250,.16)}'
     // ── Geometric solid decoration — TOP QUARTER (0–25 %) ───────────────
     // Solid dark block with diagonal accent stripes + horizontal line.
     // Frames the "Hydra" title from above, reads as a fixed UI chrome
@@ -466,11 +473,7 @@ export function createSplashWindow() {
     +     '<path d="M508,386 L526,386 L526,368"/>'        // bottom-right
     +   '</g>'
     + '</svg></div>'
-    + '<div class="dial-grid" aria-hidden="true">'
-    +   '<span class="dial-cell dial-cell--corner"></span><span class="dial-cell dial-cell--cross"></span><span class="dial-cell dial-cell--corner"></span>'
-    +   '<span class="dial-cell dial-cell--cross"></span><span class="dial-cell dial-cell--cross dial-cell--center"></span><span class="dial-cell dial-cell--cross"></span>'
-    +   '<span class="dial-cell dial-cell--corner"></span><span class="dial-cell dial-cell--cross"></span><span class="dial-cell dial-cell--corner"></span>'
-    + '</div>'
+    + '<div class="aperture" aria-hidden="true"></div>'
     + '<div class="deco-top"></div>'
     + '<div class="band"></div>'
     + '<div class="hero">'

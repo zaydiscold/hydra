@@ -110,7 +110,8 @@ shows availability, an enable toggle, and a test-prompt button. A successful
 password unlock persists for up to 24 hours on the device; when Touch ID is
 enabled and a valid saved token exists, Hydra prompts once per relaunch before
 releasing that token. If the token is missing, expired, cancelled, or
-unavailable, Hydra goes straight to the password screen.
+unavailable, Hydra keeps the password screen visible immediately instead of
+blanking the window while native token release is pending.
 
 The proxy pool accepts one proxy per line in `ip:port:user:pass` format. Empty
 pools are valid; account tasks continue without proxies when no saved proxy is
@@ -195,7 +196,7 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, the current refined desktop release is `v1.4.5`, and
+first as `v1.1.0`, the current refined desktop release is `v1.4.6`, and
 remaining manual dogfood evidence stays explicit in the audit.
 
 Current release-train docs:

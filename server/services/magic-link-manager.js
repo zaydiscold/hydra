@@ -1,6 +1,9 @@
-// In-memory map: signInId → { accountId, userId, clientCookie, email, createdAt }
+// In-memory maps:
+// - signInId → pending entry for Hydra renderer polling
+// - opaque linkId → the same entry for the public email callback
 // TTL: 15 minutes (Clerk magic links typically expire in 10 min)
 export const pendingMagicLinks = new Map();
+export const pendingMagicLinkCallbacks = new Map();
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 let cleanupTimer = null;
@@ -11,7 +14,7 @@ export function sweepExpiredMagicLinks(now = Date.now()) {
   let removed = 0;
   for (const [k, v] of pendingMagicLinks) {
     if (v.createdAt < cutoff) {
-      pendingMagicLinks.delete(k);
+      forgetPendingMagicLink(k);
       removed++;
     }
   }
@@ -46,11 +49,29 @@ function scheduleMagicLinkCleanup() {
 }
 
 export function trackPendingMagicLink(signInId, entry) {
-  pendingMagicLinks.set(signInId, {
+  const previous = pendingMagicLinks.get(signInId);
+  if (previous?.linkId) pendingMagicLinkCallbacks.delete(previous.linkId);
+  const normalized = {
     ...entry,
+    signInId,
     createdAt: Number.isFinite(Number(entry?.createdAt)) ? Number(entry.createdAt) : Date.now(),
-  });
+  };
+  pendingMagicLinks.set(signInId, normalized);
+  if (normalized.linkId) pendingMagicLinkCallbacks.set(normalized.linkId, normalized);
   scheduleMagicLinkCleanup();
+}
+
+export function forgetPendingMagicLink(signInId) {
+  const pending = pendingMagicLinks.get(signInId);
+  pendingMagicLinks.delete(signInId);
+  if (pending?.linkId) pendingMagicLinkCallbacks.delete(pending.linkId);
+}
+
+export function claimPendingMagicLinkCallback(linkId) {
+  const pending = pendingMagicLinkCallbacks.get(linkId);
+  if (!pending) return null;
+  pendingMagicLinkCallbacks.delete(linkId);
+  return pending;
 }
 
 export function startMagicLinkCleanup() {

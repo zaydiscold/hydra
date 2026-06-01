@@ -98,7 +98,7 @@ export default function EmailLinkTab({
             style={{ marginTop: 'var(--space-sm)' }}
             disabled={creating || callbackUnavailable}
           >
-            {creating ? 'Preparing queue...' : callbackUnavailable ? 'Use OTP or configure callback' : 'Send Magic Links'}
+            {creating ? 'Preparing queue...' : callbackUnavailable ? 'Use OTP instead' : 'Send Magic Links'}
           </button>
         </form>
       </section>

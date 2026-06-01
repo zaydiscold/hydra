@@ -36,6 +36,14 @@ execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
 
 const serverModule = await import('../index.js');
 const { recordUpstreamSuccess } = await import('../services/upstream-health.js');
+const {
+  claimPendingMagicLinkCallback,
+  forgetPendingMagicLink,
+  pendingMagicLinkCallbacks,
+  pendingMagicLinks,
+  sweepExpiredMagicLinks,
+  trackPendingMagicLink,
+} = await import('../services/magic-link-manager.js');
 let baseUrl;
 let authToken;
 
@@ -144,12 +152,14 @@ test('account proxy pool endpoints store encrypted proxies and return masked pub
   assert.match(invalid.json.error, /Line 1: Proxy port/);
 });
 
-test('magic-link capability fails closed unless a public HTTPS callback is configured', async () => {
+test('magic-link capability fails closed unless an allowlisted public HTTPS callback is confirmed', async () => {
   const token = await getAuthToken();
   const previous = process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN;
+  const previousConfirmed = process.env.HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED;
 
   try {
     delete process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN;
+    delete process.env.HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED;
     const missing = await getJson('/api/accounts/magic-link/capability', {
       headers: { authorization: `Bearer ${token}` },
     });
@@ -167,6 +177,13 @@ test('magic-link capability fails closed unless a public HTTPS callback is confi
     assert.equal(local.json.data.available, false);
 
     process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN = 'https://hydra.example.test/public';
+    const unconfirmed = await getJson('/api/accounts/magic-link/capability', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(unconfirmed.res.status, 200);
+    assert.equal(unconfirmed.json.data.available, false);
+
+    process.env.HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED = '1';
     const configured = await getJson('/api/accounts/magic-link/capability', {
       headers: { authorization: `Bearer ${token}` },
     });
@@ -177,7 +194,31 @@ test('magic-link capability fails closed unless a public HTTPS callback is confi
   } finally {
     if (previous === undefined) delete process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN;
     else process.env.HYDRA_MAGIC_LINK_CALLBACK_ORIGIN = previous;
+    if (previousConfirmed === undefined) delete process.env.HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED;
+    else process.env.HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED = previousConfirmed;
   }
+});
+
+test('magic-link callback indexes clear together on completion and expiry', () => {
+  pendingMagicLinks.clear();
+  pendingMagicLinkCallbacks.clear();
+
+  trackPendingMagicLink('signin-expired', {
+    linkId: 'callback-expired',
+    createdAt: Date.now() - (16 * 60 * 1000),
+  });
+  assert.equal(pendingMagicLinks.get('signin-expired')?.linkId, 'callback-expired');
+  assert.equal(pendingMagicLinkCallbacks.get('callback-expired')?.signInId, 'signin-expired');
+  assert.equal(sweepExpiredMagicLinks(), 1);
+  assert.equal(pendingMagicLinks.has('signin-expired'), false);
+  assert.equal(pendingMagicLinkCallbacks.has('callback-expired'), false);
+
+  trackPendingMagicLink('signin-complete', { linkId: 'callback-complete' });
+  assert.equal(claimPendingMagicLinkCallback('callback-complete')?.signInId, 'signin-complete');
+  assert.equal(claimPendingMagicLinkCallback('callback-complete'), null);
+  forgetPendingMagicLink('signin-complete');
+  assert.equal(pendingMagicLinks.has('signin-complete'), false);
+  assert.equal(pendingMagicLinkCallbacks.has('callback-complete'), false);
 });
 
 test('bulk OTP stubs skip duplicate saved emails unless forceReplace is explicit', async () => {

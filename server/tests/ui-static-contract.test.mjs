@@ -51,16 +51,16 @@ test('bulk email parsing preserves duplicate remainders when used rows are clear
   );
 });
 
-test('bulk import copy points email link users at callback setup instead of parallel sending', () => {
+test('bulk import copy points OpenRouter users at OTP instead of an unverified callback setup', () => {
   const page = readRepoFile('src/pages/BulkAuthWizard.jsx');
   const tab = readRepoFile('src/components/EmailLinkTab.jsx');
 
-  assert.match(page, /Public callback/);
-  assert.match(page, /direct HTTPS code import/);
+  assert.match(page, /Tenant allowlist required/);
+  assert.match(page, /supported direct HTTPS code import/);
   assert.match(page, /magicLinkCapability=\{auth\.magicLinkCapability\}/);
   assert.match(page, /onRefreshCapability=\{auth\.refreshMagicLinkCapability\}/);
   assert.match(tab, /bulk-auth-email-link-capability/);
-  assert.match(tab, /Use OTP or configure callback/);
+  assert.match(tab, /Use OTP instead/);
   assert.match(tab, /disabled=\{creating \|\| callbackUnavailable\}/);
   assert.match(tab, /2\. Send status/);
   assert.doesNotMatch(page, /One click link/);
@@ -201,7 +201,9 @@ test('splash owns one throttled physics and render loop', () => {
   assert.doesNotMatch(windowsJs, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
   assert.match(windowsJs, /m\.kind="shattered";hydraSplashDiagnostics\.shatteredWordCount\+\+/);
   assert.match(windowsJs, /shuffle\(items\)\.slice\(0,Math\.min\(n,items\.length\)\)/);
-  assert.match(windowsJs, /dial-cell dial-cell--cross dial-cell--center/);
+  assert.match(windowsJs, /<div class="aperture" aria-hidden="true"><\/div>/);
+  assert.match(windowsJs, /\.aperture::before/);
+  assert.doesNotMatch(windowsJs, /dial-cell/);
   assert.match(windowsJs, /const maxPixels=2800000/);
   assert.match(windowsJs, /Math\.sqrt\(maxPixels\/\(w\*h\)\)/);
   assert.match(windowsJs, /tiltBias=hydraSplashTiltGravityX\*\(W\(\)\*0\.18\)/);
@@ -658,6 +660,25 @@ test('first-run setup is a guided password key tour instead of a login dead end'
   assert.match(css, /\.setup-stepper\s*\{/);
   assert.match(css, /\.setup-management-key-input\s*\{/);
   assert.match(css, /\.setup-tour\s*\{/);
+});
+
+test('desktop auth bootstrap renders password fallback while Touch ID release is pending', () => {
+  const app = readRepoFile('src/App.jsx');
+  const checkAuthStart = app.indexOf('const checkAuth = useCallback(async () => {');
+  const checkAuthEnd = app.indexOf('\n  useEffect(() => {\n    checkAuth();', checkAuthStart);
+  const checkAuth = app.slice(checkAuthStart, checkAuthEnd);
+
+  assert.notEqual(checkAuthStart, -1);
+  assert.notEqual(checkAuthEnd, -1);
+  assert.ok(
+    checkAuth.indexOf('const initialRes = await api.getAuthStatus()') < checkAuth.indexOf('storedToken = await api.hydrateToken()'),
+    'server auth status must render before the optional native Touch ID token gate',
+  );
+  assert.match(checkAuth, /const initialState = renderAuthPayload\(initialPayload\)/);
+  assert.match(checkAuth, /if \(initialState !== 'login'\) return/);
+  assert.match(checkAuth, /authStateRef\.current !== 'login'/);
+  assert.match(checkAuth, /Persisted desktop unlock unavailable/);
+  assert.match(app, /authBootstrapRef\.current \+= 1/);
 });
 
 test('sidebar navigation paths are backed by concrete routes', () => {

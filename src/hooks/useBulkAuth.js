@@ -304,14 +304,14 @@ export function useBulkAuth(addToast) {
       const capability = await refreshMagicLinkCapability(signal);
       if (signal.aborted || unmountedRef.current) return;
       if (!capability?.available) {
-        const message = capability?.message || 'Email Link is unavailable until Hydra has a public Clerk callback configured.';
+        const message = capability?.message || 'Email Link is unavailable for OpenRouter Clerk. Use OTP instead.';
         setLocalError(message);
         setEmailLinkRows(emails.map((email) => ({
           email,
           id: `unavailable-${email}`,
           signInId: null,
           status: 'error',
-          message: 'Use OTP or configure a public callback',
+          message: 'Use OTP instead',
           canRetry: false,
         })));
         appendEmailLinkLog(`Email Link unavailable before queue creation: ${message}`);
@@ -374,7 +374,7 @@ export function useBulkAuth(addToast) {
             for (const pendingRow of newRows.slice(idx + 1)) {
               updateEmailLinkRow(pendingRow.email, {
                 status: 'error',
-                message: 'Email Link unavailable until HYDRA_MAGIC_LINK_CALLBACK_ORIGIN is configured',
+                message: 'Email Link unavailable for OpenRouter Clerk — use OTP instead',
               });
             }
             break;
@@ -400,11 +400,11 @@ export function useBulkAuth(addToast) {
       const capability = await refreshMagicLinkCapability(signal);
       if (signal.aborted || unmountedRef.current) return;
       if (!capability?.available) {
-        const message = capability?.message || 'Email Link is unavailable until Hydra has a public Clerk callback configured.';
+        const message = capability?.message || 'Email Link is unavailable for OpenRouter Clerk. Use OTP instead.';
         setLocalError(message);
         updateEmailLinkRow(row.email, {
           status: 'error',
-          message: 'Use OTP or configure a public callback',
+          message: 'Use OTP instead',
           canRetry: false,
         });
         appendEmailLinkLog(`Email Link unavailable before retry: ${message}`);

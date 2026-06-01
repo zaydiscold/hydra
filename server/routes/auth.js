@@ -37,19 +37,20 @@ router.post('/logout', AuthController.logout.bind(AuthController));
 router.post('/change-password', requireUnlocked, AuthController.changePassword.bind(AuthController));
 
 // P6 — Magic link callback (PUBLIC — Clerk redirects browser here after user clicks link)
-// GET /api/auth/magic-callback?signInId=...&accountId=...
+// GET /api/auth/magic-callback?linkId=...
 router.get('/magic-callback', async (req, res) => {
-  const { signInId, accountId, __clerk_ticket: clerkTicket } = req.query;
-  if (!signInId || !accountId) {
-    return res.status(400).send('<h2>Magic Link Error</h2><p>Missing signInId or accountId in callback URL.</p>');
+  const { linkId, __clerk_ticket: clerkTicket } = req.query;
+  if (!linkId) {
+    return res.status(400).send('<h2>Magic Link Error</h2><p>Missing callback identifier.</p>');
   }
 
+  let pending;
   try {
     // Lazy import to avoid circular deps
-    const { pendingMagicLinks } = await import('../services/magic-link-manager.js');
+    const { claimPendingMagicLinkCallback, forgetPendingMagicLink } = await import('../services/magic-link-manager.js');
     const clerkAuth = await import('../services/clerk-auth.js');
     const store = await import('../services/store.js');
-    const pending = pendingMagicLinks.get(signInId);
+    pending = claimPendingMagicLinkCallback(linkId);
     if (!pending) {
       return res.status(410).send(`
         <html><body style="font-family:monospace;background:#0a0a0a;color:#fff;padding:40px">
@@ -61,8 +62,9 @@ router.get('/magic-callback', async (req, res) => {
     }
 
     // Complete the email_link sign-in/sign-up — pass the __clerk_ticket token if Clerk embedded it in the redirect URL
-    const isSignUpBool = pending.isSignUp === true || req.query.isSignUp === '1';
-    const session = await clerkAuth.completeEmailLink(signInId, pending.clientCookie, clerkTicket, { isSignUp: isSignUpBool });
+    const session = await clerkAuth.completeEmailLink(pending.signInId, pending.clientCookie, clerkTicket, {
+      isSignUp: pending.isSignUp === true,
+    });
     await store.updateAccountSession(
       pending.userId,
       pending.accountId,
@@ -87,7 +89,7 @@ router.get('/magic-callback', async (req, res) => {
       }
     }
 
-    pendingMagicLinks.delete(signInId);
+    forgetPendingMagicLink(pending.signInId);
 
     return res.send(`<!DOCTYPE html>
 <html>
@@ -108,7 +110,7 @@ router.get('/magic-callback', async (req, res) => {
       if (window.opener && !window.opener.closed) {
         window.opener.postMessage({
           type: 'hydra:magic-link-done',
-          signInId: ${JSON.stringify(signInId)},
+          signInId: ${JSON.stringify(pending.signInId)},
           accountId: ${JSON.stringify(pending.accountId)},
           email: ${JSON.stringify(pending.email)},
         }, window.location.origin);
@@ -126,6 +128,10 @@ router.get('/magic-callback', async (req, res) => {
 </body>
 </html>`);
   } catch (err) {
+    if (pending?.signInId) {
+      const { forgetPendingMagicLink } = await import('../services/magic-link-manager.js');
+      forgetPendingMagicLink(pending.signInId);
+    }
     return res.status(500).send(`
       <html><body style="font-family:monospace;background:#0a0a0a;color:#fff;padding:40px">
         <h2 style="color:#f87171">✗ Sign-In Failed</h2>
