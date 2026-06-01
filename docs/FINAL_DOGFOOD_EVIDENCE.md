@@ -2103,3 +2103,14 @@ This evidence file is not release-complete by itself. The release remains not co
   `0.0%` end), and `513490944 -> 513835008` bytes RSS (`+344064`). This is
   running-package no-regression evidence; the source copy patch is not claimed
   as released.
+- README proxy-coverage reconciliation: the public overview and Desktop App
+  operator note now describe the encrypted pool as one random route per task,
+  reused across direct HTTPS probes and browser fallback. The CLI audit locks
+  those phrases and `rg -n "Remotion|remotion" README.md` returns no matches.
+  The read-only post-change profile under
+  `/private/tmp/hydra-v147-post-readme-proxy-profile-20260601T230704Z` sampled
+  the still-installed exact-public `v1.4.7` package 11 times: four owned
+  processes, zero stale profiles, `0.0-0.1%` CPU (`0.009%` average,
+  `0.0%` end), and `514457600 -> 516734976` bytes RSS (`+2277376`). This is
+  running-package no-regression evidence; the source/docs patch is not claimed
+  as released.

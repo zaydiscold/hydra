@@ -1466,6 +1466,17 @@ closed-app CLI commands, tests, and repo-local documentation.
   samples at `0.0-0.3%` CPU (`0.036%` average, `0.0%` end) with
   `513490944 -> 513835008` bytes RSS (`+344064`). This does not claim the
   copy-only source patch is already released.
+- The README proxy-coverage follow-up aligned the public overview and Desktop
+  App note with the real one-random-route-per-task wiring across direct HTTPS
+  probes and browser fallback. `bin/commands/audit.js` now locks those phrases
+  alongside the no-Remotion, badge, Touch ID, 24-hour unlock, navigation,
+  versioning, and screenshot-secrecy anchors. The conservative running-package
+  profile under
+  `/private/tmp/hydra-v147-post-readme-proxy-profile-20260601T230704Z`
+  retained four exact-public `v1.4.7` processes and zero stale profiles across
+  11 samples at `0.0-0.1%` CPU (`0.009%` average, `0.0%` end) with
+  `514457600 -> 516734976` bytes RSS (`+2277376`). This does not claim the
+  README/audit source patch is already released.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

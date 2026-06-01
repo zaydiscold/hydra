@@ -55,7 +55,7 @@ It is designed for operators who want a native control plane without shipping ac
 - **Long-running API behavior**: bounded proxy concurrency, buffered request-log writes, log rotation, request-log retention, upstream health checks, and graceful shutdown paths.
 - **Fleet account operations**: add accounts, track session health, provision management keys, sync balances, and inspect account readiness.
 - **Key pool management**: rotate across pooled keys, cool down rate-limited keys, disable unhealthy keys, and expose a single local Hydra proxy key.
-- **Account proxy pool**: optional encrypted account-task proxy list for browser-backed signup, key, and code flows.
+- **Account proxy pool**: optional encrypted per-task proxy list for signup, key, and code flows, including direct HTTPS and browser fallbacks.
 - **Promo-code workflows**: preflight readiness, redeem against selected accounts, and keep redemption history.
 - **Local-first security**: local vault password, optional Touch ID unlock gate, encrypted secrets, owner-only data directories, redacted CLI output, and loopback-first network binding.
 - **Scriptable operator CLI**: JSON-friendly commands for automation, diagnostics, imports/exports, fleet scans, and router lifecycle control.
@@ -115,7 +115,8 @@ blanking the window while native token release is pending.
 
 The proxy pool accepts one proxy per line in `ip:port:user:pass` format. Empty
 pools are valid; account tasks continue without proxies when no saved proxy is
-available.
+available. Hydra selects one random saved route per new task and reuses it
+across direct HTTPS probes and any browser fallback for that task.
 
 ## CLI
 

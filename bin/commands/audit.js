@@ -509,6 +509,8 @@ function buildAudit() {
         && readme.includes('Captured from the packaged Electron app')
         && readme.includes('Account proxy pool')
         && readme.includes('ip:port:user:pass')
+        && readme.includes('including direct HTTPS and browser fallbacks')
+        && readme.includes('selects one random saved route per new task')
         && readme.includes('The README avoids embedding real account data, full API keys, or live secrets')
         && !/Remotion|remotion/.test(readme)
         && readme.includes('actions/workflows/release.yml/badge.svg')
