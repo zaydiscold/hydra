@@ -887,6 +887,13 @@ closed-app CLI commands, tests, and repo-local documentation.
   `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
   exactly that one Hydra bundle, and the rebuilt package remains live with
   four owned processes.
+- Detached-batch cancellation checkpoint
+  `219ae795501614b7040b63b8502b7d2135367111` used `[skip-bump]`;
+  Auto-version run `26731750366` skipped, CI run `26731750346` passed, and
+  Docker workflow run `26731750318` passed both runtime smoke and registry
+  image push. GitHub's remaining Node 20 action-runtime warning belongs to the
+  current upstream Docker helper actions, which GitHub forced onto Node 24;
+  the Hydra-owned workflow remains green.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

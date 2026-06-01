@@ -1483,3 +1483,12 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `release/` again contains only `mac-arm64/Hydra.app`; Spotlight resolves
   exactly that one `com.zayd.hydra` bundle, and the rebuilt app remains live
   with four owned processes.
+- Detached-batch cancellation checkpoint
+  `219ae795501614b7040b63b8502b7d2135367111` used `[skip-bump]`;
+  Auto-version run `26731750366` skipped, CI run `26731750346` passed, and
+  Docker workflow run `26731750318` passed both runtime smoke and registry
+  image push. GitHub again emitted its upstream Node 20 action-runtime
+  deprecation warning for the current `docker/build-push-action@v6`,
+  `docker/login-action@v3`, `docker/metadata-action@v5`, and
+  `docker/setup-buildx-action@v3` releases while forcing them onto Node 24;
+  the Hydra-owned workflow remains green.
