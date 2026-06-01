@@ -2441,3 +2441,14 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   canonical app. Real Touch ID fingerprint approval, live OTP/redemption/proxy
   completion, redacted screenshot review, and interactive Windows desktop UX
   remain explicit manual boundaries.
+- 2026-06-01 exact-public-`v1.4.7` untouched idle profile:
+  `/private/tmp/hydra-v147-public-post-closeout-idle-profile-20260601T213205Z`
+  records a native LaunchServices `4 -> 0 -> 4` lifecycle against the sole
+  canonical public ARM bundle with no Computer Use attachment. Splash work
+  decayed from `124.6%` aggregate Hydra CPU at `t+5s` to `57.1%` at `t+20s`
+  and `0.0%` at `t+35s`. The following 11 samples at 30-second intervals
+  retained the same four settled PIDs and zero stale Hydra Playwright
+  profiles. Idle CPU stayed exactly `0.0%`; RSS moved from `655867904` to
+  `626966528` bytes (`-28901376`). Unrelated browser-tool pressure varied
+  independently and is recorded separately in the owner-aware doctor
+  snapshots rather than attributed to Hydra.

@@ -2003,3 +2003,12 @@ This evidence file is not release-complete by itself. The release remains not co
   snapshot/API-key refresh actions. Spotlight resolves only the canonical app.
   Hardware Touch ID approval, full live OTP/redemption/proxy flows, redacted
   screenshot review, and interactive Windows desktop UX remain manual.
+- Exact-public-`v1.4.7` untouched idle profile:
+  `/private/tmp/hydra-v147-public-post-closeout-idle-profile-20260601T213205Z`
+  records a native LaunchServices `4 -> 0 -> 4` lifecycle without Computer
+  Use attachment. Splash work decayed from `124.6%` aggregate Hydra CPU at
+  `t+5s` to `57.1%` at `t+20s` and `0.0%` at `t+35s`. The following 11
+  samples at 30-second intervals retained the same four settled PIDs and zero
+  stale Hydra Playwright profiles. Idle CPU stayed exactly `0.0%`; RSS moved
+  from `655867904` to `626966528` bytes (`-28901376`). Owner-aware doctor
+  snapshots record unrelated browser-tool pressure separately.
