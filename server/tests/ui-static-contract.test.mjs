@@ -54,6 +54,7 @@ test('bulk email parsing preserves duplicate remainders when used rows are clear
 test('bulk import copy points OpenRouter users at OTP instead of an unverified callback setup', () => {
   const page = readRepoFile('src/pages/BulkAuthWizard.jsx');
   const tab = readRepoFile('src/components/EmailLinkTab.jsx');
+  const authUtils = readRepoFile('src/utils/auth.js');
 
   assert.match(page, /Tenant allowlist required/);
   assert.match(page, /supported direct HTTPS code import/);
@@ -65,6 +66,8 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
   assert.match(tab, /2\. Send status/);
   assert.doesNotMatch(page, /One click link/);
   assert.doesNotMatch(tab, /Parallel status/);
+  assert.match(authUtils, /Email Link works only when its capability banner says ready/);
+  assert.doesNotMatch(authUtils, /Try the Email Link tab instead/);
 });
 
 test('Electron app chrome draws its own drag strip on macOS with traffic-light clearance', () => {

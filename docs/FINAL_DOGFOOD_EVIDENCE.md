@@ -2075,3 +2075,15 @@ This evidence file is not release-complete by itself. The release remains not co
   fail-closed evidence: a valid token prompts once per relaunch while
   cancellation intentionally leaves password visible. Successful fingerprint
   approval and release of the saved token remain a user-run hardware boundary.
+- Bulk OTP guidance follow-up: `src/utils/auth.js` no longer recommends Email
+  Link generically after `email_code` or strategy failures. The hint now tells
+  operators to check the account sign-in method and use Email Link only when
+  its capability banner says ready. Focused verification passed real Express
+  integration (`10/10`), renderer/static plus cancellation contracts
+  (`89/89`), lint, build, and diff hygiene. The conservative post-fix profile
+  under `/private/tmp/hydra-v147-post-bulk-guidance-profile-20260601T224033Z`
+  sampled the still-installed exact-public `v1.4.7` package 11 times:
+  four owned processes, zero stale profiles, `0.0-0.4%` CPU (`0.036%`
+  average, `0.0%` end), and `621101056 -> 523845632` bytes RSS
+  (`-97255424`). This records running-package no-regression evidence without
+  claiming that the copy-only source patch has shipped.

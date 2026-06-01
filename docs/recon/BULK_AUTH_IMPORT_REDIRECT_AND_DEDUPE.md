@@ -26,6 +26,9 @@ The broken flow created hidden damage:
 - `/api/accounts/magic-link/capability` exposes whether Email Link can run before any account row is created or replaced.
 - The Email Link tab now runs that capability preflight before any queue write. If the callback is missing, unconfirmed, or local-only, the UI shows the callback state at the top of the tab, disables "Send Magic Links", leaves the paste input intact, and does not contact Clerk.
 - The Email Link tab keeps a "Recheck" action for compatible Clerk tenants, but OpenRouter users are directed to the supported OTP HTTPS lane instead of a tunnel setup dead end.
+- OTP strategy-error hints no longer recommend Email Link generically. They
+  tell the operator to check the account sign-in method and use Email Link
+  only when its capability banner says ready.
 - Bulk Email Link sends are paced one at a time with a `6500ms` gap.
 - Email Link sending fails closed before contacting Clerk unless `HYDRA_MAGIC_LINK_CALLBACK_ORIGIN` is public HTTPS and `HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED=1` explicitly records that the Clerk tenant owner allowlisted the relay.
 - The email callback now carries a random 24-byte base64url `linkId`. Hydra keeps Clerk attempt and account identifiers server-side, indexes the pending attempt by both `signInId` and `linkId`, atomically claims the public callback before Clerk completion, and removes both indexes together on completion, failure, or expiry.
@@ -110,3 +113,37 @@ For OpenRouter accounts, use Bulk OTP. If an owner-controlled Clerk tenant is
 introduced later, configure an authenticated named tunnel that forwards only
 `/api/auth/magic-callback`, register that exact HTTPS relay with the Clerk
 tenant owner, and only then set both opt-in variables.
+
+## OTP Guidance Follow-Up
+
+Date: 2026-06-01
+
+A later source review found one stale renderer hint in `src/utils/auth.js`.
+When Clerk rejected `email_code` or reported an unavailable strategy, the hint
+still recommended the Email Link tab generically. That contradicted the
+capability-gated OpenRouter behavior above and could steer an operator back
+into the rejected callback lane.
+
+The hint now says to check the account sign-in method and use Email Link only
+when its capability banner says ready. `server/tests/ui-static-contract.test.mjs`
+locks both the positive copy and removal of the stale generic recommendation.
+
+Focused verification passed:
+
+- `npm run test:api-integration` (`10/10`)
+- `node --test server/tests/ui-static-contract.test.mjs
+  server/tests/background-failure-visibility.test.mjs
+  server/tests/batch-runner.test.mjs
+  server/tests/openrouter-request-cancellation.test.mjs` (`89/89`)
+- `npm run lint`
+- `npm run build`
+- `git diff --check`
+
+The read-only post-fix runtime profile under
+`/private/tmp/hydra-v147-post-bulk-guidance-profile-20260601T224033Z`
+sampled the still-installed exact-public `v1.4.7` package 11 times at
+30-second intervals. It retained four Hydra-owned processes and zero stale
+profiles throughout; CPU stayed within `0.0-0.4%`, averaged `0.036%`, and
+ended at `0.0%`; RSS moved `621101056 -> 523845632` bytes (`-97255424`).
+This is conservative no-regression evidence for the running public package,
+not a claim that the copy-only source patch has already shipped.

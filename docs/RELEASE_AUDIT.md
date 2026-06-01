@@ -2550,3 +2550,21 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   fingerprint approval followed by token release remains a user-run hardware
   boundary. The durable note is
   `docs/recon/TOUCH_ID_UNLOCK_TOKEN_ORDER.md`.
+- 2026-06-01 Bulk OTP guidance follow-up: source review found one stale
+  renderer hint in `src/utils/auth.js` that recommended Email Link generically
+  when Clerk rejected `email_code` or reported an unavailable strategy. That
+  contradicted Hydra's fail-closed OpenRouter callback capability check. The
+  hint now tells the operator to check the account sign-in method and use Email
+  Link only when its capability banner says ready. Static coverage locks both
+  the new copy and removal of the stale recommendation. Focused verification
+  passed real Express API integration (`10/10`), renderer/static plus
+  cancellation contracts (`89/89`), lint, build, and diff hygiene. The
+  read-only post-fix profile under
+  `/private/tmp/hydra-v147-post-bulk-guidance-profile-20260601T224033Z`
+  sampled the still-installed exact-public `v1.4.7` package 11 times at
+  30-second intervals: four Hydra-owned processes and zero stale profiles
+  throughout, `0.0-0.4%` CPU (`0.036%` average, `0.0%` end), and
+  `621101056 -> 523845632` bytes RSS (`-97255424`). This is honest
+  no-regression evidence for the running public package; the copy-only source
+  patch is not claimed as released. The durable note is
+  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`.
