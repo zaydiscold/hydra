@@ -115,7 +115,7 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.6` is the active release candidate. Continue
+`v1.4.6` is the current public release. Continue
 using `[skip-bump]` for audit, dogfood, and isolated documentation checkpoints
 after this patch ships unless a real source fix must go to users. Do not produce
 a second minor bump merely to record manual evidence.

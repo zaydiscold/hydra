@@ -17,12 +17,12 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Multi-arch macOS updater metadata | Release workflow includes `mac-update-metadata` and `scripts/merge-mac-update-yml.mjs`; workflow contract requires merged `latest-mac.yml` with arm64 and x64 files. v1.0.17 release artifact inspection verified `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` were published with macOS arm64/x64 and Windows artifacts. | Verified by release |
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
-| Release artifacts | GitHub release v1.4.5 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26771336388` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; v1.4.5 released |
-| macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-local `v1.4.5` macOS arm64 app verifies with `codesign --verify --deep --strict`; release-matrix package smoke passed on macOS arm64 and macOS Intel. | Verified by release artifact dogfood |
+| Release artifacts | GitHub release v1.4.6 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26778847890` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; v1.4.6 released |
+| macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-local `v1.4.6` macOS arm64 app verifies with `codesign --verify --deep --strict`; release-matrix package smoke passed on macOS arm64 and macOS Intel. | Verified by release artifact dogfood |
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Packaged screenshot plan | Current gallery and splash media come from packaged Electron only and stay redacted; final interactive human visual review remains manual. The superseded Remotion lane is out of scope. | Partially verified |
-| Docker runtime smoke | GitHub Actions run `26771322892` passed both `Runtime Smoke` and `Build & Push` for the `v1.4.5` release commit. Prior stricter local `npm run docker:smoke -- --start` evidence built the trimmed image, launched full Chromium through Hydra's own persistent-context resolver, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` reported no missing Chromium libraries. | Verified locally and by CI runtime smoke |
+| Docker runtime smoke | GitHub Actions run `26778835668` passed both `Runtime Smoke` and `Build & Push` for the `v1.4.6` release commit. Prior stricter local `npm run docker:smoke -- --start` evidence built the trimmed image, launched full Chromium through Hydra's own persistent-context resolver, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` reported no missing Chromium libraries. | Verified locally and by CI runtime smoke |
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
 | Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 | Idle backend performance pass | PR #18 merged as master f74c195 and v1.0.9 includes delayed session/request-log startup sweeps, opt-in session-lifetime probe, relaxed task-supervisor sweep interval, and removed eager renderer live-probe fan-out from dashboard/vault/account-detail page load. CI, Electron package smoke, Docker, and release automation passed after merge. | Verified by CI/release |
@@ -2278,7 +2278,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   test:ui-static` (`45/45`), `npm run test:api-integration --
   --test-name-pattern='magic-link capability|magic-link callback indexes|bulk
   OTP'` (`10/10`), `npm run openapi:hydra` (`84 operations`), and `git diff
-  --check`. Packaged runtime proof follows after the canonical ARM rebuild.
+  --check`. Packaged runtime proof is recorded below.
 - 2026-06-01 `v1.4.6` canonical ARM package proof: full `npm run test:ci`,
   `npm run lint`, `npm run gate` (`12/12`), `npm run test:cli` (`46/46`),
   `npm run test:dogfood-evidence` (`1/1`), and
@@ -2294,3 +2294,35 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   compositor tail settled, `hydra doctor` reported exactly four Hydra-owned
   processes, `0.4%` aggregate CPU, `600.50 MB` RSS, and zero stale Hydra
   Playwright profiles.
+- 2026-06-01 public `v1.4.6` release closeout: GitHub release v1.4.6 is public
+  at `https://github.com/zaydiscold/hydra/releases/tag/v1.4.6`, published
+  `2026-06-01T20:07:19Z` from commit
+  `3bffb18239e666c486574928fd240ab496f53870`. Auto-version run
+  `26778835765`, CI run `26778835658`, Docker workflow run `26778835668`, and
+  Release Desktop Apps run `26778847890` all completed successfully. Docker
+  workflow run `26778835668` passed both runtime smoke and registry image push.
+  The public asset list contains macOS arm64 zip/blockmap, macOS Intel
+  zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged
+  `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`:
+  `Hydra-1.4.6-mac-arm64.zip`
+  (`sha256:17b7f7ab3fdbfd3834b7ea36cd07258a1eecc1d8ca7c61c720f1b9f2b0f4d344`),
+  `Hydra-1.4.6-mac-arm64.zip.blockmap`,
+  `Hydra-1.4.6-mac-x64.zip`
+  (`sha256:79c4f30c226ad51f35925ba07e282d069afa94bc12433ec2f90611e09aba8d4b`),
+  `Hydra-1.4.6-mac-x64.zip.blockmap`, `Hydra-1.4.6-win-x64.exe`
+  (`sha256:e6fde27826755a2c33d5116ff93d4e8614087a75bbefebe4bc841251ca147c78`),
+  `Hydra-1.4.6-win-x64.exe.blockmap`,
+  `Hydra-1.4.6-linux-x86_64.AppImage`
+  (`sha256:1d3e20516dab9de566116bfadac7348f0eb3f7ea5021f79e4ae1fb0d3fd79af8`),
+  `latest-mac.yml`, `latest.yml`, and `latest-linux.yml`. The release workflow
+  passed shared `lint`, `test:ci`, and `gate`, Linux AppImage build/smoke/upload,
+  macOS arm64 build/smoke/upload, macOS Intel build/smoke/upload, Windows NSIS
+  build/smoke plus hosted unpacked and NSIS-installed executable lifecycle
+  check, and final macOS updater metadata merge. Downloaded `latest-mac.yml`
+  lists both macOS architectures.
+- 2026-06-01 post-release branch-cleanup repair: scheduled stale-branch-cleanup
+  run `26776565868` failed when the repository correctly contained only
+  protected `master`; `grep -Ev` returned its normal no-match status under
+  `set -o pipefail`. Commit `7257498` makes the empty sweep an explicit success.
+  Manual workflow dispatch `26778878591`, closeout CI run `26778879503`, and
+  closeout Docker run `26778879520` all passed.

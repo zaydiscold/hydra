@@ -1937,3 +1937,17 @@ This evidence file is not release-complete by itself. The release remains not co
   one `Hydra — Dashboard` window at `1440x900`. After startup settled,
   `hydra doctor` reported the expected four Hydra-owned processes, `0.4%`
   aggregate CPU, `600.50 MB` RSS, and zero stale Hydra Playwright profiles.
+- Public `v1.4.6` release publication: GitHub release
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.4.6` was published on
+  2026-06-01 from commit `3bffb18239e666c486574928fd240ab496f53870`.
+  Auto-version run `26778835765`, CI run `26778835658`, Docker workflow run
+  `26778835668`, and Release Desktop Apps run `26778847890` all passed. The
+  public release contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap,
+  Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows
+  `latest.yml`, and Linux `latest-linux.yml`; the downloaded macOS updater
+  metadata lists both architectures. The release workflow also passed the
+  hosted Windows unpacked and NSIS-installed executable lifecycle check.
+- Post-release cleanup-workflow proof: commit `7257498` makes an empty
+  stale-branch sweep succeed when only protected `master` remains. Manual
+  stale-branch-cleanup dispatch `26778878591`, closeout CI run `26778879503`,
+  and closeout Docker workflow run `26778879520` passed.
