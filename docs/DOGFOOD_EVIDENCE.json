@@ -1,6 +1,6 @@
 {
   "schema": "hydra.final-dogfood-evidence.v1",
-  "generatedAt": "2026-06-01T21:19:58.821Z",
+  "generatedAt": "2026-06-01T23:26:54.000Z",
   "version": "1.4.7",
   "root": "<repo-root>",
   "checks": {
@@ -58,8 +58,8 @@
       "missingAndBlockersOk": true
     },
     "docker": {
-      "ok": false,
-      "detail": "Docker daemon was not running locally during this evidence capture; the recorded GitHub Actions Docker runtime lane remains authoritative."
+      "ok": true,
+      "detail": "Local npm run docker:smoke passed after a temporary Docker Desktop launch: compose validation, image build, and a real containerized Playwright Chromium launch. No Hydra containers or hydra_default network remained; docker desktop stop removed the remaining Docker Desktop helper processes."
     }
   },
   "manual": [

@@ -2129,3 +2129,13 @@ This evidence file is not release-complete by itself. The release remains not co
   Desktop helper processes in one second. OpenAPI regeneration retained `84`
   operations without tracked drift. Final state: one canonical Spotlight-visible app, four Hydra-owned
   processes, `0.0%` CPU, and zero stale profiles.
+- Final evidence reconciliation: `docs/DOGFOOD_EVIDENCE.json` now records the
+  passed local Docker lane instead of its earlier pre-smoke unavailable state.
+  The checked-in record remains redacted and no interactive/manual checkbox was
+  promoted. A final read-only exact-public `v1.4.7` profile under
+  `/private/tmp/hydra-v147-post-final-docs-idle-profile-20260601T232514Z`
+  retained four Hydra-owned processes and zero stale Hydra Playwright profiles
+  across all 11 samples. It captured one isolated `46.2%` CPU spike, returned
+  to low idle on the next sample, and ended at `0.0%`; RSS moved
+  `465502208 -> 470351872` bytes (`+4849664`). The full samples and broad
+  process inventories remain under that profile directory.

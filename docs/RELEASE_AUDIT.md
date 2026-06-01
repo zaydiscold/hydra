@@ -2576,3 +2576,15 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   package 11 times with four owned processes, zero stale profiles,
   `0.0-0.4%` CPU (`0.073%` average, `0.0%` end), and
   `509345792 -> 513179648` bytes RSS (`+3833856`).
+- 2026-06-01 final evidence reconciliation: `docs/DOGFOOD_EVIDENCE.json` now
+  records the already-passed local `npm run docker:smoke` lane truthfully:
+  compose validation, image build, a real containerized Playwright Chromium
+  launch, no remaining Hydra container or network, and a complete Docker
+  Desktop helper shutdown. No manual acceptance flag was promoted. A final
+  read-only exact-public `v1.4.7` profile under
+  `/private/tmp/hydra-v147-post-final-docs-idle-profile-20260601T232514Z`
+  retained four Hydra-owned processes and zero stale Hydra Playwright profiles
+  across all 11 samples. It captured one isolated `46.2%` CPU spike before
+  returning to low idle and ending at `0.0%`; RSS moved
+  `465502208 -> 470351872` bytes (`+4849664`). The full sample series and
+  broad process inventories remain in that profile directory.
