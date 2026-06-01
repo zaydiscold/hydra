@@ -184,7 +184,7 @@ function buildAudit() {
   const ciWorkflow = safeRead('.github/workflows/ci.yml');
   const dockerWorkflow = safeRead('.github/workflows/docker.yml');
   const dockerRuntimeBaselineRun = '26196262336';
-  const dockerRuntimeCiRecorded = releaseAudit.includes(`GitHub Actions run ${dockerRuntimeBaselineRun}`)
+  const dockerRuntimeBaselineRecorded = releaseAudit.includes(`GitHub Actions run ${dockerRuntimeBaselineRun}`)
     && releaseAudit.includes('Runtime Smoke')
     && releaseAudit.includes('npm run docker:smoke -- --start')
     && releaseAudit.includes('health endpoint response')
@@ -192,6 +192,7 @@ function buildAudit() {
   const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker\s+workflow\s+run\s+`(\d+)`\s+passed both runtime smoke and\s+(?:the )?registry\s+image\s+push/g)]
     .map((match) => match[1]);
   const latestDockerCheckpointRun = dockerCheckpointRuns.at(-1) ?? null;
+  const dockerRuntimeCiRecorded = dockerRuntimeBaselineRecorded && latestDockerCheckpointRun != null;
   const currentReleaseRecorded = releaseAudit.includes(`GitHub release v${version} is public`)
     && releaseAudit.includes('macOS arm64 zip/blockmap')
     && releaseAudit.includes('macOS Intel zip/blockmap')

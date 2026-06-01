@@ -1320,3 +1320,19 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   cleanly in one second. The temporary public-zip symlink and downloaded smoke
   input directory were moved reversibly out of the workspace into Trash;
   `release/` again contains only `mac-arm64/Hydra.app`.
+- Current-release artifact-proof checkpoint
+  `51fff07eff4500dee848f74036de94749df6f277` used `[skip-bump]`;
+  Auto-version run `26730026832` skipped, CI run `26730026830` passed, and
+  Docker workflow run `26730026837` passed both runtime smoke and registry
+  image push.
+- 2026-06-01 Docker audit predicate completion: the `docker-runtime` audit row
+  previously required the original full compose-start baseline but only
+  appended the newest parsed Docker checkpoint as informational evidence.
+  `bin/commands/audit.js` now requires both the original end-to-end baseline
+  and at least one newer recorded Docker checkpoint run before the row can
+  pass. The CLI regression locks that conjunction into the audit source
+  contract and still requires newest-checkpoint evidence. Syntax validation,
+  focused CLI verification (`46/46`), closed-app audit (`31 ok / 5 deferred /
+  0 missing / 0 blockers`), and diff check passed. The complete no-Docker
+  source chain then passed: lint, full `npm test`, gate (`12/12`), OpenAPI
+  generation (`83 operations`), and diff check.

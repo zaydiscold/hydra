@@ -1207,3 +1207,16 @@ This evidence file is not release-complete by itself. The release remains not co
   cleanly in one second. The temporary public-package symlink and downloaded
   smoke inputs were moved reversibly to Trash; `release/` again contains only
   `mac-arm64/Hydra.app`.
+- Current-release artifact-proof checkpoint
+  `51fff07eff4500dee848f74036de94749df6f277` used `[skip-bump]`;
+  Auto-version run `26730026832` skipped, CI run `26730026830` passed, and
+  Docker workflow run `26730026837` passed both runtime smoke and registry
+  image push.
+- The Docker audit predicate now requires both the original full
+  compose-start baseline and at least one newer recorded Docker workflow
+  checkpoint before `docker-runtime` can pass; the newest parsed checkpoint
+  remains visible in the evidence string. Syntax validation, CLI verification
+  (`46/46`), closed-app audit (`31 ok / 5 deferred / 0 missing / 0 blockers`),
+  and diff check passed. The complete no-Docker source chain then passed:
+  lint, full `npm test`, gate (`12/12`), OpenAPI generation (`83 operations`),
+  and diff check.
