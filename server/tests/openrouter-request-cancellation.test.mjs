@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { sleepWithSignal } from '../lib/abort.js';
 import { getCredits } from '../services/openrouter.js';
+import { probeOpenRouterReachability } from '../services/upstream-probe.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -48,6 +49,68 @@ test('shared abort-aware sleep clears an owned timer', async () => {
   assert.ok(Date.now() - startedAt < 250, 'abort must clear the one-second timer');
 });
 
+test('OpenRouter reachability probe aborts upstream work when its final health surface disconnects', async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  let upstreamSignal = null;
+  let calls = 0;
+  const startedAt = Date.now();
+
+  globalThis.fetch = async (_url, options) => {
+    calls += 1;
+    upstreamSignal = options.signal;
+    return new Promise((_resolve, reject) => {
+      upstreamSignal.addEventListener('abort', () => reject(upstreamSignal.reason), { once: true });
+    });
+  };
+
+  try {
+    const request = probeOpenRouterReachability({ signal: controller.signal, timeoutMs: 1000 });
+    setTimeout(() => controller.abort(new Error('health renderer disconnected')), 10);
+
+    await assert.rejects(request, /health renderer disconnected/);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(calls, 1);
+    assert.equal(upstreamSignal.aborted, true, 'final subscriber disconnect must abort the shared upstream fetch');
+    assert.ok(Date.now() - startedAt < 250, 'disconnect must not wait for the one-second timeout');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('OpenRouter reachability probe keeps shared upstream work while another health surface remains', async () => {
+  const originalFetch = globalThis.fetch;
+  const firstController = new AbortController();
+  const secondController = new AbortController();
+  let upstreamSignal = null;
+  let resolveFetch = null;
+  let calls = 0;
+
+  globalThis.fetch = async (_url, options) => {
+    calls += 1;
+    upstreamSignal = options.signal;
+    return new Promise((resolve, reject) => {
+      resolveFetch = () => resolve(new Response('', { status: 200 }));
+      upstreamSignal.addEventListener('abort', () => reject(upstreamSignal.reason), { once: true });
+    });
+  };
+
+  try {
+    const first = probeOpenRouterReachability({ signal: firstController.signal, timeoutMs: 1000 });
+    const second = probeOpenRouterReachability({ signal: secondController.signal, timeoutMs: 1000 });
+
+    firstController.abort(new Error('first health renderer disconnected'));
+    await assert.rejects(first, /first health renderer disconnected/);
+    assert.equal(calls, 1, 'concurrent health surfaces must reuse one upstream probe');
+    assert.equal(upstreamSignal.aborted, false, 'one remaining subscriber must keep the shared fetch alive');
+
+    resolveFetch();
+    assert.equal(await second, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('account, code, session, and provisioning paths preserve request ownership', () => {
   const account = readRepoFile('server/controllers/AccountController.js');
   const code = readRepoFile('server/controllers/CodeController.js');
@@ -63,6 +126,8 @@ test('account, code, session, and provisioning paths preserve request ownership'
   const proxy = readRepoFile('server/routes/proxy.js');
   const refresher = readRepoFile('server/services/session-refresher.js');
   const store = readRepoFile('server/services/store.js');
+  const systemController = readRepoFile('server/controllers/SystemController.js');
+  const upstreamProbe = readRepoFile('server/services/upstream-probe.js');
 
   assert.match(openrouter, /combineAbortSignals\(signal, AbortSignal\.timeout\(timeoutMs\)\)/);
   assert.match(openrouter, /sleepWithSignal\(RETRY_DELAYS\[attempt\] \|\| 2000, signal\)/);
@@ -108,4 +173,7 @@ test('account, code, session, and provisioning paths preserve request ownership'
   assert.match(poolController, /fetchOpenRouterModelsList\(apiKey, \{ signal: requestAbort\.signal \}\)/);
   assert.match(proxy, /fetchOpenRouterModelsList\(keyEntry\.keyString, \{ signal: requestAbort\.signal \}\)/);
   assert.match(managementKeyStore, /createManagementKey\(deviceId, accountId, name, \{ signal \}\)/);
+  assert.match(systemController, /bindRequestAbort\(req, res, 'system health request'\)/);
+  assert.match(systemController, /probeOpenRouterReachability\(\{ signal: requestAbort\.signal \}\)/);
+  assert.match(upstreamProbe, /state\.controller\.abort\(new Error\('OpenRouter reachability probe has no remaining subscribers'\)\)/);
 });

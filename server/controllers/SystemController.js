@@ -5,6 +5,7 @@ import { proxyGate } from '../services/proxy-gate.js';
 import { getUpstreamHealth, shouldProbeUpstream } from '../services/upstream-health.js';
 import { probeOpenRouterReachability } from '../services/upstream-probe.js';
 import { getAccountProxyPool, setAccountProxyPool } from '../services/account-proxy-pool.js';
+import { bindRequestAbort, throwIfAborted } from '../lib/abort.js';
 
 class SystemController extends BaseController {
   async getTasks(req, res) {
@@ -58,11 +59,13 @@ class SystemController extends BaseController {
   }
 
   async getHealth(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'system health request');
     try {
       if (shouldProbeUpstream()) {
-        await probeOpenRouterReachability();
+        await probeOpenRouterReachability({ signal: requestAbort.signal });
       }
       const pool = await rotationManager.getStatusAsync();
+      throwIfAborted(requestAbort.signal);
       const uptime = process.uptime();
       const serverNow = new Date();
       return this.success(res, {
@@ -79,7 +82,10 @@ class SystemController extends BaseController {
         upstream: getUpstreamHealth(),
       });
     } catch (err) {
+      if (requestAbort.signal.aborted) return;
       return this.error(res, err.message, err.status || 500, err.code || 'SYSTEM_HEALTH_FAILED');
+    } finally {
+      requestAbort.dispose();
     }
   }
 }

@@ -1,21 +1,27 @@
 import { OR_BASE } from '../config.js';
+import { throwIfAborted } from '../lib/abort.js';
 import { recordUpstreamFailure, recordUpstreamHttpResult } from './upstream-health.js';
 
 const PROBE_PATH = '/api/v1/models';
 const DEFAULT_TIMEOUT_MS = 2500;
 let probeInFlight = null;
 
-export async function probeOpenRouterReachability({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  if (probeInFlight) return probeInFlight;
+function startProbe(timeoutMs) {
+  const controller = new AbortController();
+  const state = {
+    controller,
+    promise: null,
+    settled: false,
+    subscribers: new Set(),
+  };
 
-  probeInFlight = (async () => {
-    const ctrl = new AbortController();
-    const timeoutId = setTimeout(() => ctrl.abort(), timeoutMs);
+  state.promise = (async () => {
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     timeoutId.unref?.();
     try {
       const res = await fetch(`${OR_BASE}${PROBE_PATH}`, {
         method: 'GET',
-        signal: ctrl.signal,
+        signal: controller.signal,
       });
       return recordUpstreamHttpResult({
         statusCode: res.status,
@@ -26,9 +32,49 @@ export async function probeOpenRouterReachability({ timeoutMs = DEFAULT_TIMEOUT_
       return false;
     } finally {
       clearTimeout(timeoutId);
-      probeInFlight = null;
+      state.settled = true;
+      if (probeInFlight === state) probeInFlight = null;
     }
   })();
 
-  return probeInFlight;
+  probeInFlight = state;
+  return state;
+}
+
+function waitForProbe(state, signal) {
+  throwIfAborted(signal);
+
+  const subscriber = Symbol('OpenRouter reachability subscriber');
+  state.subscribers.add(subscriber);
+  let finished = false;
+
+  return new Promise((resolve, reject) => {
+    const detach = () => {
+      signal?.removeEventListener('abort', onAbort);
+      state.subscribers.delete(subscriber);
+      if (!state.settled && state.subscribers.size === 0) {
+        state.controller.abort(new Error('OpenRouter reachability probe has no remaining subscribers'));
+      }
+    };
+    const settle = (callback, value) => {
+      if (finished) return;
+      finished = true;
+      detach();
+      callback(value);
+    };
+    const onAbort = () => {
+      settle(reject, signal.reason ?? new Error('OpenRouter reachability subscriber aborted'));
+    };
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    state.promise.then(
+      (result) => settle(resolve, result),
+      (err) => settle(reject, err),
+    );
+  });
+}
+
+export async function probeOpenRouterReachability({ timeoutMs = DEFAULT_TIMEOUT_MS, signal = null } = {}) {
+  const state = probeInFlight ?? startProbe(timeoutMs);
+  return waitForProbe(state, signal);
 }
