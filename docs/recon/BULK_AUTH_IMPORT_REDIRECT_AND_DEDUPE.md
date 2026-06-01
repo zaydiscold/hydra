@@ -127,6 +127,8 @@ into the rejected callback lane.
 The hint now says to check the account sign-in method and use Email Link only
 when its capability banner says ready. `server/tests/ui-static-contract.test.mjs`
 locks both the positive copy and removal of the stale generic recommendation.
+The same pass corrected the adjacent rate-limit hint grammar from `requests
+send` to `requests sent` and locks that wording as well.
 
 Focused verification passed:
 

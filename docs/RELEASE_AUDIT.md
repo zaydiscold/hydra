@@ -2556,7 +2556,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   contradicted Hydra's fail-closed OpenRouter callback capability check. The
   hint now tells the operator to check the account sign-in method and use Email
   Link only when its capability banner says ready. Static coverage locks both
-  the new copy and removal of the stale recommendation. Focused verification
+  the new copy and removal of the stale recommendation. The same pass corrected
+  the adjacent rate-limit hint grammar and locks that wording too. Focused verification
   passed real Express API integration (`10/10`), renderer/static plus
   cancellation contracts (`89/89`), lint, build, and diff hygiene. The
   read-only post-fix profile under

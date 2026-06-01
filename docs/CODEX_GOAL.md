@@ -1440,7 +1440,8 @@ closed-app CLI commands, tests, and repo-local documentation.
 - The Bulk OTP guidance follow-up removed a stale `src/utils/auth.js`
   recommendation to use Email Link generically after `email_code` or strategy
   failures. The hint now tells operators to check the account sign-in method
-  and use Email Link only when its capability banner says ready. Real Express
+  and use Email Link only when its capability banner says ready. The adjacent
+  rate-limit hint grammar was corrected and locked as well. Real Express
   integration passed `10/10`; renderer/static plus cancellation contracts
   passed `89/89`; lint, build, and diff hygiene passed. The conservative
   running-package profile under

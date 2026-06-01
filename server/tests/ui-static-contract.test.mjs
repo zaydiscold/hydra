@@ -68,6 +68,8 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
   assert.doesNotMatch(tab, /Parallel status/);
   assert.match(authUtils, /Email Link works only when its capability banner says ready/);
   assert.doesNotMatch(authUtils, /Try the Email Link tab instead/);
+  assert.match(authUtils, /Too many OTP requests sent from this IP/);
+  assert.doesNotMatch(authUtils, /Too many OTP requests send from this IP/);
 });
 
 test('Electron app chrome draws its own drag strip on macOS with traffic-light clearance', () => {

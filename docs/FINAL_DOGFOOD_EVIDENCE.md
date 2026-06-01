@@ -2078,7 +2078,8 @@ This evidence file is not release-complete by itself. The release remains not co
 - Bulk OTP guidance follow-up: `src/utils/auth.js` no longer recommends Email
   Link generically after `email_code` or strategy failures. The hint now tells
   operators to check the account sign-in method and use Email Link only when
-  its capability banner says ready. Focused verification passed real Express
+  its capability banner says ready. The adjacent rate-limit hint grammar was
+  corrected and locked as well. Focused verification passed real Express
   integration (`10/10`), renderer/static plus cancellation contracts
   (`89/89`), lint, build, and diff hygiene. The conservative post-fix profile
   under `/private/tmp/hydra-v147-post-bulk-guidance-profile-20260601T224033Z`

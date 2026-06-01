@@ -48,7 +48,7 @@ export function clerkErrorHint(message) {
   if (!message) return '';
   const m = message.toLowerCase();
   if (m.includes('rate') || m.includes('429')) {
-    return 'Too many OTP requests send from this IP — wait 5-10 min.';
+    return 'Too many OTP requests sent from this IP — wait 5-10 min.';
   }
   if (m.includes('email_code') || m.includes('strategy') || m.includes('not available')) {
     return 'Clerk may not offer email_code for this address. Check the account sign-in method. Email Link works only when its capability banner says ready.';
