@@ -771,12 +771,7 @@ export async function ensureSession(userId, accountId, { signal = null } = {}) {
         const refreshed = await refreshSession(refreshInput14, session.sessionCookie, { signal });
         if (refreshed) {
           const liveStack = Array.isArray(session.clientCookies) && session.clientCookies.length > 0
-            ? (Array.isArray(refreshed.deadClientCookies) && refreshed.deadClientCookies.length > 0
-              ? (() => {
-                const deadSet = new Set(refreshed.deadClientCookies.map((entry) => entry.cookie));
-                return session.clientCookies.filter((entry) => !deadSet.has(entry.cookie));
-              })()
-              : session.clientCookies)
+            ? store.removeDeadClientCookies(session.clientCookies, refreshed.deadClientCookies)
             : [];
           await store.updateAccountSession(
             userId,
@@ -807,12 +802,7 @@ export async function ensureSession(userId, accountId, { signal = null } = {}) {
     if (refreshed) {
       const cc = refreshed.clientCookie ?? session.clientCookie;
       const liveStack = Array.isArray(session.clientCookies) && session.clientCookies.length > 0
-        ? (Array.isArray(refreshed.deadClientCookies) && refreshed.deadClientCookies.length > 0
-          ? (() => {
-            const deadSet = new Set(refreshed.deadClientCookies.map((entry) => entry.cookie));
-            return session.clientCookies.filter((entry) => !deadSet.has(entry.cookie));
-          })()
-          : session.clientCookies)
+        ? store.removeDeadClientCookies(session.clientCookies, refreshed.deadClientCookies)
         : [];
       await store.updateAccountSession(userId, accountId, refreshed.sessionCookie, cc, refreshed.sessionExpiry, {
         replaceClientCookies: liveStack,

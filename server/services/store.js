@@ -90,11 +90,13 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
     // write lands can pair a fresh Clerk result with stale renewal metadata.
     if (result && userId && accountId) {
       try {
+        const liveClientCookies = removeDeadClientCookies(cookieStack, result.deadClientCookies);
         await updateAccountSession(
           userId, accountId,
           result.sessionToken || result.sessionCookie || undefined,
           result.clientCookie || undefined,
           result.sessionExpiry || undefined,
+          { replaceClientCookies: liveClientCookies },
         );
       } catch (err) {
         logger.warn(`[SESSION] Failed to persist refreshed session probe result for account=${accountId}: ${err.message}`);
@@ -716,6 +718,22 @@ export function appendClientCookie(existing, newCookie) {
 }
 
 /**
+ * Drop Clerk device identities already proven dead by a stacked refresh attempt.
+ * Identity-aware comparison also removes stale snapshots that differ only in
+ * transient dashboard/Cloudflare cookie material.
+ */
+export function removeDeadClientCookies(existing, deadClientCookies = []) {
+  const stack = normalizeClientCookies({ clientCookies: Array.isArray(existing) ? existing : [] });
+  if (!Array.isArray(deadClientCookies) || deadClientCookies.length === 0) return stack;
+
+  const deadIdentities = new Set(
+    normalizeClientCookies({ clientCookies: deadClientCookies })
+      .map((entry) => clientCookieIdentity(entry.cookie)),
+  );
+  return stack.filter((entry) => !deadIdentities.has(clientCookieIdentity(entry.cookie)));
+}
+
+/**
  * Get the most recent (newest) client cookie from the stack.
  * Falls back to legacy config.clientCookie string for backward compat.
  */
@@ -727,6 +745,7 @@ export function getLatestClientCookie(config) {
 
 export async function updateAccountSession(userId, id, sessionCookie, clientCookie, sessionExpiry, options = {}) {
   const preserveSessionToken = options.preserveSessionToken === true;
+  const markSessionRefreshed = options.markSessionRefreshed !== false;
   const cfCookieExpirations = options.cfCookieExpirations;
   const replaceClientCookies = Array.isArray(options.replaceClientCookies)
     ? normalizeClientCookies({ clientCookies: options.replaceClientCookies })
@@ -759,7 +778,9 @@ export async function updateAccountSession(userId, id, sessionCookie, clientCook
     config.lastLoginAt = new Date().toISOString();
   }
 
-  config.sessionRefreshedAt = new Date().toISOString();
+  if (markSessionRefreshed) {
+    config.sessionRefreshedAt = new Date().toISOString();
+  }
 
   if (sessionExpiry !== undefined) {
     if (sessionExpiry === null && !preserveSessionToken) {

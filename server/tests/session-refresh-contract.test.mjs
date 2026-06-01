@@ -112,6 +112,15 @@ test('cookie stack normalization is bounded and legacy-compatible', async () => 
   );
   assert.deepEqual(appended.map((entry) => entry.cookie), ['fresh', 'stale']);
 
+  const pruned = store.removeDeadClientCookies(
+    [
+      { cookie: '__client=device-a; __cf_bm=old', issuedAt: 'old' },
+      { cookie: '__client=device-b; __cf_bm=keep', issuedAt: 'keep' },
+    ],
+    [{ cookie: '__client=device-a; __cf_bm=newer', issuedAt: 'dead' }],
+  );
+  assert.deepEqual(pruned.map((entry) => entry.cookie), ['__client=device-b; __cf_bm=keep']);
+
   const equivalentDashboardSnapshots = store.normalizeClientCookies({
     clientCookies: [
       { cookie: '__client=device-a; __cf_bm=latest', issuedAt: 'latest' },

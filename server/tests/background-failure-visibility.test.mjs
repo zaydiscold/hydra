@@ -242,6 +242,8 @@ test('long-running background timers do not pin idle Node processes', () => {
   assert.match(refresher, /function scheduleNextSweep\(delayMs = INTERVAL_MS\)/);
   assert.match(refresher, /_intervalHandle = setTimeout\(\(\) => \{/);
   assert.match(refresher, /scheduleNextSweep\(INTERVAL_MS\)/);
+  assert.match(refresher, /replaceClientCookies: liveStack/);
+  assert.match(refresher, /markSessionRefreshed: false/);
   assert.doesNotMatch(refresher, /setInterval/);
   assert.doesNotMatch(refresher, /clearInterval/);
   assert.match(supervisor, /this\.timer\.unref\?\.\(\)/);
@@ -315,6 +317,8 @@ test('idle desktop startup avoids expensive live session probe fan-out', () => {
   assert.match(refresher, /HYDRA_SESSION_REFRESH_STARTUP_DELAY_MS/);
   assert.match(refresher, /5 \* 60 \* 1000/);
   assert.match(refresher, /sweepAndRefresh\(\)\.finally\(\(\) => \{[\s\S]*scheduleNextSweep\(INTERVAL_MS\)/);
+  assert.match(refresher, /replaceClientCookies: liveStack/);
+  assert.match(refresher, /markSessionRefreshed: false/);
   assert.match(refresher, /HYDRA_SESSION_LIFETIME_PROBE === '1'/);
   assert.match(refresher, /SESSION_PROBE_ENABLED && Date\.now\(\) - _lastSessionProbeAt >= SESSION_PROBE_INTERVAL_MS/);
   assert.match(pinger, /HYDRA_HEALTH_PING_STARTUP_DELAY_MS/);

@@ -600,6 +600,8 @@ function buildAudit() {
         && sessionRefresher.includes('function scheduleNextSweep(delayMs = INTERVAL_MS)')
         && sessionRefresher.includes('_intervalHandle = setTimeout')
         && sessionRefresher.includes('scheduleNextSweep(INTERVAL_MS)')
+        && sessionRefresher.includes('replaceClientCookies: liveStack')
+        && sessionRefresher.includes('markSessionRefreshed: false')
         && !sessionRefresher.includes('setInterval')
         && taskSupervisor.includes('scheduleNextSweep(delayMs = TASK_SWEEP_INTERVAL_MS)')
         && taskSupervisor.includes('this.timer = setTimeout')

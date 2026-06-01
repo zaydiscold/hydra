@@ -2028,3 +2028,35 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Matter state. The immediately preceding untouched five-minute runtime
   profile remains the relevant idle evidence because this second rebuild only
   tightens the shipped repository audit contract.
+- 2026-06-01 session-refresh dead-cookie pruning: the six-hour auto-refresher
+  now persists an empty Clerk device-cookie stack after proving all stored
+  identities dead, preserving the stored session token while intentionally
+  leaving `sessionRefreshedAt` unchanged. Forced live probes and automation
+  refreshes use the same identity-aware pruning helper after an older stacked
+  identity succeeds. Deterministic `npm run test:session-refresher-pruning`
+  evidence records future retries `25 -> 0`; session contracts passed `12/12`,
+  background contracts passed `32/32`, cancellation contracts passed `5/5`,
+  chain completeness passed `2/2`, CLI passed `46/46`, lint passed, audit
+  remained `31 ok / 5 deferred / 0 missing / 0 blockers`, and diff hygiene
+  passed. The recon note is
+  `docs/recon/SESSION_REFRESH_DEAD_COOKIE_PRUNING.md`.
+- 2026-06-01 session-pruning current-source ARM package proof: native quit
+  evidence under
+  `/private/tmp/hydra-v142-session-pruning-rebuild-shutdown-20260601T.ZrqqTS`
+  records all four prior package processes exiting. ARM rebuild, package
+  smoke, strict deep `codesign`, bundle version (`1.4.2`), and embedded
+  production source inspection passed. The local zip SHA-256 was
+  `08ac0a0d8e5ed2cde472e409062a40d9d02cd2fa9e2d164be681e3c1369a08a3`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-session-pruning-package-20260601T071712Z`.
+- 2026-06-01 session-pruning LaunchServices and soak proof:
+  `/private/tmp/hydra-v142-session-pruning-current-source-launch-20260601T.ykgIT2`
+  records one canonical Spotlight bundle, four settled Hydra-owned processes
+  at `0.000%` CPU and `587.33 MB` RSS, zero Hydra Playwright profiles, and
+  finite splash teardown with `72/72` shuffled words, zero duplicate skips,
+  lifted collision-free portal entry, timers `0`, inactive RAF, and cleared
+  Matter state. The untouched rebuilt-package profile under
+  `/private/tmp/hydra-v142-session-pruning-post-rebuild-idle-20260601T.2OCWjF`
+  retained four processes and zero profiles across 11 samples. CPU ranged
+  `0.000-0.400%`, averaged `0.055%`, and ended at `0.000%`; RSS changed by
+  `+5144576` bytes.

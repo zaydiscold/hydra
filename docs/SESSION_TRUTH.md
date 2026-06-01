@@ -185,3 +185,37 @@ or management keys. Results:
 - One active login intentionally had no management key.
 - Every active row retained a one-entry Clerk identity stack, a just-now
   silent renewal timestamp, and a `7.0d` next local renewal checkpoint.
+
+## 2026-06-01 Dead Cookie Pruning
+
+The six-hour auto-refresher now persists exhausted Clerk device-cookie stacks
+as empty after proving that every stored identity is dead. The metadata-only
+write preserves the existing session token and intentionally leaves
+`sessionRefreshedAt` unchanged: pruning failed refresh material is not a silent
+renewal.
+
+Forced live probes and automation session refreshes also remove dead identities
+after an older stacked cookie succeeds. Identity-aware comparison treats
+snapshots that differ only in transient dashboard or Cloudflare material as
+the same Clerk device identity.
+
+The deterministic lifecycle test starts with `25` dead cookie identities:
+
+```bash
+npm run test:session-refresher-pruning
+```
+
+The first sweep attempts all `25`, stores an empty stack without stamping a
+false renewal, and records `SESSION_REFRESH_FAILED`. The second sweep attempts
+`0`, proving known-dead identities do not consume Clerk requests every six
+hours forever. The recon note is
+`docs/recon/SESSION_REFRESH_DEAD_COOKIE_PRUNING.md`.
+
+The current-source ARM package proof passed smoke, strict deep `codesign`,
+embedded-source inspection, LaunchServices launch, and an untouched five-minute
+profile. Across 11 samples the package retained four Hydra-owned processes,
+zero Hydra Playwright profiles, `0.055%` average CPU, `0.000%` end CPU, and
+`+5144576` bytes RSS drift. Evidence is stored under
+`/private/tmp/hydra-v142-session-pruning-current-source-launch-20260601T.ykgIT2`
+and
+`/private/tmp/hydra-v142-session-pruning-post-rebuild-idle-20260601T.2OCWjF`.

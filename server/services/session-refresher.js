@@ -121,6 +121,18 @@ async function _sweepImpl(signal) {
 
         if (!refreshResult) {
           logger.warn(`[AUTO-REFRESH] All ${clientCookiesStack.length} stacked cookie(s) dead for account=${account.id} — session needs manual re-auth`);
+          await updateAccountSession(
+            account.userId,
+            account.id,
+            undefined,
+            undefined,
+            undefined,
+            {
+              preserveSessionToken: true,
+              replaceClientCookies: liveStack,
+              markSessionRefreshed: false,
+            },
+          );
           await logAccountEvent(account.userId, account.id, 'SESSION_REFRESH_FAILED', `All ${clientCookiesStack.length} stacked __client cookie(s) are dead — session may need manual re-auth`);
           skipped++;
           continue;

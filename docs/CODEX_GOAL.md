@@ -1322,6 +1322,35 @@ closed-app CLI commands, tests, and repo-local documentation.
   cleared Matter state. This audit-only package pass does not change runtime
   behavior, so the immediately preceding untouched five-minute profile remains
   the relevant idle-runtime evidence.
+- Session refresh hardening now prunes exhausted Clerk device-cookie stacks
+  after the auto-refresher proves every identity dead. The metadata-only write
+  preserves the stored session token and does not rewrite
+  `sessionRefreshedAt`, so failed maintenance cannot masquerade as a silent
+  renewal. Forced live probes and automation refreshes also use the shared
+  identity-aware pruning helper after an older cookie succeeds. Deterministic
+  `npm run test:session-refresher-pruning` evidence records future retries
+  `25 -> 0`; the recon note is
+  `docs/recon/SESSION_REFRESH_DEAD_COOKIE_PRUNING.md`.
+- Native quit evidence under
+  `/private/tmp/hydra-v142-session-pruning-rebuild-shutdown-20260601T.ZrqqTS`
+  records all four prior package processes exiting before the rebuilt bundle
+  moved into place. The session-pruning ARM rebuild passed package smoke,
+  strict deep `codesign`, bundle version (`1.4.2`), and embedded production
+  source inspection. Its local zip SHA-256 was
+  `08ac0a0d8e5ed2cde472e409062a40d9d02cd2fa9e2d164be681e3c1369a08a3`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-session-pruning-package-20260601T071712Z`.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v142-session-pruning-current-source-launch-20260601T.ykgIT2`
+  records one canonical Spotlight bundle, four settled Hydra-owned processes
+  at `0.000%` CPU and `587.33 MB` RSS, and zero Hydra Playwright profiles.
+  Splash diagnostics report `72/72` shuffled words, zero duplicate skips,
+  collision-free lifted portal entry, timers `0`, inactive RAF, and cleared
+  Matter state. The untouched five-minute rebuilt-package profile under
+  `/private/tmp/hydra-v142-session-pruning-post-rebuild-idle-20260601T.2OCWjF`
+  retained four processes and zero profiles across 11 samples: CPU ranged
+  `0.000-0.400%`, averaged `0.055%`, and ended at `0.000%`; RSS changed by
+  `+5144576` bytes.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
