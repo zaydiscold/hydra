@@ -728,6 +728,11 @@ closed-app CLI commands, tests, and repo-local documentation.
   strict deep `codesign` passed. `docker compose ps --all` returned no
   services, no `hydra_default` network remained, and Docker Desktop stopped
   cleanly in one second.
+- Rotation-pool-hardening checkpoint
+  `924e55186bda95eec7a6746814b4f85374cef581` used `[skip-bump]`;
+  Auto-version run `26729047216` skipped, CI run `26729047218` passed, and
+  Docker workflow run `26729047213` passed both runtime smoke and registry
+  image push.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

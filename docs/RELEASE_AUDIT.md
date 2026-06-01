@@ -1263,3 +1263,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   (`83 operations`). A final strict deep `codesign` passed. `docker compose ps
   --all` returned no services, no `hydra_default` network remained, and Docker
   Desktop was restored to its stopped state in one second.
+- Rotation-pool-hardening checkpoint
+  `924e55186bda95eec7a6746814b4f85374cef581` used `[skip-bump]`;
+  Auto-version run `26729047216` skipped, CI run `26729047218` passed, and
+  Docker workflow run `26729047213` passed both runtime smoke and registry
+  image push.
