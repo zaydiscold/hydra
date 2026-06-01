@@ -1951,3 +1951,17 @@ This evidence file is not release-complete by itself. The release remains not co
   stale-branch sweep succeed when only protected `master` remains. Manual
   stale-branch-cleanup dispatch `26778878591`, closeout CI run `26778879503`,
   and closeout Docker workflow run `26778879520` passed.
+- Post-release `v1.4.6` read-only runtime and Search cleanup proof:
+  `/private/tmp/hydra-v146-post-release-readonly-idle-lwlq2dbC` sampled the
+  already-running canonical package 11 times across `394` seconds with a
+  minimum `30`-second pause plus native `top` collection. The same four
+  Hydra-owned processes and zero stale profiles remained present throughout;
+  aggregate CPU stayed `0.0-0.1%`, averaged `0.009%`, and ended at `0.0%`;
+  RSS moved `474.31 MB -> 487.17 MB`. Broad before/after process inventories,
+  per-sample doctor JSON, full `ps`, native `top`, and `summary.json` remain
+  under the profile directory. Follow-up local cleanup unregistered eight
+  stale LaunchServices records for historical `~/.Trash` bundles,
+  force-registered the canonical `1.4.6` app, and left both LaunchServices
+  and Spotlight resolving only
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`. No bundle or Trash
+  backup was deleted.

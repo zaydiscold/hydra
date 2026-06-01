@@ -2326,3 +2326,24 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `set -o pipefail`. Commit `7257498` makes the empty sweep an explicit success.
   Manual workflow dispatch `26778878591`, closeout CI run `26778879503`, and
   closeout Docker run `26778879520` all passed.
+- 2026-06-01 post-release `v1.4.6` read-only idle profile:
+  `/private/tmp/hydra-v146-post-release-readonly-idle-lwlq2dbC` sampled the
+  already-running canonical package 11 times across `394` seconds with a
+  minimum `30`-second pause between snapshots plus native `top` collection.
+  The same four Hydra-owned processes and zero Hydra Playwright profiles
+  remained present throughout. Aggregate Hydra CPU stayed between `0.0%` and
+  `0.1%`, averaged `0.009%`, and ended at `0.0%`; RSS moved from `474.31 MB`
+  to `487.17 MB` (`+13484032` bytes). The directory preserves broad
+  `ps -ax -o pid,ppid,stat,%cpu,%mem,rss,etime,command | grep -iE
+  'chrome|chromium|playwright|electron|hydra'` before/after inventories,
+  per-sample doctor JSON, full process snapshots, native `top` samples, and
+  `summary.json`. Unrelated Chrome load remained separate from Hydra-owned
+  rows.
+- 2026-06-01 post-release local Search cleanup: targeted filesystem and
+  Spotlight scans already resolved only
+  `/Users/zaydk/Desktop/hydra/release/mac-arm64/Hydra.app`, but LaunchServices
+  still remembered eight historical Hydra bundles under `~/.Trash`. Each stale
+  Trash registration was unregistered with `lsregister -u`, the canonical
+  `1.4.6` app was force-registered with `lsregister -f`, and the follow-up
+  LaunchServices plus Spotlight inventories each report only the canonical
+  bundle. No app bundle or Trash backup was deleted.
