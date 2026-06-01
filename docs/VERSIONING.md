@@ -4,17 +4,21 @@ Hydra uses semantic version numbers in the shape `MAJOR.MINOR.PATCH`.
 
 ## Current Release Lane
 
-The renderer and desktop refinement shipped as `v1.4.0` on 2026-05-31. It
-builds on the `v1.3.0` splash, proximity-field, Settings, artwork, auth/session,
-and cross-platform packaging tranche with scoped renderer memoization, stable
-Pool Manager callbacks, account-card aggregate-slice comparisons, and the
-restored two-layer README media stack.
+The renderer and desktop refinement shipped as `v1.4.0` on 2026-05-31. The
+artifact-parity hardening patch shipped as `v1.4.2` on 2026-06-01 after the
+immutable `v1.4.1` release-bootstrap failure was repaired. The current public
+lane builds on the `v1.3.0` splash, proximity-field, Settings, artwork,
+auth/session, and cross-platform packaging tranche with scoped renderer
+memoization, stable Pool Manager callbacks, account-card aggregate-slice
+comparisons, the restored two-layer README media stack, request-owned
+cancellation and shutdown joins, bounded Windows lifecycle smoke, renderer
+observer cleanup, and demand-driven idle schedulers.
 
 Tracked `package.json` and `package-lock.json` now stay aligned with published
-`v1.4.0`. New isolated fixes advance from the active `1.4.x` lane: the next
-normal patch release is `1.4.1`, not another `1.0.x` or `1.1.x` release.
+`v1.4.2`. New isolated fixes advance from the active `1.4.x` lane: the next
+normal patch release is `1.4.3`, not another `1.0.x` or `1.1.x` release.
 
-The public `v1.4.0` desktop updater matrix contains macOS arm64, macOS Intel,
+The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
 metadata, and merged multi-architecture macOS updater metadata. Linux
 publishing was restored because its package preparation and smoke contracts
@@ -101,7 +105,7 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.0` is published. Continue using `[skip-bump]` for audit, dogfood, and
+`v1.4.2` is published. Continue using `[skip-bump]` for audit, dogfood, and
 isolated documentation checkpoints while the remaining manual packaged-GUI
 evidence is collected. Do not produce a second minor bump merely to record
 manual evidence.
@@ -129,7 +133,8 @@ Operationally:
    `docs/PACKAGED_ELECTRON_DOGFOOD.md` honest about what is source-verified,
    packaged-verified, user-confirmed, or still deferred.
 4. Use a normal patch bump only when an additional source fix must ship.
-5. Keep the existing `v1.4.0` tag pinned to its tested release commit.
+5. Keep the existing `v1.4.0`, failed `v1.4.1`, and public `v1.4.2` tags
+   pinned to their immutable commits.
 
 If a future tranche changes backward compatibility, use `[bump:major]` and
 document the migration. No current change requires a `2.0.0` release.

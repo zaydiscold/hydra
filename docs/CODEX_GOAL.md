@@ -1237,6 +1237,26 @@ closed-app CLI commands, tests, and repo-local documentation.
   Auto-version run `26738319746` skipped, CI run `26738319743` passed, and
   Docker workflow run `26738319737` passed runtime smoke and registry image
   push.
+- Public artifact-parity patch `v1.4.2` published on 2026-06-01 from immutable
+  release commit `ff63fdd6ef49509e8ed0b44c07aac0b0fc2e4b95`. Auto-version run
+  `26738561372`, CI run `26738561386`, Docker workflow run `26738561364`, and
+  Release Desktop Apps run `26738568988` passed. Live asset inspection found
+  all ten expected public files with GitHub SHA-256 digests. Downloaded
+  `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` report `1.4.2`, point
+  to the expected released platform artifacts, and preserve both macOS
+  architectures.
+- The downloaded exact-public `Hydra-1.4.2-mac-arm64.zip` SHA-256 is
+  `243ad57e19bc2b6e8d25511443f79bd71fb1e41aecbbcd64f29478deeabecfe7`,
+  matching GitHub. Its SHA-512 matches `latest-mac.yml`. The extracted app
+  reports `1.4.2` and passed strict deep `codesign` plus explicit-resource
+  package smoke. Native quit removed the stale local `1.4.0` package before it
+  moved reversibly to
+  `~/.Trash/hydra-local-v140-replaced-20260601T063234Z/Hydra.app`; the exact
+  public `1.4.2` package now occupies the canonical path. A LaunchServices
+  relaunch settled to four Hydra-owned processes at `0.1%` aggregate CPU and
+  `618.70 MB` RSS with zero Hydra Playwright profiles. Spotlight resolves
+  exactly the canonical bundle and `release/` contains only
+  `mac-arm64/Hydra.app`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

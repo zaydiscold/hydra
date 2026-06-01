@@ -57,3 +57,17 @@ The repair checkpoint
 `5857ff4ce330fec3016862fc1390e4ce9eabd1f1` used `[skip-bump]`;
 Auto-version run `26738319746` skipped, CI run `26738319743` passed, and Docker
 workflow run `26738319737` passed runtime smoke and registry image push.
+
+## Resolution
+
+Commit `2ed168b802043b4f23f78f3b052e2ba394b3fddf` triggered the repaired patch
+release. Auto-version run `26738561372` created immutable tag `v1.4.2`, normal
+CI run `26738561386` passed, and Docker workflow run `26738561364` passed
+runtime smoke and registry image push.
+
+Release Desktop Apps run `26738568988` passed the shared `lint, test, gate`
+job that previously blocked `v1.4.1`, then published Linux x64 AppImage, macOS
+arm64 zip, macOS Intel zip, Windows x64 NSIS, and the merged dual-architecture
+`latest-mac.yml`. Live release inspection verified all ten expected public
+assets. The circular release-bootstrap dependency is closed without weakening
+post-publication audit truth.

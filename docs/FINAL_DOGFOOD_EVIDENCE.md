@@ -1682,3 +1682,24 @@ This evidence file is not release-complete by itself. The release remains not co
   Auto-version run `26738319746` skipped, CI run `26738319743` passed, and
   Docker workflow run `26738319737` passed runtime smoke and registry image
   push.
+- Public artifact-parity patch `v1.4.2` published on 2026-06-01 from immutable
+  release commit `ff63fdd6ef49509e8ed0b44c07aac0b0fc2e4b95`. Auto-version run
+  `26738561372`, CI run `26738561386`, Docker workflow run `26738561364`, and
+  Release Desktop Apps run `26738568988` passed. The release matrix published
+  Linux x64 AppImage, macOS arm64 zip, macOS Intel zip, Windows x64 NSIS,
+  platform blockmaps, Linux and Windows updater metadata, and merged
+  dual-architecture macOS updater metadata. Live asset inspection found all
+  ten expected public files with GitHub SHA-256 digests; downloaded updater
+  manifests report `1.4.2` and reference the expected platform artifacts.
+- The downloaded exact-public `Hydra-1.4.2-mac-arm64.zip` SHA-256 is
+  `243ad57e19bc2b6e8d25511443f79bd71fb1e41aecbbcd64f29478deeabecfe7`,
+  matching GitHub. Its SHA-512 matches `latest-mac.yml`. The extracted app
+  reports `1.4.2` and passed strict deep `codesign` plus explicit-resource
+  package smoke. Native quit removed the stale local `1.4.0` package before it
+  moved reversibly to
+  `~/.Trash/hydra-local-v140-replaced-20260601T063234Z/Hydra.app`; the exact
+  public `1.4.2` package now occupies the canonical path. A LaunchServices
+  relaunch settled to four Hydra-owned processes at `0.1%` aggregate CPU and
+  `618.70 MB` RSS with zero Hydra Playwright profiles. Spotlight resolves
+  exactly the canonical bundle and `release/` contains only
+  `mac-arm64/Hydra.app`.

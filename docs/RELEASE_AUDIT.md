@@ -17,8 +17,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Multi-arch macOS updater metadata | Release workflow includes `mac-update-metadata` and `scripts/merge-mac-update-yml.mjs`; workflow contract requires merged `latest-mac.yml` with arm64 and x64 files. v1.0.17 release artifact inspection verified `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` were published with macOS arm64/x64 and Windows artifacts. | Verified by release |
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
-| Release artifacts | GitHub release v1.4.0 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26724123318` passed shared gates, package smoke on every target, the hosted Windows unpacked-executable launch-and-cleanup gate, artifact uploads, and macOS updater-metadata merge. All ten downloaded public assets matched GitHub SHA-256 digests; every updater SHA-512 matched its released binary. Real Intel GUI and Windows NSIS install/open UX remain target-runner or user-run evidence only. | Asset presence verified; startup fix released |
-| macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-public `v1.4.0` macOS arm64 app and the rebuilt current-source arm64 package verify with `codesign --verify --deep --strict`; explicit-resource package smoke passed against both lanes. | Verified by release artifact dogfood |
+| Release artifacts | GitHub release v1.4.2 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26738568988` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests; downloaded updater manifests report `1.4.2`, point to the released platform artifacts, and list both macOS architectures. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; artifact-parity patch released |
+| macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-public `v1.4.2` macOS arm64 app and the rebuilt current-source arm64 package verify with `codesign --verify --deep --strict`; explicit-resource package smoke passed against both lanes. | Verified by release artifact dogfood |
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Packaged screenshot plan | Current gallery and splash media come from packaged Electron only and stay redacted; final interactive human visual review remains manual. The superseded Remotion lane is out of scope. | Partially verified |
@@ -1937,3 +1937,22 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Auto-version run `26738319746` skipped, CI run `26738319743` passed, and
   Docker workflow run `26738319737` passed runtime smoke and registry image
   push.
+- 2026-06-01 public `v1.4.2` artifact-parity closeout: release commit
+  `ff63fdd6ef49509e8ed0b44c07aac0b0fc2e4b95` is tagged `v1.4.2` and Release
+  Desktop Apps run `26738568988` passed shared gates, Linux x64 AppImage,
+  macOS arm64 zip, macOS Intel zip, Windows x64 NSIS, the hosted unpacked and
+  NSIS-installed Windows lifecycle gate, uploads, and merged macOS updater
+  metadata. Live GitHub inspection found all ten expected assets. Downloaded
+  `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` report `1.4.2` and
+  point to the correct released artifacts; the macOS manifest lists both
+  architectures. The downloaded arm64 zip SHA-256
+  `243ad57e19bc2b6e8d25511443f79bd71fb1e41aecbbcd64f29478deeabecfe7`
+  matches GitHub, its SHA-512 matches `latest-mac.yml`, and the extracted app
+  passed strict deep `codesign` plus explicit-resource package smoke. Native
+  quit removed the stale local `1.4.0` app before it moved reversibly to
+  `~/.Trash/hydra-local-v140-replaced-20260601T063234Z/Hydra.app`. The
+  canonical `release/mac-arm64/Hydra.app` now reports `1.4.2`; LaunchServices
+  relaunch settled to four Hydra-owned processes at `0.1%` aggregate CPU and
+  `618.70 MB` RSS with zero Hydra Playwright profiles; Spotlight resolves only
+  that canonical bundle; and `release/` again contains only
+  `mac-arm64/Hydra.app`.
