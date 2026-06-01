@@ -382,6 +382,7 @@ test('hydra audit reports release evidence and deferred manual items without lau
   assert.ok(report.items.some((item) => item.id === 'windows-installer-artifact' && item.state === 'ok' && item.evidence.includes(`GitHub release v${pkg.version} Windows NSIS`)));
   assert.ok(report.items.some((item) => item.id === 'dependency-audit' && item.state === 'ok' && /brace-expansion/.test(item.evidence) && /5\.0\.6/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'account-proxy-pool' && item.state === 'ok' && /per-task automation route/.test(item.evidence)));
+  assert.ok(report.items.some((item) => item.id === 'performance-efficiency-pass' && item.state === 'ok' && /renderer polling/.test(item.evidence)));
   assert.ok(report.items.some((item) => item.id === 'packaged-gui-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'live-mvp-dogfood' && item.state === 'deferred'));
   assert.ok(report.items.some((item) => item.id === 'packaged-screenshot-audit' && item.state === 'deferred'));

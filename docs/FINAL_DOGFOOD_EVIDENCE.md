@@ -1418,3 +1418,36 @@ This evidence file is not release-complete by itself. The release remains not co
   `e583326c89f35da0d8f30a81fc4d16625395546c` used `[skip-bump]`.
   The newest CI run `26733857394` passed, and Docker workflow
   `26733857387` passed runtime smoke and registry image push.
+- Passive observer loading is now quiet across scheduled dashboard, pool
+  sync, traffic, vault, cached session-status, magic-link, generator, and
+  Code Redeemer reconciliation paths. Explicit operator actions retain
+  foreground loading feedback. The deterministic benchmark under
+  `/private/tmp/hydra-passive-observer-loading-benchmark-20260601T035300Z/summary.json`
+  removes `5600` global loading events across `200` modeled cycles per
+  observer class while preserving the foreground default.
+- Native shutdown evidence is under
+  `/private/tmp/hydra-v140-passive-observer-rebuild-shutdown-20260601T040100Z`;
+  four package processes exited in one second. Current-source ARM rebuild,
+  package smoke, strict deep `codesign`, bundle version (`1.4.0`), embedded
+  source-map inspection, and LaunchServices relaunch passed. The local ARM
+  zip SHA-256 was
+  `e2fa276b3610dc83a648904d681077b37b6c64b8cabcb7b520bb8d215f48bbe1`.
+  Launch evidence is under
+  `/private/tmp/hydra-v140-passive-observer-current-source-launch-20260601T040400Z`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-passive-observer-current-source-package-20260601T040400Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one Hydra application bundle, and local Docker is stopped.
+- The final untouched package profile under
+  `/private/tmp/hydra-v140-passive-observer-post-rebuild-idle-20260601T040500Z`
+  retained four Hydra processes and zero Hydra Playwright profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.300%`, averaged
+  `0.027%`, and ended at `0.000%`; RSS moved from `634976 KiB` to
+  `603984 KiB` (`-30992 KiB`).
+- Passive-observer checkpoint `ceeeb5da21a13244dae3ea035cbdad53059e350b`
+  used `[skip-bump]`; Auto-version run `26734396984` skipped, CI run
+  `26734396983` passed, and Docker workflow `26734396980` passed runtime
+  smoke and registry image push. The quiet-helper update exposed stale
+  closed-app audit matchers; the corrected predicate and CLI regression
+  restore `31 ok / 5 deferred / 0 missing / 0 blockers` with
+  `complete=false`.

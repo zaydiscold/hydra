@@ -146,7 +146,7 @@ git diff --check
 HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke
 codesign --verify --deep --strict --verbose=2 release/mac-arm64/Hydra.app
 node bin/hydra.mjs audit --json
-mdfind "kMDItemFSName == 'Hydra.app'cd"
+mdfind "kMDItemContentType == 'com.apple.application-bundle' && kMDItemDisplayName == 'Hydra'"
 ```
 
 ## Public Release Boundary
@@ -168,3 +168,53 @@ f4bead3fafecd3c3f45ddd4d27783579f78ef479d0028155934e65521f80231b
 That hash is local current-source package proof only. Public `v1.4.0` assets
 remain the previously published Mac, Windows, and Linux artifacts because the
 five manual acceptance rows remain deferred.
+
+## Passive Observer Follow-Up
+
+The first quiet-health patch removed the app-shell health-poll animation.
+The follow-up sweep found the same foreground-loading coupling in other
+passive observers: scheduled dashboard and pool-sync refreshes, traffic,
+vault account refresh, cached session-status fallbacks, magic-link claim and
+live confirmation polling, generator status and heartbeat polling, debounced
+Code Redeemer preflight, and delayed post-run redemption-history
+reconciliation. These paths now use dedicated quiet API helpers. Operator
+actions retain the foreground loading default.
+
+The event model is preserved at:
+
+```text
+/private/tmp/hydra-passive-observer-loading-benchmark-20260601T035300Z/summary.json
+```
+
+Across `200` modeled cycles per observer class, the prior paths emitted
+`5600` global loading events. The quiet paths emit `0`, while foreground
+requests still track loading by default.
+
+Current-source package proof is preserved under:
+
+```text
+/private/tmp/hydra-v140-passive-observer-rebuild-shutdown-20260601T040100Z
+/private/tmp/hydra-v140-passive-observer-current-source-launch-20260601T040400Z
+/private/tmp/hydra-v140-passive-observer-post-rebuild-idle-20260601T040500Z
+```
+
+Native quit removed all four old package processes in one second. ARM
+rebuild, package smoke, strict deep `codesign`, bundle version (`1.4.0`),
+embedded source-map inspection, and LaunchServices relaunch passed. The
+five-minute untouched profile retained four Hydra-owned processes and zero
+Hydra Playwright profiles; CPU ranged from `0.000%` to `0.300%`, averaged
+`0.027%`, and ended at `0.000%`. RSS moved from `634976 KiB` to
+`603984 KiB` (`-30992 KiB`).
+
+The pushed source checkpoint is:
+
+```text
+ceeeb5da21a13244dae3ea035cbdad53059e350b  quiet passive observer loading
+```
+
+Auto-version run `26734396984` skipped, CI run `26734396983` passed, and
+Docker workflow run `26734396980` passed runtime smoke and registry image
+push. The source update exposed stale closed-app audit predicates for the
+older helper names. The predicate and CLI regression now require the quiet
+form and return `31 ok / 5 deferred / 0 missing / 0 blockers` with
+`complete=false`.

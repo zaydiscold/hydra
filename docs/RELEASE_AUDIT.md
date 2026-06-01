@@ -1607,3 +1607,47 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Their Auto-version runs skipped. The newest CI run `26733857394` passed,
   and newest Docker workflow `26733857387` passed runtime smoke and registry
   image push.
+- 2026-06-01 passive-observer loading hardening: the quiet-request split now
+  covers scheduled dashboard metrics, pool sync status, traffic, vault
+  account refresh, cached session-status fallbacks, magic-link claim and live
+  confirmation polling, generator status and heartbeat polling, debounced
+  Code Redeemer session preflight, and delayed post-run redemption-history
+  reconciliation. Foreground start, verify, refresh, sync, provision, redeem,
+  and explicit live-session actions keep the animated loading default.
+  UI static contracts passed `40/40`; background visibility contracts passed
+  `32/32`; CLI contracts passed `46/46`; lint, full `npm test`, Vite build,
+  gate (`12/12`), OpenAPI route-map test, and diff check passed.
+- 2026-06-01 passive-observer loading benchmark:
+  `/private/tmp/hydra-passive-observer-loading-benchmark-20260601T035300Z/summary.json`
+  models `200` cycles for each patched observer class. The prior paths emitted
+  `5600` global loading events; the quiet paths emit `0`, while foreground
+  requests still track loading by default.
+- 2026-06-01 passive-observer current-source package proof: native quit
+  removed all four prior package processes in one second with evidence under
+  `/private/tmp/hydra-v140-passive-observer-rebuild-shutdown-20260601T040100Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), and embedded source-map inspection passed. The local ARM zip
+  SHA-256 was
+  `e2fa276b3610dc83a648904d681077b37b6c64b8cabcb7b520bb8d215f48bbe1`;
+  it is local current-source proof, not a replacement public asset.
+  LaunchServices evidence is under
+  `/private/tmp/hydra-v140-passive-observer-current-source-launch-20260601T040400Z`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-passive-observer-current-source-package-20260601T040400Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one Hydra application bundle, and local Docker remains
+  stopped.
+- 2026-06-01 passive-observer post-rebuild profile:
+  `/private/tmp/hydra-v140-passive-observer-post-rebuild-idle-20260601T040500Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across 11 untouched samples over five minutes. CPU ranged from `0.000%` to
+  `0.300%`, averaged `0.027%`, and ended at `0.000%`; RSS moved from
+  `634976 KiB` to `603984 KiB` (`-30992 KiB`).
+- Passive-observer checkpoint `ceeeb5da21a13244dae3ea035cbdad53059e350b`
+  used `[skip-bump]`; Auto-version run `26734396984` skipped, CI run
+  `26734396983` passed, and Docker workflow run `26734396980` passed runtime
+  smoke and registry image push. The quiet-helper change exposed stale
+  closed-app audit predicates for bulk magic-link and Code Redeemer observer
+  paths; those predicates and the CLI regression now require the quiet form.
+  The repaired audit returns `31 ok / 5 deferred / 0 missing / 0 blockers`
+  with `complete=false`.

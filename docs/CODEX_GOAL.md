@@ -972,6 +972,46 @@ closed-app CLI commands, tests, and repo-local documentation.
   `e583326c89f35da0d8f30a81fc4d16625395546c` used `[skip-bump]`.
   The newest CI run `26733857394` passed, and Docker workflow
   `26733857387` passed runtime smoke and registry image push.
+- The remaining renderer sweep found passive observers beyond app-shell
+  health polling. Scheduled dashboard metrics, pool sync status, traffic,
+  vault refresh, cached session-status fallbacks, bulk magic-link claim/live
+  confirmation, generator status/heartbeat, debounced Code Redeemer
+  preflight, and delayed redemption-history reconciliation now use explicit
+  quiet helpers. User-triggered start, verify, refresh, sync, provision,
+  redeem, and live-check actions retain foreground loading feedback.
+- The deterministic event benchmark under
+  `/private/tmp/hydra-passive-observer-loading-benchmark-20260601T035300Z/summary.json`
+  models `200` cycles per patched observer class and reduces global loading
+  events from `5600` to `0` while preserving the foreground default.
+  Focused UI contracts passed `40/40`, background visibility contracts passed
+  `32/32`, CLI contracts passed `46/46`, and the complete source chain passed
+  lint, full `npm test`, Vite build, gate (`12/12`), OpenAPI map, and diff
+  check.
+- Pre-rebuild native shutdown removed all four package processes in one
+  second with evidence under
+  `/private/tmp/hydra-v140-passive-observer-rebuild-shutdown-20260601T040100Z`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), embedded source-map inspection, and LaunchServices relaunch
+  passed. The current-source local ARM zip SHA-256 was
+  `e2fa276b3610dc83a648904d681077b37b6c64b8cabcb7b520bb8d215f48bbe1`.
+  Launch evidence is under
+  `/private/tmp/hydra-v140-passive-observer-current-source-launch-20260601T040400Z`.
+- The final untouched package profile under
+  `/private/tmp/hydra-v140-passive-observer-post-rebuild-idle-20260601T040500Z`
+  retained four Hydra processes and zero Hydra Playwright profiles across 11
+  five-minute samples. CPU ranged from `0.000%` to `0.300%`, averaged
+  `0.027%`, and ended at `0.000%`; RSS moved from `634976 KiB` to
+  `603984 KiB` (`-30992 KiB`). Generated archive byproducts moved
+  reversibly to
+  `~/.Trash/hydra-passive-observer-current-source-package-20260601T040400Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly one Hydra application bundle, and local Docker is stopped.
+- Passive-observer checkpoint `ceeeb5da21a13244dae3ea035cbdad53059e350b`
+  used `[skip-bump]`; Auto-version run `26734396984` skipped, CI run
+  `26734396983` passed, and Docker workflow `26734396980` passed runtime
+  smoke and registry image push. The source change exposed stale audit
+  matchers; the repaired predicate and CLI regression restore
+  `31 ok / 5 deferred / 0 missing / 0 blockers` with `complete=false`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
