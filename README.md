@@ -196,7 +196,7 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, the current refined desktop release is `v1.4.6`, and
+first as `v1.1.0`, the current refined desktop release is `v1.4.7`, and
 remaining manual dogfood evidence stays explicit in the audit.
 
 Current release-train docs:

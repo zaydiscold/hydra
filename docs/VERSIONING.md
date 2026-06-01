@@ -9,12 +9,15 @@ artifact-parity hardening patch shipped as `v1.4.2` on 2026-06-01 after the
 immutable `v1.4.1` release-bootstrap failure was repaired. The Bulk Auth
 redirect/dedupe repair shipped as `v1.4.4`, and `1.4.5` is the callback-status
 UI gate that makes Email Link unavailability visible before a batch can start.
-`1.4.6` is the final splash-overlay and Bulk Auth truthfulness refinement: the
+`1.4.6` is the splash-overlay and Bulk Auth truthfulness refinement: the
 rigid nine-cell launch grid is replaced by a lower-node faceted glass aperture
 with translucent side wings, the renderer no longer blanks while native Touch
 ID token release is pending, and Email Link no longer advertises an arbitrary
 public-tunnel setup that OpenRouter's Clerk tenant will reject. OTP remains the
-supported direct-HTTPS OpenRouter bulk-import lane.
+supported direct-HTTPS OpenRouter bulk-import lane. `1.4.7` is the narrow
+Account Detail action repair: live-session probe, snapshot refresh, and
+management-key refresh click handlers now invoke their AbortSignal-aware
+callbacks without forwarding React click events as signals.
 The current public lane builds on the `v1.3.0` splash, proximity-field,
 Settings, artwork,
 auth/session, and cross-platform packaging tranche with scoped renderer
@@ -23,8 +26,8 @@ comparisons, the restored two-layer README media stack, request-owned
 cancellation and shutdown joins, bounded Windows lifecycle smoke, renderer
 observer cleanup, and demand-driven idle schedulers.
 
-Tracked `package.json` and `package-lock.json` now target `1.4.6` for the
-faceted splash-overlay patch. This remains the active `1.4.x`
+Tracked `package.json` and `package-lock.json` now target `1.4.7` for the
+Account Detail action repair. This remains the active `1.4.x`
 lane: normal public patch releases continue as `v1.4.x`, not another `1.0.x`
 or `1.1.x` release.
 
@@ -115,7 +118,7 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.6` is the current public release. Continue
+`v1.4.7` is the current public release. Continue
 using `[skip-bump]` for audit, dogfood, and isolated documentation checkpoints
 after this patch ships unless a real source fix must go to users. Do not produce
 a second minor bump merely to record manual evidence.
@@ -134,6 +137,9 @@ whose translucent wings preserve portal visibility without adding runtime
 loops, renders the password fallback while native Touch ID token release is
 pending, and requires explicit tenant-owner allowlist confirmation before the
 dormant Email Link relay path can activate.
+`v1.4.7` repairs the Account Detail renderer bindings for live-session,
+snapshot, and management-key refresh actions while preserving route-owned
+AbortSignal cancellation.
 
 The first `v1.4.1` tag exposed a pre-publication gate cycle before any desktop
 artifact uploaded: `hydra audit` correctly reported that current-version Intel

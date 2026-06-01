@@ -1978,3 +1978,28 @@ This evidence file is not release-complete by itself. The release remains not co
   navigation, Touch ID fingerprint approval, live account flows, screenshot
   review, and interactive Windows launch unchecked. Closed-app audit remains
   `31 ok / 5 deferred / 0 missing / 0 blockers`.
+- `v1.4.7` Account Detail binding repair: packaged Electron dogfood reproduced
+  a renderer-only live-session warning while CLI refresh and the direct
+  embedded HTTP session-check route both returned a live active session. React
+  click events were being forwarded as AbortSignals by direct callback
+  bindings. The repair uses explicit zero-argument wrappers for live-session,
+  snapshot, and management-key refresh actions and locks all ten affected
+  Account Detail call sites with a renderer static contract.
+- Public `v1.4.7` release publication: GitHub release
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.4.7` was published on
+  2026-06-01 from commit `d7fb68fab49c075f830bc65a36f336c291aefe4d`.
+  Auto-version run `26782109972`, CI run `26782110073`, Docker workflow run
+  `26782109931`, and Release Desktop Apps run `26782121839` passed. The public
+  release contains all ten expected Linux, macOS ARM, macOS Intel, Windows, and
+  updater-metadata assets; merged `latest-mac.yml` lists both architectures.
+- Exact-public-`v1.4.7` local package proof: the downloaded public ARM zip
+  matched GitHub SHA-256
+  `0d4ea5946c547a8d9cfb0df578e41d1850fe95dbb903346f41f3de94b79989c1`.
+  Its extracted app is the sole canonical `release/mac-arm64/Hydra.app`,
+  reports `1.4.7`, passes strict deep codesign and ARM package smoke, and
+  settled before Computer Use attachment to four Hydra-owned processes,
+  `0.2%` aggregate CPU, and zero stale profiles. Computer Use verified the
+  public package's live Clerk probe, management-key reload, and account
+  snapshot/API-key refresh actions. Spotlight resolves only the canonical app.
+  Hardware Touch ID approval, full live OTP/redemption/proxy flows, redacted
+  screenshot review, and interactive Windows desktop UX remain manual.

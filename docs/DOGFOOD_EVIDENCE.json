@@ -1,37 +1,37 @@
 {
   "schema": "hydra.final-dogfood-evidence.v1",
-  "generatedAt": "2026-06-01T20:49:57.252Z",
-  "version": "1.4.6",
+  "generatedAt": "2026-06-01T21:19:58.821Z",
+  "version": "1.4.7",
   "root": "<repo-root>",
   "checks": {
     "artifacts": [
       {
-        "path": "Hydra-1.4.6-mac-arm64.zip",
+        "path": "Hydra-1.4.7-mac-arm64.zip",
         "ok": true,
         "detail": "288 MB"
       },
       {
-        "path": "Hydra-1.4.6-mac-arm64.zip.blockmap",
+        "path": "Hydra-1.4.7-mac-arm64.zip.blockmap",
         "ok": true,
         "detail": "0 MB"
       },
       {
-        "path": "Hydra-1.4.6-mac-x64.zip",
+        "path": "Hydra-1.4.7-mac-x64.zip",
         "ok": true,
         "detail": "299 MB"
       },
       {
-        "path": "Hydra-1.4.6-mac-x64.zip.blockmap",
+        "path": "Hydra-1.4.7-mac-x64.zip.blockmap",
         "ok": true,
         "detail": "0 MB"
       },
       {
-        "path": "Hydra-1.4.6-win-x64.exe",
+        "path": "Hydra-1.4.7-win-x64.exe",
         "ok": true,
         "detail": "296 MB"
       },
       {
-        "path": "Hydra-1.4.6-win-x64.exe.blockmap",
+        "path": "Hydra-1.4.7-win-x64.exe.blockmap",
         "ok": true,
         "detail": "0 MB"
       }
