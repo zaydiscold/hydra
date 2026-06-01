@@ -1330,3 +1330,41 @@ This evidence file is not release-complete by itself. The release remains not co
   image push. GitHub's remaining Node 20 action-runtime warning belongs to the
   current upstream Docker helper actions, which GitHub forced onto Node 24;
   the Hydra-owned workflow remains green.
+- Request-owned upstream work now shares abort ownership across OpenRouter
+  retries, Clerk auth, dashboard JWT repair, account generation,
+  management-key provisioning, code redemption, diagnostic probes,
+  model-list refresh, proxy fallback, Playwright context cleanup, and the
+  session refresher's active pass. The benchmark under
+  `/private/tmp/hydra-openrouter-disconnect-benchmark-20260531T195305/summary.txt`
+  reduced `200` post-disconnect retries to `0`, reduced fetches from `400` to
+  `200`, aborted all `200` synthetic surfaces, and reduced settlement from
+  `525.428ms` to `16.496ms`.
+- Native shutdown evidence is under
+  `/private/tmp/hydra-v140-request-ownership-rebuild-shutdown-20260531T195438`;
+  four packaged processes exited immediately. The ARM package rebuilt and
+  passed package smoke, strict deep `codesign`, and bundle version (`1.4.0`).
+  The local zip SHA-256 is
+  `c3700c1a52d44f9a2638c1f71ce0114aeccc030f8eb0d23f0ee96aa454a98844`.
+  LaunchServices relaunch evidence is under
+  `/private/tmp/hydra-v140-request-ownership-current-source-launch-20260531T195645`.
+  Generated package byproducts moved reversibly to
+  `~/.Trash/hydra-request-ownership-current-source-package-20260531T200313`;
+  `release/` again contains only `mac-arm64/Hydra.app`, and Spotlight resolves
+  exactly that one Hydra bundle.
+- The settled short profile under
+  `/private/tmp/hydra-v140-request-ownership-post-rebuild-quiet-idle-20260531T195735`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across 11 samples. CPU averaged `0.436%` and ended at `0.000%`; RSS moved
+  from `635088 KiB` to `604096 KiB` (`-30992 KiB`). `hydra doctor --json`
+  independently recorded four owned processes at `0%` CPU and zero Hydra
+  Playwright profiles. Its reported external browser-tool load remains
+  separately owned and is not attributed to Hydra.
+- The signal-aware source change exposed a stale audit matcher for the proxy
+  pool evidence row. The repaired predicate and CLI regression return the
+  closed-app audit to `31 ok / 5 deferred / 0 missing / 0 blockers` with
+  `complete=false`.
+- Request-ownership checkpoint
+  `fced9d6443cb852a8d1229c7289f7b81a75477b7` used `[skip-bump]`;
+  Auto-version run `26732648111` skipped, CI run `26732648116` passed, and
+  Docker workflow run `26732648112` passed both runtime smoke and registry
+  image push.

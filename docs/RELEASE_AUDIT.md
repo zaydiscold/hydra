@@ -1492,3 +1492,57 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `docker/login-action@v3`, `docker/metadata-action@v5`, and
   `docker/setup-buildx-action@v3` releases while forcing them onto Node 24;
   the Hydra-owned workflow remains green.
+- 2026-06-01 request-owned upstream cancellation hardening: shared abort
+  helpers now own client disconnects, timeout timers, retry sleeps, active
+  refresher sweeps, and optional Playwright context teardown. Signals are
+  threaded through OpenRouter, Clerk auth, dashboard JWT self-healing,
+  password/OTP and magic-link flows, management-key provisioning, code
+  redemption, account generation, diagnostic probes, model-list refresh,
+  proxy fallback, and session-refresh shutdown. Focused request-cancellation
+  tests passed `3/3`; detached-batch tests passed `5/5`; background visibility
+  contracts passed `32/32`; session-refresh contracts passed `12/12`; UI
+  static contracts passed `39/39`; chain completeness passed `1/1`; and the
+  complete no-Docker source chain passed lint, full `npm test`, Vite build,
+  gate (`12/12`), OpenAPI generation (`83 operations`), and diff check.
+- 2026-06-01 request-cancellation benchmark:
+  `/private/tmp/hydra-openrouter-disconnect-benchmark-20260531T195305/summary.txt`
+  exercised `200` canceled OpenRouter retry surfaces with a `500ms` delay.
+  The prior shape launched `200` post-disconnect retries, made `400` fetches,
+  and settled in `525.428ms`; the hardened path made `200` fetches, aborted
+  all `200` surfaces, avoided every post-disconnect fetch, and settled in
+  `16.496ms`.
+- 2026-06-01 request-owned current-source package proof: native quit removed
+  all four Hydra-owned package processes immediately with evidence under
+  `/private/tmp/hydra-v140-request-ownership-rebuild-shutdown-20260531T195438`.
+  The ARM app rebuilt and passed package smoke, strict deep `codesign`, and
+  bundle-version inspection (`1.4.0`). The local zip SHA-256 is
+  `c3700c1a52d44f9a2638c1f71ce0114aeccc030f8eb0d23f0ee96aa454a98844`;
+  it is local current-source proof, not a replacement public asset.
+  LaunchServices relaunch evidence is under
+  `/private/tmp/hydra-v140-request-ownership-current-source-launch-20260531T195645`.
+  Generated zip, blockmap, updater metadata, and builder-debug byproducts
+  moved reversibly to
+  `~/.Trash/hydra-request-ownership-current-source-package-20260531T200313`;
+  `release/` again contains only `mac-arm64/Hydra.app`, and Spotlight resolves
+  exactly that one Hydra bundle.
+- 2026-06-01 request-owned post-rebuild quiet profile:
+  `/private/tmp/hydra-v140-request-ownership-post-rebuild-quiet-idle-20260531T195735`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles
+  across 11 settled samples. Aggregate CPU averaged `0.436%` and ended at
+  `0.000%`; RSS moved from `635088 KiB` to `604096 KiB` (`-30992 KiB`).
+  `hydra doctor --json` separately reported four owned processes at `0%` CPU
+  and zero Hydra Playwright profiles. It also recorded unrelated external
+  browser-tool pressure, which is not attributed to Hydra.
+- 2026-06-01 request-ownership audit predicate repair: the source hardening
+  correctly added a signal argument to proxy-aware management-key,
+  redemption, and Playwright paths, but the closed-app audit still matched the
+  old call shape. The predicate and CLI regression now require the
+  signal-aware form. The repaired audit returns `31 ok / 5 deferred /
+  0 missing / 0 blockers` with `complete=false`.
+- Request-ownership checkpoint
+  `fced9d6443cb852a8d1229c7289f7b81a75477b7` used `[skip-bump]`;
+  Auto-version run `26732648111` skipped, CI run `26732648116` passed, and
+  Docker workflow run `26732648112` passed both runtime smoke and registry
+  image push. GitHub again emitted its upstream Node 20 action-runtime
+  deprecation warning for the current Docker helper actions while forcing
+  them onto Node 24; the Hydra-owned workflow remains green.

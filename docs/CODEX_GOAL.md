@@ -894,6 +894,42 @@ closed-app CLI commands, tests, and repo-local documentation.
   image push. GitHub's remaining Node 20 action-runtime warning belongs to the
   current upstream Docker helper actions, which GitHub forced onto Node 24;
   the Hydra-owned workflow remains green.
+- Request-owned upstream work now shares disconnect and lifecycle
+  cancellation across OpenRouter retries, Clerk auth, dashboard JWT
+  self-healing, password/OTP and magic-link flows, account generation,
+  management-key provisioning, code redemption, diagnostic probes, model
+  refresh, proxy fallback, Playwright cleanup, and session-refresher
+  shutdown. Focused regressions and the complete no-Docker source chain
+  passed. The deterministic benchmark at
+  `/private/tmp/hydra-openrouter-disconnect-benchmark-20260531T195305/summary.txt`
+  reduced `200` post-disconnect retries to `0`, fetches from `400` to `200`,
+  and settlement from `525.428ms` to `16.496ms`.
+- Pre-rebuild native shutdown removed all four package processes immediately
+  with evidence under
+  `/private/tmp/hydra-v140-request-ownership-rebuild-shutdown-20260531T195438`.
+  ARM rebuild, package smoke, strict deep `codesign`, bundle version
+  (`1.4.0`), and LaunchServices relaunch passed. The current-source local zip
+  SHA-256 is
+  `c3700c1a52d44f9a2638c1f71ce0114aeccc030f8eb0d23f0ee96aa454a98844`.
+  Generated package byproducts moved reversibly to
+  `~/.Trash/hydra-request-ownership-current-source-package-20260531T200313`;
+  `release/` again contains only `mac-arm64/Hydra.app`, and Spotlight resolves
+  exactly that one bundle.
+- The short settled package profile under
+  `/private/tmp/hydra-v140-request-ownership-post-rebuild-quiet-idle-20260531T195735`
+  retained four owned processes and zero Hydra Playwright profiles across 11
+  samples. Hydra CPU averaged `0.436%` and ended at `0.000%`; RSS fell by
+  `30992 KiB`. External browser-tool pressure reported by `hydra doctor` is
+  recorded separately and is not attributed to Hydra.
+- Signal propagation changed proxy-aware function signatures and exposed a
+  stale closed-app audit matcher. The repaired audit predicate and CLI
+  regression restore `31 ok / 5 deferred / 0 missing / 0 blockers` with
+  `complete=false`.
+- Request-ownership checkpoint
+  `fced9d6443cb852a8d1229c7289f7b81a75477b7` used `[skip-bump]`;
+  Auto-version run `26732648111` skipped, CI run `26732648116` passed, and
+  Docker workflow run `26732648112` passed runtime smoke and registry image
+  push. Local Docker remains stopped after verification.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

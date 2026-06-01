@@ -482,16 +482,16 @@ function buildAudit() {
         && accountGenerator.includes('automationRoute: automationRoute.label')
         && dashboardApi.includes('pickAutomationNetworkRoute')
         && dashboardApi.includes('fetchOptionsWithAccountProxy')
-        && dashboardApi.includes('tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute)')
-        && dashboardApi.includes('tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute)')
-        && dashboardApi.includes('redeemCodeViaServerAction(sessionCookie, clientCookie, code, automationRoute)')
-        && dashboardApi.includes('tryRestApiRedeemCode(sessionCookie, clientCookie, code, automationRoute)')
-        && dashboardApi.includes('redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, automationRoute)')
+        && dashboardApi.includes('tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute, signal)')
+        && dashboardApi.includes('tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute, signal)')
+        && dashboardApi.includes('redeemCodeViaServerAction(sessionCookie, clientCookie, code, automationRoute, signal)')
+        && dashboardApi.includes('tryRestApiRedeemCode(sessionCookie, clientCookie, code, automationRoute, signal)')
+        && dashboardApi.includes('redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, automationRoute, signal)')
         && dashboardApi.includes('syncApiKeysViaPlaywright(sessionCookie, clientCookie, automationRoute)')
         && String(pkg.scripts?.test || '').includes('test:account-proxy-pool')
         && backgroundFailureTest.includes('ProxyAgent')
         && backgroundFailureTest.includes('fetchOptionsWithAutomationProxy')
-        && backgroundFailureTest.includes('redeemCodeViaServerAction\\(sessionCookie, clientCookie, code, automationRoute\\)')
+        && backgroundFailureTest.includes('redeemCodeViaServerAction\\(sessionCookie, clientCookie, code, automationRoute, signal\\)')
         && backgroundFailureTest.includes('syncApiKeysViaPlaywright\\(sessionCookie, clientCookie, automationRoute\\)'),
       'Settings/API store one proxy per line encrypted; signup, management-key, HTTP redemption, REST redemption, API-key sync, and Playwright fallback paths share one per-task automation route, with random account-proxy selection and explicit direct-localhost fallback',
     ),
