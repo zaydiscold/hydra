@@ -1267,3 +1267,10 @@ This evidence file is not release-complete by itself. The release remains not co
   stopped cleanly in one second, `release/` again contains only
   `mac-arm64/Hydra.app`, and Spotlight resolves exactly that one installed
   Hydra bundle.
+- Multi-proxy selector checkpoint
+  `a17067108bc0802a9bf259736b3698a55d380190` used `[skip-bump]`;
+  Auto-version run `26730889924` skipped, CI run `26730889905` passed, and
+  Docker workflow run `26730889927` passed both runtime smoke and registry
+  image push. GitHub's remaining Node 20 action-runtime warning belongs to the
+  current upstream Docker helper actions, which GitHub forced onto Node 24;
+  the Hydra-owned workflow remains green.

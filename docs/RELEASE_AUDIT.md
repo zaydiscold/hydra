@@ -1404,3 +1404,12 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   remained, Docker Desktop stopped cleanly in one second, and `release/` again
   contains only `mac-arm64/Hydra.app`. Spotlight resolves exactly that one
   `com.zayd.hydra` bundle.
+- Multi-proxy selector checkpoint
+  `a17067108bc0802a9bf259736b3698a55d380190` used `[skip-bump]`;
+  Auto-version run `26730889924` skipped, CI run `26730889905` passed, and
+  Docker workflow run `26730889927` passed both runtime smoke and registry
+  image push. GitHub again emitted its upstream Node 20 action-runtime
+  deprecation warning for the current `docker/build-push-action@v6`,
+  `docker/login-action@v3`, `docker/metadata-action@v5`, and
+  `docker/setup-buildx-action@v3` releases while forcing them onto Node 24;
+  the Hydra-owned workflow remains green.
