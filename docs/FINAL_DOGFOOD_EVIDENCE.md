@@ -1167,3 +1167,13 @@ This evidence file is not release-complete by itself. The release remains not co
   Auto-version run `26729047216` skipped, CI run `26729047218` passed, and
   Docker workflow run `26729047213` passed both runtime smoke and registry
   image push.
+- The final post-cleanup closed-app audit sweep repaired two release-truth
+  parser bugs: the local-archive fallback no longer hard-codes `v1.1.0`, and
+  the documented Docker-checkpoint matcher now tolerates Markdown whitespace
+  throughout `registry image push`. `hydra audit` derives the recorded public
+  release from current package metadata and requires recorded macOS arm64,
+  macOS Intel, and Windows artifact groups. Focused CLI verification passed
+  `46/46`; lint, full `npm test`, gate (`12/12`), OpenAPI generation (`83
+  operations`), and diff check passed. Closed-app audit remains `31 ok / 5
+  deferred / 0 missing / 0 blockers`, with public `v1.4.0` ARM evidence and
+  newest recorded Docker run `26729047213`.

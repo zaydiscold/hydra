@@ -1268,3 +1268,16 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Auto-version run `26729047216` skipped, CI run `26729047218` passed, and
   Docker workflow run `26729047213` passed both runtime smoke and registry
   image push.
+- 2026-06-01 release-audit truth hardening: the post-cleanup closed-app audit
+  exposed two stale-evidence parser bugs. Its local-archive fallback still
+  hard-coded `v1.1.0`, and its documented Docker-checkpoint matcher failed
+  when Markdown wrapped between `registry` and `image`. `hydra audit` now
+  derives the recorded public release from the current package version,
+  requires the current release audit to name the macOS arm64, macOS Intel, and
+  Windows artifact groups, and tolerates Markdown whitespace throughout the
+  Docker image-push phrase. Focused CLI verification passed `46/46`. The full
+  no-container chain passed: lint, full `npm test`, gate (`12/12`), OpenAPI
+  generation (`83 operations`), and diff check. Closed-app audit remains
+  honest at `31 ok / 5 deferred / 0 missing / 0 blockers`; its ARM evidence
+  now names public `v1.4.0`, and its Docker evidence selects run
+  `26729047213`.

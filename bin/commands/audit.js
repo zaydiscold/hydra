@@ -167,6 +167,7 @@ function parseBlockers(auditDoc) {
 
 function buildAudit() {
   const pkg = JSON.parse(read('package.json'));
+  const version = pkg.version;
   const packageLock = safeRead('package-lock.json');
   const goalDoc = safeRead('docs/CODEX_GOAL.md');
   const releaseAudit = safeRead('docs/RELEASE_AUDIT.md');
@@ -188,13 +189,13 @@ function buildAudit() {
     && releaseAudit.includes('npm run docker:smoke -- --start')
     && releaseAudit.includes('health endpoint response')
     && releaseAudit.includes('Build & Push');
-  const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker\s+workflow\s+run\s+`(\d+)`\s+passed both runtime smoke and\s+(?:the )?registry image push/g)]
+  const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker\s+workflow\s+run\s+`(\d+)`\s+passed both runtime smoke and\s+(?:the )?registry\s+image\s+push/g)]
     .map((match) => match[1]);
   const latestDockerCheckpointRun = dockerCheckpointRuns.at(-1) ?? null;
-  const v110ReleaseRecorded = releaseAudit.includes('Final release run `26702889329` passed')
-    && releaseAudit.includes('Public release `v1.1.0` contains')
-    && releaseAudit.includes('Hydra-1.1.0-mac-arm64.zip')
-    && releaseAudit.includes('Hydra-1.1.0-mac-x64.zip');
+  const currentReleaseRecorded = releaseAudit.includes(`GitHub release v${version} is public`)
+    && releaseAudit.includes('macOS arm64 zip/blockmap')
+    && releaseAudit.includes('macOS Intel zip/blockmap')
+    && releaseAudit.includes('Windows NSIS/blockmap');
   const smokeWorkflow = safeRead('.github/workflows/electron-smoke.yml');
   const releaseWorkflow = safeRead('.github/workflows/release.yml');
   const autoVersionWorkflow = safeRead('.github/workflows/auto-version.yml');
@@ -265,7 +266,6 @@ function buildAudit() {
   const electronBuilderConfig = safeRead('electron-builder.yml');
   const packagedOpenScript = safeRead('scripts/open-packaged-app.mjs');
 
-  const version = pkg.version;
   const dogfoodEvidence = inspectDogfoodEvidence(version);
   const packagedGuiManualOk = evidenceManualOk(dogfoodEvidence, [
     'packaged-gui-launch',
@@ -349,10 +349,10 @@ function buildAudit() {
     check(
       'mac-arm-artifact',
       'macOS ARM artifact',
-      (macArmSize != null && existsSync(join(ROOT, artifactPaths.macArmBlockmap))) || v110ReleaseRecorded || macArmCiRecorded,
+      (macArmSize != null && existsSync(join(ROOT, artifactPaths.macArmBlockmap))) || currentReleaseRecorded || macArmCiRecorded,
       (macArmSize == null
-        ? v110ReleaseRecorded
-          ? 'GitHub release v1.1.0 macOS arm64 artifact and release-matrix smoke evidence are recorded in docs/RELEASE_AUDIT.md'
+        ? currentReleaseRecorded
+          ? `GitHub release v${version} macOS arm64 artifact and release-matrix smoke evidence are recorded in docs/RELEASE_AUDIT.md`
           : 'GitHub Actions macOS arm64 electron:smoke artifact evidence recorded in docs/RELEASE_AUDIT.md'
         : `${artifactPaths.macArmZip} (${macArmSize} MB) + blockmap is the local-manifest workspace artifact`)
         + (installedMacArmVersion
