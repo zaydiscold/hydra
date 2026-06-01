@@ -5,10 +5,19 @@ import assert from 'node:assert/strict';
 let createdRows = [];
 let createError = null;
 let fallbackError = null;
+let createManyGate = null;
 const warnings = [];
 const errors = [];
 
+process.env.HYDRA_REQUEST_LOG_SHUTDOWN_DRAIN_MS = '25';
+
 const fakeRequestLog = {
+  createMany: mock.fn(async ({ data }) => {
+    if (createManyGate) await createManyGate.promise;
+    if (data.some((row) => row.keyHash) && createError) throw createError;
+    createdRows.push(...data);
+    return { count: data.length };
+  }),
   create: mock.fn(async ({ data }) => {
     if (data.keyHash && createError) throw createError;
     if (!data.keyHash && fallbackError) throw fallbackError;
@@ -44,10 +53,12 @@ const {
 test.afterEach(async () => {
   createError = null;
   fallbackError = null;
+  createManyGate = null;
   createdRows = [];
   warnings.length = 0;
   errors.length = 0;
   await stopRequestLogBuffer();
+  fakeRequestLog.createMany.mock.resetCalls();
   fakeRequestLog.create.mock.resetCalls();
 });
 
@@ -115,4 +126,48 @@ test('request-log buffer is bounded and reports dropped rows', () => {
   assert.equal(snapshot.queued, snapshot.maxQueue);
   assert.ok(snapshot.dropped > 0);
   assert.ok(warnings.some((line) => line.includes('Queue full; dropped')));
+});
+
+test('request-log buffer shutdown waits for an already-active flush', async () => {
+  createManyGate = Promise.withResolvers();
+  enqueueRequestLog({
+    keyHash: null,
+    model: 'slow-write',
+    status: 200,
+    latencyMs: 5,
+  });
+
+  const flush = flushRequestLogBuffer();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  let stopSettled = false;
+  const stop = stopRequestLogBuffer().then(() => {
+    stopSettled = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stopSettled, false, 'shutdown must join an active buffer flush');
+
+  createManyGate.resolve();
+  await Promise.all([flush, stop]);
+  assert.equal(getRequestLogBufferSnapshot().flushInFlight, false);
+});
+
+test('request-log buffer shutdown timeout leaves warning evidence', async () => {
+  createManyGate = Promise.withResolvers();
+  enqueueRequestLog({
+    keyHash: null,
+    model: 'blocked-write',
+    status: 200,
+    latencyMs: 5,
+  });
+
+  const flush = flushRequestLogBuffer();
+  await new Promise((resolve) => setImmediate(resolve));
+  await stopRequestLogBuffer();
+
+  assert.ok(warnings.some((line) => line.includes('Shutdown drain timed out after 25ms')));
+  assert.equal(getRequestLogBufferSnapshot().flushInFlight, true);
+
+  createManyGate.resolve();
+  await flush;
 });

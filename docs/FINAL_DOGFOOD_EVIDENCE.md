@@ -1078,3 +1078,39 @@ This evidence file is not release-complete by itself. The release remains not co
   `a404d421b26765396677c9d0708a3985c942ae0ab778971b0b99abb9db014036`.
   This is fresh packaged-app screenshot provenance, not a substitute for the
   remaining human route review.
+- A final runtime ownership sweep found that request-log shutdown could skip
+  joining an already-active buffer flush. The buffer now owns a shared
+  `flushPromise`; concurrent flush and stop callers join it; a bounded timeout
+  path emits a warning with remaining queued rows; and snapshots expose
+  `flushInFlight`. `npm run test:request-log-buffer` passed `5/5`, including
+  the active-join regression and a forced `25ms` timeout-warning regression.
+  Full `npm test`, lint, Vite build, gate (`12/12`), and OpenAPI regeneration
+  (`83 operations`) passed before the package rebuild.
+- The current-source local arm64 package was rebuilt after that hardening.
+  Package smoke and strict deep `codesign` passed; packaged-source inspection
+  confirmed the new request-log ownership code. The rebuilt local
+  `Hydra-1.4.0-mac-arm64.zip` hashes to
+  `192ab474457a1bd25cabc113e9b81982959a3161cfc644f81df7844ae53049f8`.
+  It is current-source local evidence, not the published `v1.4.0` release
+  artifact. LaunchServices launch evidence is under
+  `/private/tmp/hydra-v140-request-log-current-source-launch-20260531T235242Z`.
+- `/private/tmp/hydra-v140-request-log-post-rebuild-idle-reprofile-20260531T235339Z`
+  sampled the untouched rebuilt package every 30 seconds for five minutes.
+  All 11 samples retained four Hydra-owned processes and zero stale Hydra
+  Playwright profiles. CPU stayed between `0.0%` and `2.4%` (`0.227%`
+  average, `0.0%` ending), including the first startup-settling sample; RSS
+  moved from `590.58 MiB` to `591.83 MiB` (`+1.25 MiB`). The post-sampler
+  doctor snapshot remained calm at four processes, `0.0%` CPU, `592.25 MB`
+  RSS, and zero stale profiles. No Computer Use helper remained, Docker
+  Desktop remained stopped, and a targeted Desktop search found only
+  `release/mac-arm64/Hydra.app`.
+- The request-log-hardening literal final acceptance chain passed:
+  `npm run lint && npm test && npm run gate &&
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run
+  docker:smoke && npm run openapi:hydra`. Gate remained `12/12`, package smoke
+  exercised the rebuilt local arm64 app and zip, Docker smoke rebuilt the
+  production image and launched Hydra's isolated full-Chromium persistent
+  context, and OpenAPI generation retained `83 operations`. Strict deep
+  `codesign` passed, `docker compose ps --all` returned no services, no
+  `hydra_default` network remained, and Docker Desktop was restored to its
+  stopped state through `docker desktop stop`.

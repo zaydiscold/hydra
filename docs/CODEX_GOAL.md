@@ -641,6 +641,44 @@ closed-app CLI commands, tests, and repo-local documentation.
   SHA-256
   `a404d421b26765396677c9d0708a3985c942ae0ab778971b0b99abb9db014036`.
   This does not promote the still-manual interactive route review.
+- A final server-runtime ownership sweep found one additional request-log
+  shutdown bug: an already-active buffered flush made
+  `flushRequestLogBuffer()` return immediately, allowing
+  `stopRequestLogBuffer()` to advance without joining the database write.
+  `server/services/request-log-buffer.js` now owns one shared `flushPromise`,
+  joins concurrent flush and stop callers, emits bounded timeout-warning
+  evidence with remaining queue length, and exposes `flushInFlight` in its
+  snapshot. `npm run test:request-log-buffer` passed `5/5`, including the
+  active-join regression and forced `25ms` timeout-warning path. Full `npm
+  test`, lint, Vite build, gate (`12/12`), and OpenAPI generation (`83
+  operations`) also passed before rebuilding.
+- The hardened current-source local arm64 package rebuilt successfully.
+  Package smoke and strict deep `codesign` passed; inspection of the packaged
+  server copy confirmed the request-log ownership fix. Its local zip checksum
+  is `192ab474457a1bd25cabc113e9b81982959a3161cfc644f81df7844ae53049f8`;
+  this is current-source local evidence, not a new published artifact.
+  LaunchServices evidence is under
+  `/private/tmp/hydra-v140-request-log-current-source-launch-20260531T235242Z`.
+- A five-minute untouched post-rebuild profile under
+  `/private/tmp/hydra-v140-request-log-post-rebuild-idle-reprofile-20260531T235339Z`
+  retained four packaged processes and zero stale Hydra Playwright profiles
+  across all 11 samples. CPU stayed between `0.0%` and `2.4%` (`0.227%`
+  average, `0.0%` ending), including the first startup-settling sample; RSS
+  moved from `590.58 MiB` to `591.83 MiB` (`+1.25 MiB`). The post-sampler
+  doctor snapshot remained calm at four processes, `0.0%` CPU, `592.25 MB`
+  RSS, and zero stale profiles. No Computer Use helper remained, Docker
+  Desktop remained stopped, and a targeted Desktop search found only the
+  canonical `release/mac-arm64/Hydra.app`.
+- The request-log-hardening literal final acceptance chain passed:
+  `npm run lint && npm test && npm run gate &&
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run
+  docker:smoke && npm run openapi:hydra`. Gate remained `12/12`, package smoke
+  exercised the rebuilt local arm64 app and zip, Docker smoke rebuilt the
+  production image and launched Hydra's isolated full-Chromium persistent
+  context, and OpenAPI generation retained `83 operations`. Strict deep
+  `codesign` passed, `docker compose ps --all` returned no services, no
+  `hydra_default` network remained, and Docker Desktop was restored to its
+  stopped state through `docker desktop stop`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

@@ -1153,3 +1153,49 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `/private/tmp/hydra-v140-native-dashboard-refresh-20260531T234102Z`. This
   refresh proves current packaged-app Dashboard provenance without promoting
   the still-blocked interactive visual-review checkbox.
+- 2026-05-31 request-log shutdown drain hardening: a final runtime ownership
+  sweep found that `stopRequestLogBuffer()` could call
+  `flushRequestLogBuffer()` while a flush was already active and receive an
+  immediate return instead of joining the active database write. Shutdown
+  could consequently advance toward Prisma disconnect without waiting for
+  buffered request logs. `server/services/request-log-buffer.js` now owns the
+  active flush through one shared `flushPromise`, makes concurrent flush and
+  stop callers join it, and leaves a bounded shutdown-timeout warning with the
+  remaining queue length if the drain exceeds its limit. The buffer snapshot
+  now exposes `flushInFlight`. `npm run test:request-log-buffer` passed all
+  five focused tests, including an already-active flush join and a forced
+  `25ms` timeout warning path. Full `npm test`, `npm run lint`, `npm run
+  build`, `npm run gate` (`12/12`), and `npm run openapi:hydra` (`83
+  operations`) also passed before packaging.
+- 2026-05-31 current-source `v1.4.0` native rebuild after request-log
+  hardening: `ELECTRON_CACHE=/private/tmp/hydra-electron-cache npm run
+  electron:build:mac-arm64` rebuilt the local package. `HYDRA_BUILD_TARGET=
+  darwin-arm64 npm run electron:smoke` and strict deep `codesign` passed.
+  Packaged-source inspection confirmed `flushPromise`, the bounded timeout
+  warning, and `flushInFlight` inside
+  `release/mac-arm64/Hydra.app/Contents/Resources/app/server/services/request-log-buffer.js`.
+  The current-source local arm64 zip hashes to
+  `192ab474457a1bd25cabc113e9b81982959a3161cfc644f81df7844ae53049f8`;
+  it is local rebuild evidence, not a replacement for the published `v1.4.0`
+  asset. LaunchServices launch evidence is under
+  `/private/tmp/hydra-v140-request-log-current-source-launch-20260531T235242Z`.
+- 2026-05-31 current-source request-log post-rebuild calm-runtime proof:
+  `/private/tmp/hydra-v140-request-log-post-rebuild-idle-reprofile-20260531T235339Z`
+  sampled the untouched rebuilt package every 30 seconds for five minutes.
+  All 11 samples retained four Hydra-owned processes and zero stale Hydra
+  Playwright profiles. CPU stayed between `0.0%` and `2.4%` (`0.227%`
+  average, `0.0%` ending), including the first startup-settling sample; RSS
+  moved from `590.58 MiB` to `591.83 MiB` (`+1.25 MiB`). A post-sampler doctor
+  snapshot reported four processes, `0.0%` CPU, `592.25 MB` RSS, zero stale
+  profiles, no Computer Use helper, and Docker Desktop still stopped.
+- 2026-05-31 request-log-hardening final local chain: the literal ordered
+  acceptance sequence passed against the rebuilt current-source local
+  package: `npm run lint && npm test && npm run gate &&
+  HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run
+  docker:smoke && npm run openapi:hydra`. Gate remained `12/12`, package smoke
+  exercised the rebuilt arm64 app and zip, Docker smoke rebuilt the production
+  image and launched Hydra's isolated full-Chromium persistent context, and
+  OpenAPI generation retained `83 operations`. Strict deep `codesign` passed,
+  `docker compose ps --all` returned no services, no `hydra_default` network
+  remained, and Docker Desktop was restored to its stopped state through
+  `docker desktop stop`.

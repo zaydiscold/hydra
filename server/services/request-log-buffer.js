@@ -10,6 +10,7 @@ const ERROR_LOG_WINDOW_MS = 60 * 1000;
 let queue = [];
 let timer = null;
 let flushing = false;
+let flushPromise = null;
 let dropped = 0;
 let lastErrorAt = 0;
 let lastDropWarnAt = 0;
@@ -84,40 +85,57 @@ async function writeRequestLog(row) {
   }
 }
 
-export async function flushRequestLogBuffer() {
-  if (flushing || queue.length === 0) return;
-  flushing = true;
+export function flushRequestLogBuffer() {
+  if (flushPromise) return flushPromise;
+  if (queue.length === 0) return Promise.resolve();
 
-  try {
-    while (queue.length > 0) {
-      const batch = queue.splice(0, MAX_FLUSH_BATCH);
-      try {
-        await prisma.requestLog.createMany({ data: batch });
-      } catch {
-        // Fall back to sequential writes if batch fails (e.g., due to a bad keyHash)
-        for (const row of batch) {
-          await writeRequestLog(row);
+  flushPromise = (async () => {
+    flushing = true;
+
+    try {
+      while (queue.length > 0) {
+        const batch = queue.splice(0, MAX_FLUSH_BATCH);
+        try {
+          await prisma.requestLog.createMany({ data: batch });
+        } catch {
+          // Fall back to sequential writes if batch fails (e.g., due to a bad keyHash)
+          for (const row of batch) {
+            await writeRequestLog(row);
+          }
         }
       }
+    } finally {
+      flushing = false;
+      flushPromise = null;
+      if (queue.length > 0) ensureTimer();
     }
-  } finally {
-    flushing = false;
-    if (queue.length > 0) ensureTimer();
-  }
+  })();
+
+  return flushPromise;
 }
 
 export async function stopRequestLogBuffer() {
   if (timer) clearTimeout(timer);
   timer = null;
   let drainTimeout = null;
+  let drainTimedOut = false;
   try {
     await Promise.race([
       flushRequestLogBuffer(),
       new Promise(resolve => {
-        drainTimeout = setTimeout(resolve, MAX_SHUTDOWN_DRAIN_MS);
+        drainTimeout = setTimeout(() => {
+          drainTimedOut = true;
+          resolve();
+        }, MAX_SHUTDOWN_DRAIN_MS);
         drainTimeout.unref?.();
       }),
     ]);
+    if (drainTimedOut) {
+      logger.warn(
+        `[REQUEST_LOG] Shutdown drain timed out after ${MAX_SHUTDOWN_DRAIN_MS}ms ` +
+        `with ${queue.length} queued row(s); active flush continues in background`
+      );
+    }
   } finally {
     if (drainTimeout) clearTimeout(drainTimeout);
   }
@@ -128,6 +146,7 @@ export function getRequestLogBufferSnapshot() {
     queued: queue.length,
     dropped,
     flushing,
+    flushInFlight: Boolean(flushPromise),
     maxQueue: MAX_QUEUE,
   };
 }
