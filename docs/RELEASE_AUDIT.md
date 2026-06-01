@@ -1932,3 +1932,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   preserving `mac-intel-current` as `missing` until current public release
   evidence is recorded. The recon note is
   `docs/recon/RELEASE_BOOTSTRAP_AUDIT_CONTRACT.md`.
+- Release-bootstrap repair checkpoint
+  `5857ff4ce330fec3016862fc1390e4ce9eabd1f1` used `[skip-bump]`;
+  Auto-version run `26738319746` skipped, CI run `26738319743` passed, and
+  Docker workflow run `26738319737` passed runtime smoke and registry image
+  push.

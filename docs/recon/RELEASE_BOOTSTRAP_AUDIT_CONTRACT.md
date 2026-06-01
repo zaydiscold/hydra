@@ -52,3 +52,8 @@ The audit command itself was not weakened.
 Keep failed tag `v1.4.1` immutable. It uploaded no desktop artifacts. The
 repaired artifact-parity tranche advances through the normal patch lane as
 `v1.4.2`.
+
+The repair checkpoint
+`5857ff4ce330fec3016862fc1390e4ce9eabd1f1` used `[skip-bump]`;
+Auto-version run `26738319746` skipped, CI run `26738319743` passed, and Docker
+workflow run `26738319737` passed runtime smoke and registry image push.

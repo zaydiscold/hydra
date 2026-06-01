@@ -1677,3 +1677,8 @@ This evidence file is not release-complete by itself. The release remains not co
   permits historical hosted package-smoke evidence during the pre-publication
   gate while continuing to require recorded current public evidence after
   publication. The repaired artifact-parity tranche advances as `v1.4.2`.
+- Release-bootstrap repair checkpoint
+  `5857ff4ce330fec3016862fc1390e4ce9eabd1f1` used `[skip-bump]`;
+  Auto-version run `26738319746` skipped, CI run `26738319743` passed, and
+  Docker workflow run `26738319737` passed runtime smoke and registry image
+  push.
