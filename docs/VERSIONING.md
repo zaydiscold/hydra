@@ -6,18 +6,21 @@ Hydra uses semantic version numbers in the shape `MAJOR.MINOR.PATCH`.
 
 The renderer and desktop refinement shipped as `v1.4.0` on 2026-05-31. The
 artifact-parity hardening patch shipped as `v1.4.2` on 2026-06-01 after the
-immutable `v1.4.1` release-bootstrap failure was repaired. The current public
-lane builds on the `v1.3.0` splash, proximity-field, Settings, artwork,
+immutable `v1.4.1` release-bootstrap failure was repaired. The Bulk Auth
+redirect/dedupe repair shipped as `v1.4.4`, and `1.4.5` is the callback-status
+UI gate that makes Email Link unavailability visible before a batch can start.
+The current public lane builds on the `v1.3.0` splash, proximity-field,
+Settings, artwork,
 auth/session, and cross-platform packaging tranche with scoped renderer
 memoization, stable Pool Manager callbacks, account-card aggregate-slice
 comparisons, the restored two-layer README media stack, request-owned
 cancellation and shutdown joins, bounded Windows lifecycle smoke, renderer
 observer cleanup, and demand-driven idle schedulers.
 
-Tracked `package.json` and `package-lock.json` now target `1.4.3` for the
-Touch ID/session/lifecycle closeout. This remains the active `1.4.x` lane: the
-next normal public patch release is `v1.4.3`, not another `1.0.x` or `1.1.x`
-release.
+Tracked `package.json` and `package-lock.json` now target `1.4.5` for the
+Bulk Auth Email Link callback-status patch. This remains the active `1.4.x`
+lane: normal public patch releases continue as `v1.4.x`, not another `1.0.x`
+or `1.1.x` release.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -106,7 +109,7 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.2` is published and `v1.4.3` is the next patch release candidate. Continue
+`v1.4.4` is published and `v1.4.5` is the next patch release candidate. Continue
 using `[skip-bump]` for audit, dogfood, and isolated documentation checkpoints
 after this patch ships unless a real source fix must go to users. Do not produce
 a second minor bump merely to record manual evidence.
@@ -116,9 +119,10 @@ The post-`v1.4.0` stabilization tranche reached public desktop artifacts as
 lifecycle smoke, hardened Docker browser fallback, passive renderer observer
 cleanup, idle task-expiry disarming, idle request-log retention write
 avoidance, and empty-pool health-pinger disarming. Keep the tested `v1.4.0`,
-failed `v1.4.1`, and published `v1.4.2` tags immutable. The `v1.4.3` patch adds
-the Touch ID token-order fix, session-refresh timestamp cleanup, dead-cookie
-stack pruning, lifecycle tracing, and close-to-background hardening.
+failed `v1.4.1`, and published `v1.4.2` tags immutable. The `v1.4.3` and
+`v1.4.4` patches add the Touch ID/session/lifecycle closeout and Bulk Auth
+redirect/dedupe hardening; `v1.4.5` is the narrow UI gate that prevents the
+same Email Link callback failure from being started accidentally.
 
 The first `v1.4.1` tag exposed a pre-publication gate cycle before any desktop
 artifact uploaded: `hydra audit` correctly reported that current-version Intel
@@ -135,8 +139,8 @@ Operationally:
    `docs/PACKAGED_ELECTRON_DOGFOOD.md` honest about what is source-verified,
    packaged-verified, user-confirmed, or still deferred.
 4. Use a normal patch bump only when an additional source fix must ship.
-5. Keep the existing `v1.4.0`, failed `v1.4.1`, and public `v1.4.2` tags
-   pinned to their immutable commits.
+5. Keep the existing `v1.4.0`, failed `v1.4.1`, and later public `v1.4.x`
+   tags pinned to their immutable commits.
 
 If a future tranche changes backward compatibility, use `[bump:major]` and
 document the migration. No current change requires a `2.0.0` release.

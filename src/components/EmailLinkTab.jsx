@@ -10,6 +10,8 @@ export default function EmailLinkTab({
   logLines,
   localError,
   errorCopyCommand,
+  magicLinkCapability,
+  onRefreshCapability,
   forceReplace,
   setForceReplace,
   onSend,
@@ -19,11 +21,47 @@ export default function EmailLinkTab({
     e.preventDefault();
     onSend(parseEmailEntries(pasteText));
   };
+  const callbackUnavailable = magicLinkCapability?.available === false;
+  const callbackChecking = magicLinkCapability?.status === 'checking' || magicLinkCapability?.status === 'refreshing';
+  const callbackReady = magicLinkCapability?.available === true;
+  const callbackText = callbackReady
+    ? `Email Link callback ready: ${magicLinkCapability.callbackOrigin}${magicLinkCapability.callbackPath || '/api/auth/magic-callback'}`
+    : magicLinkCapability?.message || 'Checking Email Link callback...';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       <section className="card">
         <h2 style={{ fontSize: '1rem', marginBottom: 'var(--space-sm)' }}>1. Paste emails</h2>
+        <div
+          data-testid="bulk-auth-email-link-capability"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 'var(--space-sm)',
+            marginBottom: 'var(--space-sm)',
+            padding: '10px 12px',
+            borderRadius: 7,
+            border: callbackReady ? '1px solid rgba(0, 255, 136, 0.28)' : '1px solid rgba(255, 189, 66, 0.32)',
+            background: callbackReady ? 'rgba(0, 255, 136, 0.06)' : 'rgba(255, 189, 66, 0.08)',
+            color: callbackReady ? 'var(--status-success)' : 'var(--text-secondary)',
+            fontSize: '0.78rem',
+            lineHeight: 1.4,
+          }}
+        >
+          <span>{callbackText}</span>
+          {onRefreshCapability && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => onRefreshCapability()}
+              disabled={callbackChecking}
+              style={{ flexShrink: 0 }}
+            >
+              {callbackChecking ? 'Checking...' : 'Recheck'}
+            </button>
+          )}
+        </div>
         <form onSubmit={handleCreate}>
           <textarea
             data-testid="bulk-auth-email-link-input"
@@ -58,9 +96,9 @@ export default function EmailLinkTab({
             data-testid="bulk-auth-send-links"
             className="btn btn-primary"
             style={{ marginTop: 'var(--space-sm)' }}
-            disabled={creating}
+            disabled={creating || callbackUnavailable}
           >
-            {creating ? 'Preparing queue…' : 'Send Magic Links'}
+            {creating ? 'Preparing queue...' : callbackUnavailable ? 'Use OTP or configure callback' : 'Send Magic Links'}
           </button>
         </form>
       </section>

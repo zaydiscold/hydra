@@ -594,8 +594,12 @@ test('bulk import avoids local self-rate-limit and handles duplicate replacement
   assert.match(controller, /async magicLinkCapability/);
   assert.match(controller, /MAGIC_LINK_CALLBACK_UNAVAILABLE/);
   assert.match(bulkAuth, /api\.getMagicLinkCapability\(signal\)/);
+  assert.match(bulkAuth, /magicLinkCapability/);
+  assert.match(bulkAuth, /refreshMagicLinkCapability/);
   assert.match(bulkAuth, /Email Link unavailable before queue creation/);
   assert.match(bulkAuth, /remainingEmailTextAfterUse\(prev, usedEmails\)/);
+  assert.match(emailTab, /bulk-auth-email-link-capability/);
+  assert.match(emailTab, /disabled=\{creating \|\| callbackUnavailable\}/);
   assert.match(emailTab, /Force replace matching saved emails/);
   assert.match(emailTab, /r\.canRetry !== false/);
   assert.match(otpTab, /Force replace matching saved emails/);

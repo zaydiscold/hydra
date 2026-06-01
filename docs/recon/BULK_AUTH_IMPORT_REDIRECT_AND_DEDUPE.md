@@ -21,7 +21,8 @@ The broken flow created hidden damage:
 
 - `/api/accounts/bulk-otp-stubs` no longer uses the high-cost limiter; it is a local encrypted-vault write and does not send Clerk email.
 - `/api/accounts/magic-link/capability` exposes whether Email Link can run before any account row is created or replaced.
-- The Email Link tab now runs that capability preflight first. If the callback is missing or local-only, the UI shows one failure state, disables retry for those rows, leaves the paste input intact, and does not contact Clerk.
+- The Email Link tab now runs that capability preflight before any queue write. If the callback is missing or local-only, the UI shows the callback state at the top of the tab, disables "Send Magic Links", leaves the paste input intact, and does not contact Clerk.
+- The Email Link tab includes a "Recheck" action so operators can configure `HYDRA_MAGIC_LINK_CALLBACK_ORIGIN` and verify the callback without re-pasting or starting a batch.
 - Bulk Email Link sends are paced one at a time with a `6500ms` gap.
 - Email Link sending now fails closed before contacting Clerk unless `HYDRA_MAGIC_LINK_CALLBACK_ORIGIN` is set to a public HTTPS origin that routes `/api/auth/magic-callback` back to Hydra.
 - Bulk import has a shared "Force replace matching saved emails" toggle. Without it, existing emails are reported as duplicate skips and stay in the paste box. With it, the existing row is converted back into a pending OTP stub while management-key records are preserved.
@@ -34,7 +35,8 @@ Source contracts:
 - `server/controllers/AccountController.js`: callback preflight, capability endpoint, include-pending duplicate lookup, and force-replace path.
 - `server/routes/accounts.js`: bulk OTP stubs are no longer high-cost limited.
 - `server/services/store.js`: `replaceAccountWithOtpStub()` clears stale session material, invalidates session-status cache, and preserves the account row.
-- `src/hooks/useBulkAuth.js`: capability-gated Email Link queue, paced sends, and paste cleanup.
+- `src/hooks/useBulkAuth.js`: capability-gated Email Link queue, live callback-status state, paced sends, and paste cleanup.
+- `src/components/EmailLinkTab.jsx`: pre-send callback banner, Recheck action, disabled send button when Email Link cannot work, and Force Replace control.
 - `src/utils/auth.js`: duplicate-preserving email parsing and cleanup helpers.
 
 Regression coverage:

@@ -79,6 +79,8 @@ export default function BulkAuthWizard({ addToast }) {
           logLines={auth.emailLinkLog}
           localError={auth.localError}
           errorCopyCommand={auth.errorCopyCommand}
+          magicLinkCapability={auth.magicLinkCapability}
+          onRefreshCapability={auth.refreshMagicLinkCapability}
           forceReplace={auth.bulkForceReplace}
           setForceReplace={auth.setBulkForceReplace}
           onSend={auth.handleSendMagicLinks}

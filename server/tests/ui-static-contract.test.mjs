@@ -57,6 +57,11 @@ test('bulk import copy points email link users at callback setup instead of para
 
   assert.match(page, /Public callback/);
   assert.match(page, /direct HTTPS code import/);
+  assert.match(page, /magicLinkCapability=\{auth\.magicLinkCapability\}/);
+  assert.match(page, /onRefreshCapability=\{auth\.refreshMagicLinkCapability\}/);
+  assert.match(tab, /bulk-auth-email-link-capability/);
+  assert.match(tab, /Use OTP or configure callback/);
+  assert.match(tab, /disabled=\{creating \|\| callbackUnavailable\}/);
   assert.match(tab, /2\. Send status/);
   assert.doesNotMatch(page, /One click link/);
   assert.doesNotMatch(tab, /Parallel status/);

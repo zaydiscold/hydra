@@ -2136,6 +2136,37 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   macOS Intel build/smoke/upload, Windows NSIS build/smoke plus hosted unpacked
   and NSIS-installed executable lifecycle check, and final macOS updater
   metadata merge.
+- 2026-06-01 `v1.4.5` Bulk Auth Email Link ergonomics: the server-side
+  `v1.4.4` protection already stopped Clerk calls when
+  `HYDRA_MAGIC_LINK_CALLBACK_ORIGIN` was missing or local-only. The follow-up
+  UI now makes that state visible before the operator can start a batch:
+  `src/hooks/useBulkAuth.js` tracks `magicLinkCapability`, refreshes it on Bulk
+  Auth mount and before send/resend, and `src/components/EmailLinkTab.jsx`
+  renders a callback-status banner with a `Recheck` action. When capability is
+  explicitly unavailable, the `Send Magic Links` button is disabled and the
+  button copy points to OTP or callback configuration. This keeps the direct
+  OTP import path active while preventing a repeat of the row-by-row
+  redirect/rate-limit failure loop.
+- 2026-06-01 `v1.4.5` local verification: package metadata was bumped to
+  `1.4.5`; focused checks passed `npm run test:ui-static -- --test-name-pattern='bulk|Magic Link|force|email'`
+  (`44/44`), `npm run test:background-failure-visibility -- --test-name-pattern='bulk import|magic-link capability'`
+  (`33/33`), `npm run test:api-integration -- --test-name-pattern='magic-link capability|bulk OTP'`
+  (`9/9`), `npm run lint`, `npm run gate` (`12/12`), and `npm run test:cli`
+  (`46/46`). The canonical local macOS ARM package rebuilt as bundle version
+  `1.4.5`; `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict
+  deep `codesign --verify --deep --strict`, embedded renderer inspection for
+  `bulk-auth-email-link-capability` and `Use OTP or configure callback`, and
+  LaunchServices relaunch all passed. The local ARM zip SHA-256 is
+  `fe64d4266122e486347cf3c3c6850097a3a6dd144946477b70c5f4240ca118a2`.
+  A five-minute idle sample at
+  `/private/tmp/hydra-1.4.5-bulk-auth-idle-20260601T172922Z` recorded 11
+  samples from `2026-06-01T17:29:22.767Z` through
+  `2026-06-01T17:34:23.644Z`, one stable four-process Hydra tree, `0.0%`
+  aggregate Hydra CPU at every sample, RSS moving from `519.64 MB` to
+  `520.83 MB` (`+1.19 MB`), and zero stale Hydra Playwright profiles in the
+  settled post-launch doctor snapshot. The stale local `1.4.4` macOS archive
+  and blockmap were moved reversibly to
+  `~/.Trash/hydra-old-release-artifacts-20260601T173035Z`.
 - 2026-06-01 post-release `v1.4.3` docs closeout and fresh read-only profile:
   commit `92b159adc233ee3a7fe8231f40129d77f627a45f` recorded the public release
   closeout with `[skip-bump]`; Auto-version run `26746458475` skipped as

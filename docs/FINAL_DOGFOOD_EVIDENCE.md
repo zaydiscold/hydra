@@ -1890,3 +1890,17 @@ This evidence file is not release-complete by itself. The release remains not co
   `latest.yml`, and Linux `latest-linux.yml`; the release workflow also passed
   the hosted Windows unpacked and NSIS-installed executable lifecycle check plus
   the final macOS updater metadata merge.
+- `v1.4.5` Bulk Auth UI gate proof: the local package was rebuilt from the
+  Email Link capability-banner patch. The Email Link tab now surfaces
+  `magicLinkCapability`, offers `Recheck`, and disables `Send Magic Links` with
+  `Use OTP or configure callback` when the server reports the callback cannot
+  work. Focused verification passed UI static `44/44`, background visibility
+  `33/33`, API integration `9/9`, lint, gate `12/12`, and CLI `46/46`.
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  codesign, bundle version `1.4.5`, and embedded renderer inspection all
+  passed. LaunchServices opened the rebuilt local app, and the five-minute
+  idle sample in
+  `/private/tmp/hydra-1.4.5-bulk-auth-idle-20260601T172922Z` recorded the
+  expected four Hydra-owned processes, `0.0%` aggregate CPU across all 11
+  samples, RSS `519.64 MB -> 520.83 MB`, and no stale Hydra Playwright
+  profiles in the settled post-launch doctor snapshot.

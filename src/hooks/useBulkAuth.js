@@ -13,6 +13,27 @@ import {
 const POLL_INTERVAL = 5000;
 const BULK_MAGIC_LINK_SEND_DELAY_MS = 6500;
 
+function normalizeMagicLinkCapability(response) {
+  const payload = response?.data ?? response;
+  if (!payload || typeof payload !== 'object') {
+    return {
+      status: 'error',
+      available: null,
+      message: 'Email Link capability response was malformed. Use OTP until Hydra can re-check the callback.',
+    };
+  }
+  return {
+    status: 'ready',
+    available: !!payload.available,
+    message: payload.message || '',
+    hint: payload.hint || '',
+    fallback: payload.fallback || '',
+    code: payload.code || '',
+    callbackOrigin: payload.callbackOrigin || '',
+    callbackPath: payload.callbackPath || '',
+  };
+}
+
 function normalizeBulkOtpStubResults(response) {
   const payload = response?.data;
   if (Array.isArray(payload)) return payload;
@@ -33,6 +54,11 @@ export function useBulkAuth(addToast) {
   const [localError, setLocalError] = useState('');
   const [errorCopyCommand, setErrorCopyCommand] = useState('');
   const [bulkForceReplace, setBulkForceReplace] = useState(false);
+  const [magicLinkCapability, setMagicLinkCapability] = useState({
+    status: 'checking',
+    available: null,
+    message: 'Checking Email Link callback...',
+  });
 
   // Email Link (Magic Link) Tab State
   const [emailLinkRows, setEmailLinkRows] = useState([]);
@@ -70,6 +96,31 @@ export function useBulkAuth(addToast) {
   }, []);
 
   // --- Email Link Logic ---
+
+  const refreshMagicLinkCapability = useCallback(async (signalOverride) => {
+    const signal = signalOverride ?? lifecycleAbortRef.current?.signal;
+    if (!signal || signal.aborted || unmountedRef.current) return null;
+    setMagicLinkCapability((prev) => ({
+      ...prev,
+      status: prev.status === 'ready' ? 'refreshing' : 'checking',
+    }));
+    try {
+      const res = await api.getMagicLinkCapability(signal);
+      if (signal.aborted || unmountedRef.current) return null;
+      const capability = normalizeMagicLinkCapability(res);
+      setMagicLinkCapability(capability);
+      return capability;
+    } catch (err) {
+      if (signal.aborted || unmountedRef.current) return null;
+      const capability = {
+        status: 'error',
+        available: null,
+        message: api.formatApiErrorMessage(err),
+      };
+      setMagicLinkCapability(capability);
+      return capability;
+    }
+  }, []);
 
   const waitForMagicLinkSendDelay = useCallback((delayMs) => {
     const signal = lifecycleAbortRef.current?.signal;
@@ -223,6 +274,7 @@ export function useBulkAuth(addToast) {
         });
     };
     window.addEventListener('message', onMessage);
+    void refreshMagicLinkCapability(signal);
     return () => {
       window.removeEventListener('message', onMessage);
       unmountedRef.current = true;
@@ -236,7 +288,7 @@ export function useBulkAuth(addToast) {
         pollTimerRef.current = null;
       }
     };
-  }, [addToast, appendEmailLinkLog, stopMagicLinkPolling, updateEmailLinkRow]);
+  }, [addToast, appendEmailLinkLog, refreshMagicLinkCapability, stopMagicLinkPolling, updateEmailLinkRow]);
 
   const handleSendMagicLinks = useCallback(async ({ emails, duplicates = [] }) => {
     if (!emails.length) { setLocalError('Paste at least one email.'); return; }
@@ -249,9 +301,8 @@ export function useBulkAuth(addToast) {
     }
 
     try {
-      const capabilityRes = await api.getMagicLinkCapability(signal);
+      const capability = await refreshMagicLinkCapability(signal);
       if (signal.aborted || unmountedRef.current) return;
-      const capability = capabilityRes?.data ?? capabilityRes;
       if (!capability?.available) {
         const message = capability?.message || 'Email Link is unavailable until Hydra has a public Clerk callback configured.';
         setLocalError(message);
@@ -339,16 +390,15 @@ export function useBulkAuth(addToast) {
     } finally {
       if (!unmountedRef.current) setCreating(false);
     }
-  }, [addToast, appendEmailLinkLog, bulkForceReplace, resetErrors, setPasteText, startMagicLinkPolling, updateEmailLinkRow, waitForMagicLinkSendDelay]);
+  }, [addToast, appendEmailLinkLog, bulkForceReplace, refreshMagicLinkCapability, resetErrors, setPasteText, startMagicLinkPolling, updateEmailLinkRow, waitForMagicLinkSendDelay]);
 
   const handleResendMagicLink = useCallback(async (row) => {
     const signal = lifecycleAbortRef.current?.signal;
     if (!signal || signal.aborted || unmountedRef.current) return;
     updateEmailLinkRow(row.email, { status: 'sending', message: 'Re-sending…' });
     try {
-      const capabilityRes = await api.getMagicLinkCapability(signal);
+      const capability = await refreshMagicLinkCapability(signal);
       if (signal.aborted || unmountedRef.current) return;
-      const capability = capabilityRes?.data ?? capabilityRes;
       if (!capability?.available) {
         const message = capability?.message || 'Email Link is unavailable until Hydra has a public Clerk callback configured.';
         setLocalError(message);
@@ -370,7 +420,7 @@ export function useBulkAuth(addToast) {
       if (signal.aborted || unmountedRef.current) return;
       updateEmailLinkRow(row.email, { status: 'error', message: api.formatApiErrorMessage(err) });
     }
-  }, [appendEmailLinkLog, startMagicLinkPolling, updateEmailLinkRow]);
+  }, [appendEmailLinkLog, refreshMagicLinkCapability, startMagicLinkPolling, updateEmailLinkRow]);
 
   // --- OTP Logic ---
 
@@ -613,6 +663,8 @@ export function useBulkAuth(addToast) {
     errorCopyCommand,
 
     // Email Link
+    magicLinkCapability,
+    refreshMagicLinkCapability,
     emailLinkRows,
     emailLinkLog,
     handleSendMagicLinks,
