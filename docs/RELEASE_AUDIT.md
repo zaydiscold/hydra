@@ -1281,3 +1281,8 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   honest at `31 ok / 5 deferred / 0 missing / 0 blockers`; its ARM evidence
   now names public `v1.4.0`, and its Docker evidence selects run
   `26729047213`.
+- Release-audit truth-hardening checkpoint
+  `8c7293c59d1898272ff14ec7cb8b834c39158007` used `[skip-bump]`;
+  Auto-version run `26729401085` skipped, CI run `26729401072` passed, and
+  Docker workflow run `26729401071` passed both runtime smoke and registry
+  image push.

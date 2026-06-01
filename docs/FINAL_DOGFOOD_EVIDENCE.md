@@ -1177,3 +1177,8 @@ This evidence file is not release-complete by itself. The release remains not co
   operations`), and diff check passed. Closed-app audit remains `31 ok / 5
   deferred / 0 missing / 0 blockers`, with public `v1.4.0` ARM evidence and
   newest recorded Docker run `26729047213`.
+- Release-audit truth-hardening checkpoint
+  `8c7293c59d1898272ff14ec7cb8b834c39158007` used `[skip-bump]`;
+  Auto-version run `26729401085` skipped, CI run `26729401072` passed, and
+  Docker workflow run `26729401071` passed both runtime smoke and registry
+  image push.
