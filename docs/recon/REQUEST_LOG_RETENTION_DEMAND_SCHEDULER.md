@@ -82,3 +82,30 @@ This is a `[skip-bump]` source checkpoint after public `v1.4.2`. The rebuilt
 local arm64 package is current-source dogfood evidence, not a replacement
 public artifact. Manual GUI, Touch ID fingerprint, Intel, and real Windows
 desktop dogfood boundaries remain explicit.
+
+## Audit Contract Follow-Up
+
+`bin/commands/audit.js` now rejects older request-log retention shapes unless
+the demand-driven worker:
+
+1. Disarms after an empty startup prune.
+2. Rearms through buffered non-stream proxy logging.
+3. Rearms through direct SSE placeholder logging.
+4. Preserves the retained-row cadence and prune-error retry.
+5. Clears scheduled work during shutdown.
+
+`server/tests/cli.test.mjs` locks that source contract. The second current-source
+ARM rebuild passed package smoke, strict deep `codesign`, bundle version
+inspection, embedded production notifier inspection, and LaunchServices
+settling. Evidence lives under:
+
+```text
+/private/tmp/hydra-v142-audit-retention-contract-rebuild-shutdown-20260601T.swVAL6
+/private/tmp/hydra-v142-audit-retention-contract-launch-20260601T.Qkdbo7
+```
+
+The local rebuilt zip SHA-256 was:
+
+```text
+33db71e47bf19cd92f04a2140f6d695e68930b3d8fc9b020721ebcdb28d9b769
+```

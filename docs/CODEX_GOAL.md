@@ -1294,6 +1294,34 @@ closed-app CLI commands, tests, and repo-local documentation.
   `4.600%` in sample `00`, stayed at `0.000%` for all ten later samples
   including the startup-prune window, and ended at `0.000%`; RSS changed by
   `+4912 KiB`.
+- Request-log retention scheduler checkpoint
+  `c0a8c27f5ac5f754d695d04fb8f90c7f5d849d8b` used `[skip-bump]`;
+  Auto-version run `26740075092` skipped, CI run `26740075081` passed, and
+  Docker workflow run `26740075047` passed runtime smoke plus registry image
+  push.
+- The CLI release audit now rejects older request-log retention shapes unless
+  the demand-driven worker disarms after an empty prune, rearms through both
+  buffered and direct-SSE log creation paths, retains error retries, and keeps
+  shutdown clearing. `npm run test:cli` passed `46/46` after the source-contract
+  hardening.
+- Native quit evidence under
+  `/private/tmp/hydra-v142-audit-retention-contract-rebuild-shutdown-20260601T.swVAL6`
+  records all four prior package processes exiting before the rebuilt bundle
+  moved into place. The audit-contract ARM rebuild passed package smoke, strict
+  deep `codesign`, bundle version (`1.4.2`), and embedded production notifier
+  inspection. Its local zip SHA-256 was
+  `33db71e47bf19cd92f04a2140f6d695e68930b3d8fc9b020721ebcdb28d9b769`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-audit-retention-contract-package-20260601T070443Z`.
+- LaunchServices evidence under
+  `/private/tmp/hydra-v142-audit-retention-contract-launch-20260601T.Qkdbo7`
+  records one canonical Spotlight bundle, four settled Hydra-owned processes
+  at `0.000%` CPU and `593.34 MB` RSS, and zero Hydra Playwright profiles.
+  Splash diagnostics again report `72/72` shuffled words, zero duplicate
+  skips, collision-free lifted portal entry, timers `0`, inactive RAF, and
+  cleared Matter state. This audit-only package pass does not change runtime
+  behavior, so the immediately preceding untouched five-minute profile remains
+  the relevant idle-runtime evidence.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

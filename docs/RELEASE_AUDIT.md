@@ -2001,3 +2001,30 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   across 11 samples. CPU peaked at `4.600%` in sample `00`, stayed at
   `0.000%` for all ten subsequent samples including the startup-prune window,
   and ended at `0.000%`; RSS changed by `+4912 KiB`.
+- 2026-06-01 request-log retention scheduler checkpoint:
+  `c0a8c27f5ac5f754d695d04fb8f90c7f5d849d8b` used `[skip-bump]`;
+  Auto-version run `26740075092` skipped, CI run `26740075081` passed, and
+  Docker workflow run `26740075047` passed runtime smoke plus registry image
+  push.
+- 2026-06-01 request-log retention audit-contract hardening: `hydra audit`
+  now requires the empty-table disarm path, traffic-driven notifier export,
+  buffered-log notifier call, direct-SSE notifier call, retained-row cadence,
+  error retry, and shutdown clear. `npm run test:cli` passed `46/46`.
+- 2026-06-01 audit-contract current-source ARM package proof: native quit
+  evidence under
+  `/private/tmp/hydra-v142-audit-retention-contract-rebuild-shutdown-20260601T.swVAL6`
+  records all four prior package processes exiting. ARM rebuild, package
+  smoke, strict deep `codesign`, bundle version (`1.4.2`), and embedded
+  production notifier inspection passed. The local zip SHA-256 was
+  `33db71e47bf19cd92f04a2140f6d695e68930b3d8fc9b020721ebcdb28d9b769`.
+  Generated archive byproducts moved reversibly to
+  `~/.Trash/hydra-audit-retention-contract-package-20260601T070443Z`.
+- 2026-06-01 audit-contract LaunchServices proof:
+  `/private/tmp/hydra-v142-audit-retention-contract-launch-20260601T.Qkdbo7`
+  records one canonical Spotlight bundle, four settled Hydra-owned processes
+  at `0.000%` CPU and `593.34 MB` RSS, and zero Hydra Playwright profiles.
+  Splash teardown again reports `72/72` shuffled words, zero duplicate skips,
+  collision-free lifted portal entry, timers `0`, inactive RAF, and cleared
+  Matter state. The immediately preceding untouched five-minute runtime
+  profile remains the relevant idle evidence because this second rebuild only
+  tightens the shipped repository audit contract.
