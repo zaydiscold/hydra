@@ -1833,6 +1833,11 @@ This evidence file is not release-complete by itself. The release remains not co
   retained four Hydra-owned processes and zero stale profiles across all 11
   samples: CPU stayed `0.0-0.1%`, averaged `0.036%`, and ended at `0.0%`; RSS
   moved `617644032 -> 607289344` bytes (`-10354688`).
+  The same source checkpoint passed lint, full `npm test`, gate (`12/12`),
+  rebuilt ARM package smoke, strict deep codesign, OpenAPI regeneration (`84`
+  operations, no drift), and local Docker smoke with a real containerized
+  Playwright Chromium launch. `docker desktop stop` removed Docker Desktop
+  runtime helpers in one second; no `hydra_default` network remained.
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under
   `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`

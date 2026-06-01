@@ -2387,6 +2387,16 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   retained exactly four Hydra-owned processes and zero stale profiles across
   all 11 30-second samples: CPU stayed `0.0-0.1%`, averaged `0.036%`, and
   ended at `0.0%`; RSS moved `617644032 -> 607289344` bytes (`-10354688`).
+- 2026-06-01 lifecycle-timeout literal-chain closeout: final source checkpoint
+  `893978a` passed `npm run lint`, full `npm test`, `npm run gate` (`12/12`),
+  rebuilt ARM `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`,
+  strict deep codesign, and `npm run openapi:hydra` (`84` operations, no
+  tracked drift). Docker Desktop was started temporarily and became ready in
+  two seconds; `npm run docker:smoke` passed compose validation, production
+  image build, and a real containerized Playwright Chromium launch. Bounded
+  teardown left no `hydra_default` network, `docker desktop stop` removed the
+  Desktop runtime helpers in one second, and Hydra returned to four owned
+  processes at `0.0%` CPU with zero stale profiles.
 - 2026-06-01 post-release literal-gate recheck: `npm run lint`, full
   `npm test`, and `npm run gate` (`12/12`) passed against the docs-reconciled
   `v1.4.6` tree. Bare `HYDRA_BUILD_TARGET=darwin-arm64 npm run
