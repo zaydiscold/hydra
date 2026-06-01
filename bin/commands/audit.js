@@ -362,9 +362,11 @@ function buildAudit() {
     check(
       'mac-intel-artifact',
       'macOS Intel artifact',
-      (macX64Size != null && existsSync(join(ROOT, artifactPaths.macX64Blockmap))) || macX64CiRecorded,
+      (macX64Size != null && existsSync(join(ROOT, artifactPaths.macX64Blockmap))) || currentReleaseRecorded || macX64CiRecorded,
       macX64Size == null
-        ? 'GitHub Actions macOS Intel electron:smoke artifact evidence recorded in docs/RELEASE_AUDIT.md'
+        ? currentReleaseRecorded
+          ? `GitHub release v${version} macOS Intel artifact and release-matrix smoke evidence are recorded in docs/RELEASE_AUDIT.md`
+          : 'GitHub Actions macOS Intel electron:smoke artifact evidence recorded in docs/RELEASE_AUDIT.md'
         : artifactPaths.macX64Zip + ' (' + macX64Size + ' MB) + blockmap',
     ),
     check(
@@ -373,18 +375,22 @@ function buildAudit() {
       ((macX64Size != null
         && existsSync(join(ROOT, artifactPaths.macX64Blockmap))
         && existsSync(join(ROOT, 'release/mac/Hydra.app/Contents/MacOS/Hydra')))
-        || macX64CiRecorded)
+        || currentReleaseRecorded)
         && !blockers.some((row) => /macOS Intel package refresh/.test(row.requirement)),
-      macX64CiRecorded
+      currentReleaseRecorded
+        ? `GitHub release v${version} macOS Intel artifact and release-matrix smoke evidence are recorded in docs/RELEASE_AUDIT.md`
+        : macX64CiRecorded
         ? 'GitHub Actions macOS Intel runner built --mac zip --x64 and electron:smoke verified packaged shell, x64 zip, Prisma engine, and bundled Chromium'
         : 'macOS Intel x64 package was rebuilt and smoked after the native titlebar/traffic-light change',
     ),
     check(
       'windows-installer-artifact',
       'Windows x64 installer artifact',
-      (winX64Size != null && existsSync(join(ROOT, artifactPaths.winX64Blockmap))) || winX64CiRecorded,
+      (winX64Size != null && existsSync(join(ROOT, artifactPaths.winX64Blockmap))) || currentReleaseRecorded || winX64CiRecorded,
       winX64Size == null
-        ? 'GitHub Actions Windows NSIS electron:smoke artifact evidence recorded in docs/RELEASE_AUDIT.md'
+        ? currentReleaseRecorded
+          ? `GitHub release v${version} Windows NSIS artifact and release-matrix smoke evidence are recorded in docs/RELEASE_AUDIT.md`
+          : 'GitHub Actions Windows NSIS electron:smoke artifact evidence recorded in docs/RELEASE_AUDIT.md'
         : artifactPaths.winX64Exe + ' (' + winX64Size + ' MB) + blockmap',
     ),
     evidenceBackedCheck(
@@ -502,6 +508,8 @@ function buildAudit() {
         && readme.includes('The README avoids embedding real account data, full API keys, or live secrets')
         && !/Remotion|remotion/.test(readme)
         && readme.includes('[docs/VERSIONING.md](docs/VERSIONING.md)')
+        && readme.includes(`current refined desktop release is \`v${version}\``)
+        && readme.includes('the active `1.4.x` lane')
         && versioningDoc.includes('[bump:minor]')
         && versioningDoc.includes('1.1.0 -> 1.1.1')
         && versioningDoc.includes('Splash Density And Tilt In The Version Notes')

@@ -182,12 +182,13 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-as `v1.1.0`, and remaining manual dogfood evidence stays explicit in the audit.
+first as `v1.1.0`, the current refined desktop release is `v1.4.0`, and
+remaining manual dogfood evidence stays explicit in the audit.
 
 Current release-train docs:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
-  checkpoints, and the completed `v1.1.0` release path.
+  checkpoints, the active `1.4.x` lane, and completed release history.
 - [Design Engineering](docs/DESIGN_ENGINEERING.md): splash portal composition,
   restrained proximity fields, session-truth copy, and embedded product credit.
 - [Splash Tilt Research](docs/SPLASH_TILT_RESEARCH.md): how the 16 second,

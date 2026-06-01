@@ -1,6 +1,6 @@
 # Hydra Release Audit
 
-Last updated: 2026-05-31
+Last updated: 2026-06-01
 Scope: source-verifiable release readiness for the Electron desktop app, plus explicit blockers for work that still requires packaged app, live account, Docker daemon, or screenshot evidence.
 
 ## Prompt-to-Artifact Checklist
@@ -18,11 +18,11 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
 | Release artifacts | GitHub release v1.4.0 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26724123318` passed shared gates, package smoke on every target, the hosted Windows unpacked-executable launch-and-cleanup gate, artifact uploads, and macOS updater-metadata merge. All ten downloaded public assets matched GitHub SHA-256 digests; every updater SHA-512 matched its released binary. Real Intel GUI and Windows NSIS install/open UX remain target-runner or user-run evidence only. | Asset presence verified; startup fix released |
-| macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The latest locally dogfooded v1.0.11 macOS arm64 release artifact verifies with `codesign --verify --deep --strict`, includes the vendored splash physics runtime, and `ELECTRON_RUN_AS_NODE=1 Hydra.app/Contents/MacOS/Hydra -e ...` loads Electron Framework successfully. | Verified by release artifact dogfood |
+| macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-public `v1.4.0` macOS arm64 app and the rebuilt current-source arm64 package verify with `codesign --verify --deep --strict`; explicit-resource package smoke passed against both lanes. | Verified by release artifact dogfood |
 | Packaged Electron GUI dogfood | Must launch packaged Electron, navigate real app surfaces, verify no dead buttons/silent failures, and keep secrets redacted. | Not Yet Verified |
 | Live MVP dogfood | Live OTP/login, redemption, proxy rotation, and real-key paths require real credentials/accounts/codes. | Not Yet Verified |
 | Packaged screenshot plan | Current gallery and splash media come from packaged Electron only and stay redacted; final interactive human visual review remains manual. The superseded Remotion lane is out of scope. | Partially verified |
-| Docker runtime smoke | GitHub Actions run `26725827291` passed both `Runtime Smoke` and `Build & Push` for the trimmed Docker-browser hardening checkpoint. A stricter local `npm run docker:smoke -- --start` pass also built the trimmed image, launched full Chromium through Hydra's own persistent-context resolver, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` reported no missing Chromium libraries. | Verified locally and by CI runtime smoke |
+| Docker runtime smoke | GitHub Actions run `26729484195` passed both `Runtime Smoke` and `Build & Push` for the final-tip docs checkpoint after release-audit truth hardening. A stricter local `npm run docker:smoke -- --start` pass also built the trimmed image, launched full Chromium through Hydra's own persistent-context resolver, started the compose service, received HTTP `200`, and cleaned up compose resources. Direct post-build `ldd` reported no missing Chromium libraries. | Verified locally and by CI runtime smoke |
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
 | Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 | Idle backend performance pass | PR #18 merged as master f74c195 and v1.0.9 includes delayed session/request-log startup sweeps, opt-in session-lifetime probe, relaxed task-supervisor sweep interval, and removed eager renderer live-probe fan-out from dashboard/vault/account-detail page load. CI, Electron package smoke, Docker, and release automation passed after merge. | Verified by CI/release |
@@ -1286,3 +1286,37 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Auto-version run `26729401085` skipped, CI run `26729401072` passed, and
   Docker workflow run `26729401071` passed both runtime smoke and registry
   image push.
+- 2026-06-01 current-release audit completion pass: `hydra audit` now reports
+  macOS ARM, macOS Intel, Intel-current, and Windows NSIS artifact evidence
+  from recorded public `v1.4.0` release-matrix proof instead of allowing the
+  Intel-current claim to rest on historical `v1.0.7` CI evidence. README
+  release-train copy now distinguishes the historical first `v1.1.0`
+  performance tranche from the current refined `v1.4.0` desktop release and
+  active `1.4.x` lane. Focused CLI verification passed `46/46`; `rg -n
+  'Remotion|remotion' README.md` returned no matches.
+- 2026-06-01 current-release audit quiet profile:
+  `/private/tmp/hydra-v140-post-audit-current-artifacts-quiet-idle-20260601T005910Z`
+  sampled the untouched canonical packaged app every 30 seconds for five
+  minutes after the CLI/README fix, with no concurrent local tests or git
+  activity. All 11 samples retained four Hydra-owned processes and zero stale
+  Hydra Playwright profiles. Aggregate Hydra CPU stayed exactly `0.000%` in
+  every sample; RSS moved from `499952 KiB` to `500864 KiB` (`+912 KiB`).
+  Broad before/after `ps -ax | grep -iE
+  'chrome|chromium|playwright|electron|hydra'` inventories are preserved in
+  that profile directory. A preliminary overlapping sampler is preserved
+  separately under
+  `/private/tmp/hydra-v140-post-audit-loop-idle-20260601T005352Z` and is not
+  used as the authoritative quiet-runtime result.
+- 2026-06-01 current-release audit final local chain: the public
+  `Hydra-1.4.0-mac-arm64.zip` downloaded from GitHub matched its published
+  SHA-256 digest exactly:
+  `320bb60fc3400449fb9c34d4003c5afd9811337c3c9e8cf08f074921fa5e4dac`.
+  The literal ordered acceptance sequence passed: lint, full `npm test`,
+  serial gate (`12/12`), ARM package smoke against that exact public zip,
+  Docker smoke with a rebuilt production image and successful isolated
+  full-Chromium launch, and OpenAPI generation (`83 operations`). A final
+  strict deep `codesign` passed. `docker compose ps --all` returned no
+  services, no `hydra_default` network remained, and Docker Desktop stopped
+  cleanly in one second. The temporary public-zip symlink and downloaded smoke
+  input directory were moved reversibly out of the workspace into Trash;
+  `release/` again contains only `mac-arm64/Hydra.app`.
