@@ -2484,3 +2484,23 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   variance, and returned no Vision OCR text. This is current native capture
   and environment-blocker evidence, not interactive route, screenshot-review,
   or physical Touch ID completion.
+- 2026-06-01 exact-public-`v1.4.7` Bulk Email Link relay setup attempt: the
+  operator asked Hydra to configure the public HTTPS callback after seeing the
+  capability banner. A fresh machine-state check found `cloudflared 2026.3.0`
+  installed but no `~/.cloudflared/` identity, `cloudflared tunnel list`
+  blocked on the missing origin certificate, and unauthenticated Wrangler.
+  More importantly, Clerk's current redirect documentation still requires a
+  `redirect_url` on the instance domain, one of its subdomains, or the same
+  requesting origin. Live `curl -sSIL` probes confirmed OpenRouter uses
+  `https://clerk.openrouter.ai` and that OpenRouter's same-origin
+  `/auth?callback_url=...` handoff exists, but OpenRouter documents that
+  surface as OAuth PKCE API-key authorization. It does not return the Clerk
+  `__clerk_ticket` required by Hydra's `/api/auth/magic-callback` session
+  completion route. The local Printing Press OpenRouter map likewise exposes
+  `/auth/keys/code` and `/auth/keys` for PKCE API keys, not a supported Clerk
+  login-session import endpoint. No tunnel was started and no `.env` value was
+  changed: writing `HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED=1` without a
+  tenant-owner allowlist entry would be false and would re-enable rejected
+  Clerk requests. Bulk OTP remains the supported direct-HTTPS OpenRouter
+  import path. Reproduction commands and external references are recorded in
+  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`.

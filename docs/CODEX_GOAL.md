@@ -1386,6 +1386,17 @@ closed-app CLI commands, tests, and repo-local documentation.
   `cbd66508eb94e9a58016ebb82dace2b26c472ea695939a307508ce21de603de6`,
   nonzero variance, and no Vision OCR text. Interactive route review,
   screenshot approval, and physical Touch ID remain manual.
+- The exact-public `v1.4.7` Bulk Email Link relay setup attempt is documented
+  in `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`. A fresh local check
+  found `cloudflared 2026.3.0` installed but no authenticated named-tunnel
+  identity and unauthenticated Wrangler. The upstream blocker is more
+  fundamental: Clerk still requires an instance-domain, subdomain, same-origin,
+  or tenant-owner-allowlisted `redirect_url`. OpenRouter's documented
+  `/auth?callback_url=...` PKCE handoff produces API keys, not the
+  `__clerk_ticket` Hydra needs to complete a Clerk login session. No tunnel was
+  started and no false
+  `HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED=1` value was written. Bulk OTP
+  remains the supported direct-HTTPS OpenRouter import lane.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

@@ -73,3 +73,40 @@ tenant or callback allowlist.
 - Clerk custom Email Link flow: https://clerk.com/docs/js-frontend/guides/development/custom-flows/authentication/email-links
 - Clerk same-device/browser protection: https://clerk.com/docs/guides/secure/best-practices/protect-email-links
 - Clerk redirect allowlist model: https://clerk.com/docs/reference/backend/types/backend-redirect-url
+- Clerk Account Portal redirect rule: https://clerk.com/docs/guides/account-portal/direct-links
+- OpenRouter OAuth PKCE callback flow: https://openrouter.ai/docs/use-cases/oauth-pkce
+
+## Live Relay Setup Attempt
+
+Date: 2026-06-01
+
+The operator asked Hydra to configure the relay after seeing the Email Link
+capability banner. A fresh machine-state and upstream-contract check confirmed
+that Hydra must not write the two opt-in environment variables automatically:
+
+- `cloudflared --version` reports `2026.3.0`, but this machine has no
+  `~/.cloudflared/` identity. `cloudflared tunnel list` fails because no origin
+  certificate is configured.
+- `wrangler whoami` reports that Wrangler is not authenticated.
+- A live `curl -sSIL https://openrouter.ai/sign-in` probe confirms OpenRouter
+  is using `https://clerk.openrouter.ai`.
+- Clerk's current redirect documentation states that `redirect_url` must be on
+  the instance domain, one of its subdomains, or share the requesting origin.
+  Hydra cannot add a relay URL to OpenRouter's tenant-owned allowlist.
+- A live
+  `curl -sSIL 'https://openrouter.ai/auth?callback_url=https%3A%2F%2Fexample.com%2Fcb'`
+  probe confirms that OpenRouter has a same-origin `/auth` handoff. OpenRouter
+  documents that route as an OAuth PKCE API-key authorization flow. It does
+  not return the Clerk `__clerk_ticket` required by Hydra's
+  `/api/auth/magic-callback` session-completion route.
+- The local Printing Press OpenRouter map exposes `/auth/keys/code` and
+  `/auth/keys` for that PKCE API-key flow. It does not expose a supported API
+  that imports an OpenRouter Clerk login session.
+
+No tunnel was started and no `.env` value was changed. Setting
+`HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED=1` without a tenant-owner
+allowlist entry would be false and would re-enable the rejected-request loop.
+For OpenRouter accounts, use Bulk OTP. If an owner-controlled Clerk tenant is
+introduced later, configure an authenticated named tunnel that forwards only
+`/api/auth/magic-callback`, register that exact HTTPS relay with the Clerk
+tenant owner, and only then set both opt-in variables.
