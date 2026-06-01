@@ -50,7 +50,7 @@ jobs:
 
           # All branches except protected.
           gh api "repos/$REPO/branches" --paginate --jq '.[].name' \
-            | grep -Ev "$PROTECTED" \
+            | { grep -Ev "$PROTECTED" || true; } \
             | while IFS= read -r branch; do
                 # Skip if there's an open PR targeting this branch.
                 open=$(gh pr list --state open --head "$branch" --json number --jq 'length')
