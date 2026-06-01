@@ -1846,3 +1846,13 @@ This evidence file is not release-complete by itself. The release remains not co
   words, zero duplicate shatter skips, timers `0`, inactive RAF, collision-free
   lifted portal entry, and cleared Matter state. The final log window contains
   no new close-dialog quit path after the rebuilt launch.
+- Public `v1.4.3` release publication: GitHub release
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.4.3` was published on
+  2026-06-01 with all ten expected release assets: macOS arm64 zip/blockmap,
+  macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage,
+  `latest-mac.yml`, `latest.yml`, and `latest-linux.yml`. Release Desktop Apps
+  run `26745761313` passed shared lint/test/gate, package smoke on every
+  desktop target, the hosted Windows unpacked and NSIS-installed executable
+  lifecycle check, artifact uploads, and macOS updater metadata merge. CI run
+  `26745750087`, Docker workflow run `26745750037`, and Auto-version run
+  `26745750077` also completed successfully.
