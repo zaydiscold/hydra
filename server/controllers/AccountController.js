@@ -9,7 +9,12 @@ import { ProvisionKeyNotCapturedError } from '../services/dashboard-api.js';
 import { assertManagementKey } from '../services/key-utils.js';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { logger } from '../services/logger.js';
-import { runInBatches } from '../services/batch-runner.js';
+import {
+  bindRequestAbort,
+  combineAbortSignals,
+  runInBatches,
+  throwIfAborted,
+} from '../services/batch-runner.js';
 import { invalidateSnapshotCache } from './DashboardController.js';
 import {
   addAccountSchema,
@@ -100,13 +105,16 @@ export class AccountController extends BaseController {
   }
 
   async bulkAdd(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'bulk account import request');
     try {
       const { lines } = this.validate(req.body, bulkAddSchema);
 
       const results = await taskSupervisor.enqueueBatch(
         'batch_account_work',
         req.user.id,
-        async () => {
+        async (task) => {
+          const signal = combineAbortSignals(requestAbort.signal, task.abortController.signal);
+          throwIfAborted(signal);
           // Pre-fetch existing accounts once for dedup lookup on 409
           let existingAccounts = [];
           try {
@@ -117,6 +125,7 @@ export class AccountController extends BaseController {
 
           const batchResults = [];
           for (const [index, lineStr] of lines.entries()) {
+            throwIfAborted(signal);
             try {
               if (lineStr.includes(':')) {
                 const parts = lineStr.split(':').map(p => p.trim());
@@ -168,6 +177,8 @@ export class AccountController extends BaseController {
       return this.success(res, { count: created, created, skipped, failed, data: results }, 201);
     } catch (err) {
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -176,8 +187,10 @@ export class AccountController extends BaseController {
    * Used by Bulk Auth wizard before per-account otp/start + otp/verify.
    */
   async bulkOtpStubs(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'bulk OTP stub request');
     try {
       const { emails: rawEmails } = this.validate(req.body, bulkOtpStubsSchema);
+      throwIfAborted(requestAbort.signal);
 
       // Expand *@domain wildcards to random aliases (e.g. *@zayd.wtf → nova4821@zayd.wtf)
       const RANDOM_WORDS = [
@@ -224,6 +237,7 @@ export class AccountController extends BaseController {
       }
 
       for (const email of unique) {
+        throwIfAborted(requestAbort.signal);
         let created = false;
         let lastError = null;
 
@@ -290,6 +304,8 @@ export class AccountController extends BaseController {
       return this.success(res, { results }, 201);
     } catch (err) {
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
@@ -601,6 +617,7 @@ export class AccountController extends BaseController {
   }
 
   async provisionAll(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'bulk account provisioning request');
     try {
       const candidates = (await store.getAllAccountsWithKeys(req.user.id)).filter((a) => !a.managementKey && a.email);
 
@@ -624,7 +641,8 @@ export class AccountController extends BaseController {
       const results = await taskSupervisor.enqueueBatch(
         'batch_account_work',
         req.user.id,
-        async () => {
+        async (task) => {
+          const signal = combineAbortSignals(requestAbort.signal, task.abortController.signal);
           return runInBatches(eligible, async (account) => {
             try {
               const result = await dashboardApi.createManagementKey(req.user.id, account.id);
@@ -632,13 +650,15 @@ export class AccountController extends BaseController {
             } catch (err) {
               return { id: account.id, alias: account.alias, success: false, error: err.message };
             }
-          });
+          }, { signal });
         },
         { operation: 'provision_all', size: eligible.length },
       );
       return this.success(res, { results, skipped });
     } catch (err) {
       return this.error(res, err.message, err.status || 500);
+    } finally {
+      requestAbort.dispose();
     }
   }
 

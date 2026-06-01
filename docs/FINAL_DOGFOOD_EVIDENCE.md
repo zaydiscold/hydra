@@ -1274,3 +1274,52 @@ This evidence file is not release-complete by itself. The release remains not co
   image push. GitHub's remaining Node 20 action-runtime warning belongs to the
   current upstream Docker helper actions, which GitHub forced onto Node 24;
   the Hydra-owned workflow remains green.
+- Before detached-batch cancellation hardening, an untouched five-minute
+  packaged profile under
+  `/private/tmp/hydra-v140-continuation-idle-reprofile-20260601T015213Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles.
+  Aggregate CPU ended calm at `0.000%` but included one `23.300%` transient;
+  the follow-up stack sample found the main process parked in
+  `CFRunLoop`/`mach_msg`, while the simultaneous doctor snapshot recorded
+  `186` externally owned browser-tool processes at `290.6%` aggregate CPU.
+- The shared batch runner now owns abort-aware, unref'd inter-chunk delays and
+  stops future work after client disconnect or supervisor cancellation.
+  Account import, OTP stubs, provisioning, bulk redemption, matrix redemption,
+  the dashboard bulk runner, and renderer request helpers thread the signals.
+  Raw bulk-redemption codes are no longer retained in task metadata. Direct
+  regressions passed `5/5`, and the deterministic canceled-work benchmark at
+  `/private/tmp/hydra-batch-disconnect-benchmark-20260601T020048Z/summary.txt`
+  reduced `200` post-disconnect worker chunks to `0`, aborting all `200`
+  synthetic surfaces and settling in `7.247ms` instead of `102.030ms`.
+- Native shutdown inventories are under
+  `/private/tmp/hydra-v140-batch-abort-rebuild-shutdown-20260601T020334Z`;
+  four packaged processes exited in one second. The current-source arm64 app
+  rebuilt successfully and passed ARM package smoke, strict deep `codesign`,
+  bundle-version inspection (`1.4.0`), and embedded abort-wiring inspection.
+  The local zip SHA-256 is
+  `8bb94844319f96edecabd94059139e28c9508aafa326ed7f6476e174684c4700`.
+  LaunchServices relaunch evidence is under
+  `/private/tmp/hydra-v140-batch-abort-current-source-launch-20260601T020511Z`.
+  Packaging byproducts were moved reversibly to
+  `~/.Trash/hydra-batch-abort-current-source-package-20260601T021151Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`.
+- The rebuilt untouched package profile under
+  `/private/tmp/hydra-v140-batch-abort-post-rebuild-quiet-idle-20260601T020610Z`
+  retained four packaged processes across 11 samples over five minutes.
+  Aggregate Hydra CPU stayed exactly `0.000%`; RSS moved from `603520 KiB` to
+  `609472 KiB` (`+5952 KiB`). The broad sampler matcher counted its own shell
+  once; authoritative `hydra doctor --json` reported zero Hydra Playwright
+  profiles.
+- The detached-batch final literal local chain passed lint, full `npm test`,
+  gate (`12/12`), ARM package smoke, Docker smoke with a rebuilt production
+  image and successful isolated full-Chromium Playwright launch, OpenAPI
+  generation (`83 operations`), and diff check in order. Strict deep
+  `codesign` passed afterward. Compose retained no services or
+  `hydra_default` network; evidence is under
+  `/private/tmp/hydra-v140-batch-abort-docker-postconditions-20260601T021656Z`.
+  Docker Desktop stopped cleanly in one second. Temporary package-smoke
+  symlinks moved reversibly to
+  `~/.Trash/hydra-batch-abort-final-smoke-links-20260601T021709Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one Hydra bundle, and the rebuilt package remains live with
+  four owned processes.

@@ -839,6 +839,54 @@ closed-app CLI commands, tests, and repo-local documentation.
   image push. GitHub's remaining Node 20 action-runtime warning belongs to the
   current upstream Docker helper actions, which GitHub forced onto Node 24;
   the Hydra-owned workflow remains green.
+- A continuation idle profile under
+  `/private/tmp/hydra-v140-continuation-idle-reprofile-20260601T015213Z`
+  retained four packaged processes and zero Hydra Playwright profiles across
+  11 samples. Aggregate CPU ended at `0.000%` but included one `23.300%`
+  transient; the follow-up main stack sample was parked in
+  `CFRunLoop`/`mach_msg`, and the concurrent doctor snapshot recorded `186`
+  externally owned browser-tool processes at `290.6%` aggregate CPU.
+- The shared batch runner now makes inter-chunk waits abort-aware and unref'd.
+  Client disconnects and task-supervisor cancellation stop future account
+  import, OTP-stub, provisioning, bulk-redemption, matrix-redemption, and
+  dashboard-runner chunks. Renderer helpers accept request signals, and
+  bulk-redemption task metadata no longer retains the raw code. New direct
+  regressions passed `5/5`; the benchmark at
+  `/private/tmp/hydra-batch-disconnect-benchmark-20260601T020048Z/summary.txt`
+  reduced `200` post-disconnect worker calls to `0`, with all `200` synthetic
+  requests aborted and settlement reduced from `102.030ms` to `7.247ms`.
+  Background visibility contracts passed `32/32`, UI static contracts passed
+  `39/39`, chain completeness passed `1/1`, and the full no-Docker source
+  chain passed lint, full `npm test`, Vite build, gate (`12/12`), OpenAPI
+  generation (`83 operations`), and diff check.
+- Pre-rebuild native shutdown removed all four packaged Hydra processes in one
+  second with evidence under
+  `/private/tmp/hydra-v140-batch-abort-rebuild-shutdown-20260601T020334Z`.
+  Current-source arm64 rebuild, ARM package smoke, strict deep `codesign`,
+  bundle version (`1.4.0`), and embedded abort-wiring inspection passed. The
+  local zip SHA-256 is
+  `8bb94844319f96edecabd94059139e28c9508aafa326ed7f6476e174684c4700`.
+  LaunchServices handoff evidence is under
+  `/private/tmp/hydra-v140-batch-abort-current-source-launch-20260601T020511Z`.
+  Generated packaging byproducts moved reversibly to
+  `~/.Trash/hydra-batch-abort-current-source-package-20260601T021151Z`.
+- The untouched post-rebuild profile under
+  `/private/tmp/hydra-v140-batch-abort-post-rebuild-quiet-idle-20260601T020610Z`
+  retained four packaged processes across 11 samples. Aggregate Hydra CPU
+  stayed exactly `0.000%`; RSS moved from `603520 KiB` to `609472 KiB`
+  (`+5952 KiB`). The broad sampler matcher counted its own shell command once;
+  authoritative `hydra doctor --json` reported zero Hydra Playwright profiles.
+- The detached-batch final literal local chain passed lint, full `npm test`,
+  gate (`12/12`), ARM package smoke, Docker smoke with a rebuilt production
+  image and successful isolated full-Chromium Playwright launch, OpenAPI
+  generation (`83 operations`), and diff check in order. Strict deep
+  `codesign` passed afterward. `docker compose ps --all` returned no services,
+  no `hydra_default` network remained, and Docker Desktop stopped cleanly in
+  one second. Temporary package-smoke symlinks moved reversibly to
+  `~/.Trash/hydra-batch-abort-final-smoke-links-20260601T021709Z`;
+  `release/` again contains only `mac-arm64/Hydra.app`, Spotlight resolves
+  exactly that one Hydra bundle, and the rebuilt package remains live with
+  four owned processes.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

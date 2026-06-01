@@ -298,8 +298,8 @@ export const addAccount = (alias, managementKey) =>
   request('/accounts', { method: 'POST', body: { alias, managementKey } });
 export const addAccountWithCredentials = (alias, email, password, authMethod) =>
   request('/accounts/with-credentials', { method: 'POST', body: { alias, email, password, authMethod } });
-export const bulkAddAccounts = (lines) =>
-  request('/accounts/bulk', { method: 'POST', body: { lines } });
+export const bulkAddAccounts = (lines, signal) =>
+  request('/accounts/bulk', { method: 'POST', body: { lines }, signal });
 /** Create OTP-only vault rows from emails only (Bulk Auth wizard). */
 export const bulkOtpStubs = (emails, signal) =>
   request('/accounts/bulk-otp-stubs', { method: 'POST', body: { emails }, signal });
@@ -338,8 +338,8 @@ export const getMagicLinkStatus = (id, signInId, signal) =>
 // Provisioning
 export const provisionManagementKey = (id, keyName) =>
   request(`/accounts/${id}/provision`, { method: 'POST', body: { keyName } });
-export const provisionAll = () =>
-  request('/accounts/provision-all', { method: 'POST' });
+export const provisionAll = (signal) =>
+  request('/accounts/provision-all', { method: 'POST', signal });
 
 // Keys
 export const getKeys = (accountId) => request(`/accounts/${accountId}/keys`);
@@ -353,8 +353,8 @@ export const deleteKey = (accountId, hash) =>
 // Code Redemption
 export const redeemCode = (accountId, code) =>
   request('/codes/redeem', { method: 'POST', body: { accountId, code } });
-export const bulkRedeemCode = (accountIds, code) =>
-  request('/codes/bulk', { method: 'POST', body: { accountIds, code } });
+export const bulkRedeemCode = (accountIds, code, signal) =>
+  request('/codes/bulk', { method: 'POST', body: { accountIds, code }, signal });
 export const bulkMatrixRedeem = (assignments, signal) =>
   request('/codes/bulk-matrix', { method: 'POST', body: { assignments }, signal });
 export const preflightRedeemAccounts = (accountIds, signal) =>

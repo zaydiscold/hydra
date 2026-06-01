@@ -4,7 +4,7 @@ import * as dashboardApi from '../services/dashboard-api.js';
 import { z } from 'zod';
 import { taskSupervisor } from '../services/task-supervisor.js';
 import { addRedemptionRecord, getRedemptionRecords } from '../services/redemption-log.js';
-import { runInBatches } from '../services/batch-runner.js';
+import { bindRequestAbort, combineAbortSignals, runInBatches } from '../services/batch-runner.js';
 import { logger } from '../services/logger.js';
 
 const redeemSchema = z.object({
@@ -64,13 +64,15 @@ class CodeController extends BaseController {
   }
 
   async bulkRedeem(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'bulk code redemption request');
     try {
       const { accountIds, code } = this.validate(req.body, bulkRedeemSchema);
       const results = await taskSupervisor.enqueueBatch(
         'batch_code_work',
         req.user.id,
-        async () => {
-          const res = await dashboardApi.bulkRedeemCode(req.user.id, accountIds, code);
+        async (task) => {
+          const signal = combineAbortSignals(requestAbort.signal, task.abortController.signal);
+          const res = await dashboardApi.bulkRedeemCode(req.user.id, accountIds, code, { signal });
           // P16 — log each outcome
           if (Array.isArray(res)) {
             for (const r of res) {
@@ -79,21 +81,25 @@ class CodeController extends BaseController {
           }
           return res;
         },
-        { operation: 'bulk_redeem', size: accountIds.length, code },
+        { operation: 'bulk_redeem', size: accountIds.length },
       );
       return this.success(res, results);
     } catch (err) {
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 
   async bulkMatrix(req, res) {
+    const requestAbort = bindRequestAbort(req, res, 'bulk matrix redemption request');
     try {
       const { assignments } = this.validate(req.body, bulkMatrixSchema);
       const results = await taskSupervisor.enqueueBatch(
         'batch_code_work',
         req.user.id,
-        async () => {
+        async (task) => {
+          const signal = combineAbortSignals(requestAbort.signal, task.abortController.signal);
           return runInBatches(assignments, async (assignment) => {
             const { accountId, code } = assignment;
             try {
@@ -117,7 +123,7 @@ class CodeController extends BaseController {
               await recordRedemptionAttempt(req.user.id, { code, accountId, success: false, message });
               return payload;
             }
-          });
+          }, { signal });
         },
         { operation: 'bulk_matrix_redeem', size: assignments.length },
       );
@@ -135,6 +141,8 @@ class CodeController extends BaseController {
       ));
     } catch (err) {
       return this.error(res, err.message);
+    } finally {
+      requestAbort.dispose();
     }
   }
 

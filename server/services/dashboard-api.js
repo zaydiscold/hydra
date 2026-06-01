@@ -3505,7 +3505,7 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
   return result;
 }
 
-export async function bulkRedeemCode(userId, accountIds, code) {
+export async function bulkRedeemCode(userId, accountIds, code, { signal = null } = {}) {
   return runInBatches(accountIds, async (id) => {
     try {
       const account = await store.getAccountWithKey(userId, id);
@@ -3516,7 +3516,7 @@ export async function bulkRedeemCode(userId, accountIds, code) {
       const { errorCode, message } = classifyRedeemFailure(err.message, err);
       return { accountId: id, success: false, message, error: message, errorCode };
     }
-  });
+  }, { signal });
 }
 
 export async function getUserProfile(sessionCookie, clientCookie) {
