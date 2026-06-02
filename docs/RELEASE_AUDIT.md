@@ -2962,4 +2962,10 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   Local Intel packaging was not faked on Apple Silicon: package prep correctly
   refused `darwin-x64` because the local Playwright cache contains only the ARM
   Chromium payload. The Intel artifact remains assigned to the hosted Intel
-  macOS runner.
+  macOS runner. GitHub release v1.5.1 is public after Release Desktop Apps run
+  `26814812863`; the run passed shared lint/test/gate, macOS arm64 zip smoke,
+  macOS Intel x64 zip smoke, Windows NSIS build/smoke plus hosted
+  unpacked/installed executable launch, Linux AppImage smoke, artifact uploads,
+  and merged macOS updater metadata. Public asset inspection verified macOS
+  arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux
+  x64 AppImage, `latest-mac.yml`, `latest.yml`, and `latest-linux.yml`.
