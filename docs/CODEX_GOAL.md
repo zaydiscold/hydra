@@ -1634,8 +1634,10 @@ closed-app CLI commands, tests, and repo-local documentation.
   zero stale profiles, and `0.0%` CPU at both `+60s` and `+90s`. The local ARM
   archive hash before reversible cleanup was
   `294024c55ea3e84e3b4bd25fe294cb063c49f4d905a7c5ad2c269176d23679e1`.
-  Hosted Intel, Windows, and Linux artifacts remain workflow-owned release
-  outputs after the final GitHub push.
+  Hosted Intel, Windows, and Linux artifacts are public workflow-owned release
+  outputs after successful Desktop Release run `26792860931`; its Windows
+  runner passed package smoke plus unpacked and NSIS-installed executable
+  launch-and-cleanup proof.
 
 ---
 

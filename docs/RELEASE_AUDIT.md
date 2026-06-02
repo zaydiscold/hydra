@@ -2775,6 +2775,11 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   only that bundle. A fresh LaunchServices run held four owned processes and
   zero stale profiles throughout. Splash work sampled `76.9%`, `259.3%`,
   `74.5%`, and `31.6%` CPU at `+5s`, `+15s`, `+30s`, and `+35s`, then settled
-  to `0.0%` at both `+60s` and `+90s`. Hosted Intel, Windows, and Linux
-  artifact publication remains pending until the GitHub release workflow
-  completes.
+  to `0.0%` at both `+60s` and `+90s`. Hosted publication then completed
+  successfully in GitHub Actions run `26792860931`: Linux AppImage, macOS ARM
+  zip, macOS Intel zip, Windows NSIS installer, their updater blockmaps, and
+  merged Linux/macOS/Windows updater metadata are public on the non-draft,
+  non-prerelease `v1.4.8` GitHub release. The Windows runner passed package
+  smoke plus launch-and-cleanup proof for both unpacked and NSIS-installed
+  executables. CI run `26792854933`, Docker run `26792854912`, and Auto-version
+  run `26792854913` also completed successfully.
