@@ -18,6 +18,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
 | Account Generator signup form drift | `1.5.2` fills required OpenRouter signup password/legal fields, detects hidden Turnstile state as `manual_verification`, keeps waits abort-aware, and documents the current selector evidence. | Source verified; final OTP remains operator-owned |
 | Account Generator browser-state rescue | `1.5.3` passes Playwright wait timeouts in the correct options slot, reports sanitized signup/security/OTP checkpoints to the renderer, and adds a `POST /api/generator/:taskId/focus` browser-focus path. | Source and bounded live smoke verified; final OTP remains operator-owned |
+| Account Generator modal-form repair | `1.5.4` fills OpenRouter's current duplicate Clerk modal fields, handles first/last/email/password/terms, force-accepts terms through portal overlays, and unlocks OTP entry from checkpoint truth. | Source, visual, and bounded live service smoke verified; final OTP remains operator-owned |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
 | Release artifacts | GitHub release v1.4.7 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26782121839` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; v1.4.7 released |
 | macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-local public `v1.4.7` macOS arm64 app verifies with `codesign --verify --deep --strict`; release-matrix package smoke passed on macOS arm64 and macOS Intel. | Verified by release artifact dogfood |
@@ -3109,3 +3110,32 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   blocked by macOS assistive-access permissions, so final human visual review
   of the active Generator card remains explicit. Final human verification and
   OTP entry remain operator-owned.
+- 2026-06-02 `1.5.4` Account Generator modal-form repair: live reproduction
+  against `https://openrouter.ai/sign-up` showed OpenRouter now renders a
+  modal with first name, last name, email, password, legal acceptance, multiple
+  visible Clerk submit controls, and a floating portal that can intercept the
+  legal checkbox click. The old generator could fill/click the wrong visible
+  form tree, then wait for OTP while the real modal still needed form fields.
+  Hydra now fills every visible matching signup field, derives first/last names
+  from the email, handles email/password/name/terms blockers in sanitized
+  checkpoints, uses force plus DOM fallback for legal acceptance, clicks the
+  current modal Continue control, retries form advancement before declaring an
+  OTP wait, and lets the renderer/backend accept OTP submission when the
+  checkpoint is already `otp` even if status polling has not caught up. Focused
+  verification passed `node --check server/services/account-generator.js`,
+  `node --test server/tests/background-failure-visibility.test.mjs`,
+  `node --test server/tests/ui-static-contract.test.mjs`, `npm run lint`, full
+  `npm test`, `npm run gate`, `npm run build`, `npm run openapi:hydra`,
+  `node bin/hydra.mjs audit --json`, and `git diff --check`. A real
+  `startSignupJob()` service smoke with a throwaway address reached
+  `manual_verification` in seven seconds with all sanitized field blockers false
+  and clean cancellation. A source dev
+  visual smoke for `/generator` saved a screenshot under
+  `/var/folders/jp/srqsp2ts3rv7qxvsdx4s1n480000gn/T/hydra-generator-ui-smoke-1780406137587/generator.png`;
+  the Generator Start button rendered as one line with `white-space: nowrap`
+  and zero measured button/chip overflow. Local macOS arm64 packaging passed
+  `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  codesign verification, bundle version `1.5.4`, and zip SHA-256
+  `5e5abf48c3fe2daa286160f55b06309f7a1d7cc18e25fb7c0ac603c8c353d8a6`.
+  Final human verification and OTP entry remain operator-owned.

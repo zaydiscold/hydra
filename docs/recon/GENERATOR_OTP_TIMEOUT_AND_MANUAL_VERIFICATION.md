@@ -35,6 +35,15 @@ the third argument, records sanitized browser checkpoints, and exposes a
 Generator focus endpoint so the operator can bring the isolated account browser
 forward during security checks.
 
+Follow-up live form walk on 2026-06-02 found a fourth upstream drift:
+OpenRouter now opens a Clerk modal with first name, last name, email, password,
+terms, duplicate visible submit controls, and a floating portal that can
+intercept checkbox clicks. Hydra `1.5.4` fills the visible duplicate form fields,
+derives safe first/last names from the email, accepts the legal checkbox with a
+force path plus DOM fallback, clicks the current modal Continue control, and
+uses checkpoint truth to unlock OTP entry if the browser has already reached the
+code screen before the status poll updates.
+
 ## How It Was Found
 
 - The reported error matched Playwright's 30-second wait shape:
@@ -64,6 +73,13 @@ forward during security checks.
 - Direct service smoke through `startSignupJob()` reached
   `manual_verification` with `mode=browser_signup` and cleaned up without a
   false launch failure after cancellation.
+- `v1.5.4` direct service smoke through `startSignupJob()` reached
+  `manual_verification` in seven seconds after filling first name, last name,
+  email, password, and terms. The sanitized checkpoint reported all field
+  blockers false before clean cancellation.
+- `v1.5.4` source dev visual smoke for `/generator` saved a screenshot and
+  measured zero overflow after replacing the inner Start button `btn-icon`
+  span with `generator-button-label`.
 - `v1.5.3` focused verification:
   - `node --check server/services/account-generator.js`
   - `node --check server/controllers/GeneratorController.js`
@@ -100,12 +116,18 @@ server/services/account-generator.js
 - SIGNUP_FORM_BLOCKED_GRACE_MS = 3 * 1000
 - readSignupCheckpoint(page)
 - signupBlocked / passwordBlocked / legalBlocked
+- emailBlocked / firstNameBlocked / lastNameBlocked
 - input[name="cf-turnstile-response"]
 - turnstilePending
+- fillVisibleSignupNames(page, ...)
+- fillVisibleSignupEmail(page, ...)
 - fillVisibleSignupPassword(page, ...)
 - acceptVisibleSignupTerms(page, ...)
+- clickVisibleSignupContinueControl(page, ...)
 - Manual upstream verification visible ...
 - GENERATOR_SIGNUP_FORM_BLOCKED
+- GENERATOR_SIGNUP_EMAIL_FIELD_MISSING
+- GENERATOR_SIGNUP_NAME_FIELD_MISSING
 - GENERATOR_MANUAL_VERIFICATION_TIMEOUT
 - GENERATOR_OTP_SCREEN_TIMEOUT
 - fillVisibleOtpInput(page, otpCode, task.taskId)
@@ -116,12 +138,14 @@ src/api.js
 - submitGeneratorOtpQuiet(..., trackLoading: false)
 
 src/pages/Generator.jsx
+- isOtpReady(status, checkpoint)
 - waiting_for_otp_screen: Watching the isolated browser for email-code or human-verification state.
 - entering_signup_details: Entering the signup password and required OpenRouter consent.
 - manual_verification: Finish any OpenRouter security check in the account browser...
 - Submit code
 - Browser state: {checkpointText}
 - Show account browser
+- generator-button-label
 
 server/routes/generator.js
 - POST /:taskId/focus

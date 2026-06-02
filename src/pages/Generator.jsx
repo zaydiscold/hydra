@@ -62,6 +62,9 @@ function checkpointLabel(checkpoint) {
       return 'Security check visible';
     case 'signup_blocked': {
       const fields = [
+        checkpoint.emailBlocked ? 'email' : null,
+        checkpoint.firstNameBlocked ? 'first name' : null,
+        checkpoint.lastNameBlocked ? 'last name' : null,
         checkpoint.passwordBlocked ? 'password' : null,
         checkpoint.legalBlocked ? 'terms' : null,
       ].filter(Boolean).join(' + ');
@@ -72,6 +75,10 @@ function checkpointLabel(checkpoint) {
     default:
       return null;
   }
+}
+
+function isOtpReady(status, checkpoint) {
+  return status === 'awaiting_otp' || checkpoint?.state === 'otp';
 }
 
 export default function Generator({ addToast }) {
@@ -323,6 +330,7 @@ export default function Generator({ addToast }) {
   };
 
   const checkpointText = checkpointLabel(checkpoint);
+  const otpReady = isOtpReady(status, checkpoint);
   const canFocusBrowser = jobMode === 'browser_signup' && BROWSER_BACKED_STATUSES.has(status);
 
   return (
@@ -377,7 +385,7 @@ export default function Generator({ addToast }) {
               onClick={handleStart}
               disabled={!emailTemplate || starting}
             >
-              <span className="btn-icon" style={{ justifyContent: 'center' }}>
+              <span className="generator-button-label">
                 <PlusIcon size={20} />
                 <span>{starting ? 'Starting...' : 'Start Generation'}</span>
               </span>
@@ -428,7 +436,7 @@ export default function Generator({ addToast }) {
           )}
 
             <div className="status-indicator" style={{ marginTop: 'var(--space-md)' }}>
-            {status === 'awaiting_otp' ? (
+            {otpReady ? (
               <div className="otp-box generator-otp-panel">
                 <p className="generator-status-copy">
                   <strong>{generatorModeLabel(jobMode)}</strong> is ready for the email code sent to {emailTemplate}.
@@ -451,7 +459,7 @@ export default function Generator({ addToast }) {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                   />
-                  <button type="submit" className="btn btn-primary generator-otp-submit" disabled={otp.length !== 6 || verifying || status !== 'awaiting_otp'}>
+                  <button type="submit" className="btn btn-primary generator-otp-submit" disabled={otp.length !== 6 || verifying || !otpReady}>
                     {verifying ? 'Submitting...' : 'Submit code'}
                   </button>
                 </form>
@@ -477,7 +485,7 @@ export default function Generator({ addToast }) {
               </button>
             )}
             <button type="button" className="btn btn-ghost generator-cancel-btn" onClick={cancelJob}>
-              <span className="btn-icon">
+              <span className="generator-button-label">
                 <PowerIcon size={18} />
                 <span>Cancel job</span>
               </span>

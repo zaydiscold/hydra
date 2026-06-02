@@ -682,6 +682,8 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(generator, /manual_verification: 'Finish any OpenRouter security check in the account browser\./);
   assert.match(generator, /generatorModeLabel\(jobMode\)/);
   assert.match(generator, /checkpointLabel\(checkpoint\)/);
+  assert.match(generator, /function isOtpReady\(status, checkpoint\)/);
+  assert.match(generator, /const otpReady = isOtpReady\(status, checkpoint\)/);
   assert.match(generator, /Browser state: \{checkpointText\}/);
   assert.match(generator, /api\.focusGeneratorBrowserQuiet\(taskId\)/);
   assert.match(generator, /Show account browser/);

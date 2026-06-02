@@ -4472,6 +4472,15 @@ select:-webkit-autofill {
   font-weight: 800;
 }
 
+.generator-button-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .generator-start-btn:disabled {
   opacity: 0.52;
   filter: saturate(0.55) brightness(0.85);

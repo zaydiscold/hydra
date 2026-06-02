@@ -99,13 +99,31 @@ function serializeGeneratorTask(task) {
 async function readSignupCheckpoint(page) {
   return page.evaluate((otpSelector) => {
     const text = document.body?.innerText?.toLowerCase?.() || '';
-    const formInputs = Array.from(document.querySelectorAll('input'));
-    const passwordInput = formInputs.find((input) => input.type === 'password' || /password/i.test(`${input.name || ''} ${input.id || ''} ${input.placeholder || ''}`));
-    const legalCheckbox = formInputs.find((input) => input.type === 'checkbox' && /legal|terms|privacy|agree|accepted/i.test(`${input.name || ''} ${input.id || ''} ${input.getAttribute('aria-label') || ''}`));
-    const signupFormVisible = Boolean(passwordInput || legalCheckbox)
+    const visibleInputs = Array.from(document.querySelectorAll('input')).filter((input) => {
+      if (!input || input.disabled) return false;
+      return Boolean(input.offsetWidth || input.offsetHeight || input.getClientRects().length);
+    });
+    const describeInput = (input) => `${input.name || ''} ${input.id || ''} ${input.placeholder || ''} ${input.getAttribute('aria-label') || ''}`.trim();
+    const emailInput = visibleInputs.find((input) => (
+      input.type === 'email'
+      || input.inputMode === 'email'
+      || /email/i.test(describeInput(input))
+    ) && !/search/i.test(describeInput(input)));
+    const firstNameInput = visibleInputs.find((input) => /first[-_\s]*name/i.test(describeInput(input)));
+    const lastNameInput = visibleInputs.find((input) => /last[-_\s]*name/i.test(describeInput(input)));
+    const passwordInput = visibleInputs.find((input) => input.type === 'password' || /password/i.test(describeInput(input)));
+    const legalCheckbox = visibleInputs.find((input) => input.type === 'checkbox' && /legal|terms|privacy|agree|accepted/i.test(describeInput(input)));
+    const signupFormVisible = Boolean(emailInput || firstNameInput || lastNameInput || passwordInput || legalCheckbox)
       || text.includes('create your account')
       || text.includes('password')
       || text.includes('terms of service');
+    const emailBlocked = Boolean(emailInput) && !String(emailInput.value || '').trim();
+    const firstNameBlocked = Boolean(firstNameInput)
+      && (firstNameInput.required || firstNameInput.getAttribute('aria-required') === 'true')
+      && !String(firstNameInput.value || '').trim();
+    const lastNameBlocked = Boolean(lastNameInput)
+      && (lastNameInput.required || lastNameInput.getAttribute('aria-required') === 'true')
+      && !String(lastNameInput.value || '').trim();
     const passwordBlocked = Boolean(passwordInput)
       && !passwordInput.value
       && (text.includes('password') || text.includes('8 or more characters'));
@@ -135,7 +153,10 @@ async function readSignupCheckpoint(page) {
       otpVisible,
       manualVisible,
       signupFormVisible,
-      signupBlocked: !otpVisible && !manualVisible && signupFormVisible && (passwordBlocked || legalBlocked),
+      signupBlocked: !otpVisible && !manualVisible && signupFormVisible && (emailBlocked || firstNameBlocked || lastNameBlocked || passwordBlocked || legalBlocked),
+      emailBlocked,
+      firstNameBlocked,
+      lastNameBlocked,
       passwordBlocked,
       legalBlocked,
       url: document.location.href,
@@ -146,6 +167,9 @@ async function readSignupCheckpoint(page) {
     manualVisible: false,
     signupFormVisible: false,
     signupBlocked: false,
+    emailBlocked: false,
+    firstNameBlocked: false,
+    lastNameBlocked: false,
     passwordBlocked: false,
     legalBlocked: false,
     url: page.url?.() ?? 'unknown',
@@ -165,6 +189,9 @@ function summarizeSignupCheckpoint(checkpoint) {
     state,
     url: checkpoint.url,
     title: checkpoint.title,
+    emailBlocked: Boolean(checkpoint.emailBlocked),
+    firstNameBlocked: Boolean(checkpoint.firstNameBlocked),
+    lastNameBlocked: Boolean(checkpoint.lastNameBlocked),
     passwordBlocked: Boolean(checkpoint.passwordBlocked),
     legalBlocked: Boolean(checkpoint.legalBlocked),
     error: checkpoint.error || null,
@@ -187,6 +214,7 @@ async function waitForOtpChallenge(task, page) {
   let manualReported = false;
   let blockedSince = 0;
   let lastCheckpointReportAt = 0;
+  let formAdvanceAttempts = 0;
 
   while (Date.now() - startedAt < OTP_WAIT_TIMEOUT_MS) {
     throwIfAborted(signal);
@@ -196,6 +224,17 @@ async function waitForOtpChallenge(task, page) {
       lastCheckpointReportAt = Date.now();
     }
     if (checkpoint.otpVisible) return;
+    if (checkpoint.signupFormVisible && !checkpoint.manualVisible && formAdvanceAttempts < 4) {
+      const advanced = await fillAndAdvanceVisibleSignupForm(task, page, {
+        reason: checkpoint.signupBlocked ? 'blocked-form' : 'visible-form',
+      });
+      if (advanced) {
+        formAdvanceAttempts += 1;
+        blockedSince = 0;
+        await sleepWithSignal(1200, signal);
+        continue;
+      }
+    }
     if (checkpoint.manualVisible) {
       manualReported = true;
       taskSupervisor.updateTask(task.taskId, {
@@ -213,6 +252,9 @@ async function waitForOtpChallenge(task, page) {
       blockedSince ||= Date.now();
       if (Date.now() - blockedSince >= SIGNUP_FORM_BLOCKED_GRACE_MS) {
         const fields = [
+          checkpoint.emailBlocked ? 'email address' : null,
+          checkpoint.firstNameBlocked ? 'first name' : null,
+          checkpoint.lastNameBlocked ? 'last name' : null,
           checkpoint.passwordBlocked ? 'password' : null,
           checkpoint.legalBlocked ? 'terms acceptance' : null,
         ].filter(Boolean).join(' and ') || 'required signup fields';
@@ -251,33 +293,84 @@ async function waitForOtpChallenge(task, page) {
   throw err;
 }
 
+function toTitleCasePart(value, fallback) {
+  const cleaned = String(value || '').replace(/[^a-z0-9]+/gi, ' ').trim();
+  const first = cleaned.split(/\s+/).filter(Boolean)[0] || fallback;
+  return `${first.charAt(0).toUpperCase()}${first.slice(1).toLowerCase()}`;
+}
+
+function deriveSignupNames(email) {
+  const [local = '', domain = ''] = String(email || '').split('@');
+  const localParts = local.split(/[._+-]+/).filter(Boolean);
+  const domainParts = domain.split(/[._-]+/).filter(Boolean);
+  return {
+    firstName: toTitleCasePart(localParts[0], 'Hydra'),
+    lastName: toTitleCasePart(localParts[1] || domainParts[0], 'Account'),
+  };
+}
+
+async function fillVisibleInputs(page, selectors, value, taskId, label) {
+  const locator = page.locator(selectors.join(', '));
+  let filled = 0;
+  const count = await locator.count().catch(() => 0);
+  for (let i = 0; i < count; i += 1) {
+    const input = locator.nth(i);
+    try {
+      if (!await input.isVisible({ timeout: 700 })) continue;
+      if (await input.isDisabled({ timeout: 700 }).catch(() => false)) continue;
+      await input.fill(value, { timeout: 3000 });
+      await input.evaluate((el) => {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }).catch(() => {});
+      filled += 1;
+    } catch (err) {
+      logger.warn(`[Account Generator] Signup ${label} candidate failed for ${taskId}: ${err.message}`);
+    }
+  }
+  if (filled > 0) logger.info(`[Account Generator] Filled signup ${label} for ${taskId} (${filled} field${filled === 1 ? '' : 's'})`);
+  return filled > 0;
+}
+
+async function fillVisibleSignupEmail(page, email, taskId) {
+  return fillVisibleInputs(page, [
+    'input[name="emailAddress"]',
+    'input[name="identifier"]',
+    'input[type="email"]',
+    'input[id*="email" i]',
+    'input[placeholder*="email" i]',
+    'input[autocomplete="email"]',
+    'input[inputmode="email"]',
+    '.cl-formFieldInput[type="email"]',
+    'input[class*="email" i]',
+  ], email, taskId, 'email');
+}
+
+async function fillVisibleSignupNames(page, email, taskId) {
+  const { firstName, lastName } = deriveSignupNames(email);
+  const firstFilled = await fillVisibleInputs(page, [
+    'input[name="firstName"]',
+    'input[id*="firstName" i]',
+    'input[id*="first-name" i]',
+    'input[placeholder*="first name" i]',
+  ], firstName, taskId, 'first name');
+  const lastFilled = await fillVisibleInputs(page, [
+    'input[name="lastName"]',
+    'input[id*="lastName" i]',
+    'input[id*="last-name" i]',
+    'input[placeholder*="last name" i]',
+  ], lastName, taskId, 'last name');
+  return firstFilled || lastFilled;
+}
+
 async function fillVisibleSignupPassword(page, password, taskId) {
-  const selectors = [
+  return fillVisibleInputs(page, [
     'input[name="password"]',
     'input[type="password"]',
     'input[id*="password" i]',
     'input[placeholder*="password" i]',
     'input[autocomplete="new-password"]',
-  ];
-
-  for (const selector of selectors) {
-    const input = page.locator(selector).first();
-    try {
-      if (await input.count() === 0) continue;
-      if (!await input.isVisible({ timeout: 1000 })) continue;
-      await input.fill(password);
-      await input.evaluate((el) => {
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      }).catch(() => {});
-      logger.info(`[Account Generator] Filled signup password for ${taskId}`);
-      return true;
-    } catch (err) {
-      logger.warn(`[Account Generator] Signup password candidate failed for ${taskId}: ${err.message}`);
-    }
-  }
-
-  return false;
+  ], password, taskId, 'password');
 }
 
 async function acceptVisibleSignupTerms(page, taskId) {
@@ -298,7 +391,7 @@ async function acceptVisibleSignupTerms(page, taskId) {
         logger.info(`[Account Generator] Signup terms already accepted for ${taskId}`);
         return true;
       }
-      await checkbox.check({ timeout: 3000 });
+      await checkbox.check({ timeout: 3000, force: true });
       logger.info(`[Account Generator] Accepted signup terms for ${taskId}`);
       return true;
     } catch (err) {
@@ -324,7 +417,105 @@ async function acceptVisibleSignupTerms(page, taskId) {
     }
   }
 
+  const changed = await page.evaluate(() => {
+    const isVisible = (el) => Boolean(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    const checkSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')?.set;
+    let changedCount = 0;
+    for (const input of Array.from(document.querySelectorAll('input[type="checkbox"]'))) {
+      const text = `${input.name || ''} ${input.id || ''} ${input.getAttribute('aria-label') || ''}`;
+      if (!isVisible(input) || !/legal|terms|privacy|agree|accepted/i.test(text)) continue;
+      if (!input.checked) {
+        if (checkSetter) checkSetter.call(input, true);
+        else input.checked = true;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        changedCount += 1;
+      }
+    }
+    return changedCount;
+  }).catch((err) => {
+    logger.warn(`[Account Generator] Signup terms DOM fallback failed for ${taskId}: ${err.message}`);
+    return 0;
+  });
+  if (changed > 0) {
+    logger.info(`[Account Generator] Accepted signup terms via DOM fallback for ${taskId} (${changed} checkbox${changed === 1 ? '' : 'es'})`);
+    return true;
+  }
+
   return false;
+}
+
+async function clickVisibleSignupContinueControl(page, taskId) {
+  const candidates = [
+    page.locator('button.cl-formButtonPrimary:has-text("Continue")').last(),
+    page.locator('button:has-text("Continue")').last(),
+    page.locator('button:has-text("Sign up")').last(),
+    page.locator('button:has-text("Next")').last(),
+    page.locator('button[type="submit"]').last(),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (await candidate.count() === 0) continue;
+      if (!await candidate.isVisible({ timeout: 1000 })) continue;
+      if (!await candidate.isEnabled({ timeout: 1000 }).catch(() => true)) continue;
+      await candidate.click({ timeout: 5000 });
+      logger.info(`[Account Generator] Clicked signup continue control for ${taskId}`);
+      return true;
+    } catch (err) {
+      logger.warn(`[Account Generator] Signup continue candidate failed for ${taskId}: ${err.message}`);
+    }
+  }
+
+  try {
+    await page.keyboard.press('Enter');
+    logger.info(`[Account Generator] Used signup Enter fallback for ${taskId}`);
+    return true;
+  } catch (err) {
+    logger.warn(`[Account Generator] Signup Enter fallback failed for ${taskId}: ${err.message}`);
+    return false;
+  }
+}
+
+async function fillAndAdvanceVisibleSignupForm(task, page, { reason = 'form' } = {}) {
+  const taskId = task.taskId;
+  const email = task.metadata.email;
+  const password = task.metadata.password;
+  taskSupervisor.updateTask(taskId, { status: 'entering_signup_details' });
+  const namesFilled = await fillVisibleSignupNames(page, email, taskId);
+  const emailFilled = await fillVisibleSignupEmail(page, email, taskId);
+  const passwordFilled = await fillVisibleSignupPassword(page, password, taskId);
+  const termsAccepted = await acceptVisibleSignupTerms(page, taskId);
+  const checkpoint = await readSignupCheckpoint(page);
+  updateTaskCheckpoint(task, checkpoint, { mode: 'browser_signup' });
+
+  if (!emailFilled && checkpoint.emailBlocked) {
+    const err = new Error('Could not fill OpenRouter signup email field - page may have changed');
+    err.code = 'GENERATOR_SIGNUP_EMAIL_FIELD_MISSING';
+    throw err;
+  }
+  if (!passwordFilled && checkpoint.passwordBlocked) {
+    const err = new Error('Could not find OpenRouter signup password field - page may have changed');
+    err.code = 'GENERATOR_SIGNUP_PASSWORD_FIELD_MISSING';
+    throw err;
+  }
+  if (!termsAccepted && checkpoint.legalBlocked) {
+    const err = new Error('Could not accept OpenRouter signup terms - page may have changed');
+    err.code = 'GENERATOR_SIGNUP_TERMS_FIELD_MISSING';
+    throw err;
+  }
+
+  if (!namesFilled && (checkpoint.firstNameBlocked || checkpoint.lastNameBlocked)) {
+    const err = new Error('Could not fill OpenRouter signup name fields - page may have changed');
+    err.code = 'GENERATOR_SIGNUP_NAME_FIELD_MISSING';
+    throw err;
+  }
+
+  const clicked = await clickVisibleSignupContinueControl(page, taskId);
+  if (!clicked) return false;
+  logger.info(`[Account Generator] Advanced signup form for ${taskId} (${reason})`);
+  taskSupervisor.updateTask(taskId, { status: 'waiting_for_otp_screen' });
+  return true;
 }
 
 async function clickVisibleOtpSubmitControl(page, taskId) {
@@ -508,92 +699,17 @@ async function launchSignupFlowPlaywright(task) {
 
       taskSupervisor.updateTask(task.taskId, { status: 'entering_email' });
 
-      // Try multiple email input selectors (OpenRouter/Clerk may vary)
-      const emailSelectors = [
-        'input[type="email"]',
-        'input[name="emailAddress"]',
-        'input[name="identifier"]',
-        'input[id*="email" i]',
-        'input[placeholder*="email" i]',
-        'input[autocomplete="email"]',
-        '.cl-formFieldInput[type="email"]',
-        'input[class*="email" i]',
-      ];
-
-      let emailInput = null;
-      for (const selector of emailSelectors) {
-        const locator = page.locator(selector).first();
-        try {
-          await locator.waitFor({ state: 'visible', timeout: 5000 });
-          emailInput = locator;
-          logger.info(`[Account Generator] Found email input using: ${selector}`);
-          break;
-        } catch {
-          // Try next selector
-        }
-      }
-
-      if (!emailInput) {
+      const emailFilled = await fillVisibleSignupEmail(page, task.metadata.email, task.taskId);
+      if (!emailFilled) {
         // Dump page HTML for debugging
         const html = await page.content().catch(() => 'failed to get HTML');
         logger.error(`[Account Generator] Could not find email input. Page HTML snippet: ${html.slice(0, 2000)}`);
         throw new Error('Could not find email input field - page may have changed');
       }
 
-      await emailInput.fill(task.metadata.email);
       await page.waitForTimeout(500);
 
-      taskSupervisor.updateTask(task.taskId, { status: 'entering_signup_details' });
-
-      const preDetailCheckpoint = await readSignupCheckpoint(page);
-      updateTaskCheckpoint(task, preDetailCheckpoint, { mode: 'browser_signup' });
-      const passwordFilled = await fillVisibleSignupPassword(page, task.metadata.password, task.taskId);
-      if (!passwordFilled && preDetailCheckpoint.passwordBlocked) {
-        const err = new Error('Could not find OpenRouter signup password field - page may have changed');
-        err.code = 'GENERATOR_SIGNUP_PASSWORD_FIELD_MISSING';
-        throw err;
-      }
-
-      const termsAccepted = await acceptVisibleSignupTerms(page, task.taskId);
-      const postPasswordCheckpoint = await readSignupCheckpoint(page);
-      updateTaskCheckpoint(task, postPasswordCheckpoint, { mode: 'browser_signup' });
-      if (!termsAccepted && postPasswordCheckpoint.legalBlocked) {
-        const err = new Error('Could not accept OpenRouter signup terms - page may have changed');
-        err.code = 'GENERATOR_SIGNUP_TERMS_FIELD_MISSING';
-        throw err;
-      }
-
-      // Try multiple continue button selectors
-      const continueSelectors = [
-        'button:has-text("Continue")',
-        'button.cl-formButtonPrimary',
-        'button:has-text("Sign up")',
-        'button:has-text("Next")',
-        'button.cl-button',
-        'button[class*="primary" i]',
-        'button[type="submit"]',
-      ];
-
-      let clicked = false;
-      for (const selector of continueSelectors) {
-        const btn = page.locator(selector).first();
-        try {
-          if (await btn.isVisible({ timeout: 2000 })) {
-            await btn.click();
-            logger.info(`[Account Generator] Clicked continue using: ${selector}`);
-            clicked = true;
-            break;
-          }
-        } catch {
-          // Try next
-        }
-      }
-
-      if (!clicked) {
-        // Try pressing Enter as fallback
-        await emailInput.press('Enter');
-        logger.info('[Account Generator] Used Enter key fallback');
-      }
+      await fillAndAdvanceVisibleSignupForm(task, page, { reason: 'initial-submit' });
 
       taskSupervisor.updateTask(task.taskId, { status: 'waiting_for_otp_screen' });
       await waitForOtpChallenge(task, page);
@@ -932,10 +1048,14 @@ export async function submitOtpForJob(taskId, ownerUserId, otpCode) {
     error.status = 404;
     throw error;
   }
-  if (task.status !== 'awaiting_otp') {
+  const checkpointOtpReady = task.metadata?.checkpoint?.state === 'otp';
+  if (task.status !== 'awaiting_otp' && !checkpointOtpReady) {
     const error = new Error(`Cannot submit OTP in status: ${task.status}`);
     error.status = 409;
     throw error;
+  }
+  if (checkpointOtpReady && task.status !== 'awaiting_otp') {
+    taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });
   }
 
   // Fire-and-forget — the promise is tracked via trackPromise inside finalizeOtpSubmission.
