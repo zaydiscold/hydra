@@ -121,3 +121,22 @@ profile closed cleanly:
 /private/tmp/hydra-v147-proximity-geometry-cache-idle-profile-20260602T001609Z
 samples=11 owned=4 profiles=0 cpu_min=0.000 cpu_max=0.300 cpu_avg=0.045 cpu_end=0.000 rss_start=648085504 rss_end=617791488 rss_delta=-30294016
 ```
+
+## Literal Recheck
+
+```bash
+npm run lint
+npm test
+npm run gate
+npm run openapi:hydra
+git diff --check
+node bin/hydra.mjs audit --json
+npm run docker:smoke
+docker compose down --remove-orphans
+docker desktop stop
+```
+
+Lint, full `npm test`, gate `12/12`, OpenAPI generation (`84 operations`, no
+tracked drift), diff hygiene, and audit all passed. The local Docker smoke
+rebuilt the image and launched real containerized Playwright Chromium.
+Teardown left no `hydra_default` network, and Docker Desktop stopped cleanly.

@@ -2455,7 +2455,12 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `/private/tmp/hydra-v147-proximity-geometry-cache-idle-profile-20260602T001609Z`
   retained four owned processes and zero profiles across all `11` samples;
   CPU ranged `0.0-0.3%` (`0.045%` average, ending `0.0%`) while RSS fell
-  `30,294,016` bytes. The durable note is
+  `30,294,016` bytes. A final literal recheck passed lint, full `npm test`,
+  gate `12/12`, OpenAPI generation (`84 operations`, no tracked drift), diff
+  hygiene, audit, and local Docker smoke with a rebuilt image and real
+  containerized Playwright Chromium launch. Teardown left no `hydra_default`
+  network and `docker desktop stop` removed the Desktop runtime in one
+  bounded stop. The durable note is
   `docs/recon/PROXIMITY_FIELD_GEOMETRY_CACHE.md`.
 - 2026-06-01 post-release literal-gate recheck: `npm run lint`, full
   `npm test`, and `npm run gate` (`12/12`) passed against the docs-reconciled
