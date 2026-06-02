@@ -1846,10 +1846,18 @@ This evidence file is not release-complete by itself. The release remains not co
   records `scheduled=false -> true -> false` across idle, tracked-link, and
   early-completion states, avoiding one residual wakeup. Real Express API
   integration passed `11/11`, background ownership contracts passed `33/33`,
-  and lint passed. The durable note is
-  `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`. Rebuilt-package profiling
-  remains required before this source refinement counts as packaged-runtime
-  evidence.
+  and lint passed. The rebuilt ARM package passed smoke, strict deep codesign,
+  and embedded-source hash equality. LaunchServices evidence under
+  `/private/tmp/hydra-v147-magic-link-early-disarm-launch-20260601T235711Z`
+  records one canonical Spotlight app, four owned processes, zero stale
+  profiles, bounded splash teardown, and CPU decay
+  `97.9% -> 173.8% -> 4.1%` across launch, `+15s`, and `+30s`. The untouched
+  rebuilt-package profile under
+  `/private/tmp/hydra-v147-magic-link-early-disarm-idle-profile-20260601T235802Z`
+  retained four owned processes and zero stale profiles across 11 samples:
+  CPU stayed `0.0-0.2%`, averaged `0.027%`, and ended at `0.0%`; RSS moved
+  `648937472 -> 533970944` bytes (`-114966528`). The durable note is
+  `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`.
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under
   `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`

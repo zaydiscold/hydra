@@ -2410,7 +2410,20 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   completes. Real Express API integration passed `11/11`, background
   ownership contracts passed `33/33`, lint passed, and `hydra audit --json`
   remains `31 ok / 5 deferred / 0 missing / 0 blockers`. The durable note is
-  `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`.
+  `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`. The rebuilt ARM package
+  passed smoke, strict deep codesign, and embedded-source hash equality; the
+  generated zip SHA-256 before reversible metadata cleanup was
+  `5b68bab15511dedbf81ef016c766907144bc17b924d21b32299ca8535b969875`.
+  LaunchServices evidence under
+  `/private/tmp/hydra-v147-magic-link-early-disarm-launch-20260601T235711Z`
+  records one canonical Spotlight app, four owned processes, zero stale
+  profiles, finite splash teardown, and CPU decay
+  `97.9% -> 173.8% -> 4.1%` across launch, `+15s`, and `+30s`. The untouched
+  rebuilt-package profile under
+  `/private/tmp/hydra-v147-magic-link-early-disarm-idle-profile-20260601T235802Z`
+  retained four processes and zero stale profiles across 11 samples:
+  CPU stayed `0.0-0.2%`, averaged `0.027%`, and ended at `0.0%`; RSS moved
+  `648937472 -> 533970944` bytes (`-114966528`).
 - 2026-06-01 post-release literal-gate recheck: `npm run lint`, full
   `npm test`, and `npm run gate` (`12/12`) passed against the docs-reconciled
   `v1.4.6` tree. Bare `HYDRA_BUILD_TARGET=darwin-arm64 npm run

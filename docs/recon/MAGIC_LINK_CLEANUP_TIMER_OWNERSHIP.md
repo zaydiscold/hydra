@@ -77,3 +77,47 @@ git diff --check
 
 The real Express API suite includes a dynamic regression proving early
 completion disarms the last pending cleanup timer.
+
+## Packaged Runtime Evidence
+
+The rebuilt macOS ARM package passed:
+
+```bash
+HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke
+codesign --verify --deep --strict --verbose=2 release/mac-arm64/Hydra.app
+shasum -a 256 server/services/magic-link-manager.js \
+  release/mac-arm64/Hydra.app/Contents/Resources/app/server/services/magic-link-manager.js
+```
+
+The source and embedded manager hashes matched:
+
+```text
+8c68abd03aa8051ec1d2804d47e5c07d8506052666180bd26d10cac9185064ab
+```
+
+The generated zip SHA-256 before reversible metadata cleanup was:
+
+```text
+5b68bab15511dedbf81ef016c766907144bc17b924d21b32299ca8535b969875
+```
+
+LaunchServices evidence:
+
+```text
+/private/tmp/hydra-v147-magic-link-early-disarm-launch-20260601T235711Z
+near-launch  4 processes  97.9% CPU   430489600 bytes RSS  0 stale profiles
+plus-15s     4 processes  173.8% CPU  754450432 bytes RSS  0 stale profiles
+plus-30s     4 processes  4.1% CPU    648937472 bytes RSS  0 stale profiles
+```
+
+The splash log reported a finite teardown: `target=72`, `queueLength=72`,
+`shatteredWordCount=72`, `duplicateShatterSkips=0`, `timers=0`, inactive RAF,
+cleared Matter state, disabled portal collision response, and applied portal
+lift.
+
+Untouched five-minute idle profile:
+
+```text
+/private/tmp/hydra-v147-magic-link-early-disarm-idle-profile-20260601T235802Z
+samples=11 owned=4 profiles=0 cpu_min=0.000 cpu_max=0.200 cpu_avg=0.027 cpu_end=0.000 rss_start=648937472 rss_end=533970944 rss_delta=-114966528
+```
