@@ -57,9 +57,8 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
   const authUtils = readRepoFile('src/utils/auth.js');
 
   assert.match(page, /Owner-only; not OpenRouter/);
-  assert.match(page, /Email Link is an owner-only advanced relay/);
-  assert.match(page, /same direct HTTPS email-code login used by account cards/);
-  assert.match(page, /Use Generator for a brand-new signup/);
+  assert.match(page, /Import existing OpenRouter accounts with direct HTTPS/);
+  assert.match(page, /Use Generator for new signups/);
   assert.match(page, /magicLinkCapability=\{auth\.magicLinkCapability\}/);
   assert.match(page, /onRefreshCapability=\{auth\.refreshMagicLinkCapability\}/);
   assert.match(tab, /bulk-auth-email-link-capability/);
@@ -528,7 +527,7 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(dashboard, /data-testid="fleet-health-donut"/);
   assert.match(dashboard, /strokeDasharray=\{`\$\{healthyLen\} \$\{circumference\}`\}/);
   assert.match(dashboard, /<ActivityPanel events=\{activity\} \/>/);
-  assert.match(dashboard, /className="accounts-grid dashboard-mini-grid proximity-field"/);
+  assert.match(dashboard, /accounts-grid dashboard-mini-grid proximity-field/);
   assert.match(dashboard, /<AccountCard[\s\S]*compact\s*\/>/);
   assert.match(dashboard, /onResumeAuth=\{handleResumeBulkAuth\}/);
   assert.match(dashboard, /account\.pendingVerification[\s\S]*title: 'OTP sign-in pending'/);
@@ -537,9 +536,10 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(accountCard, />\s*Resume\s*<\/button>/);
   assert.match(accountCard, /if \(account\.pendingVerification\) \{[\s\S]*onResumeAuth\?\.\(\)/);
   assert.match(dashboard, /className="dashboard-view-toggle"/);
-  assert.match(dashboard, /<span className="active">GRID<\/span>/);
-  assert.match(dashboard, /<span>LIST<\/span>/);
-  assert.match(dashboard, /<span>MAP<\/span>/);
+  assert.match(dashboard, /\['grid', 'list', 'map'\]\.map/);
+  assert.match(dashboard, /onClick=\{\(\) => setViewMode\(mode\)\}/);
+  assert.match(dashboard, /function AccountTopologyMap/);
+  assert.match(css, /\.dashboard-account-map__node/);
   assert.doesNotMatch(dashboard, /dashboard-stats-strip/);
   assert.doesNotMatch(dashboard, /<SummaryCard/);
   assert.match(dashboard, /function getFleetHealth\(accounts, liveStatuses = \{\}\)/);
@@ -710,9 +710,8 @@ test('sidebar navigation paths are backed by concrete routes', () => {
     '/vault',
     '/pool',
     '/codes',
-    '/generator',
     '/traffic',
-    '/settings',
+    '/generator',
   ]);
 
   const routePaths = new Set([...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((match) => match[1]));
@@ -720,8 +719,55 @@ test('sidebar navigation paths are backed by concrete routes', () => {
     assert.equal(routePaths.has(path), true, `${path} is missing a <Route>`);
   }
 
+  assert.match(app, /onClick=\{\(\) => navigate\('\/settings'\)\}/);
+  assert.match(app, /<span className="sidebar-tooltip" role="tooltip">Settings<\/span>/);
   assert.match(app, /<Route path="\/diagnostics" element=\{<Navigate to="\/settings#diagnostics" replace \/>\}/);
   assert.match(readRepoFile('src/pages/Settings.jsx'), /location\.hash !== '#diagnostics'/);
+});
+
+test('1.5 desktop operator polish stays wired to real controls', () => {
+  const app = readRepoFile('src/App.jsx');
+  const css = readRepoFile('src/index.css');
+  const traffic = readRepoFile('src/pages/Traffic.jsx');
+  const settings = readRepoFile('src/pages/Settings.jsx');
+  const keyRow = readRepoFile('src/components/KeyRow.jsx');
+  const accountRow = readRepoFile('src/components/AccountRow.jsx');
+  const bulkAuth = readRepoFile('src/hooks/useBulkAuth.js');
+  const sessionStorage = readRepoFile('src/hooks/useSessionStorageState.js');
+
+  assert.match(app, /radius:\s*150/);
+  assert.match(app, /maxScale:\s*0\.14/);
+  assert.match(app, /maxShiftX:\s*10/);
+  assert.match(app, /brightnessDelta:\s*0\.22/);
+  assert.match(app, /<span className="sidebar-tooltip" role="tooltip">\{item\.label\}<\/span>/);
+  assert.match(css, /\.sidebar-tooltip\s*\{/);
+  assert.match(css, /\.sidebar--collapsed \.nav-link:hover \.sidebar-tooltip,/);
+
+  assert.match(app, /planet-moon-orbit/);
+  assert.match(css, /\.app-shell--ambient-motion \.planet-moon-orbit\s*\{/);
+  assert.match(css, /animation:\s*moonOrbit 16s linear infinite/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?transform:\s*rotate\(-18deg\);/);
+
+  assert.match(traffic, /formatUsd\(log\.inputCost\)/);
+  assert.match(traffic, /formatUsd\(log\.outputCost\)/);
+  assert.match(traffic, /formatUsd\(log\.totalCost\)/);
+  assert.match(traffic, /describeRoute\(log\)/);
+  assert.match(traffic, /OpenRouter reported/);
+  assert.match(traffic, /catalog_estimate/);
+
+  assert.match(settings, /Display Density/);
+  assert.match(settings, /setStoredUiDensity\(density\)/);
+  assert.match(css, /\.app-shell--density-compact/);
+
+  assert.match(keyRow, /pool-toggle-hitbox/);
+  assert.match(keyRow, /pool-paste-key-btn/);
+  assert.match(accountRow, /pool-account-toggle/);
+  assert.match(css, /\.pool-toggle-hitbox\s*\{/);
+  assert.match(css, /\.pool-paste-key-btn\s*\{/);
+
+  assert.match(bulkAuth, /useSessionStorageState\('hydra\.bulkAuth\.emailLinkLog'/);
+  assert.match(bulkAuth, /useSessionStorageState\('hydra\.bulkAuth\.otpLog'/);
+  assert.match(sessionStorage, /window\.sessionStorage\?\.setItem\(key, JSON\.stringify\(value\)\)/);
 });
 
 test('Electron document title follows the active app route', () => {

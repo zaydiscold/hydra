@@ -253,6 +253,7 @@ export default function PoolManager({ addToast }) {
     load,
     handleToggleProxy,
     handleToggleKey,
+    handleToggleAccount,
     handleRegister,
     handleRefreshModels,
     handleAutoProvision,
@@ -281,6 +282,7 @@ export default function PoolManager({ addToast }) {
 
   // UI Handlers
   const onToggleKey = useCallback((hash, checked) => handleToggleKey(hash, checked), [handleToggleKey]);
+  const onToggleAccount = useCallback((id, checked) => handleToggleAccount(id, checked), [handleToggleAccount]);
   const onSyncKeys = useCallback((id) => handleSyncKeys(id), [handleSyncKeys]);
   const onProvision = useCallback((id) => handleAutoProvision(id), [handleAutoProvision]);
   const onRegisterKey = useCallback((hash, name) => setRegistering({ hash, name }), []);
@@ -307,7 +309,7 @@ export default function PoolManager({ addToast }) {
             <AnimeText mode="words" variant="scanline" delay={26}>Pool Manager</AnimeText>
           </h1>
           <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem', marginTop: 4 }}>
-            Manage your keys and accounts in the unified routing pool.
+            Choose which encrypted OpenRouter keys Hydra can route through.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -352,6 +354,7 @@ export default function PoolManager({ addToast }) {
                     key={a.id}
                     account={a}
                     onToggleKey={onToggleKey}
+                    onToggleAccount={onToggleAccount}
                     onRegisterKey={onRegisterKey}
                     onDisableKey={handleDisableKey}
                     onDeleteKey={setDeleting}

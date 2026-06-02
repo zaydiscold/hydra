@@ -7,6 +7,7 @@ import { isElectron, native as nativeBridge, tryNative, useNativeInfo } from './
 import { useOwnedTimeouts } from './hooks/useOwnedTimeouts';
 import { useVisibleRecurringTask } from './hooks/useVisibleRecurringTask.js';
 import { useProximityField } from './hooks/useProximityField.js';
+import { getStoredUiDensity, subscribeUiDensity } from './lib/uiDensity.js';
 import {
   cancelTrackedAnimationFrame,
   clearTrackedTimeout,
@@ -507,9 +508,8 @@ const navItems = [
   { id: 'vault', label: 'Vault', icon: <VaultIcon size={18} />, path: '/vault' },
   { id: 'pool', label: 'Pool Manager', icon: <NetworkIcon size={18} />, path: '/pool' },
   { id: 'codes', label: 'Redeem', icon: <TicketIcon size={18} />, path: '/codes' },
-  { id: 'generator', label: 'Generator', icon: <GeneratorIcon size={18} />, path: '/generator' },
   { id: 'traffic', label: 'Traffic', icon: <ActivityIcon size={18} />, path: '/traffic' },
-  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} />, path: '/settings' }
+  { id: 'generator', label: 'Generator', icon: <GeneratorIcon size={18} />, path: '/generator' },
 ];
 
 function isMacUserAgent() {
@@ -579,6 +579,7 @@ export default function App() {
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
   const [ambientMotion, setAmbientMotion] = useState(true);
+  const [uiDensity, setUiDensity] = useState(getStoredUiDensity);
   const [toasts, setToasts] = useState([]);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const [upstreamHealth, setUpstreamHealth] = useState(null);
@@ -596,11 +597,14 @@ export default function App() {
   const rendererChrome = electronMode;
   const sidebarProximity = useProximityField({
     owner: 'App.sidebarNav',
-    radius: 105,
-    maxScale: 0.035,
+    radius: 150,
+    maxScale: 0.14,
     maxLift: 0,
-    maxShiftX: 3,
+    maxShiftX: 10,
+    brightnessDelta: 0.22,
   });
+
+  useEffect(() => subscribeUiDensity(setUiDensity), []);
 
   // #70: Keep Electron/Finder window titles aligned with the current route.
   useEffect(() => {
@@ -944,7 +948,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className={`app-shell${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}`}>
+      <div className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}`}>
         <AppChrome />
         <AppVersionStamp />
         <GlobalLoadingBar />
@@ -957,7 +961,9 @@ export default function App() {
           <div className="meteor" />
           <div className="meteor" />
         </div>
-        <div className="planet planet-1" />
+        <div className="planet planet-1">
+          <span className="planet-moon-orbit" aria-hidden="true"><span className="planet-moon" /></span>
+        </div>
         <div className="planet planet-2" />
 
         {authState === 'setup' || authState === 'login' ? (
@@ -1015,6 +1021,7 @@ export default function App() {
                   >
                     <span className="nav-icon">{item.icon}</span>
                     {!sidebarCollapsed && <span>{item.label}</span>}
+                    <span className="sidebar-tooltip" role="tooltip">{item.label}</span>
                   </button>
                 );
               })}
@@ -1035,16 +1042,27 @@ export default function App() {
                   </svg>
                 </span>
                 {!sidebarCollapsed && <span>Collapse</span>}
+                <span className="sidebar-tooltip" role="tooltip">{sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}</span>
+              </button>
+              <button type="button" data-proximity-target className="nav-link"
+                onClick={() => navigate('/settings')}
+                title="Settings"
+              >
+                <span className="nav-icon"><SettingsIcon size={18} /></span>
+                {!sidebarCollapsed && <span>Settings</span>}
+                <span className="sidebar-tooltip" role="tooltip">Settings</span>
               </button>
               {isElectron() ? (
                 <>
                   <button type="button" data-proximity-target className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
                     <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock Vault</span>}
+                    <span className="sidebar-tooltip" role="tooltip">Lock Vault</span>
                   </button>
                   <button type="button" data-proximity-target className="nav-link" style={{ color: 'var(--status-error)' }} onClick={handleQuit} title="Quit">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Quit</span>}
+                    <span className="sidebar-tooltip" role="tooltip">Quit</span>
                   </button>
                 </>
               ) : (
@@ -1052,10 +1070,12 @@ export default function App() {
                   <button type="button" data-proximity-target className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
                     <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock</span>}
+                    <span className="sidebar-tooltip" role="tooltip">Lock</span>
                   </button>
                   <button type="button" data-proximity-target className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Shutdown</span>}
+                    <span className="sidebar-tooltip" role="tooltip">Shutdown</span>
                   </button>
                 </>
               )}

@@ -21,6 +21,7 @@ function StatusDot({ active }) {
 const AccountRow = memo(function AccountRow({
   account,
   onToggleKey,
+  onToggleAccount,
   onRegisterKey,
   onDisableKey,
   onDeleteKey,
@@ -106,19 +107,14 @@ const AccountRow = memo(function AccountRow({
 
         {/* Status Toggle */}
         <div style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-           <div
-             style={{
-               fontSize: '0.7rem',
-               fontWeight: 700,
-               color: isPooled ? 'var(--status-success)' : 'var(--text-tertiary)',
-               padding: '2px 6px',
-               borderRadius: 4,
-               border: `1px solid ${isPooled ? 'var(--status-success)' : 'var(--border-subtle)'}`,
-               display: 'inline-block'
-             }}
+           <button
+             type="button"
+             className={`pool-account-toggle${isPooled ? ' pool-account-toggle--active' : ''}`}
+             onClick={() => onToggleAccount(id, !isPooled)}
+             title={isPooled ? 'Remove this account’s stored keys from routing' : 'Add this account’s stored keys to routing'}
            >
              {(poolStatus === 'pooled' ? 'POOLED' : 'NOT POOLED')}
-           </div>
+           </button>
         </div>
       </div>
 

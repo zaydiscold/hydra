@@ -450,7 +450,7 @@ export default function CodeRedemption({ addToast }) {
           </div>
           <textarea
             className="code-textarea-neo"
-            style={{ minHeight: 180, resize: 'vertical' }}
+            style={{ minHeight: 132, resize: 'vertical' }}
             placeholder={"One code per line:\n\nHYDRA-XXXX-YYYY\nCREDIT100-XYZ"}
             value={codes}
             onChange={(e) => setCodes(e.target.value)}

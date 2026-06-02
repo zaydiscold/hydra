@@ -55,16 +55,16 @@ const KeyRow = memo(function KeyRow({
       }}
     >
       {/* Checkbox */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <label className={`pool-toggle-hitbox${canPool ? '' : ' pool-toggle-hitbox--disabled'}`}>
         <input
           type="checkbox"
           checked={isPooled}
           disabled={!canPool}
           onChange={(e) => onToggle(hash, e.target.checked)}
           title={canPool ? (isPooled ? 'Remove from pool' : 'Add to pool') : 'Paste key string first'}
-          style={{ width: 16, height: 16, accentColor: 'var(--status-success)', cursor: canPool ? 'pointer' : 'not-allowed' }}
+          style={{ width: 18, height: 18, accentColor: 'var(--status-success)', cursor: canPool ? 'pointer' : 'not-allowed' }}
         />
-      </div>
+      </label>
 
       {/* Key info */}
       <div style={{ minWidth: 0 }}>
@@ -134,12 +134,9 @@ const KeyRow = memo(function KeyRow({
         {!hasKeyString ? (
           <button
             type="button"
-            className="btn btn-sm"
+            className="btn btn-sm pool-paste-key-btn"
             onClick={() => onRegister(hash, name)}
             style={{
-              color: '#000',
-              border: '1px solid var(--status-warning)',
-              background: 'var(--status-warning)',
               gap: 4,
               fontSize: '0.72rem',
               fontWeight: 700,

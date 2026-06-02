@@ -5,8 +5,42 @@ import {
   ActivityIcon,
   RefreshIcon,
   AlertIcon,
-  DatabaseIcon
+  DatabaseIcon,
+  WalletIcon
 } from '../components/Icons';
+
+function formatUsd(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—';
+  const amount = Number(value);
+  if (amount === 0) return '$0.00';
+  if (amount < 0.0001) return `$${amount.toFixed(7)}`;
+  if (amount < 0.01) return `$${amount.toFixed(5)}`;
+  return `$${amount.toFixed(3)}`;
+}
+
+function describeRoute(log) {
+  const attempt = Number(log.attempt || 1);
+  const rotated = attempt > 1;
+  const label = rotated ? `try ${attempt} · rotated` : `try ${attempt}`;
+  const descriptions = {
+    served: 'OpenRouter served this request.',
+    upstream_response: log.status === 404
+      ? 'OpenRouter rejected the model or endpoint. Rotating credentials would not repair this request.'
+      : 'OpenRouter returned a client-visible response. Hydra did not penalize the credential.',
+    key_rate_limited: 'This credential hit a rate limit. Hydra cooled it and tried another eligible key.',
+    ip_rate_limited: 'OpenRouter reported an IP-level rate limit. Hydra cooled the whole pool.',
+    key_out_of_credits: 'This credential ran out of credits. Hydra cooled it and tried another eligible key.',
+    key_rejected: 'OpenRouter rejected this credential. Hydra removed it from rotation.',
+    upstream_5xx: 'OpenRouter returned a server error. Hydra tried another eligible key.',
+    connect_timeout: 'The upstream connection timed out. Hydra tried another eligible key.',
+    stream_timeout: 'The upstream response timed out. Hydra tried another eligible key.',
+    network_error: 'The upstream request failed before a response. Hydra tried another eligible key.',
+  };
+  return {
+    label,
+    detail: descriptions[log.outcome] || 'Legacy log row without route-attempt telemetry.',
+  };
+}
 
 export default function Traffic({ addToast }) {
   const { data, loading, refreshing, fetchTraffic } = useTraffic({ addToast });
@@ -24,7 +58,7 @@ export default function Traffic({ addToast }) {
     );
   }
 
-  const { logs = [], metrics = [] } = data || {};
+  const { logs = [], metrics = [], routing = {} } = data || {};
 
   // Aggregate metrics
   let totalRequests = 0;
@@ -38,6 +72,7 @@ export default function Traffic({ addToast }) {
   });
 
   const errorRate = totalRequests > 0 ? ((errorRequests / totalRequests) * 100).toFixed(1) : 0;
+  const visibleSpend = logs.reduce((sum, log) => sum + (Number(log.totalCost) || 0), 0);
 
   // Calculate RPM from logs (very rough estimate based on the last 100 requests)
   let rpm = 0;
@@ -78,7 +113,7 @@ export default function Traffic({ addToast }) {
       </div>
 
       {/* Stats */}
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
         <div className="stat-card stat-card-highlight traffic-stat-card shine-sweep animate-spring stagger-delay-0">
           <div className="stat-card-header">
             <div className="stat-card-label">Est. Request Rate</div>
@@ -97,7 +132,7 @@ export default function Traffic({ addToast }) {
           <div className="stat-card-value info mono">
             {totalRequests.toLocaleString()}
           </div>
-          <div className="stat-card-sub">requests cleared</div>
+          <div className="stat-card-sub">upstream attempts logged</div>
         </div>
         <div className="stat-card traffic-stat-card shine-sweep animate-spring stagger-delay-100">
           <div className="stat-card-header">
@@ -108,6 +143,18 @@ export default function Traffic({ addToast }) {
             {errorRate}%
           </div>
           <div className="stat-card-sub">non-200 responses</div>
+        </div>
+        <div className="stat-card traffic-stat-card shine-sweep animate-spring stagger-delay-150">
+          <div className="stat-card-header">
+            <div className="stat-card-label">Visible Spend</div>
+            <WalletIcon className="stat-icon" />
+          </div>
+          <div className="stat-card-value accent mono">
+            {formatUsd(visibleSpend)}
+          </div>
+          <div className="stat-card-sub">
+            latest {logs.length} attempts · {routing.available ?? 0}/{routing.totalPooled ?? 0} keys ready
+          </div>
         </div>
       </div>
 
@@ -132,12 +179,14 @@ export default function Traffic({ addToast }) {
                 <tr>
                   <th>Timestamp</th>
                   <th>Status</th>
+                  <th>Route</th>
                   <th>Model</th>
                   <th>Account</th>
                   <th>Key</th>
                   <th>Client</th>
                   <th style={{ textAlign: 'right' }}>Latency</th>
                   <th style={{ textAlign: 'right' }}>Tokens (in/out)</th>
+                  <th style={{ textAlign: 'right' }}>Price (in/out)</th>
                 </tr>
               </thead>
               <tbody>
@@ -148,15 +197,26 @@ export default function Traffic({ addToast }) {
                   const routeAlias = log.key?.account?.alias || (log.keyHash ? 'Archived account' : 'Deleted account');
                   const at = new Date(log.createdAt);
                   const stamp = at.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' });
+                  const route = describeRoute(log);
+                  const costPrefix = log.costSource === 'catalog_estimate' ? '~' : '';
                   return (
                     <tr key={log.id}>
                       <td className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
                         {stamp}
                       </td>
                       <td>
-                        <span className={`badge ${isErr ? 'badge-error' : 'badge-success'}`}>
+                        <span
+                          className={`badge ${isErr ? 'badge-error' : 'badge-success'}`}
+                          title={route.detail}
+                        >
                           {log.status}
                         </span>
+                      </td>
+                      <td style={{ minWidth: 118, verticalAlign: 'middle' }} title={route.detail}>
+                        <div className="traffic-route-label mono">{route.label}</div>
+                        <div className={`traffic-route-outcome traffic-route-outcome--${isErr ? 'error' : 'ok'}`}>
+                          {log.outcome || 'legacy'}
+                        </div>
                       </td>
                       <td
                         className="mono"
@@ -220,6 +280,28 @@ export default function Traffic({ addToast }) {
                         }}
                       >
                         {(log.promptTokens !== null && log.completionTokens !== null) ? `${log.promptTokens}/${log.completionTokens}` : '—'}
+                      </td>
+                      <td
+                        className="mono"
+                        style={{
+                          minWidth: 132,
+                          fontSize: '0.72rem',
+                          textAlign: 'right',
+                          color: 'var(--text-secondary)',
+                          verticalAlign: 'middle'
+                        }}
+                        title={log.costSource === 'openrouter_usage'
+                          ? `OpenRouter reported ${formatUsd(log.totalCost)} total usage. Input and output splits use the cached catalog rate.`
+                          : log.costSource === 'catalog_estimate'
+                            ? 'Estimated from cached OpenRouter per-token model prices.'
+                            : 'Refresh the OpenRouter model catalog in Pool Manager to estimate pricing.'}
+                      >
+                        {log.inputCost !== null || log.outputCost !== null ? (
+                          <>
+                            <div>{costPrefix}{formatUsd(log.inputCost)} / {costPrefix}{formatUsd(log.outputCost)}</div>
+                            <div className="traffic-cost-total">{formatUsd(log.totalCost)} total</div>
+                          </>
+                        ) : '—'}
                       </td>
                     </tr>
                   );
