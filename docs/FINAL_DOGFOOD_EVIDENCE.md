@@ -65,6 +65,18 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
   `bff154ff91ad5fba41f90b5c138987098fac6671043d160ec72bc3613e9f25af`.
   ImageMagick reported nonblank variance; Tesseract OCR found only harmless
   glyph noise and no email, endpoint, key, or credential-shaped text.
+- Local `v1.5.6` packaged screenshot evidence now has an app-owned capture
+  path for machines where macOS capture permissions block `screencapture`,
+  Computer Use, or System Events:
+  `docs/evidence/hydra-v156-packaged-dashboard-self-capture-redacted.png`.
+  The raw private PNG was written by the packaged Electron main process through
+  `webContents.capturePage()` after a LaunchServices relaunch with
+  `--self-capture=/private/tmp/hydra-v156-self-capture-20260602T143316Z/hydra-v156-dashboard-raw.png`.
+  The checked-in image was downscaled to `1440x900` and pixelated across the
+  account/content region. SHA-256:
+  `c0c4d7e415417bf00b1ff06ae66b9d35523b9f35e66754171ba3507d20c9bdd9`.
+  ImageMagick reported `mean=0.0939336 stdev=0.0609961`; Tesseract OCR found
+  no email, endpoint, key, session, password, or credential-shaped text.
 - Dashboard metadata/status shaping is down 61.1% in the local DB microbench.
 - Proxy retry body encoding is down 86.9% in the request-body benchmark.
 - Vault status-total rendering is down 96.0% in the synthetic 5000-account
@@ -2350,3 +2362,59 @@ This evidence file is not release-complete by itself. The release remains not co
   processes, zero stale Playwright profiles, `0.0%` aggregate CPU, and
   `591.64 MB` RSS. Local notarization remains deferred because Apple signing
   credentials are absent; local ad-hoc codesign is valid.
+- `1.5.6` packaged self-capture checkpoint: after the Generator OTP handoff
+  hardening, local package metadata was advanced to `1.5.6` and the macOS ARM
+  package was rebuilt from source. `HYDRA_BUILD_TARGET=darwin-arm64 npm run
+  electron:smoke` passed, strict deep codesign passed, the bundle reported
+  `CFBundleShortVersionString=1.5.6`, and the rebuilt zip SHA-256 was
+  `3a892bf939c06525a6c0b0365c44719a97b5f511389821b5906789779f9e7267`.
+  The first self-capture launch proved the flag reached the packaged process
+  but correctly rejected `/private/tmp` because only `os.tmpdir()` and Hydra
+  logs were accepted. The app gate was tightened to accept `/tmp` and
+  `/private/tmp`, covered by `npm run test:electron-main-process`, rebuilt,
+  smoke-tested, codesigned, and embedded-source inspected. LaunchServices then
+  opened `release/mac-arm64/Hydra.app` with
+  `--hydra-self-capture=/private/tmp/hydra-v156-self-capture-20260602T143316Z/hydra-v156-dashboard-raw.png`
+  and `--hydra-self-capture-delay-ms=3500`; the packaged Electron main process
+  wrote a `2880x1800` raw PNG via `webContents.capturePage()`. The raw stayed
+  in `/private/tmp`; the checked-in redacted proof is
+  `docs/evidence/hydra-v156-packaged-dashboard-self-capture-redacted.png`
+  (`sha256 c0c4d7e415417bf00b1ff06ae66b9d35523b9f35e66754171ba3507d20c9bdd9`).
+  This gives a packaged screenshot path that avoids Chrome, Vite preview,
+  Browser Harness, System Events, and macOS Screen Recording prompts.
+- `1.5.6` final Generator signup-shell hardening checkpoint: the remaining
+  reported `Timeout 30000ms exceeded` came from a stale packaged flow that
+  still trusted a blind Playwright signup-shell wait. The final patch replaces
+  that shell wait with 500ms sanitized checkpoint polling, raises page defaults
+  to the known startup/OTP windows, keeps hydrate/form/OTP delays abort-aware,
+  trims whitespace-only Generator aliases before start, and keeps active
+  Generator controls as equal-width compact buttons with the shorter
+  **Show browser** label. Focused verification passed
+  `node --check server/services/account-generator.js`,
+  `npm run test:background-failure-visibility`, and `npm run test:ui-static`.
+  Final source verification then passed the full `npm test` chain,
+  `npm run lint`, `npm run build`, `npm run gate`, `npm run openapi:hydra`,
+  `node bin/hydra.mjs audit --json`, and `git diff --check`.
+  The final local ARM package passed `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  codesign, bundle version `1.5.6`, and embedded-source inspection for
+  `SIGNUP_SHELL_CHECK_INTERVAL_MS`, `GENERATOR_SIGNUP_SHELL_TIMEOUT`,
+  `page.setDefaultTimeout`, abort-aware form helpers, and the supervisor-backed
+  cancellation log reason. The final local ARM zip SHA-256 is
+  `93f4c7e519a30b5da69ac6d69104b2960bf3f31634b3b9afc9b2cc43f00cf4ad`.
+  LaunchServices opened the exact rebuilt package; splash diagnostics remained
+  finite (`durationMs=16000`, `exitMs=11750`, `portalMs=4250`, `timers=0`,
+  `rafActive=false`, `bodyCount=0`, `matterCleared=true`) and renderer
+  diagnostics settled to three bounded timeouts with no active RAFs or Anime
+  effects. A live packaged private-API Generator start for a redacted supplied alias
+  on `127.0.0.1:52388` reached `status=entering_email`,
+  `mode=browser_signup`, `checkpoint.state=manual_verification`, and
+  `url=https://openrouter.ai/sign-up`; bounded cleanup succeeded and the fresh
+  log ended with `Launch stopped ... bounded_packaged_handoff_test`. The
+  process table returned to the expected four Hydra-owned Electron processes
+  with no spawned OpenRouter browser left behind. A local
+  `npm run electron:build:mac-x64` attempt stopped at the intended
+  target-payload guard because this Apple Silicon machine only has ARM
+  Playwright Chromium, so Intel packaging remains a GitHub macOS Intel runner
+  responsibility. Upstream human verification and final OTP entry remain
+  operator-owned.

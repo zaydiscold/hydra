@@ -58,6 +58,7 @@ const GENERATOR_TTL_MS = 5 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 45 * 1000;
 const OTP_WAIT_TIMEOUT_MS = 75 * 1000;
 const OTP_CHECK_INTERVAL_MS = 350;
+const SIGNUP_SHELL_CHECK_INTERVAL_MS = 500;
 const SIGNUP_FORM_BLOCKED_GRACE_MS = 3 * 1000;
 const MANUAL_VERIFICATION_TIMEOUT_MS = 4 * 60 * 1000;
 const COMPLETION_TIMEOUT_MS = 30 * 1000;
@@ -340,11 +341,17 @@ function deriveSignupNames(email) {
   };
 }
 
-async function fillVisibleInputs(page, selectors, value, taskId, label) {
+async function fillVisibleInputs(page, selectors, value, taskId, label, signal = null) {
+  throwIfAborted(signal);
   const locator = page.locator(selectors.join(', '));
   let filled = 0;
-  const count = await locator.count().catch(() => 0);
+  const count = await locator.count().catch((err) => {
+    if (signal?.aborted) return 0;
+    logger.warn(`[Account Generator] Signup ${label} count failed for ${taskId}: ${err.message}`);
+    return 0;
+  });
   for (let i = 0; i < count; i += 1) {
+    throwIfAborted(signal);
     const input = locator.nth(i);
     try {
       if (!await input.isVisible({ timeout: 700 })) continue;
@@ -356,6 +363,7 @@ async function fillVisibleInputs(page, selectors, value, taskId, label) {
       }).catch(() => {});
       filled += 1;
     } catch (err) {
+      if (signal?.aborted) return filled > 0;
       logger.warn(`[Account Generator] Signup ${label} candidate failed for ${taskId}: ${err.message}`);
     }
   }
@@ -363,7 +371,7 @@ async function fillVisibleInputs(page, selectors, value, taskId, label) {
   return filled > 0;
 }
 
-async function fillVisibleSignupEmail(page, email, taskId) {
+async function fillVisibleSignupEmail(page, email, taskId, signal = null) {
   return fillVisibleInputs(page, [
     'input[name="emailAddress"]',
     'input[name="identifier"]',
@@ -374,37 +382,38 @@ async function fillVisibleSignupEmail(page, email, taskId) {
     'input[inputmode="email"]',
     '.cl-formFieldInput[type="email"]',
     'input[class*="email" i]',
-  ], email, taskId, 'email');
+  ], email, taskId, 'email', signal);
 }
 
-async function fillVisibleSignupNames(page, email, taskId) {
+async function fillVisibleSignupNames(page, email, taskId, signal = null) {
   const { firstName, lastName } = deriveSignupNames(email);
   const firstFilled = await fillVisibleInputs(page, [
     'input[name="firstName"]',
     'input[id*="firstName" i]',
     'input[id*="first-name" i]',
     'input[placeholder*="first name" i]',
-  ], firstName, taskId, 'first name');
+  ], firstName, taskId, 'first name', signal);
+  throwIfAborted(signal);
   const lastFilled = await fillVisibleInputs(page, [
     'input[name="lastName"]',
     'input[id*="lastName" i]',
     'input[id*="last-name" i]',
     'input[placeholder*="last name" i]',
-  ], lastName, taskId, 'last name');
+  ], lastName, taskId, 'last name', signal);
   return firstFilled || lastFilled;
 }
 
-async function fillVisibleSignupPassword(page, password, taskId) {
+async function fillVisibleSignupPassword(page, password, taskId, signal = null) {
   return fillVisibleInputs(page, [
     'input[name="password"]',
     'input[type="password"]',
     'input[id*="password" i]',
     'input[placeholder*="password" i]',
     'input[autocomplete="new-password"]',
-  ], password, taskId, 'password');
+  ], password, taskId, 'password', signal);
 }
 
-async function acceptVisibleSignupTerms(page, taskId) {
+async function acceptVisibleSignupTerms(page, taskId, signal = null) {
   const selectors = [
     'input[name="legalAccepted"]',
     'input[id*="legal" i]',
@@ -414,6 +423,7 @@ async function acceptVisibleSignupTerms(page, taskId) {
   ];
 
   for (const selector of selectors) {
+    throwIfAborted(signal);
     const checkbox = page.locator(selector).first();
     try {
       if (await checkbox.count() === 0) continue;
@@ -426,6 +436,7 @@ async function acceptVisibleSignupTerms(page, taskId) {
       logger.info(`[Account Generator] Accepted signup terms for ${taskId}`);
       return true;
     } catch (err) {
+      if (signal?.aborted) return false;
       logger.warn(`[Account Generator] Signup terms checkbox candidate failed for ${taskId}: ${err.message}`);
     }
   }
@@ -437,6 +448,7 @@ async function acceptVisibleSignupTerms(page, taskId) {
   ];
 
   for (const candidate of labelCandidates) {
+    throwIfAborted(signal);
     try {
       if (await candidate.count() === 0) continue;
       if (!await candidate.isVisible({ timeout: 1000 })) continue;
@@ -444,10 +456,12 @@ async function acceptVisibleSignupTerms(page, taskId) {
       logger.info(`[Account Generator] Accepted signup terms via label for ${taskId}`);
       return true;
     } catch (err) {
+      if (signal?.aborted) return false;
       logger.warn(`[Account Generator] Signup terms label candidate failed for ${taskId}: ${err.message}`);
     }
   }
 
+  throwIfAborted(signal);
   const changed = await page.evaluate(() => {
     const isVisible = (el) => Boolean(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
     const checkSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')?.set;
@@ -465,6 +479,7 @@ async function acceptVisibleSignupTerms(page, taskId) {
     }
     return changedCount;
   }).catch((err) => {
+    if (signal?.aborted) return 0;
     logger.warn(`[Account Generator] Signup terms DOM fallback failed for ${taskId}: ${err.message}`);
     return 0;
   });
@@ -476,7 +491,7 @@ async function acceptVisibleSignupTerms(page, taskId) {
   return false;
 }
 
-async function clickVisibleSignupContinueControl(page, taskId) {
+async function clickVisibleSignupContinueControl(page, taskId, signal = null) {
   const candidates = [
     page.locator('button.cl-formButtonPrimary:has-text("Continue")').last(),
     page.locator('button:has-text("Continue")').last(),
@@ -486,6 +501,7 @@ async function clickVisibleSignupContinueControl(page, taskId) {
   ];
 
   for (const candidate of candidates) {
+    throwIfAborted(signal);
     try {
       if (await candidate.count() === 0) continue;
       if (!await candidate.isVisible({ timeout: 1000 })) continue;
@@ -494,15 +510,18 @@ async function clickVisibleSignupContinueControl(page, taskId) {
       logger.info(`[Account Generator] Clicked signup continue control for ${taskId}`);
       return true;
     } catch (err) {
+      if (signal?.aborted) return false;
       logger.warn(`[Account Generator] Signup continue candidate failed for ${taskId}: ${err.message}`);
     }
   }
 
+  throwIfAborted(signal);
   try {
     await page.keyboard.press('Enter');
     logger.info(`[Account Generator] Used signup Enter fallback for ${taskId}`);
     return true;
   } catch (err) {
+    if (signal?.aborted) return false;
     logger.warn(`[Account Generator] Signup Enter fallback failed for ${taskId}: ${err.message}`);
     return false;
   }
@@ -512,13 +531,20 @@ async function fillAndAdvanceVisibleSignupForm(task, page, { reason = 'form' } =
   const taskId = task.taskId;
   const email = task.metadata.email;
   const password = task.metadata.password;
+  const signal = task.abortController.signal;
+  throwIfAborted(signal);
   taskSupervisor.updateTask(taskId, { status: 'entering_signup_details' });
-  const namesFilled = await fillVisibleSignupNames(page, email, taskId);
-  const emailFilled = await fillVisibleSignupEmail(page, email, taskId);
-  const passwordFilled = await fillVisibleSignupPassword(page, password, taskId);
-  const termsAccepted = await acceptVisibleSignupTerms(page, taskId);
+  const namesFilled = await fillVisibleSignupNames(page, email, taskId, signal);
+  throwIfAborted(signal);
+  const emailFilled = await fillVisibleSignupEmail(page, email, taskId, signal);
+  throwIfAborted(signal);
+  const passwordFilled = await fillVisibleSignupPassword(page, password, taskId, signal);
+  throwIfAborted(signal);
+  const termsAccepted = await acceptVisibleSignupTerms(page, taskId, signal);
+  throwIfAborted(signal);
   const checkpoint = await readSignupCheckpoint(page);
   updateTaskCheckpoint(task, checkpoint, { mode: 'browser_signup' });
+  throwIfAborted(signal);
 
   if (!emailFilled && checkpoint.emailBlocked) {
     const err = new Error('Could not fill OpenRouter signup email field - page may have changed');
@@ -542,7 +568,7 @@ async function fillAndAdvanceVisibleSignupForm(task, page, { reason = 'form' } =
     throw err;
   }
 
-  const clicked = await clickVisibleSignupContinueControl(page, taskId);
+  const clicked = await clickVisibleSignupContinueControl(page, taskId, signal);
   if (!clicked) return false;
   logger.info(`[Account Generator] Advanced signup form for ${taskId} (${reason})`);
   taskSupervisor.updateTask(taskId, { status: 'waiting_for_otp_screen' });
@@ -580,16 +606,31 @@ async function clickVisibleOtpSubmitControl(page, taskId) {
   }
 }
 
-async function waitForSignupShell(page) {
-  return page.waitForFunction(() => {
-    const hasInput = document.querySelector('input[type="email"], input[name="identifier"], input[name="emailAddress"], .cl-formFieldInput');
-    const hasButton = document.querySelector('button[type="submit"], button.cl-formButtonPrimary');
-    const text = document.body?.innerText?.toLowerCase?.() || '';
-    const hasSecurityGate = text.includes('verify you are human')
-      || text.includes('security check')
-      || Boolean(document.querySelector('iframe[src*="turnstile" i], iframe[src*="captcha" i], input[name="cf-turnstile-response"]'));
-    return hasInput || hasButton || hasSecurityGate;
-  }, undefined, { timeout: STARTUP_TIMEOUT_MS });
+async function waitForSignupShell(task, page) {
+  const signal = task.abortController.signal;
+  const startedAt = Date.now();
+  let lastCheckpoint = null;
+  let lastCheckpointReportAt = 0;
+
+  while (Date.now() - startedAt < STARTUP_TIMEOUT_MS) {
+    throwIfAborted(signal);
+    const checkpoint = await readSignupCheckpoint(page);
+    lastCheckpoint = checkpoint;
+    if (Date.now() - lastCheckpointReportAt >= 2 * 1000) {
+      updateTaskCheckpoint(task, checkpoint, { mode: 'browser_signup' });
+      lastCheckpointReportAt = Date.now();
+    }
+    if (checkpoint.otpVisible || checkpoint.manualVisible || checkpoint.signupFormVisible) {
+      return checkpoint;
+    }
+    await sleepWithSignal(SIGNUP_SHELL_CHECK_INTERVAL_MS, signal);
+  }
+
+  const checkpoint = lastCheckpoint ?? await readSignupCheckpoint(page);
+  updateTaskCheckpoint(task, checkpoint, { mode: 'browser_signup' });
+  const err = new Error(`Timed out waiting for OpenRouter signup shell after ${STARTUP_TIMEOUT_MS}ms; current page ${checkpoint.url}`);
+  err.code = 'GENERATOR_SIGNUP_SHELL_TIMEOUT';
+  throw err;
 }
 
 async function fillVisibleOtpInput(page, otpCode, taskId) {
@@ -711,6 +752,8 @@ async function launchSignupFlowPlaywright(task) {
       });
       const browser = context.browser();
       const page = await context.newPage();
+      page.setDefaultTimeout(Math.max(STARTUP_TIMEOUT_MS, OTP_WAIT_TIMEOUT_MS));
+      page.setDefaultNavigationTimeout(STARTUP_TIMEOUT_MS);
       taskSupervisor.attachResources(task.taskId, { browser, context, page });
       throwIfAborted(signal);
 
@@ -723,16 +766,16 @@ async function launchSignupFlowPlaywright(task) {
 
       // Wait for Next.js/React to hydrate and Clerk to render
       taskSupervisor.updateTask(task.taskId, { status: 'waiting_for_page_hydrate' });
-      await page.waitForTimeout(3000);
+      await sleepWithSignal(3000, signal);
 
       // Wait for any form or security element to appear. Playwright's
       // waitForFunction signature is (fn, arg, options), so keep the timeout in
       // the third slot; otherwise it silently falls back to 30 seconds.
-      await waitForSignupShell(page);
+      await waitForSignupShell(task, page);
 
       taskSupervisor.updateTask(task.taskId, { status: 'entering_email' });
 
-      const emailFilled = await fillVisibleSignupEmail(page, task.metadata.email, task.taskId);
+      const emailFilled = await fillVisibleSignupEmail(page, task.metadata.email, task.taskId, signal);
       if (!emailFilled) {
         // Dump page HTML for debugging
         const html = await page.content().catch(() => 'failed to get HTML');
@@ -740,7 +783,7 @@ async function launchSignupFlowPlaywright(task) {
         throw new Error('Could not find email input field - page may have changed');
       }
 
-      await page.waitForTimeout(500);
+      await sleepWithSignal(500, signal);
 
       await fillAndAdvanceVisibleSignupForm(task, page, { reason: 'initial-submit' });
 
@@ -750,7 +793,7 @@ async function launchSignupFlowPlaywright(task) {
       taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });
     } catch (err) {
       if (signal.aborted) {
-        logger.info(`[Account Generator] Launch stopped for ${task.taskId}: ${err.message}`);
+        logger.info(`[Account Generator] Launch stopped for ${task.taskId}: ${signal.reason?.message || err.message}`);
         return;
       }
       logger.error(`[Account Generator] Launch failed for ${task.taskId}: ${err.message}`);
@@ -783,7 +826,7 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
 
       taskSupervisor.updateTask(task.taskId, { status: 'submitting_otp' });
       await fillVisibleOtpInput(page, otpCode, task.taskId);
-      await page.waitForTimeout(250);
+      await sleepWithSignal(250, signal);
       await clickVisibleOtpSubmitControl(page, task.taskId);
 
       taskSupervisor.updateTask(task.taskId, { status: 'waiting_for_completion' });

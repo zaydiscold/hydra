@@ -309,6 +309,27 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(surface.includes('mw.close();'), 'activate load failure must close the hidden failed window before surfacing recovery');
   });
 
+  it('supports explicit packaged self-capture without exposing screenshot IPC to renderers', () => {
+    const main = readFileSync(MAIN_JS, 'utf-8');
+    const ipc = readFileSync(resolve(APP_DIR, 'ipc.js'), 'utf-8');
+    const preload = readFileSync(resolve(ELECTRON_DIR, 'preload.js'), 'utf-8');
+
+    assert.match(main, /SELF_CAPTURE_ARG_PREFIX = '--hydra-self-capture='/);
+    assert.match(main, /SELF_CAPTURE_DELAY_ARG_PREFIX = '--hydra-self-capture-delay-ms='/);
+    assert.match(main, /function parseSelfCaptureRequest\(\)/);
+    assert.match(main, /capture path must be absolute/);
+    assert.match(main, /capture path must end in \.png/);
+    assert.match(main, /capture path must be under the OS temp dir or Hydra logs dir/);
+    assert.match(main, /path\.resolve\('\/private\/tmp'\)/);
+    assert.match(main, /window\.webContents\.capturePage\(\)/);
+    assert.match(main, /image\.isEmpty\(\)/);
+    assert.match(main, /writeFile\(request\.outputPath, png, \{ mode: 0o600 \}\)/);
+    assert.match(main, /scheduleSelfCapture\(mainWindow, reason\)/);
+    assert.match(main, /\[hydra-capture\] self capture wrote/);
+    assert.doesNotMatch(ipc, /capturePage|hydra-self-capture|native:.*capture/);
+    assert.doesNotMatch(preload, /capturePage|hydra-self-capture|native:.*capture/);
+  });
+
   it('startup timing and uncaught-exception telemetry failures are visible', () => {
     const surface = readFileSync(MAIN_JS, 'utf-8');
 

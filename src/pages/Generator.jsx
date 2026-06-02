@@ -259,15 +259,18 @@ export default function Generator({ addToast }) {
 
   const handleStart = async () => {
     if (startInFlightRef.current) return;
+    const email = emailTemplate.trim();
+    if (!email) return;
     startInFlightRef.current = true;
     setStarting(true);
     try {
       setError(null);
       setOtp('');
+      setEmailTemplate(email);
       setCreatedAccount(null);
       setCheckpoint(null);
       completedToastRef.current = false;
-      const res = await api.startGeneratorJob(emailTemplate, password, 1);
+      const res = await api.startGeneratorJob(email, password, 1);
       const payload = res?.data ?? res ?? {};
       const startedTaskId = payload.taskId ?? payload.jobId ?? null;
       if (lifecycleClosedRef.current) {
@@ -331,7 +334,8 @@ export default function Generator({ addToast }) {
 
   const checkpointText = checkpointLabel(checkpoint);
   const otpReady = isOtpReady(status, checkpoint);
-  const canFocusBrowser = jobMode === 'browser_signup' && BROWSER_BACKED_STATUSES.has(status);
+  const browserBacked = jobMode === 'browser_signup' || BROWSER_BACKED_STATUSES.has(status) || Boolean(checkpoint?.state);
+  const canFocusBrowser = browserBacked && !isTerminalStatus(status) && Boolean(taskId);
 
   return (
     <>
@@ -383,7 +387,7 @@ export default function Generator({ addToast }) {
 
             <button type="button" className="btn btn-primary generator-start-btn"
               onClick={handleStart}
-              disabled={!emailTemplate || starting}
+              disabled={!emailTemplate.trim() || starting}
             >
               <span className="generator-button-label">
                 <PlusIcon size={20} />
@@ -481,7 +485,7 @@ export default function Generator({ addToast }) {
           <div className="generator-job-actions">
             {canFocusBrowser && (
               <button type="button" className="btn btn-secondary generator-browser-focus" onClick={handleFocusBrowser} disabled={focusingBrowser}>
-                {focusingBrowser ? 'Showing...' : 'Show account browser'}
+                {focusingBrowser ? 'Showing...' : 'Show browser'}
               </button>
             )}
             <button type="button" className="btn btn-ghost generator-cancel-btn" onClick={cancelJob}>

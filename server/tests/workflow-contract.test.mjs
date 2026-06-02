@@ -306,6 +306,9 @@ test('packaged app dogfood launcher uses LaunchServices instead of direct execut
   assert.match(script, /function runProcessDiagnostics/, 'launcher must look for the app process after LaunchServices handoff');
   assert.match(script, /function runLaunchFailureBaselines/, 'launcher must compare failed Hydra handoffs against baseline system-app handoffs');
   assert.match(script, /Calculator\.app/, 'launcher failure diagnostics must include a known Apple app baseline');
+  assert.match(script, /--self-capture=<png>/, 'launcher must document the packaged self-capture option');
+  assert.match(script, /--hydra-self-capture=\$\{selfCapturePath\}/, 'launcher must pass self-capture through LaunchServices --args');
+  assert.match(script, /--hydra-self-capture-delay-ms=\$\{selfCaptureDelayMs\}/, 'launcher must pass the optional self-capture delay');
   assert.match(script, /Do not launch\s+Contents\/MacOS\/Hydra directly/, 'launcher must warn against direct binary launch');
   assert.doesNotMatch(script, /Contents\/MacOS\/Hydra['"`]/, 'launcher must not spawn the packaged executable directly');
 });

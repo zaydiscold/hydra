@@ -6,7 +6,12 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const appPath = resolve(process.argv[2] || 'release/mac-arm64/Hydra.app');
+const rawArgs = process.argv.slice(2);
+const selfCaptureArg = rawArgs.find((arg) => arg.startsWith('--self-capture='));
+const selfCaptureDelayArg = rawArgs.find((arg) => arg.startsWith('--self-capture-delay-ms='));
+const appPath = resolve(rawArgs.find((arg) => !arg.startsWith('-')) || 'release/mac-arm64/Hydra.app');
+const selfCapturePath = selfCaptureArg ? resolve(selfCaptureArg.slice('--self-capture='.length)) : null;
+const selfCaptureDelayMs = selfCaptureDelayArg ? selfCaptureDelayArg.slice('--self-capture-delay-ms='.length) : null;
 
 function plistValue(plistPath, key) {
   return execFileSync('/usr/libexec/PlistBuddy', ['-c', `Print :${key}`, plistPath], {
@@ -116,12 +121,19 @@ function usage() {
   console.log(`Hydra packaged app launcher
 
 Usage:
-  node scripts/open-packaged-app.mjs [path/to/Hydra.app]
+  node scripts/open-packaged-app.mjs [path/to/Hydra.app] [--self-capture=/tmp/hydra.png]
 
 Launches the macOS packaged .app through LaunchServices. Do not launch
 Contents/MacOS/Hydra directly for GUI dogfood; that path can abort during
 macOS application registration and does not represent the normal packaged app
 launch path.
+
+Options:
+  --self-capture=<png>            Ask packaged Hydra to write one renderer
+                                  capture after startup. The app only accepts
+                                  absolute .png paths under the OS temp dir or
+                                  Hydra logs dir.
+  --self-capture-delay-ms=<ms>    Optional bounded delay before capture.
 `);
 }
 
@@ -160,6 +172,10 @@ console.log(`[open-packaged-app] executable OK: ${bundle.executablePath}`);
 runPreLaunchDiagnostics(appPath, bundle);
 
 const args = ['-n', appPath];
+if (selfCapturePath) {
+  args.push('--args', `--hydra-self-capture=${selfCapturePath}`);
+  if (selfCaptureDelayMs) args.push(`--hydra-self-capture-delay-ms=${selfCaptureDelayMs}`);
+}
 console.log(`[open-packaged-app] open ${args.join(' ')}`);
 
 const child = spawn('open', args, {

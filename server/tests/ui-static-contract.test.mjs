@@ -686,7 +686,7 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(generator, /const otpReady = isOtpReady\(status, checkpoint\)/);
   assert.match(generator, /Browser state: \{checkpointText\}/);
   assert.match(generator, /api\.focusGeneratorBrowserQuiet\(taskId\)/);
-  assert.match(generator, /Show account browser/);
+  assert.match(generator, /Show browser/);
   assert.match(api, /focusGeneratorBrowserQuiet = \(taskId, signal\) =>\s*request\(`\/generator\/\$\{taskId\}\/focus`, \{ method: 'POST', signal, trackLoading: false \}\)/);
   assert.match(generator, /className="generator-otp-row"/);
   assert.match(generator, /onChange=\{e => setOtp\(e\.target\.value\.replace\(\/\\D\/g, ''\)\.slice\(0, 6\)\)\}/);
@@ -706,9 +706,10 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?padding-inline:\s*1rem;/);
   assert.match(css, /\.generator-active-card\s*\{[\s\S]*?border-left-width:\s*8px;/);
   assert.match(css, /\.generator-job-actions\s*\{[\s\S]*?display:\s*grid;/);
-  assert.match(css, /\.generator-job-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(168px,\s*max-content\)\);/);
+  assert.match(css, /\.generator-job-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(156px,\s*1fr\)\);/);
+  assert.match(css, /\.generator-job-actions \.btn\s*\{[\s\S]*?width:\s*100%;/);
   assert.match(css, /\.generator-browser-focus\s*\{[\s\S]*?min-height:\s*42px;/);
-  assert.match(css, /\.generator-browser-focus\s*\{[\s\S]*?min-width:\s*168px;/);
+  assert.match(css, /\.generator-cancel-btn\s*\{[\s\S]*?min-height:\s*42px;/);
 });
 
 test('first-run setup is a guided password key tour instead of a login dead end', () => {

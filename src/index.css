@@ -4609,22 +4609,27 @@ select:-webkit-autofill {
 
 .generator-job-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(168px, max-content));
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
   align-items: center;
   gap: var(--space-sm);
   margin-top: var(--space-lg);
+  max-width: 520px;
 }
 
 .generator-browser-focus {
   min-height: 42px;
-  min-width: 168px;
   justify-content: center;
 }
 
 .generator-cancel-btn {
   color: var(--status-error);
-  min-width: 148px;
+  min-height: 42px;
   justify-content: center;
+}
+
+.generator-job-actions .btn {
+  width: 100%;
+  min-width: 0;
 }
 
 .redeemer-grid {
@@ -4776,7 +4781,7 @@ select:-webkit-autofill {
 }
 
 .app-shell--density-compact .main-content .generator-job-actions {
-  grid-template-columns: repeat(auto-fit, minmax(148px, max-content));
+  grid-template-columns: repeat(auto-fit, minmax(144px, 1fr));
   margin-top: 12px;
 }
 

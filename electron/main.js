@@ -5,6 +5,8 @@
  * All shared runtime state lives in app/state.js.
  */
 import { app, Menu, Tray, nativeImage, shell } from 'electron';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -67,6 +69,13 @@ const RENDERER_DIAGNOSTICS_SCRIPT = `
   return typeof fn === 'function' ? fn() : null;
 })()
 `;
+const SELF_CAPTURE_ARG_PREFIX = '--hydra-self-capture=';
+const SELF_CAPTURE_DELAY_ARG_PREFIX = '--hydra-self-capture-delay-ms=';
+const SELF_CAPTURE_DEFAULT_DELAY_MS = 2500;
+const SELF_CAPTURE_MIN_DELAY_MS = 1000;
+const SELF_CAPTURE_MAX_DELAY_MS = 15000;
+
+let selfCaptureScheduled = false;
 
 function summarizeRendererBucket(bucket) {
   const active = Number.isFinite(Number(bucket?.active)) ? Number(bucket.active) : 0;
@@ -120,6 +129,80 @@ function scheduleRendererDiagnostics(window, label, delayMs) {
   const timer = setTimeout(() => {
     void logRendererDiagnostics(window, label);
   }, delayMs);
+  timer.unref?.();
+}
+
+function parseSelfCaptureRequest() {
+  const captureArg = process.argv.find((arg) => arg.startsWith(SELF_CAPTURE_ARG_PREFIX));
+  if (!captureArg) return null;
+
+  const rawOutputPath = captureArg.slice(SELF_CAPTURE_ARG_PREFIX.length).trim();
+  if (!rawOutputPath) return { error: 'empty capture path' };
+  if (!path.isAbsolute(rawOutputPath)) return { error: 'capture path must be absolute' };
+
+  const outputPath = path.resolve(rawOutputPath);
+  if (path.extname(outputPath).toLowerCase() !== '.png') return { error: 'capture path must end in .png' };
+
+  const allowedRoots = [
+    path.resolve(tmpdir()),
+    path.resolve('/tmp'),
+    path.resolve('/private/tmp'),
+    path.resolve(app.getPath('logs')),
+  ];
+  const allowed = allowedRoots.some((root) => outputPath === root || outputPath.startsWith(`${root}${path.sep}`));
+  if (!allowed) return { error: 'capture path must be under the OS temp dir or Hydra logs dir' };
+
+  const delayArg = process.argv.find((arg) => arg.startsWith(SELF_CAPTURE_DELAY_ARG_PREFIX));
+  const rawDelay = delayArg ? Number.parseInt(delayArg.slice(SELF_CAPTURE_DELAY_ARG_PREFIX.length), 10) : SELF_CAPTURE_DEFAULT_DELAY_MS;
+  const delayMs = Number.isFinite(rawDelay)
+    ? Math.max(SELF_CAPTURE_MIN_DELAY_MS, Math.min(SELF_CAPTURE_MAX_DELAY_MS, rawDelay))
+    : SELF_CAPTURE_DEFAULT_DELAY_MS;
+
+  return { outputPath, delayMs };
+}
+
+function selfCapturePathForLog(outputPath) {
+  const tmpRoot = path.resolve(tmpdir());
+  if (outputPath === tmpRoot || outputPath.startsWith(`${tmpRoot}${path.sep}`)) {
+    return `$TMPDIR/${path.relative(tmpRoot, outputPath)}`;
+  }
+  const logsRoot = path.resolve(app.getPath('logs'));
+  if (outputPath === logsRoot || outputPath.startsWith(`${logsRoot}${path.sep}`)) {
+    return `$HYDRA_LOGS/${path.relative(logsRoot, outputPath)}`;
+  }
+  return path.basename(outputPath);
+}
+
+function scheduleSelfCapture(window, reason) {
+  if (selfCaptureScheduled) return;
+  const request = parseSelfCaptureRequest();
+  if (!request) return;
+  selfCaptureScheduled = true;
+
+  if (request.error) {
+    console.warn(`[hydra-capture] self capture disabled: ${request.error}`);
+    return;
+  }
+
+  const timer = setTimeout(async () => {
+    try {
+      if (!window || window.isDestroyed() || window.webContents?.isDestroyed?.()) {
+        throw new Error('main window not available');
+      }
+      const image = await window.webContents.capturePage();
+      if (!image || image.isEmpty()) throw new Error('captured image is empty');
+      const png = image.toPNG();
+      await mkdir(path.dirname(request.outputPath), { recursive: true });
+      await writeFile(request.outputPath, png, { mode: 0o600 });
+      console.warn('[hydra-capture] self capture wrote', JSON.stringify({
+        reason,
+        output: selfCapturePathForLog(request.outputPath),
+        bytes: png.length,
+      }));
+    } catch (err) {
+      console.warn('[hydra-capture] self capture failed:', err?.message || err);
+    }
+  }, request.delayMs);
   timer.unref?.();
 }
 
@@ -597,6 +680,7 @@ app.whenReady().then(async () => {
       setTimeout(() => verifyVisible(`${reason}+1200ms`), 1200).unref?.();
       scheduleRendererDiagnostics(mainWindow, `${reason}+2s`, 2000);
       scheduleRendererDiagnostics(mainWindow, `${reason}+10s`, 10000);
+      scheduleSelfCapture(mainWindow, reason);
       // Boot complete — release the gate so activate / second-instance /
       // tray-click handlers can spawn windows again from this point on.
       setBootingSplash(false);

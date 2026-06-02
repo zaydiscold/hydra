@@ -154,6 +154,9 @@ Screenshot audit is last. Functional packaged-app dogfood comes first.
 Valid screenshot evidence:
 
 - Captured from the packaged Electron app
+- Prefer the app-owned self-capture path when macOS Screen Recording or
+  Accessibility permissions block native screenshots:
+  `node scripts/open-packaged-app.mjs release/mac-arm64/Hydra.app --self-capture=/private/tmp/hydra-dashboard.png`
 - Names the app build/artifact used
 - Covers representative desktop sizes and main routes
 - Notes any visual defect with the route, viewport, and expected fix
@@ -165,6 +168,28 @@ Invalid screenshot evidence:
 - localhost browser tabs
 - source-only component screenshots
 - screenshots taken before functional dogfood is attempted
+
+## v1.5.6 Self-Capture Checkpoint
+
+The local `v1.5.6` package adds an explicit LaunchServices-only capture flag
+for packaged dogfood. The launcher passes `--hydra-self-capture=<absolute .png>`
+through `open -n ... --args`; Electron main validates that the target is under
+the OS temp directory or Hydra logs directory, waits until the real main window
+is revealed, then writes one `webContents.capturePage()` PNG with mode `0600`.
+
+This exists because macOS Screen Recording and Accessibility permissions can
+block `/usr/sbin/screencapture`, Computer Use, and System Events even while the
+packaged app is running correctly. It is not exposed through preload or renderer
+IPC, and raw captures still stay outside the repository until redacted and OCR
+checked.
+
+The same patch also records the packaged Account Generator handoff boundary:
+start a Generator job through the packaged app's private loopback API, wait for
+`checkpoint.state=manual_verification` or `otp`, then cancel with
+`DELETE /api/generator/:taskId`. A clean run should log the supervisor cancel
+reason, not Playwright's page-close text, and should return to the normal
+Hydra-owned Electron process tree with no spawned OpenRouter browser left
+behind.
 
 ## v1.1.4 Screenshot Checkpoint
 

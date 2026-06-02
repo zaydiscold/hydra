@@ -40,6 +40,9 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /const startInFlightRef = useRef\(false\)/);
   assert.match(source, /const verifyInFlightRef = useRef\(false\)/);
   assert.match(source, /if \(startInFlightRef\.current\) return/);
+  assert.match(source, /const email = emailTemplate\.trim\(\)/);
+  assert.match(source, /setEmailTemplate\(email\)/);
+  assert.match(source, /api\.startGeneratorJob\(email, password, 1\)/);
   assert.match(source, /const startedTaskId = payload\.taskId \?\? payload\.jobId \?\? null/);
   assert.match(source, /if \(lifecycleClosedRef\.current\) \{[\s\S]*cleanupLateStartedTask\(startedTaskId\)/);
   assert.match(source, /activeTaskRef\.current = startedTaskId/);
@@ -48,7 +51,7 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /api\.submitGeneratorOtpQuiet\(renderedTaskId, otp\)/);
   assert.match(api, /submitGeneratorOtpQuiet = \(taskId, otp\) =>\s*request\(`\/generator\/verify\/\$\{taskId\}`, \{ method: 'POST', body: \{ otp \}, trackLoading: false \}\)/);
   assert.match(source, /if \(lifecycleClosedRef\.current \|\| activeTaskRef\.current !== renderedTaskId\) return/);
-  assert.match(source, /disabled=\{!emailTemplate \|\| starting\}/);
+  assert.match(source, /disabled=\{!emailTemplate\.trim\(\) \|\| starting\}/);
   assert.match(source, /function isOtpReady\(status, checkpoint\)/);
   assert.match(source, /const otpReady = isOtpReady\(status, checkpoint\)/);
   assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying \|\| !otpReady\}/);
@@ -693,6 +696,10 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   const source = readRepoFile('server/services/account-generator.js');
   const routes = readRepoFile('server/routes/generator.js');
   const controller = readRepoFile('server/controllers/GeneratorController.js');
+  const signupShellSource = source.slice(
+    source.indexOf('async function waitForSignupShell'),
+    source.indexOf('async function fillVisibleOtpInput'),
+  );
 
   assert.match(source, /pickAutomationNetworkRoute/);
   assert.match(source, /mergeAutomationLaunchArgs\(launchArgs, automationRoute\)/);
@@ -705,6 +712,7 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /manual_verification/);
   assert.match(source, /const OTP_CHECK_INTERVAL_MS = 350/);
   assert.match(source, /const OTP_WAIT_TIMEOUT_MS = 75 \* 1000/);
+  assert.match(source, /const SIGNUP_SHELL_CHECK_INTERVAL_MS = 500/);
   assert.match(source, /const SIGNUP_FORM_BLOCKED_GRACE_MS = 3 \* 1000/);
   assert.match(source, /readSignupCheckpoint\(page\)/);
   assert.match(source, /signupBlocked/);
@@ -721,12 +729,16 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /checkpoint: summarizeSignupCheckpoint\(checkpoint\)/);
   assert.match(source, /Manual upstream verification visible/);
   assert.match(source, /GENERATOR_SIGNUP_FORM_BLOCKED/);
+  assert.match(source, /GENERATOR_SIGNUP_SHELL_TIMEOUT/);
   assert.match(source, /GENERATOR_OTP_SCREEN_TIMEOUT/);
   assert.match(source, /GENERATOR_MANUAL_VERIFICATION_TIMEOUT/);
   assert.match(source, /sleepWithSignal\(OTP_CHECK_INTERVAL_MS, signal\)/);
-  assert.match(source, /waitForSignupShell\(page\)/);
-  assert.match(source, /page\.waitForFunction\(\(\) => \{[\s\S]*?\}, undefined, \{ timeout: STARTUP_TIMEOUT_MS \}\)/);
+  assert.match(source, /async function waitForSignupShell\(task, page\)/);
+  assert.match(source, /sleepWithSignal\(SIGNUP_SHELL_CHECK_INTERVAL_MS, signal\)/);
+  assert.match(source, /waitForSignupShell\(task, page\)/);
+  assert.match(source, /page\.setDefaultTimeout\(Math\.max\(STARTUP_TIMEOUT_MS, OTP_WAIT_TIMEOUT_MS\)\)/);
   assert.match(source, /\}, undefined, \{ timeout: 15000 \}\)/);
+  assert.doesNotMatch(signupShellSource, /page\.waitForFunction/);
   assert.doesNotMatch(source, /waitForFunction\(\(\) => \{[\s\S]{0,600}?\}, \{ timeout:/);
   assert.doesNotMatch(source, /page\.waitForFunction\(otpChallengeVisiblePredicate/);
   assert.match(source, /waitForOtpChallenge\(task, page\)/);
@@ -734,17 +746,20 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(routes, /router\.post\('\/:taskId\/focus'/);
   assert.match(controller, /focusBrowser\(req, res\)/);
   assert.match(source, /deriveSignupNames\(email\)/);
-  assert.match(source, /fillVisibleSignupNames\(page, email, taskId\)/);
-  assert.match(source, /fillVisibleSignupEmail\(page, email, taskId\)/);
-  assert.match(source, /fillVisibleSignupPassword\(page, password, taskId\)/);
+  assert.match(source, /const signal = task\.abortController\.signal/);
+  assert.match(source, /throwIfAborted\(signal\)/);
+  assert.match(source, /fillVisibleSignupNames\(page, email, taskId, signal\)/);
+  assert.match(source, /fillVisibleSignupEmail\(page, email, taskId, signal\)/);
+  assert.match(source, /fillVisibleSignupPassword\(page, password, taskId, signal\)/);
   assert.match(source, /fillAndAdvanceVisibleSignupForm\(task, page/);
-  assert.match(source, /clickVisibleSignupContinueControl\(page, taskId\)/);
+  assert.match(source, /clickVisibleSignupContinueControl\(page, taskId, signal\)/);
   assert.match(source, /formAdvanceAttempts < 4/);
   assert.match(source, /!emailFilled && checkpoint\.emailBlocked/);
   assert.match(source, /!passwordFilled && checkpoint\.passwordBlocked/);
   assert.match(source, /!termsAccepted && checkpoint\.legalBlocked/);
   assert.match(source, /!namesFilled && \(checkpoint\.firstNameBlocked \|\| checkpoint\.lastNameBlocked\)/);
-  assert.match(source, /acceptVisibleSignupTerms\(page, taskId\)/);
+  assert.match(source, /acceptVisibleSignupTerms\(page, taskId, signal\)/);
+  assert.match(source, /if \(signal\?\.aborted\) return false/);
   assert.match(source, /input\[name="legalAccepted"\]/);
   assert.match(source, /checkbox\.check\(\{ timeout: 3000, force: true \}\)/);
   assert.match(source, /Accepted signup terms via DOM fallback/);
