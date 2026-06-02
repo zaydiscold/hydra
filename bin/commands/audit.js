@@ -482,6 +482,7 @@ function buildAudit() {
         && accountGenerator.includes('mergeAutomationLaunchArgs(launchArgs, automationRoute)')
         && accountGenerator.includes('proxy: playwrightProxyForAutomation(automationRoute)')
         && accountGenerator.includes('automationRoute: automationRoute.label')
+        && accountGenerator.includes('headless: config.HYDRA_GENERATOR_HEADLESS')
         && dashboardApi.includes('pickAutomationNetworkRoute')
         && dashboardApi.includes('fetchOptionsWithAccountProxy')
         && dashboardApi.includes('tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute, signal)')
@@ -494,7 +495,7 @@ function buildAudit() {
         && backgroundFailureTest.includes('fetchOptionsWithAutomationProxy')
         && backgroundFailureTest.includes('redeemCodeViaServerAction\\(sessionCookie, clientCookie, code, automationRoute, signal\\)')
         && backgroundFailureTest.includes('syncApiKeysViaPlaywright\\(sessionCookie, clientCookie, automationRoute\\)'),
-      'Settings/API store one proxy per line encrypted; signup, management-key, HTTP redemption, REST redemption, API-key sync, and Playwright fallback paths share one per-task automation route, with random account-proxy selection and explicit direct-localhost fallback',
+      'Settings/API store one proxy per line encrypted; signup, management-key, HTTP redemption, REST redemption, API-key sync, and Playwright fallback paths share one per-task automation route, with random account-proxy selection, generator visible-browser default, and explicit direct-localhost fallback',
     ),
     check(
       'readme-navigation',
@@ -507,6 +508,7 @@ function buildAudit() {
         && readme.includes('## Gallery')
         && readme.includes('Captured from the packaged Electron app')
         && readme.includes('Account proxy pool')
+        && readme.includes('new signup uses Generator with an isolated visible browser')
         && readme.includes('ip:port:user:pass')
         && readme.includes('including direct HTTPS and browser fallbacks')
         && readme.includes('selects one random saved route per new task')
@@ -516,8 +518,12 @@ function buildAudit() {
         && readme.includes('actions/workflows/docker.yml/badge.svg?branch=master')
         && !readme.includes('actions/workflows/electron-smoke.yml/badge.svg?branch=master')
         && !readme.includes('img.shields.io/github/license')
-        && readme.includes('Touch ID is opt-in')
+        && readme.includes('Touch ID defaults on once for')
+        && readme.includes('keeps an explicit')
+        && readme.includes('Settings opt-out durable across future launches')
         && /A successful\s+password unlock persists for up to 24 hours on the device/.test(readme)
+        && /both\s+\*\*Unlock with Touch ID\*\*\s+and password/.test(readme)
+        && /avoids macOS\s+Keychain token storage/.test(readme)
         && readme.includes('[docs/VERSIONING.md](docs/VERSIONING.md)')
         && /current public desktop release is `v\d+\.\d+\.\d+`/.test(readme)
         && readme.replace(/\s+/g, ' ').includes(`active review candidate is \`${version}\``)
@@ -553,7 +559,10 @@ function buildAudit() {
         && !electronWindows.includes('Run.run')
         && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
         && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=16000')
-        && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=3000')
+        && electronWindows.includes('HYDRA_SPLASH_EXIT_MS=11750')
+        && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=4250')
+        && electronWindows.includes('baseFontSize*(0.903+Math.random()*1.092)')
+        && electronWindows.includes('const wave=.5+.5*Math.sin')
         && electronWindows.includes('function drawHydraPortal')
         && electronWindows.includes('ctx.globalCompositeOperation="lighter"')
         && electronWindows.includes('segments=Math.max(3,7-depth)')
@@ -683,6 +692,12 @@ function buildAudit() {
         && generatorPage.includes('cleanupLateStartedTask(startedTaskId)')
         && generatorPage.includes('activeTaskRef.current = startedTaskId')
         && generatorPage.includes("api.cleanupGeneratorJob(lateTaskId, 'client_disconnect', { keepalive: true })")
+        && generatorPage.includes('generatorModeLabel(jobMode)')
+        && generatorPage.includes('inputMode="numeric"')
+        && generatorPage.includes("status !== 'awaiting_otp'")
+        && accountGenerator.includes('waitForOtpChallenge(task, page)')
+        && accountGenerator.includes('clickVisibleOtpSubmitControl(page, task.taskId)')
+        && accountGenerator.includes('manual_verification')
         && bulkAuthHook.includes('pollTimerRef.current')
         && bulkAuthHook.includes('poll.inFlight')
         && bulkAuthHook.includes('const lifecycleAbortRef = useRef(null)')
@@ -729,7 +744,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is extended to 16s with a unique 72-word shower, shattering is one-shot per parent, the top-edge spawn no longer overlaps a ceiling collider, and the staged 3s accelerating portal orbit disables collision response while preserving individual glyph motion; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit and duplicate start/OTP submissions are gated; ordinary proxy fetches abort and stop retrying when their clients disconnect; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation remains 16s with a unique 72-word shower, approximately 5% larger glyph sizing, one-shot parent shattering, no top-edge ceiling overlap, and a staged 4.25s collision-free portal orbit with a canvas-owned light wave; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit, duplicate start/OTP submissions are gated, browser signup surfaces manual verification, and OTP-page submission is explicit; ordinary proxy fetches abort and stop retrying when their clients disconnect; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',
@@ -792,7 +807,10 @@ function buildAudit() {
       'startup-fallback',
       'Startup and activate no-blank fallback',
       electronMain.includes('loadURL resolved before ready-to-show')
-        && electronMain.includes('if (loadSucceeded && !mainShown)')
+        && electronMain.includes('if (loadSucceeded && !mainRevealStarted)')
+        && electronMain.includes('main-window:startup-reveal')
+        && electronMain.includes('app.focus({ steal: true })')
+        && electronMain.includes('main reveal late recovery')
         && electronMain.includes('createMainWindow({ show: false, preloadPath: PRELOAD_PATH })')
         && electronMain.includes('newWin.loadURL(url).then(showActivatedWindow).catch')
         && electronWindows.includes('full-name greeting lookup failed, using username fallback')
@@ -1042,8 +1060,15 @@ function buildAudit() {
         && !electronIpc.includes('biometricOn && canPromptBiometric()')
         && electronIpcContractTest.includes('enabled biometric auth-token gate fails closed')
         && electronIpcContractTest.includes('check token presence and expiry before prompting Touch ID')
+        && electronIpc.includes("ipcMain.handle('native:auth-token:lock'")
+        && electronIpc.includes('if (biometricOn && token && expiresAt > Date.now())')
+        && electronIpc.includes('retainedForBiometric: true')
+        && rendererApi.includes("nativeAuthToken('lockAuthToken')")
+        && rendererApp.includes('await api.lockToken()')
+        && rendererApp.includes('Unlock with Touch ID')
+        && electronIpcContractTest.includes('manual vault lock only retains a usable auth token behind the biometric gate')
         && electronMainProcessTest.includes('keeps biometric auth-token fallback failures visible while failing closed'),
-      'native auth-token release validates token presence/expiry before prompting, then requires biometric approval when enabled and logs prompt/availability failures',
+      'native auth-token release validates token presence/expiry before prompting, requires biometric approval when enabled, logs prompt/availability failures, and lets manual Lock retain a usable device credential only behind that same gate so Touch ID and password remain available',
     ),
   ];
 

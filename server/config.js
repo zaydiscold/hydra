@@ -53,8 +53,14 @@ const configSchema = z.object({
   /** Browser-parity headers for Clerk FAPI (OpenRouter dashboard origin). */
   CLERK_ORIGIN: z.string().url().default('https://openrouter.ai'),
   CLERK_REFERER: z.string().url().default('https://openrouter.ai/sign-in'),
-  /** Run server-side Playwright with a visible browser (local debugging). */
+  /** Run server-side Playwright with a visible browser for provisioning/debug paths. */
   HYDRA_PLAYWRIGHT_HEADED: z.boolean().default(false),
+  /**
+   * Account Generator is a user-triggered signup lane. Keep its isolated
+   * browser visible by default so upstream CAPTCHA/manual verification can be
+   * completed by the operator. Set HYDRA_GENERATOR_HEADLESS=1 for CI/servers.
+   */
+  HYDRA_GENERATOR_HEADLESS: z.boolean().default(false),
   /** Optional Playwright browser channel, e.g. `chrome` for system Chrome (less bot friction than bundled Chromium). */
   HYDRA_PLAYWRIGHT_CHANNEL: z.string().min(1).optional(),
   /** Explicit path to Chromium/Chrome executable for Playwright. Overrides channel and bundled Chromium lookup. */
@@ -107,6 +113,7 @@ try {
     CLERK_ORIGIN: process.env.CLERK_ORIGIN,
     CLERK_REFERER: process.env.CLERK_REFERER,
     HYDRA_PLAYWRIGHT_HEADED: parseBoolean(process.env.HYDRA_PLAYWRIGHT_HEADED),
+    HYDRA_GENERATOR_HEADLESS: parseBoolean(process.env.HYDRA_GENERATOR_HEADLESS),
     HYDRA_PLAYWRIGHT_CHANNEL: process.env.HYDRA_PLAYWRIGHT_CHANNEL?.trim() || undefined,
     HYDRA_PLAYWRIGHT_EXECUTABLE_PATH: process.env.HYDRA_PLAYWRIGHT_EXECUTABLE_PATH?.trim() || undefined,
     HYDRA_PLAYWRIGHT_CDP_ENDPOINT: process.env.HYDRA_PLAYWRIGHT_CDP_ENDPOINT?.trim() || undefined,

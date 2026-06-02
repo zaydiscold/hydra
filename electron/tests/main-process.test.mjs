@@ -216,7 +216,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(windows.includes("win.on('close', (event) => {"), 'main window close must be synchronously guarded');
     assert.ok(windows.includes('event.preventDefault()'), 'normal window close must not quit the app');
     assert.ok(windows.includes("logWindowLifecycle('close-kept-running-in-background')"), 'background close path must leave lifecycle evidence');
-    assert.ok(windows.includes('app.dock?.hide()'), 'normal close should hide the macOS dock icon');
+    assert.ok(windows.includes('Keep the Dock icon available even while the window is backgrounded.'), 'normal close should keep Dock presentation recoverable');
+    assert.ok(!windows.includes('app.dock?.hide()'), 'normal close must not hide the macOS dock icon');
     assert.ok(windows.includes('win.destroy()'), 'normal close should free the renderer while the proxy stays alive');
     assert.ok(!windows.includes('Keep Running in Background'), 'normal close must not show a modal choice');
     assert.ok(!windows.includes('close-dialog-quit-selected'), 'normal close must not be able to select Quit Hydra');
@@ -295,7 +296,13 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     const surface = readFileSync(MAIN_JS, 'utf-8');
 
     assert.ok(surface.includes('loadURL resolved before ready-to-show'), 'startup must show main after a successful load even if ready-to-show never fires');
-    assert.ok(surface.includes('if (loadSucceeded && !mainShown)'), 'startup fallback must only show after loadURL succeeds');
+    assert.ok(surface.includes('if (loadSucceeded && !mainRevealStarted)'), 'startup fallback must only show after loadURL succeeds');
+    assert.ok(surface.includes('app.dock?.show()'), 'startup reveal must restore the macOS Dock/app presentation before showing');
+    assert.ok(surface.includes("app.focus({ steal: true })"), 'startup reveal must activate the app after Dock presentation is restored');
+    assert.ok(surface.includes('main reveal did not become visible'), 'startup reveal must log and retry invisible show attempts');
+    assert.ok(surface.includes('mainWindow.showInactive()'), 'startup reveal must use a visibility retry before leaving the user with no window');
+    assert.ok(surface.includes('main-window:startup-reveal'), 'startup reveal must leave explicit package-launch evidence');
+    assert.ok(surface.includes('main reveal late recovery'), 'startup reveal must retry through the shared focus path if macOS keeps it hidden');
     assert.ok(surface.includes('createMainWindow({ show: false, preloadPath: PRELOAD_PATH })'), 'activate path must not show a blank window before loadURL');
     assert.ok(surface.includes('newWin.once(\'ready-to-show\', showActivatedWindow)'), 'activate path must show after ready-to-show');
     assert.ok(surface.includes('newWin.loadURL(url).then(showActivatedWindow).catch'), 'activate path must also show after successful loadURL when ready-to-show is missing');
@@ -327,8 +334,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /let hydraSplashDisposed=false/);
     assert.match(windows, /function disposeHydraSplash\(reason="manual"\)/);
     assert.match(windows, /HYDRA_SPLASH_DURATION_MS=16000/);
-    assert.match(windows, /HYDRA_SPLASH_EXIT_MS=13000/);
-    assert.match(windows, /HYDRA_SPLASH_PORTAL_MS=3000/);
+    assert.match(windows, /HYDRA_SPLASH_EXIT_MS=11750/);
+    assert.match(windows, /HYDRA_SPLASH_PORTAL_MS=4250/);
     assert.match(windows, /HYDRA_SPLASH_DISPOSE_MS=18500/);
     assert.match(windows, /HYDRA_SPLASH_TARGET=72/);
     assert.doesNotMatch(windows, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
@@ -337,8 +344,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /<div class="aperture" aria-hidden="true"><\/div>/);
     assert.match(windows, /\.aperture::before/);
     assert.doesNotMatch(windows, /dial-cell/);
-    assert.match(windows, /baseFontSize\*\(0\.86\+Math\.random\(\)\*1\.04\)/);
-    assert.match(windows, /const delay=34\+Math\.random\(\)\*112\+\(Math\.random\(\)<0\.16\?Math\.random\(\)\*150:0\)/);
+    assert.match(windows, /baseFontSize\*\(0\.903\+Math\.random\(\)\*1\.092\)/);
+    assert.match(windows, /const delay=30\+Math\.random\(\)\*104\+\(Math\.random\(\)<0\.16\?Math\.random\(\)\*138:0\)/);
     assert.match(windows, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
     assert.match(windows, /Welcome, /);
     assert.match(windows, /portalRadius=Math\.min\(W\(\),H\(\)\)\*\(0\.46-0\.27\*easedExit\)/);
@@ -350,7 +357,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
     assert.match(windows, /hydraSplashDiagnostics\.portalLiftApplied=true/);
     assert.match(windows, /const stems=9/);
-    assert.match(windows, /if\(i%5===0\)\{ctx\.shadowColor=m\.color;ctx\.shadowBlur=4\+portalRatio\*8;\}/);
+    assert.match(windows, /const wave=\.5\+\.5\*Math\.sin/);
+    assert.match(windows, /if\(i%5===0\)\{ctx\.shadowColor=m\.color;ctx\.shadowBlur=4\+portalRatio\*8\+wave\*3;\}/);
     assert.match(windows, /function drawHydraPortal\(now,ratio\)/);
     assert.match(windows, /ctx\.globalCompositeOperation="lighter"/);
     assert.match(windows, /ctx\.createRadialGradient\(cx,cy,short\*0\.045,cx,cy,base\*1\.36\)/);
@@ -425,14 +433,20 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.ok(surface.includes('native:auth-token:get'), 'must expose native token read');
     assert.ok(surface.includes('native:auth-token:status'), 'must expose native token status for diagnostics');
     assert.ok(surface.includes('native:auth-token:set'), 'must expose native token write');
+    assert.ok(surface.includes('native:auth-token:lock'), 'must expose biometric-gated native token retention during manual lock');
     assert.ok(surface.includes('renderer-auth-token.json'), 'must persist token outside port-scoped localStorage');
     assert.ok(surface.includes('expiresAt'), 'native persisted token must store an explicit expiry');
     assert.ok(surface.includes('24 * 60 * 60 * 1000'), 'native persisted token must be capped to a 24-hour unlock window');
   });
 
   it('keeps biometric auth-token fallback failures visible while failing closed', () => {
+    const main = readFileSync(resolve(ROOT, 'electron/main.js'), 'utf-8');
     const ipc = readFileSync(resolve(ROOT, 'electron/app/ipc.js'), 'utf-8');
     const biometric = readFileSync(resolve(ROOT, 'electron/app/biometric.js'), 'utf-8');
+    const prefs = readFileSync(resolve(ROOT, 'electron/app/userPrefs.js'), 'utf-8');
+    assert.ok(main.includes('initializeBiometricDefault(canPromptBiometric())'), 'supported desktop devices must initialize the one-time biometric default');
+    assert.ok(prefs.includes('biometricDefaultInitialized'), 'biometric defaulting must preserve an explicit user opt-out');
+    assert.ok(prefs.includes("source: hasExplicitChoice ? 'existing-choice' : 'capability-default'"), 'biometric defaulting must distinguish existing preferences from device defaults');
     assert.ok(ipc.includes('biometric auth-token gate denied release'), 'auth-token gate denial must leave log evidence');
     assert.ok(ipc.includes("promptErr?.code || 'BIOMETRIC_DENIED'"), 'auth-token gate denial must preserve the biometric failure code');
     assert.ok(ipc.includes('return ok(null); // user cancelled, failed, or unavailable'), 'auth-token gate denial must still fall back to password');

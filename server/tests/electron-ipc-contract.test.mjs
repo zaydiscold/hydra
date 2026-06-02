@@ -145,3 +145,16 @@ test('enabled biometric auth-token gate fails closed when prompting is unavailab
     'enabled biometric gate must not bypass auth-token release when the biometric prompt is unavailable',
   );
 });
+
+test('manual vault lock only retains a usable auth token behind the biometric gate', () => {
+  const ipcSrc = read('electron/app/ipc.js');
+  const handler = ipcHandlerBlocks(ipcSrc).find(({ channel }) => channel === 'native:auth-token:lock');
+
+  assert.ok(handler, 'expected native:auth-token:lock handler');
+  assert.match(handler.body, /const biometricOn = Boolean\(await getPref\('biometricEnabled'\)\)/);
+  assert.match(handler.body, /if \(biometricOn && token && expiresAt > Date\.now\(\)\) \{/);
+  assert.match(handler.body, /return ok\(\{ retainedForBiometric: true \}\)/);
+  assert.match(handler.body, /await rm\(authTokenPath\(\), \{ force: true \}\)/);
+  assert.match(handler.body, /return ok\(\{ retainedForBiometric: false \}\)/);
+  assert.match(handler.body, /renderer auth-token lock cleanup failed:/);
+});

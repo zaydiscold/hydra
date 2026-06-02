@@ -2272,3 +2272,23 @@ This evidence file is not release-complete by itself. The release remains not co
   `016010d098faf19cbe8659b10880cf8dfa6ef54cd83e32d8c7fd16ed54cdc6bc`.
   Hosted PR CI, Docker runtime, and cross-platform package lanes remain the
   merge boundary.
+- `1.5.0` final Generator OTP and LaunchServices reveal checkpoint: the
+  superseding local ARM package includes the visible Generator browser default,
+  manual-verification state, sanitized six-digit OTP panel, Enter-submit form,
+  and explicit Clerk OTP submit-control click. The supplied signup credentials
+  were not used to create a live upstream account during verification because
+  the remaining OTP/human-verification step is operator-owned. The same rebuild
+  fixes an intermittent splash-to-main reveal race by restoring macOS Dock
+  presentation, activating/focusing the app, logging deterministic
+  `main-window:startup-reveal` evidence, and retrying hidden-window show
+  attempts. Package smoke, strict deep codesign, bundle version checks, and
+  embedded-source inspection passed. The final ARM zip SHA-256 is
+  `49d191e7a9cfb72193abf5b10e4cb96c18c9bb0bee35d687b019f7ddce63ab44`.
+  LaunchServices opened the rebuilt app without a browser; splash diagnostics
+  reported `durationMs=16000`, `exitMs=11750`, `portalMs=4250`, `timers=0`,
+  `rafActive=false`, `bodyCount=0`, and `matterCleared=true`. Startup reveal
+  reported `visible=true` at the initial loadURL fallback, `+300ms`, and
+  `+1200ms`. A later untouched idle sample settled to four Hydra-owned
+  processes, zero stale Playwright profiles, `0.0%` aggregate CPU, and
+  `591.64 MB` RSS. Local notarization remains deferred because Apple signing
+  credentials are absent; local ad-hoc codesign is valid.

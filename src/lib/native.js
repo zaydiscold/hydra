@@ -105,6 +105,7 @@ export const native = {
   getAuthToken: () => invokeNative('getAuthToken'),
   authTokenStatus: () => invokeNative('authTokenStatus'),
   setAuthToken: (token) => invokeNative('setAuthToken', token),
+  lockAuthToken: () => invokeNative('lockAuthToken'),
   clearAuthToken: () => invokeNative('clearAuthToken'),
   hideWindow: () => invokeNative('hideWindow'),
   quitApp: () => invokeNative('quitApp'),

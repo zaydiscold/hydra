@@ -62,7 +62,7 @@ Hydra keeps local OpenRouter operations in one place:
 
 | Need | Where to go |
 | --- | --- |
-| See fleet health quickly | **Command**: switch between Grid, List, and Map views. |
+| See fleet health quickly | **Command**: scroll the account viewport in Grid, scan aligned rows in List, or open the topology Map. |
 | Import existing accounts | **Bulk Import**: use the sequential direct-HTTPS OTP queue. |
 | Inspect saved logins | **Vault**: review account state and live-session evidence. |
 | Decide which keys may route | **Pool Manager**: enable accounts and keys with forgiving controls. |
@@ -83,12 +83,13 @@ traffic trail that explains what happened.
 - **Readable Traffic Console**: each recent request shows route attempt, outcome, model, account, key, client, latency, input/output tokens, and input/output price. Exact OpenRouter usage cost wins when upstream returns it; cached catalog prices provide an explicit estimate fallback.
 - **Long-running API behavior**: bounded proxy concurrency, bounded multi-key failover, buffered request-log writes, log rotation, request-log retention, upstream health checks, and graceful shutdown paths.
 - **Fleet account operations**: add accounts, track session health, provision management keys, sync balances, and inspect account readiness.
+- **Account import and signup lanes**: existing OpenRouter accounts use the direct HTTPS OTP queue; new signup uses Generator with an isolated visible browser when upstream human verification is required.
 - **Key pool management**: rotate across pooled keys, cool down rate-limited keys, disable unhealthy keys, and expose a single local Hydra proxy key.
 - **Account proxy pool**: optional encrypted per-task proxy list for signup, key, and code flows, including direct HTTPS and browser fallbacks.
 - **Promo-code workflows**: preflight readiness, redeem against selected accounts, and keep redemption history.
-- **Local-first security**: local vault password, optional Touch ID unlock gate, encrypted secrets, owner-only data directories, redacted CLI output, and loopback-first network binding.
+- **Local-first security**: local vault password, Touch ID unlock on supported Macs with a durable Settings opt-out, encrypted secrets, owner-only data directories, redacted CLI output, and loopback-first network binding.
 - **Scriptable operator CLI**: JSON-friendly commands for automation, diagnostics, imports/exports, fleet scans, and router lifecycle control.
-- **Operator-friendly desktop polish**: labeled sidebar hover tips, stronger proximity feedback, persisted Bulk Import activity, density controls, compact redemption layout, and a launch-bounded ambient moon orbit.
+- **Operator-friendly desktop polish**: a bounded Command account viewport, true dense List rows, labeled sidebar hover tips, stronger proximity feedback, persisted Bulk Import activity, content-wide density controls, compact redemption layout, and a launch-bounded ambient moon orbit.
 - **Release-oriented quality gates**: linting, Electron packaging checks, API integration tests, UI static contracts, OpenAPI coverage, Docker smoke checks, and Windows path compatibility checks.
 
 ## Install
@@ -135,13 +136,20 @@ is reserved for explicit Quit actions in the tray, menu, or sidebar so a normal
 window close cannot accidentally take down local routing.
 
 Settings includes local security controls, router settings, Touch ID status when
-available, and the encrypted account proxy pool. Touch ID is opt-in: Settings
-shows availability, an enable toggle, and a test-prompt button. A successful
+available, and the encrypted account proxy pool. Touch ID defaults on once for
+supported Macs, stays off on unsupported devices, and keeps an explicit
+Settings opt-out durable across future launches. Settings also exposes the
+availability status, enable toggle, and test-prompt button. A successful
 password unlock persists for up to 24 hours on the device; when Touch ID is
 enabled and a valid saved token exists, Hydra prompts once per relaunch before
 releasing that token. If the token is missing, expired, cancelled, or
-unavailable, Hydra keeps the password screen visible immediately instead of
-blanking the window while native token release is pending.
+unavailable, Hydra keeps the polished password fallback visible immediately
+instead of blanking the window while native token release is pending. Manual
+**Lock** ends the visible session immediately but keeps a still-valid device
+token only when the Touch ID gate is enabled, so the next unlock screen offers
+both **Unlock with Touch ID** and password. Hydra intentionally avoids macOS
+Keychain token storage here: the owner-only token file plus native Touch ID
+gate keeps launch calm without duplicate Keychain prompts.
 
 The proxy pool accepts one proxy per line in `ip:port:user:pass` format. Empty
 pools are valid; account tasks continue without proxies when no saved proxy is
@@ -152,7 +160,11 @@ The sidebar keeps high-frequency operations together and moves Account
 Generator to the bottom of the main stack. Hover any icon in the collapsed
 sidebar to see its section name. Settings lives beside lock and quit actions at
 the bottom. Settings also includes **Standard** and **Compact** density modes
-for operators who want more information visible at once.
+for operators who want more information visible at once. Compact mode tightens
+the working pages without shrinking the sidebar rail or weakening its proximity
+feedback. On Command, Grid and List scroll inside the account viewport instead
+of pushing the whole page downward; List is an aligned operator row view rather
+than a one-column card stack.
 
 ## CLI
 

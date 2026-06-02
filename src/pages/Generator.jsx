@@ -11,9 +11,37 @@ import {
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'expired']);
 const HEARTBEAT_INTERVAL_MS = 10 * 1000;
 const POLL_INTERVAL_MS = 2 * 1000;
+const STATUS_COPY = {
+  detecting_account: 'Checking whether this email already exists.',
+  falling_back_to_browser: 'Opening the isolated account browser for signup.',
+  launching_browser: 'Launching the isolated account browser.',
+  navigating_signup: 'Opening OpenRouter signup.',
+  waiting_for_page_hydrate: 'Waiting for Clerk to render the signup form.',
+  entering_email: 'Entering the signup email.',
+  waiting_for_otp_screen: 'Waiting for the verification-code screen.',
+  manual_verification: 'Complete the human verification in the account browser, then Hydra will continue to OTP.',
+  sending_otp: 'Sending the email code through direct HTTPS.',
+  awaiting_otp: 'Enter the 6-digit code from your email.',
+  submitting_otp: 'Submitting the code.',
+  verifying_otp: 'Verifying the code.',
+  waiting_for_completion: 'Waiting for OpenRouter to finish signup.',
+  setting_password: 'Setting the account password.',
+  extracting_session: 'Capturing the finished dashboard session.',
+  activating_session: 'Extending the fresh OTP session.',
+  activating_long_lived_session: 'Extending the fresh signup session.',
+  saving_profile: 'Saving the local account profile.',
+  saving_local_profile: 'Saving the local account profile.',
+  provisioning_key: 'Creating the first management key.',
+};
 
 function isTerminalStatus(status) {
   return TERMINAL_STATUSES.has(status);
+}
+
+function generatorModeLabel(mode) {
+  if (mode === 'https_otp') return 'Direct HTTPS OTP';
+  if (mode === 'browser_signup') return 'Isolated browser signup';
+  return 'Generator';
 }
 
 export default function Generator({ addToast }) {
@@ -24,6 +52,7 @@ export default function Generator({ addToast }) {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState(null);
   const [createdAccount, setCreatedAccount] = useState(null);
+  const [jobMode, setJobMode] = useState(null);
   const [starting, setStarting] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
@@ -45,6 +74,7 @@ export default function Generator({ addToast }) {
     setStatus(nextStatus);
     if (payload.error) setError(payload.error);
     if (payload.account) setCreatedAccount(payload.account);
+    if (payload.mode) setJobMode(payload.mode);
     if (payload.taskId && !taskId) setTaskId(payload.taskId);
   }, [taskId]);
 
@@ -170,6 +200,7 @@ export default function Generator({ addToast }) {
     setTaskId(null);
     setStatus('idle');
     setOtp('');
+    setJobMode(null);
     setVerifying(false);
   }, []);
 
@@ -202,6 +233,7 @@ export default function Generator({ addToast }) {
       }
       activeTaskRef.current = startedTaskId;
       setTaskId(startedTaskId);
+      setJobMode(payload.mode ?? null);
       setStatus(payload.status ?? 'initializing');
     } catch (err) {
       if (lifecycleClosedRef.current) return;
@@ -214,7 +246,7 @@ export default function Generator({ addToast }) {
   };
 
   const handleVerify = async () => {
-    if (!otp || !taskId || verifyInFlightRef.current) return;
+    if (otp.length !== 6 || !taskId || verifyInFlightRef.current) return;
     const renderedTaskId = taskId;
     verifyInFlightRef.current = true;
     setVerifying(true);
@@ -265,7 +297,7 @@ export default function Generator({ addToast }) {
             <div className="generator-card-title">New account</div>
             <div className="generator-form-grid">
               <div className="form-group">
-                <label>Gmail Alias</label>
+                <label>Email alias</label>
                 <input
                   type="email"
                   className="form-input form-input-mono"
@@ -338,28 +370,39 @@ export default function Generator({ addToast }) {
             </p>
           )}
 
-          <div className="status-indicator" style={{ marginTop: 'var(--space-md)' }}>
+            <div className="status-indicator" style={{ marginTop: 'var(--space-md)' }}>
             {status === 'awaiting_otp' ? (
-              <div className="otp-box">
-                <p>Playwright paused. Enter the 6-digit code sent to {emailTemplate}:</p>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', marginBottom: '1rem' }}>
+              <div className="otp-box generator-otp-panel">
+                <p className="generator-status-copy">
+                  <strong>{generatorModeLabel(jobMode)}</strong> is ready for the email code sent to {emailTemplate}.
+                </p>
+                <form
+                  className="generator-otp-row"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleVerify();
+                  }}
+                >
                   <input
                     type="text"
                     className="form-input form-input-mono otp-input"
                     maxLength={6}
                     value={otp}
-                    onChange={e => setOtp(e.target.value)}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="123456"
-                    style={{ fontSize: '2rem', letterSpacing: '0.4em', width: '240px' }}
                     spellCheck={false}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
                   />
-                  <button type="button" className="btn btn-primary" onClick={handleVerify} disabled={otp.length !== 6 || verifying}>
+                  <button type="submit" className="btn btn-primary generator-otp-submit" disabled={otp.length !== 6 || verifying || status !== 'awaiting_otp'}>
                     {verifying ? '[VERIFYING]' : '[VERIFY]'}
                   </button>
-                </div>
+                </form>
               </div>
             ) : (
-              <p>Please wait…</p>
+              <p className="generator-status-copy">
+                {STATUS_COPY[status] || 'Please wait while Hydra advances this generator job.'}
+              </p>
             )}
           </div>
 

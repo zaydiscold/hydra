@@ -2912,3 +2912,29 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   all `13` Dashboard accounts, Grid/List/Map, Traffic, Pool Manager, Settings
   density switching, and the shortened Bulk OTP surface. Hosted PR checks
   remain the merge boundary.
+- 2026-06-02 final `1.5.0` Generator OTP and startup-reveal package proof:
+  Account Generator now defaults its isolated signup browser to visible mode
+  for upstream human verification, reports `manual_verification` instead of
+  hanging silently, sanitizes OTP input to six digits, supports Enter-submit,
+  and explicitly clicks Clerk's visible OTP submit control before falling back
+  to Enter. No real signup was started from the supplied `admin@preheat.cc`
+  credentials during this verification because the upstream OTP/human
+  verification step belongs to the operator. The final source patch also
+  hardened the splash-to-main handoff after LaunchServices exposed an
+  intermittent invisible-window reveal: startup now waits briefly for macOS
+  Dock presentation, shows inactive, activates/focuses, logs
+  `main-window:startup-reveal`, and retries visibility if macOS keeps the
+  window hidden. Focused main-process regression passed `31/31`, package smoke
+  passed, strict deep codesign passed, bundle version reported `1.5.0`, and
+  embedded-source inspection found the Generator, splash timing, and reveal
+  anchors inside the packaged app. The final local ARM zip SHA-256 is
+  `49d191e7a9cfb72193abf5b10e4cb96c18c9bb0bee35d687b019f7ddce63ab44`.
+  LaunchServices opened the exact rebuilt bundle without a browser; splash
+  diagnostics stayed finite with `durationMs=16000`, `exitMs=11750`,
+  `portalMs=4250`, `timers=0`, `rafActive=false`, `bodyCount=0`, and
+  `matterCleared=true`. The reveal log reported `visible=true` at initial
+  loadURL fallback, `+300ms`, and `+1200ms`. The first post-splash sample
+  caught the expected compositor tail, then the untouched idle sample settled
+  to four Hydra-owned processes, zero stale Playwright profiles, `0.0%`
+  aggregate CPU, and `591.64 MB` RSS. Local notarization remains deferred
+  because Apple signing credentials are absent; local ad-hoc codesign is valid.

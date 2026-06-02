@@ -604,7 +604,7 @@ export function createSplashWindow() {
     + 'const updateStrip=document.getElementById("update-strip");'
     + 'const updateFill=document.getElementById("update-strip-fill");'
     + 'let phaseIndex=0,updateActive=false;'
-    + 'const HYDRA_SPLASH_DURATION_MS=16000,HYDRA_SPLASH_EXIT_MS=13000,HYDRA_SPLASH_PORTAL_MS=3000,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=2700,HYDRA_SPLASH_DISPOSE_MS=18500,HYDRA_SPLASH_TARGET=72;'
+    + 'const HYDRA_SPLASH_DURATION_MS=16000,HYDRA_SPLASH_EXIT_MS=11750,HYDRA_SPLASH_PORTAL_MS=4250,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=3825,HYDRA_SPLASH_DISPOSE_MS=18500,HYDRA_SPLASH_TARGET=72;'
     + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0,hydraSplashExitStartedAt=0;'
     + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,portalMs:HYDRA_SPLASH_PORTAL_MS,target:HYDRA_SPLASH_TARGET,queueLength:0,shatteredWordCount:0,duplicateShatterSkips:0,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,peakDynamicBodyCount:0,portalCollisionDisabled:false,portalLiftApplied:false,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
     + 'window.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics;'
@@ -761,15 +761,15 @@ export function createSplashWindow() {
     +   'const it=queue[spawnIdx++];'
     +   'const isBrand=it.tag==="brand";'
     +   'const baseFontSize=isBrand?(30+Math.floor(Math.random()*10)):(20+Math.floor(Math.random()*8));'
-    +   'const fontSize=Math.max(16,Math.round(baseFontSize*(0.86+Math.random()*1.04)));'
+    +   'const fontSize=Math.max(17,Math.round(baseFontSize*(0.903+Math.random()*1.092)));'
     +   'const weight=isBrand?"800":"600";'
     +   'const color=it.color||PALETTE[hashStr(it.text)%PALETTE.length];'
     +   'spawnWord(it.text,color,fontSize,weight);'
-    +   'const delay=34+Math.random()*112+(Math.random()<0.16?Math.random()*150:0);'
+    +   'const delay=30+Math.random()*104+(Math.random()<0.16?Math.random()*138:0);'
     +   'hydraSplashSetTimeout(scheduleNextWord,delay);'
     + '}'
     + 'scheduleNextWord();'
-    // ─── Accelerating portal orbit — begin at t=13s. The settled pile keeps
+    // ─── Accelerating portal orbit — begin at t=11.75s. The settled pile keeps
     // its individual glyph bodies, but each frame bends their velocities into
     // a tightening clockwise orbit around the screen center. Collision masks
     // are cleared once orbit starts: the glyphs stay independently animated
@@ -859,7 +859,7 @@ export function createSplashWindow() {
     +     'ctx.save();'
     +     'ctx.translate(b.position.x,b.position.y);'
     +     'ctx.rotate(b.angle);'
-    +     'if(portalRatio){const pulse=.82+Math.sin(now*.012+b.position.x*.018+b.position.y*.014)*.18;ctx.globalAlpha=.66+pulse*.30;const depthScale=.86+pulse*.24;ctx.scale(depthScale,depthScale);if(i%5===0){ctx.shadowColor=m.color;ctx.shadowBlur=4+portalRatio*8;}}'
+    +     'if(portalRatio){const wave=.5+.5*Math.sin((now-hydraSplashExitStartedAt)*.009-b.position.x*.021-b.position.y*.012);ctx.globalAlpha=.66+wave*.30;const depthScale=.9+wave*.18;ctx.scale(depthScale,depthScale);if(i%5===0){ctx.shadowColor=m.color;ctx.shadowBlur=4+portalRatio*8+wave*3;}}'
     +     'ctx.fillStyle=m.color;'
     +     'ctx.font=fontFor(m.fontSize,m.weight);'
     +     'ctx.textAlign="center";ctx.textBaseline="middle";'
@@ -964,7 +964,10 @@ export function createMainWindow({ show = false } = {}) {
     // reserved for explicit native quit actions (tray/menu/sidebar), which set
     // forceQuit before calling app.quit().
     logWindowLifecycle('close-kept-running-in-background');
-    if (process.platform === 'darwin') app.dock?.hide();
+    // Keep the Dock icon available even while the window is backgrounded.
+    // Hiding the Dock here makes a later LaunchServices relaunch harder to
+    // reason about and can leave OS-level inspectors with no visible window
+    // to attach to until a tray action explicitly restores presentation.
     win.destroy();  // unconditional close — bypasses the close handler we're inside
   });
 

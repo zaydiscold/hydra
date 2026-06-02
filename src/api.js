@@ -289,6 +289,11 @@ export async function clearToken() {
   clearLegacyAuthCookie();
   await nativeAuthToken('clearAuthToken');
 }
+export async function lockToken() {
+  localStorage.removeItem('hydra_token');
+  clearLegacyAuthCookie();
+  await nativeAuthToken('lockAuthToken');
+}
 export function hasToken() {
   return !!getToken();
 }

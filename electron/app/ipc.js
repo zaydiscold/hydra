@@ -241,6 +241,32 @@ export function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('native:auth-token:lock', async () => {
+    try {
+      const parsed = await readAuthTokenRecord();
+      const token = typeof parsed?.token === 'string' ? parsed.token : null;
+      const expiresAt = token ? authTokenExpiryFromRecord(parsed) : 0;
+      const biometricOn = Boolean(await getPref('biometricEnabled'));
+
+      // A manual Lock ends the active renderer/server session immediately,
+      // but may retain one usable device credential when Touch ID is enabled.
+      // The credential still cannot leave disk until native:auth-token:get
+      // succeeds through promptBiometric(). Without that gate, Lock revokes
+      // the disk token so a future renderer cannot silently restore access.
+      if (biometricOn && token && expiresAt > Date.now()) {
+        return ok({ retainedForBiometric: true });
+      }
+
+      await rm(authTokenPath(), { force: true });
+      return ok({ retainedForBiometric: false });
+    } catch (e) {
+      await rm(authTokenPath(), { force: true }).catch((removeErr) => {
+        console.warn('[ipc] renderer auth-token lock cleanup failed:', removeErr?.message || removeErr);
+      });
+      return err(e.message, 'TOKEN_LOCK_FAILED');
+    }
+  });
+
   ipcMain.handle('native:auth-token:clear', async () => {
     try {
       await rm(authTokenPath(), { force: true });

@@ -1083,7 +1083,8 @@ select:-webkit-autofill {
   will-change: transform, filter;
 }
 
-.dashboard-mini-grid .account-card[data-proximity-target] {
+.dashboard-mini-grid .account-card[data-proximity-target],
+.dashboard-account-list__row[data-proximity-target] {
   filter: brightness(var(--proximity-brightness));
   transform:
     translateX(var(--proximity-attract-x))
@@ -1562,18 +1563,141 @@ select:-webkit-autofill {
   gap: 10px;
 }
 
-.dashboard-mini-grid--list {
-  grid-template-columns: minmax(0, 1fr);
+.dashboard-account-viewport {
+  min-width: 0;
 }
 
-.dashboard-mini-grid--list .account-card--compact {
-  min-height: 0;
-  padding: 12px 14px;
+.dashboard-account-viewport--grid,
+.dashboard-account-viewport--list {
+  max-height: clamp(320px, calc(100vh - 230px), 720px);
+  overflow: auto;
+  padding: 2px 7px 7px 2px;
+  scrollbar-gutter: stable;
 }
 
-.dashboard-mini-grid--list .account-card-balance,
-.dashboard-mini-grid--list .balance-bar {
-  margin-bottom: 6px;
+.dashboard-account-list {
+  min-width: 760px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(7, 10, 14, 0.58);
+}
+
+.dashboard-account-list__header,
+.dashboard-account-list__row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.5fr)
+    minmax(78px, 0.62fr)
+    76px
+    42px
+    minmax(96px, 0.82fr)
+    minmax(70px, 0.62fr)
+    12px;
+  gap: 10px;
+  align-items: center;
+}
+
+.dashboard-account-list__header {
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dashboard-account-list__row {
+  width: 100%;
+  min-height: 52px;
+  padding: 7px 11px 7px 9px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 3px solid transparent;
+  background: rgba(255, 255, 255, 0.015);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-align: left;
+}
+
+.dashboard-account-list__row:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-account-list__row:hover,
+.dashboard-account-list__row:focus-visible {
+  background: rgba(0, 229, 255, 0.07);
+  outline: none;
+}
+
+.dashboard-account-list__row--healthy { border-left-color: var(--status-success); }
+.dashboard-account-list__row--partial { border-left-color: var(--status-warning); }
+.dashboard-account-list__row--dead { border-left-color: var(--status-error); }
+
+.dashboard-account-list__identity {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.dashboard-account-list__identity strong,
+.dashboard-account-list__identity em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-account-list__identity strong {
+  color: var(--text-primary);
+  font-size: 0.74rem;
+}
+
+.dashboard-account-list__identity em {
+  margin-top: 1px;
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  font-style: normal;
+}
+
+.dashboard-account-list__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 7px currentColor;
+}
+
+.dashboard-account-list__dot--healthy { color: var(--status-success); }
+.dashboard-account-list__dot--partial { color: var(--status-warning); }
+.dashboard-account-list__dot--dead { color: var(--status-error); }
+
+.dashboard-account-list__balance {
+  color: var(--text-primary);
+}
+
+.dashboard-account-list__balance--low { color: var(--status-warning); }
+.dashboard-account-list__balance--depleted { color: var(--status-error); }
+.dashboard-account-list__ready { color: var(--status-success); }
+.dashboard-account-list__missing { color: var(--status-error); }
+
+.dashboard-account-list__session,
+.dashboard-account-list__used {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-account-list__arrow {
+  color: var(--accent-secondary);
+  font-size: 1.15rem;
+  line-height: 1;
 }
 
 .dashboard-account-map {
@@ -3008,14 +3132,36 @@ select:-webkit-autofill {
   z-index: 10;
 }
 
+.lock-screen::before,
+.lock-screen::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lock-screen::before {
+  z-index: -2;
+  background:
+    linear-gradient(rgba(0, 229, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 0, 255, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.78), transparent 88%);
+}
+
+.lock-screen::after {
+  z-index: -1;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(0, 229, 255, 0.10), transparent 34%),
+    radial-gradient(circle at 50% 58%, rgba(255, 0, 255, 0.07), transparent 48%);
+}
+
 /* Vault Indicator */
 .vault-indicator {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   background: rgba(255, 255, 255, 0.05);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
   border: 1px solid var(--border-color);
   padding: 4px 10px;
   border-radius: 20px;
@@ -3056,15 +3202,78 @@ select:-webkit-autofill {
 }
 
 .lock-card {
-  background: var(--bg-card);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background:
+    linear-gradient(145deg, rgba(19, 21, 38, 0.98), rgba(4, 6, 18, 0.98)),
+    var(--bg-card);
   border: 4px solid var(--text-primary);
   padding: var(--space-3xl);
   width: 100%;
   max-width: 440px;
   box-shadow: 12px 12px 0 var(--text-primary);
   animation: slide-up 0.4s var(--ease-out-expo);
+}
+
+.desktop-unlock-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin: calc(-1 * var(--space-sm)) 0 var(--space-lg);
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 229, 255, 0.30);
+  border-left: 4px solid var(--accent-secondary);
+  background: rgba(0, 229, 255, 0.055);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.desktop-unlock-note__tag {
+  color: var(--accent-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.desktop-unlock-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  color: var(--text-tertiary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-unlock-divider::before,
+.desktop-unlock-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.32));
+}
+
+.desktop-unlock-divider::after {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.32), transparent);
+}
+
+.desktop-touch-id-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-color: rgba(34, 211, 238, 0.32);
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.1), rgba(168, 85, 247, 0.12));
+  color: var(--text-primary);
+}
+
+.desktop-touch-id-btn:hover:not(:disabled) {
+  border-color: rgba(34, 211, 238, 0.58);
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.17), rgba(168, 85, 247, 0.2));
 }
 
 .lock-card h2 {
@@ -3177,6 +3386,11 @@ select:-webkit-autofill {
 }
 
 @media (max-width: 640px) {
+  .desktop-unlock-note {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
   .setup-stepper {
     grid-template-columns: 1fr;
   }
@@ -3677,11 +3891,29 @@ select:-webkit-autofill {
   position: absolute;
   inset: -36px;
   display: block;
-  transform: rotate(-18deg);
+  --moon-orbit-start: -18deg;
+  --moon-orbit-end: 342deg;
+  --moon-orbit-duration: 16s;
+  transform: rotate(var(--moon-orbit-start));
+  transform-origin: 50% 50%;
 }
 
 .app-shell--ambient-motion .planet-moon-orbit {
-  animation: moonOrbit 16s linear infinite;
+  animation: moonOrbit var(--moon-orbit-duration) linear infinite;
+}
+
+.planet-moon-orbit--inner {
+  inset: -23px;
+  --moon-orbit-start: 42deg;
+  --moon-orbit-end: -318deg;
+  --moon-orbit-duration: 11.5s;
+}
+
+.planet-moon-orbit--outer {
+  inset: -53px;
+  --moon-orbit-start: -132deg;
+  --moon-orbit-end: 228deg;
+  --moon-orbit-duration: 22s;
 }
 
 .planet-moon {
@@ -3695,11 +3927,30 @@ select:-webkit-autofill {
   border-radius: 50%;
   background: rgba(0, 229, 255, 0.52);
   box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.36), 0 0 16px rgba(0, 229, 255, 0.42);
+  transform: translateX(-50%);
+}
+
+.planet-moon--ember {
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+  background: rgba(251, 191, 36, 0.5);
+  box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.28), 0 0 12px rgba(251, 191, 36, 0.32);
+}
+
+.planet-moon--ice {
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-width: 1px;
+  background: rgba(163, 230, 53, 0.46);
+  box-shadow: 0 0 10px rgba(163, 230, 53, 0.28);
 }
 
 @keyframes moonOrbit {
-  from { transform: rotate(-18deg); }
-  to { transform: rotate(342deg); }
+  from { transform: rotate(var(--moon-orbit-start)); }
+  to { transform: rotate(var(--moon-orbit-end)); }
 }
 
 .planet-2 {
@@ -4221,6 +4472,12 @@ select:-webkit-autofill {
   font-weight: 800;
 }
 
+.generator-start-btn:disabled {
+  opacity: 0.52;
+  filter: saturate(0.55) brightness(0.85);
+  cursor: not-allowed;
+}
+
 .generator-steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4242,6 +4499,46 @@ select:-webkit-autofill {
   font-weight: 800;
   text-align: center;
   text-transform: uppercase;
+}
+
+.generator-status-copy {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.generator-status-copy strong {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+.generator-otp-panel {
+  max-width: 560px;
+}
+
+.generator-otp-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(128px, auto);
+  gap: var(--space-md);
+  align-items: stretch;
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.generator-otp-row .otp-input {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1.55rem;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
+
+.generator-otp-submit {
+  min-width: 128px;
+  min-height: 48px;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .redeemer-grid {
@@ -4279,26 +4576,116 @@ select:-webkit-autofill {
   padding: 14px 24px;
 }
 
-.app-shell--density-compact .page-header {
+.app-shell--density-compact .main-content .page-header {
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+}
+
+.app-shell--density-compact .main-content .page-header h1,
+.app-shell--density-compact .main-content .page-header h2 {
+  font-size: 1.55rem;
+}
+
+.app-shell--density-compact .main-content .page-header p,
+.app-shell--density-compact .main-content .page-header__lede {
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.app-shell--density-compact .main-content .stats-grid {
+  gap: 6px;
   margin-bottom: 12px;
 }
 
-.app-shell--density-compact .card {
-  padding: 14px;
-}
-
-.app-shell--density-compact .settings-card,
-.app-shell--density-compact .settings-section-card,
-.app-shell--density-compact .redeemer-panel {
+.app-shell--density-compact .main-content .stat-card {
+  min-height: 0;
   padding: 10px;
 }
 
-.app-shell--density-compact .table th,
-.app-shell--density-compact .table td {
+.app-shell--density-compact .main-content .stat-card-value {
+  margin: 3px 0;
+  font-size: 1.48rem;
+}
+
+.app-shell--density-compact .main-content .section-header {
+  margin-bottom: 8px;
+}
+
+.app-shell--density-compact .main-content .card:not([style*="padding: 0"]) {
+  padding: 12px !important;
+}
+
+.app-shell--density-compact .main-content .form-group {
+  margin-bottom: 10px;
+}
+
+.app-shell--density-compact .main-content .form-input {
   padding: 8px 10px;
 }
 
-.app-shell--density-compact .code-textarea-neo {
+.app-shell--density-compact .main-content .two-col-layout,
+.app-shell--density-compact .main-content .settings-grid,
+.app-shell--density-compact .main-content .generator-grid,
+.app-shell--density-compact .main-content .generator-form-grid,
+.app-shell--density-compact .main-content .redeemer-grid {
+  gap: 10px;
+}
+
+.app-shell--density-compact .main-content .dashboard-command-layout {
+  gap: 12px;
+}
+
+.app-shell--density-compact .main-content .dashboard-command-rail {
+  gap: 10px;
+}
+
+.app-shell--density-compact .main-content .dashboard-command-panel {
+  padding: 10px;
+}
+
+.app-shell--density-compact .main-content .activity-panel {
+  min-height: 0;
+}
+
+.app-shell--density-compact .main-content .activity-list {
+  gap: 7px;
+}
+
+.app-shell--density-compact .main-content .settings-card,
+.app-shell--density-compact .main-content .settings-section-card,
+.app-shell--density-compact .main-content .redeemer-panel {
+  padding: 10px;
+}
+
+.app-shell--density-compact .main-content .settings-section-card {
+  margin-top: 10px;
+}
+
+.app-shell--density-compact .main-content .table th,
+.app-shell--density-compact .main-content .table td {
+  padding: 8px 10px;
+}
+
+.app-shell--density-compact .main-content .generator-card {
+  padding: 12px !important;
+}
+
+.app-shell--density-compact .main-content .generator-steps {
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.app-shell--density-compact .main-content .generator-otp-row {
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.app-shell--density-compact .main-content .generator-otp-row .otp-input,
+.app-shell--density-compact .main-content .generator-otp-submit {
+  min-height: 42px;
+}
+
+.app-shell--density-compact .main-content .code-textarea-neo {
   min-height: 104px !important;
   padding: 10px;
   font-size: 0.84rem;
@@ -4309,6 +4696,7 @@ select:-webkit-autofill {
   .generator-grid,
   .generator-form-grid,
   .generator-steps,
+  .generator-otp-row,
   .redeemer-grid {
     grid-template-columns: 1fr;
   }

@@ -24,6 +24,7 @@ const {
   _resetPrefsCache,
   getAllPrefs,
   getPref,
+  initializeBiometricDefault,
   isPrefExplicitlySet,
   setPref,
 } = await import('../../electron/app/userPrefs.js');
@@ -49,15 +50,54 @@ test('user preferences persist across cache reset and keep owner-only permission
   }
 });
 
-test('default-equal preferences are removed from disk but still read from defaults', async () => {
+test('Touch ID defaults on once for supported Macs and preserves a later explicit opt-out', async () => {
   _resetPrefsCache();
 
-  await setPref('biometricEnabled', true);
+  const initialized = await initializeBiometricDefault(true);
+  assert.deepEqual(initialized, {
+    changed: true,
+    enabled: true,
+    source: 'capability-default',
+  });
+  assert.equal(await getPref('biometricEnabled'), true);
+  assert.equal(await getPref('biometricDefaultInitialized'), true);
+
   await setPref('biometricEnabled', false);
   _resetPrefsCache();
 
   assert.equal(await getPref('biometricEnabled'), false);
   assert.equal(await isPrefExplicitlySet('biometricEnabled'), false);
+  assert.equal(await getPref('biometricDefaultInitialized'), true);
+  assert.equal(await isPrefExplicitlySet('biometricDefaultInitialized'), true);
+
+  const afterOptOut = await initializeBiometricDefault(true);
+  assert.deepEqual(afterOptOut, {
+    changed: false,
+    enabled: false,
+    source: 'initialized',
+  });
+  assert.equal(await getPref('biometricEnabled'), false);
+});
+
+test('unsupported devices initialize Touch ID off without retrying the default later', async () => {
+  await fsp.rm(path.join(userDataDir, 'preferences.json'), { force: true });
+  _resetPrefsCache();
+
+  const initialized = await initializeBiometricDefault(false);
+  assert.deepEqual(initialized, {
+    changed: true,
+    enabled: false,
+    source: 'capability-default',
+  });
+  assert.equal(await getPref('biometricEnabled'), false);
+  assert.equal(await getPref('biometricDefaultInitialized'), true);
+
+  const retried = await initializeBiometricDefault(true);
+  assert.deepEqual(retried, {
+    changed: false,
+    enabled: false,
+    source: 'initialized',
+  });
 });
 
 test('unknown preferences are rejected instead of silently persisting typos', async () => {

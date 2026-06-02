@@ -5,8 +5,9 @@ import AccountCard from '../components/AccountCard';
 import AddAccountModal from '../components/AddAccountModal';
 import AnimeText from '../components/AnimeText';
 import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, getBalanceStatus } from '../utils/format';
 import { getCardHealth } from '../utils/cardHealth';
+import { timeAgo } from '../utils/time';
 import { PlusIcon } from '../components/Icons';
 import { useProximityField } from '../hooks/useProximityField.js';
 
@@ -207,33 +208,55 @@ export default function Dashboard({ onSelectAccount, addToast }) {
               </div>
             </div>
           ) : (
-            viewMode === 'map' ? (
-              <AccountTopologyMap
-                accounts={accounts}
-                liveStatuses={liveStatuses}
-                onSelectAccount={onSelectAccount}
-                onResumeAuth={handleResumeBulkAuth}
-                proximity={accountProximity}
-              />
-            ) : (
-              <div className={`accounts-grid dashboard-mini-grid proximity-field${viewMode === 'list' ? ' dashboard-mini-grid--list' : ''}`} {...accountProximity}>
-                {accounts.map((account, index) => (
-                  <AccountCard
-                    key={account.id}
-                    account={account}
-                    index={index}
-                    onSelect={onSelectAccount}
-                    onProvision={handleProvision}
-                    provisioningIds={provisioningIds}
-                    liveStatuses={liveStatuses}
-                    actionSessionTruth={actionSessionTruth}
-                    cooldownMap={cooldownMap}
-                    onResumeAuth={handleResumeBulkAuth}
-                    compact
-                  />
-                ))}
-              </div>
-            )
+            <div className={`dashboard-account-viewport dashboard-account-viewport--${viewMode}`}>
+              {viewMode === 'map' ? (
+                <AccountTopologyMap
+                  accounts={accounts}
+                  liveStatuses={liveStatuses}
+                  onSelectAccount={onSelectAccount}
+                  onResumeAuth={handleResumeBulkAuth}
+                  proximity={accountProximity}
+                />
+              ) : viewMode === 'list' ? (
+                <div className="dashboard-account-list proximity-field" {...accountProximity}>
+                  <div className="dashboard-account-list__header" aria-hidden="true">
+                    <span>Account</span>
+                    <span>Balance</span>
+                    <span>Control</span>
+                    <span>API</span>
+                    <span>Session</span>
+                    <span>Used</span>
+                  </div>
+                  {accounts.map((account) => (
+                    <DashboardAccountListRow
+                      key={account.id}
+                      account={account}
+                      liveStatuses={liveStatuses}
+                      onSelectAccount={onSelectAccount}
+                      onResumeAuth={handleResumeBulkAuth}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="accounts-grid dashboard-mini-grid proximity-field" {...accountProximity}>
+                  {accounts.map((account, index) => (
+                    <AccountCard
+                      key={account.id}
+                      account={account}
+                      index={index}
+                      onSelect={onSelectAccount}
+                      onProvision={handleProvision}
+                      provisioningIds={provisioningIds}
+                      liveStatuses={liveStatuses}
+                      actionSessionTruth={actionSessionTruth}
+                      cooldownMap={cooldownMap}
+                      onResumeAuth={handleResumeBulkAuth}
+                      compact
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </section>
       </div>
@@ -253,6 +276,49 @@ export default function Dashboard({ onSelectAccount, addToast }) {
       )}
 
     </>
+  );
+}
+
+function DashboardAccountListRow({ account, liveStatuses, onSelectAccount, onResumeAuth }) {
+  const sessionStatus = liveStatuses[account.id] ?? account.sessionStatus ?? 'none';
+  const pendingVerification = !!account.pendingVerification;
+  const hasErrorState = account.status === 'error' || account.sessionDecryptFailed;
+  const health = pendingVerification
+    ? 'partial'
+    : getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
+  const balanceStatus = getBalanceStatus(account.credits);
+  const sessionLabel = pendingVerification
+    ? 'OTP pending'
+    : sessionStatus === 'active' || sessionStatus === 'expiring'
+      ? account.lastLoginAt ? `live · ${timeAgo(account.lastLoginAt)}` : 'live'
+      : sessionStatus === 'expired' ? 'expired' : 'offline';
+
+  return (
+    <button
+      type="button"
+      data-proximity-target
+      className={`dashboard-account-list__row dashboard-account-list__row--${health}`}
+      title={pendingVerification ? `${account.alias}: resume OTP sign-in` : `${account.alias}: open account`}
+      onClick={() => pendingVerification ? onResumeAuth() : onSelectAccount(account.id)}
+    >
+      <span className="dashboard-account-list__identity">
+        <span className={`dashboard-account-list__dot dashboard-account-list__dot--${health}`} />
+        <span>
+          <strong>{account.alias}</strong>
+          <em>{account.email || 'No email saved'}</em>
+        </span>
+      </span>
+      <strong className={`dashboard-account-list__balance dashboard-account-list__balance--${balanceStatus}`}>
+        {account.status === 'error' || pendingVerification ? '—' : formatCurrency(account.credits?.remaining)}
+      </strong>
+      <span className={account.hasManagementKey ? 'dashboard-account-list__ready' : 'dashboard-account-list__missing'}>
+        {account.hasManagementKey ? 'READY' : 'MISSING'}
+      </span>
+      <strong>{account.keys?.active || 0}</strong>
+      <span className="dashboard-account-list__session">{sessionLabel}</span>
+      <span className="dashboard-account-list__used">{formatCurrency(account.credits?.used)}</span>
+      <span className="dashboard-account-list__arrow" aria-hidden="true">›</span>
+    </button>
   );
 }
 

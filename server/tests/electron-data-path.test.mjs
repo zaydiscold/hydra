@@ -75,12 +75,14 @@ test('Electron exposes 24-hour renderer auth-token persistence', () => {
   assert.match(ipcSrc, /native:auth-token:get/);
   assert.match(ipcSrc, /native:auth-token:status/);
   assert.match(ipcSrc, /native:auth-token:set/);
+  assert.match(ipcSrc, /native:auth-token:lock/);
   assert.match(ipcSrc, /native:auth-token:clear/);
   assert.match(ipcSrc, /native:open-app-location/);
   assert.match(ipcSrc, /redactedPathInfo\(['"]Hydra data folder['"]\)/);
   assert.match(ipcSrc, /redactedPathInfo\(['"]Hydra logs folder['"]\)/);
   assert.match(preloadSrc, /getAuthToken:\s*\(\)\s*=>\s*ipcRenderer\.invoke\(['"]native:auth-token:get['"]\)/);
   assert.match(preloadSrc, /authTokenStatus:\s*\(\)\s*=>\s*ipcRenderer\.invoke\(['"]native:auth-token:status['"]\)/);
+  assert.match(preloadSrc, /lockAuthToken:\s*\(\)\s*=>\s*ipcRenderer\.invoke\(['"]native:auth-token:lock['"]\)/);
   assert.match(preloadSrc, /openAppLocation:\s*\(location\)\s*=>\s*ipcRenderer\.invoke\(['"]native:open-app-location['"],\s*location\)/);
   assert.match(nativeSrc, /authTokenStatus:\s*\(\)\s*=>\s*invokeNative\(['"]authTokenStatus['"]\)/);
   assert.match(nativeSrc, /openAppLocation:\s*\(location\)\s*=>\s*invokeNative\(['"]openAppLocation['"],\s*location\)/);
@@ -90,6 +92,7 @@ test('Electron exposes 24-hour renderer auth-token persistence', () => {
   assert.match(apiSrc, /hydrateToken\(\)/);
   assert.match(apiSrc, /await\s+nativeAuthToken\(['"]setAuthToken['"],\s*token\)/);
   assert.match(apiSrc, /await\s+clearToken\(\)/);
+  assert.match(apiSrc, /await\s+nativeAuthToken\(['"]lockAuthToken['"]\)/);
   assert.match(apiSrc, /const nativeToken\s*=\s*await\s+nativeAuthToken\(['"]getAuthToken['"]\)/);
   assert.doesNotMatch(apiSrc, /window\??\.hydraNative|globalThis\.window\??\.hydraNative/);
   assert.match(authMiddlewareSrc, /AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS\s*=\s*24\s*\*\s*60\s*\*\s*60/);

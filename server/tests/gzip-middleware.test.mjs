@@ -80,6 +80,7 @@ const mockConfig = {
   CLERK_ORIGIN: 'https://openrouter.ai',
   CLERK_REFERER: 'https://openrouter.ai/sign-in',
   HYDRA_PLAYWRIGHT_HEADED: false,
+  HYDRA_GENERATOR_HEADLESS: false,
   HYDRA_PLAYWRIGHT_CHANNEL: undefined,
   HYDRA_PLAYWRIGHT_EXECUTABLE_PATH: undefined,
   HYDRA_PLAYWRIGHT_CDP_ENDPOINT: undefined,

@@ -43,10 +43,13 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /if \(lifecycleClosedRef\.current\) \{[\s\S]*cleanupLateStartedTask\(startedTaskId\)/);
   assert.match(source, /activeTaskRef\.current = startedTaskId/);
   assert.match(source, /api\.cleanupGeneratorJob\(lateTaskId, 'client_disconnect', \{ keepalive: true \}\)/);
-  assert.match(source, /if \(!otp \|\| !taskId \|\| verifyInFlightRef\.current\) return/);
+  assert.match(source, /if \(otp\.length !== 6 \|\| !taskId \|\| verifyInFlightRef\.current\) return/);
   assert.match(source, /if \(lifecycleClosedRef\.current \|\| activeTaskRef\.current !== renderedTaskId\) return/);
   assert.match(source, /disabled=\{!emailTemplate \|\| starting\}/);
-  assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying\}/);
+  assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying \|\| status !== 'awaiting_otp'\}/);
+  assert.match(source, /inputMode="numeric"/);
+  assert.match(source, /generatorModeLabel\(jobMode\)/);
+  assert.doesNotMatch(source, /Playwright paused/);
 });
 
 test('request-log retention shutdown wait failures are logged', () => {
@@ -689,6 +692,11 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /Using account proxy \$\{describeAutomationNetworkRoute\(automationRoute\)\} for task \$\{task\.taskId\}/);
   assert.match(source, /automationRoute: automationRoute\.label/);
   assert.match(source, /proxy: playwrightProxyForAutomation\(automationRoute\)/);
+  assert.match(source, /headless: config\.HYDRA_GENERATOR_HEADLESS/);
+  assert.match(source, /manual_verification/);
+  assert.match(source, /waitForOtpChallenge\(task, page\)/);
+  assert.match(source, /clickVisibleOtpSubmitControl\(page, task\.taskId\)/);
+  assert.match(source, /Submitted OTP challenge for \$\{taskId\} with visible button/);
 });
 
 test('OpenRouter model-list cache requests are timeout bounded', () => {

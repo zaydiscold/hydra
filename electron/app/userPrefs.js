@@ -35,6 +35,7 @@ const FILENAME = 'preferences.json';
 const DEFAULTS = Object.freeze({
   telemetryEnabled: false,         // #9 — opt-in Sentry crash reporting
   biometricEnabled: false,         // #11 — Touch ID / Windows Hello unlock
+  biometricDefaultInitialized: false, // one-time supported-device default applied
   theme: 'auto',                   // 'auto' | 'light' | 'dark'
   proxyTrayBadge: true,            // show "RUNNING" indicator on tray menu
 });
@@ -88,12 +89,8 @@ export async function getPref(key) {
 /**
  * Write a single preference. Validates the key is known.
  */
-export async function setPref(key, value) {
-  if (!Object.prototype.hasOwnProperty.call(DEFAULTS, key)) {
-    throw new Error(`Unknown preference key: ${key}`);
-  }
+async function persistPrefs(next) {
   await ensureUserDataDir();
-  const next = { ...(cache || await getAllPrefs()), [key]: value };
   // remove default-equal entries so the file stays small
   for (const k of Object.keys(next)) {
     if (next[k] === DEFAULTS[k]) delete next[k];
@@ -117,6 +114,18 @@ export async function setPref(key, value) {
   }
 }
 
+export async function setPref(key, value) {
+  if (!Object.prototype.hasOwnProperty.call(DEFAULTS, key)) {
+    throw new Error(`Unknown preference key: ${key}`);
+  }
+  const next = { ...(cache || await getAllPrefs()), [key]: value };
+  // Keep an explicit opt-out durable even though default-equal values are
+  // removed from disk. Without this marker, the supported-device initializer
+  // would turn Touch ID back on after a user deliberately disabled it.
+  if (key === 'biometricEnabled') next.biometricDefaultInitialized = true;
+  await persistPrefs(next);
+}
+
 /** Reset the in-memory cache (test helper). */
 export function _resetPrefsCache() { cache = null; }
 
@@ -133,6 +142,34 @@ export async function isPrefExplicitlySet(key) {
   // Cold path: hydrate then check
   await getAllPrefs();
   return Object.prototype.hasOwnProperty.call(cache || {}, key);
+}
+
+/**
+ * Apply the desktop biometric default once.
+ *
+ * Touch ID-capable Macs default on, unsupported devices stay off, and an
+ * existing explicit preference always wins. The initialization marker makes
+ * an explicit opt-out sticky without forcing unavailable biometric prompts on
+ * Windows or Linux.
+ */
+export async function initializeBiometricDefault(canPrompt) {
+  const current = await getAllPrefs();
+  if (current.biometricDefaultInitialized) {
+    return { changed: false, enabled: Boolean(current.biometricEnabled), source: 'initialized' };
+  }
+
+  const hasExplicitChoice = await isPrefExplicitlySet('biometricEnabled');
+  const enabled = hasExplicitChoice ? Boolean(current.biometricEnabled) : Boolean(canPrompt);
+  await persistPrefs({
+    ...current,
+    biometricDefaultInitialized: true,
+    biometricEnabled: enabled,
+  });
+  return {
+    changed: true,
+    enabled,
+    source: hasExplicitChoice ? 'existing-choice' : 'capability-default',
+  };
 }
 
 export const PREF_DEFAULTS = DEFAULTS;

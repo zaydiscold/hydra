@@ -23,6 +23,7 @@ import {
   GeneratorIcon,
   SettingsIcon,
   LockIcon,
+  ShieldIcon,
   PowerIcon,
   NetworkIcon,
   ActivityIcon,
@@ -124,6 +125,8 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
   const [error, setError] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [touchIdAvailable, setTouchIdAvailable] = useState(false);
+  const [touchIdLoading, setTouchIdLoading] = useState(false);
   const [setupAccount, setSetupAccount] = useState(null);
 
   // ── Nuclear Reset Logic ──
@@ -190,6 +193,23 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
     }
   }, [isSetup]);
 
+  useEffect(() => {
+    let mounted = true;
+    if (isSetup || !isElectron()) {
+      setTouchIdAvailable(false);
+      return () => { mounted = false; };
+    }
+    nativeBridge.biometricDescribe()
+      .then((info) => {
+        if (mounted) setTouchIdAvailable(Boolean(info?.available));
+      })
+      .catch((err) => {
+        logger.warn('Touch ID status check failed on unlock screen:', err.message);
+        if (mounted) setTouchIdAvailable(false);
+      });
+    return () => { mounted = false; };
+  }, [isSetup]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -230,6 +250,29 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
       setError(err.message);
     }
     setLoading(false);
+  }
+
+  async function handleTouchIdUnlock() {
+    setError('');
+    setTouchIdLoading(true);
+    try {
+      const token = await api.hydrateToken();
+      if (!token) {
+        throw new Error('Touch ID unlock needs a saved device session. Unlock once with your password to refresh it.');
+      }
+      const res = await api.getAuthStatus();
+      const payload = res?.data ?? res ?? {};
+      if (!payload.authenticated) {
+        await api.clearToken();
+        throw new Error('The saved device session expired. Unlock once with your password to refresh it.');
+      }
+      onSuccess();
+    } catch (err) {
+      logger.warn('Touch ID unlock failed:', err.message);
+      setError(err.message);
+    } finally {
+      setTouchIdLoading(false);
+    }
   }
 
   async function handleManagementKeySubmit(e) {
@@ -357,10 +400,6 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
 
   return (
     <div className="lock-screen">
-      <div className="lock-bg-orbs">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-      </div>
       <div className="lock-card animate-spring" style={{ maxWidth: '600px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-xs)' }}>
           <div className="lock-card-icon" style={{ margin: 0 }}>HYDRA</div>
@@ -382,6 +421,12 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
             ? 'Create a local password to protect your account data. This only lives on your machine.'
             : 'Enter your password to access your OpenRouter accounts.'}
         </p>
+        {!isSetup && (
+          <div className="desktop-unlock-note" role="note">
+            <span className="desktop-unlock-note__tag">DESKTOP UNLOCK</span>
+            <span>Touch ID checks your saved 24-hour unlock first when available. Password stays ready as the secure fallback.</span>
+          </div>
+        )}
         {renderSetupStepper()}
 
         {isSetup && setupStage === 'key' ? renderSetupKeyStage() : isSetup && setupStage === 'tour' ? renderSetupTourStage() : (
@@ -443,6 +488,22 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
               : isSetup ? 'Create Password' : 'Unlock'
             }
           </button>
+          {!isSetup && touchIdAvailable && (
+            <>
+              <div className="desktop-unlock-divider"><span>or</span></div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-full desktop-touch-id-btn"
+                disabled={loading || touchIdLoading}
+                onClick={handleTouchIdUnlock}
+              >
+                {touchIdLoading
+                  ? <><div className="spinner-sm" /> Checking Touch ID...</>
+                  : <><ShieldIcon size={15} /> Unlock with Touch ID</>
+                }
+              </button>
+            </>
+          )}
         </form>
         )}
 
@@ -818,7 +879,12 @@ export default function App() {
       logger.warn('Logout request failed before local lock:', err.message);
       addToast('Server logout failed; local session was cleared.', 'warning');
     }
-    await api.clearToken();
+    try {
+      await api.lockToken();
+    } catch (err) {
+      logger.warn('Device unlock retention failed during local lock:', err.message);
+      addToast('Vault locked, but the saved Touch ID unlock could not be retained.', 'warning');
+    }
     setManualAuthState('login');
     navigate('/dashboard');
   }, [addToast, navigate, setManualAuthState]);
@@ -962,7 +1028,9 @@ export default function App() {
           <div className="meteor" />
         </div>
         <div className="planet planet-1">
-          <span className="planet-moon-orbit" aria-hidden="true"><span className="planet-moon" /></span>
+          <span className="planet-moon-orbit planet-moon-orbit--primary" aria-hidden="true"><span className="planet-moon planet-moon--primary" /></span>
+          <span className="planet-moon-orbit planet-moon-orbit--inner" aria-hidden="true"><span className="planet-moon planet-moon--ember" /></span>
+          <span className="planet-moon-orbit planet-moon-orbit--outer" aria-hidden="true"><span className="planet-moon planet-moon--ice" /></span>
         </div>
         <div className="planet planet-2" />
 

@@ -8,10 +8,12 @@ surface.
 
 The packaged splash uses Matter.js bodies and one owned canvas render loop.
 Words fall as bodies on an irregular recursive timeout cadence, shatter into
-individually simulated glyphs, then spend the final three seconds tightening
-into an accelerating center orbit. The welcome rectangle stays hidden during
-the shower and enters shortly after the portal starts, giving the transition a
-stable visual anchor without interrupting the letter rain.
+individually simulated glyphs, then spend the final `4.25s` tightening into an
+accelerating center orbit. The shower enters that portal phase at `11.75s`,
+leaving more time for the canvas-owned light wave without extending the full
+`16s` splash. The welcome rectangle stays hidden during the shower and enters
+shortly after the portal starts, giving the transition a stable visual anchor
+without interrupting the letter rain.
 
 The canvas adds a radial glow, rotating elliptical rings, orbiting motes, and
 glyph-level pulse depth during the portal phase. These layers share the
@@ -19,7 +21,7 @@ existing 30 fps canvas paint cap and deterministic Matter teardown. Three.js
 was deliberately not added: a second renderer and animation loop would cost
 more lifecycle complexity without improving this bounded 2D scene.
 
-Word scale is sampled once before body creation in the range `0.86..1.90`.
+Word scale is sampled once before body creation in the range `0.903..1.995`.
 Shattered glyphs inherit the resulting font size, preserving readable variety
 inside the bounded `72`-word physics budget. Shower spawn lanes and lateral
 velocities also vary so the rain does not resolve into an even metronomic
@@ -68,11 +70,12 @@ stem.
 
 ## Proximity Fields
 
-Dashboard account cards, command actions, empty-state actions, primary sidebar
-navigation, sidebar footer controls, and Settings action clusters use proximity
-response, not only binary hover. A reusable `useProximityField()` hook measures
-the cursor's Euclidean distance from each tagged target and writes restrained
-CSS variables for scale, lift, horizontal shift, and brightness.
+Dashboard account cards and list rows, command actions, empty-state actions,
+primary sidebar navigation, sidebar footer controls, and Settings action
+clusters use proximity response, not only binary hover. A reusable
+`useProximityField()` hook measures the cursor's Euclidean distance from each
+tagged target and writes restrained CSS variables for scale, lift, horizontal
+shift, and brightness.
 
 The implementation batches pointer work through one tracked animation frame
 per field, snapshots target geometry once per pointer pass, changes only
@@ -114,8 +117,9 @@ are grouped together instead of appearing as uneven inline controls.
   normalized Settings controls feel related without making form input
   placement unstable.
 - `src/index.css` consumes the hook's custom properties through compositor
-  transforms and filters. Account-card attraction is intentionally scoped to
-  `.dashboard-mini-grid .account-card[data-proximity-target]`; the directional
+  transforms and filters. Account attraction is intentionally scoped to
+  `.dashboard-mini-grid .account-card[data-proximity-target]` and
+  `.dashboard-account-list__row[data-proximity-target]`; the directional
   channel must not leak into precision controls or cause grid reflow.
 
 The visual rule is proximity before hover: neighboring controls should begin
@@ -123,6 +127,22 @@ responding as the pointer approaches, then let the existing hover border and
 pink highlight provide the final active-state emphasis. The engineering rule
 is stable geometry: never animate layout dimensions, grid tracks, or form
 control placement for this effect.
+
+## Command Viewport And Content Density
+
+Command keeps its account fleet inside one bounded viewport. Grid and List use
+`max-height: clamp(320px, calc(100vh - 230px), 720px)` with internal scrolling,
+so the page header and command rail remain stable as the vault grows. Map stays
+contained in the same work area. List is a true aligned operator table with
+account, balance, control, API, session, and usage columns; it is not a
+one-column stack of grid cards.
+
+Compact density is scoped under `.app-shell--density-compact .main-content`.
+It tightens route padding, headers, metric cards, forms, tables, command
+panels, Settings sections, generator steps, and redeemer controls. It
+deliberately does not target `.sidebar`: the navigation rail retains its
+stable dimensions, readable collapsed-icon tooltips, and pronounced proximity
+response in both density modes.
 
 ## Anime.js Text Treatments
 
@@ -144,6 +164,14 @@ hierarchy. Keep persistent motion in CSS only when it communicates a genuinely
 transient state, and cap its iterations. Do not attach Anime.js to the splash:
 the splash already has one finite Matter.js/canvas owner and should not gain a
 second timing system.
+
+The splash uses that same constraint for its portal light wave. Falling glyphs
+are approximately `5%` larger and the randomized shower cadence is slightly
+tighter so the pile forms during the first `11.75s`; portal entry then owns the
+remaining `4.25s` of the unchanged `16s` splash. The existing canvas paint loop
+computes one traveling sinusoidal highlight across independent glyph bodies
+after collisions are disabled. No Anime.js instance, extra RAF, interval, or
+additional physics body is introduced for the wave.
 
 ## Graphics Maintenance Checklist
 

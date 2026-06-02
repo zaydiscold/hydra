@@ -45,6 +45,21 @@ prisma/dev.db
 capture-*.json
 capture-*.png
 .playwright-mcp/
+coverage/
+.nyc_output/
+.cache/
+.vite/
+.eslintcache
+*.lcov
+*.cpuprofile
+*.heapsnapshot
+*.trace
+*.profraw
+*.profdata
+*.crash
+*.dmp
+*.pid
+*.pid.lock
 *.tmp
 *.tmp-*
 *.corrupt-*
@@ -64,7 +79,8 @@ scratch/
 # Local agent/docs context
 /AGENTS.md
 /CLAUDE.md
-/docs/
+/.claude/
+/.cursor/
 
 # Cursor hook runtime state (local; changes every session)
 .cursor/hooks/state/
