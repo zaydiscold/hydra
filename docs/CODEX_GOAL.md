@@ -1566,7 +1566,20 @@ closed-app CLI commands, tests, and repo-local documentation.
   geometry reads from `1080 -> 9` across 120 pointer frames (`-1071`,
   `99.167%`). UI static contracts passed `46/46`, lint passed, build passed,
   diff hygiene passed, and audit remains
-  `31 ok / 5 deferred / 0 missing / 0 blockers`. The durable note is
+  `31 ok / 5 deferred / 0 missing / 0 blockers`. The rebuilt ARM package
+  passed smoke, strict deep codesign, and compiled-renderer hash equality;
+  its local archive SHA-256 before reversible metadata cleanup was
+  `3e1022b3437179e43f7d630ec502ffde3b550d474103d729ee848137fc611a8e`.
+  LaunchServices evidence under
+  `/private/tmp/hydra-v147-proximity-geometry-cache-launch-20260602T001517Z`
+  records one canonical Spotlight bundle, four owned processes, zero stale
+  profiles, finite splash teardown, and launch CPU decay from `97.8%` to
+  `186.1%` to `4.2%` at near-launch, `+15s`, and `+30s`. The untouched
+  five-minute idle profile under
+  `/private/tmp/hydra-v147-proximity-geometry-cache-idle-profile-20260602T001609Z`
+  retained four owned processes and zero profiles across all `11` samples;
+  CPU ranged `0.0-0.3%` (`0.045%` average, ending `0.0%`) while RSS fell
+  `30,294,016` bytes. The durable note is
   `docs/recon/PROXIMITY_FIELD_GEOMETRY_CACHE.md`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16

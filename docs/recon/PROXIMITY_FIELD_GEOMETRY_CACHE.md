@@ -87,3 +87,37 @@ git diff --check
 The UI static suite locks geometry caching, lazy observer attachment, observer
 disconnect cleanup, bounded attraction, reduced-motion bypass, and the
 existing Dashboard, sidebar, and Settings integration.
+
+## Packaged Runtime Evidence
+
+The rebuilt ARM package passed smoke and strict deep codesign. The compiled
+renderer hash matched between the source build output and the packaged app:
+
+```text
+521b1ef1ac60a769c26601576bd48d59523c63c63bf27db75e43b87ef1578a70  dist/assets/index-Bk2lzuYV.js
+521b1ef1ac60a769c26601576bd48d59523c63c63bf27db75e43b87ef1578a70  release/mac-arm64/Hydra.app/Contents/Resources/app/dist/assets/index-Bk2lzuYV.js
+```
+
+The local archive SHA-256 before reversible metadata cleanup was:
+
+```text
+3e1022b3437179e43f7d630ec502ffde3b550d474103d729ee848137fc611a8e
+```
+
+Native LaunchServices evidence:
+
+```text
+/private/tmp/hydra-v147-proximity-geometry-cache-launch-20260602T001517Z
+near-launch  4  97.8   410517504  0
+plus-15s     4  186.1  752254976  0
+plus-30s     4  4.2    647184384  0
+```
+
+The app remained the sole Spotlight `Hydra.app`, splash diagnostics reported
+finite teardown with cleared Matter state, and the untouched five-minute idle
+profile closed cleanly:
+
+```text
+/private/tmp/hydra-v147-proximity-geometry-cache-idle-profile-20260602T001609Z
+samples=11 owned=4 profiles=0 cpu_min=0.000 cpu_max=0.300 cpu_avg=0.045 cpu_end=0.000 rss_start=648085504 rss_end=617791488 rss_delta=-30294016
+```

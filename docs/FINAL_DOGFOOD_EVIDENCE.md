@@ -1874,7 +1874,20 @@ This evidence file is not release-complete by itself. The release remains not co
   geometry reads from `1080 -> 9` across 120 pointer frames (`-1071`,
   `99.167%`). UI static contracts passed `46/46`, lint passed, build passed,
   diff hygiene passed, and audit remains
-  `31 ok / 5 deferred / 0 missing / 0 blockers`. The durable note is
+  `31 ok / 5 deferred / 0 missing / 0 blockers`. The rebuilt ARM package
+  passed smoke, strict deep codesign, and compiled-renderer hash equality;
+  its local archive SHA-256 before reversible metadata cleanup was
+  `3e1022b3437179e43f7d630ec502ffde3b550d474103d729ee848137fc611a8e`.
+  LaunchServices evidence under
+  `/private/tmp/hydra-v147-proximity-geometry-cache-launch-20260602T001517Z`
+  records one canonical Spotlight bundle, four owned processes, zero stale
+  profiles, finite splash teardown, and launch CPU decay from `97.8%` to
+  `186.1%` to `4.2%` at near-launch, `+15s`, and `+30s`. The untouched
+  five-minute idle profile under
+  `/private/tmp/hydra-v147-proximity-geometry-cache-idle-profile-20260602T001609Z`
+  retained four owned processes and zero profiles across all `11` samples;
+  CPU ranged `0.0-0.3%` (`0.045%` average, ending `0.0%`) while RSS fell
+  `30,294,016` bytes. The durable note is
   `docs/recon/PROXIMITY_FIELD_GEOMETRY_CACHE.md`.
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under
