@@ -169,6 +169,13 @@ Commands that require live OpenRouter/Clerk sessions should clearly report prefl
 
 `hydra keys provision <id> --dry-run --json` is test-covered against isolated password, OTP, and already-keyed accounts. It reports `password_reauth` as ready, OTP without session material as blocked, and already-keyed accounts as `already_has_management_key`. The confirmed `--yes` path is live and intentionally confirmation-gated; it stores created key material but does not print the full key.
 
+Management-key bootstrap is requests-first but intentionally not requests-only.
+Hydra sends one confirmed Clerk-session HTTPS Server Action write. If
+OpenRouter rotates that private dashboard action, Hydra runs one isolated UI
+learner fallback, stores the replacement `Next-Action` header, and uses direct
+HTTPS replay afterward. Hydra does not probe candidate write actions or spray
+undocumented POST routes because management-key creation is not idempotent.
+
 `hydra keys rotate <id> --dry-run --json` is test-covered against isolated password and already-keyed accounts. It rejects missing confirmation with `CONFIRMATION_REQUIRED`, reports keyed password accounts as ready via `password_reauth`, and reports accounts without a current management key as `missing_management_key`. The confirmed `--yes` path is live and intentionally confirmation-gated; after a replacement key is captured and stored, Hydra marks the previous local management-key row revoked. This does not claim upstream revocation of the old OpenRouter management key.
 
 `hydra session 529c3bc9 --json` was run against the same local data directory and returned an active stored session, 25 stacked client cookies, and a 2026-05-22 session expiry. The command intentionally reports booleans/counts for session and client-cookie state, not token values.

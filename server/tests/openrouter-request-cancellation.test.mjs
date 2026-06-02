@@ -151,7 +151,7 @@ test('account, code, session, and provisioning paths preserve request ownership'
 
   assert.match(dashboardApi, /getFreshJwt\(sessionCookie, clientCookie, \{ signal = null \} = \{\}\)/);
   assert.match(dashboardApi, /discoverServerActionHashes\(pageUrl, accountProxy = null, signal = null\)/);
-  assert.match(dashboardApi, /selfHealHash\(kind, testUrl, baseHeaders, body, accountProxy = null, signal = null\)/);
+  assert.match(dashboardApi, /selfHealRedeemHash\(testUrl, baseHeaders, body, accountProxy = null, signal = null\)/);
   assert.match(dashboardApi, /createManagementKey\(userId, accountId, keyName = 'Hydra Auto Key', \{ signal = null \} = \{\}\)/);
   assert.match(dashboardApi, /Provision abort context close failed/);
   assert.match(dashboardApi, /Redeem abort browser close failed/);

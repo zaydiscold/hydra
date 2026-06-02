@@ -41,7 +41,6 @@ import {
 import {
   truncateForLog,
   extractManagementKeyFromResponseBody,
-  normalizeDiscoveredCreateRoute,
   decodeJwtPayloadUnsafe,
   redactSensitiveForProvisionLog,
   MGMT_KEY_RE
@@ -113,7 +112,7 @@ async function waitWithClearedTimeout(promise, timeoutMs) {
  * This ID is baked into the Next.js build and will need updating if OpenRouter
  * redeploys with a new build hash.
  */
-/** Mutable so self-healing can update at runtime */
+/** Mutable so persisted or UI-learned dashboard discovery can update at runtime. */
 let CREATE_MGMT_KEY_ACTION_HASH = config.HYDRA_MGMT_KEY_SERVER_ACTION_ID || '40a4728e6d23484cde9c2e629e0c0cc195dfbbd66b';
 
 /**
@@ -126,14 +125,14 @@ let REDEEM_ACTION_HASH = config.HYDRA_REDEEM_ACTION_HASH || '402002bec2b81db8098
 // ─── Self-healing hash auto-discovery ──────────────────────────────────────
 // When a Server Action returns 404, the baked-in hash is stale (OpenRouter
 // redeployed).  We fetch the relevant OR page HTML, locate <script> tags,
-// grep for 40-char hex strings near known keywords (redeem, management-keys),
+// grep for 40-char hex strings near redeem keywords,
 // and try each candidate against the endpoint.  On success the module-level
 // hash variable is updated so subsequent calls work without a restart.
 
 const HEX40_RE = /[0-9a-f]{40}/g;
 
 /** Known keywords that appear near Server Action hashes in OR's JS bundles. */
-const SA_KEYWORDS = ['redeem', 'management-keys', 'managementKey', 'createManagementKey', 'redeemCode'];
+const SA_KEYWORDS = ['redeem', 'redeemCode'];
 
 /**
  * Fetch a page from OpenRouter, extract all <script src="…"> URLs,
@@ -203,19 +202,18 @@ async function discoverServerActionHashes(pageUrl, accountProxy = null, signal =
 }
 
 /**
- * Try to self-heal a stale Server Action hash by auto-discovering new candidates.
- * @param {'redeem'|'mgmt-key'} kind - Which hash to repair
+ * Try to self-heal the redeem Server Action hash by auto-discovering new candidates.
+ * Management-key creation intentionally does not use this helper: candidate
+ * probes are writes and could mint orphan keys.
  * @param {string} testUrl - The OR endpoint URL to probe with each candidate
  * @param {object} baseHeaders - Headers template (will add Next-Action for each candidate)
  * @param {string} body - Request body
  * @returns {string|null} The new hash if found, or null
  */
-async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = null, signal = null) {
-  const pageUrl = kind === 'redeem'
-    ? `${OR_BASE}/redeem`
-    : `${OR_BASE}/settings/management-keys`;
+async function selfHealRedeemHash(testUrl, baseHeaders, body, accountProxy = null, signal = null) {
+  const pageUrl = `${OR_BASE}/redeem`;
 
-  dashboardWarn(`[dashboard-api] ⚡ Self-healing ${kind} hash — scanning ${pageUrl} JS bundles…`);
+  dashboardWarn(`[dashboard-api] ⚡ Self-healing redeem hash — scanning ${pageUrl} JS bundles…`);
   const candidates = await discoverServerActionHashes(pageUrl, accountProxy, signal);
 
   for (const candidate of candidates) {
@@ -231,21 +229,17 @@ async function selfHealHash(kind, testUrl, baseHeaders, body, accountProxy = nul
       // Non-404 means the hash was accepted (even if the action returns an
       // application-level error like "invalid code", it confirms the route).
       if (probeRes.status !== 404) {
-        dashboardWarn(`[dashboard-api] ✅ Self-healed ${kind} hash → ${candidate}`);
-        if (kind === 'redeem') {
-          REDEEM_ACTION_HASH = candidate;
-        } else {
-          CREATE_MGMT_KEY_ACTION_HASH = candidate;
-        }
+        dashboardWarn(`[dashboard-api] ✅ Self-healed redeem hash → ${candidate}`);
+        REDEEM_ACTION_HASH = candidate;
         return candidate;
       }
     } catch (err) {
       throwIfAborted(signal);
-      dashboardWarn(`[dashboard-api] Self-heal ${kind} hash probe failed for candidate ${candidate}: ${err?.message || err}`);
+      dashboardWarn(`[dashboard-api] Self-heal redeem hash probe failed for candidate ${candidate}: ${err?.message || err}`);
     }
   }
 
-  dashboardWarn(`[dashboard-api] ❌ Self-healing ${kind} hash failed — no valid candidate found among ${candidates.length} candidates`);
+  dashboardWarn(`[dashboard-api] ❌ Self-healing redeem hash failed — no valid candidate found among ${candidates.length} candidates`);
   return null;
 }
 
@@ -429,15 +423,6 @@ function sanitizeProvisionDetailsForClient(d) {
   return out;
 }
 
-function summarizeTrpcFailure(err) {
-  if (!err) return {};
-  return {
-    trpcLastError: err.message,
-    trpcLastCode: err.trpcCode,
-    trpcLastHttp: err.httpStatus,
-  };
-}
-
 /**
  * Next.js Server Action replay for management key creation.
  * Used when dashboard create hits Server Actions instead of `/api/trpc/*`.
@@ -477,132 +462,75 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
 
   const url = `${OR_BASE}/settings/management-keys`;
 
-  // Body format confirmed from live capture: [{"name":"<key-name>"}]
-  // Fallbacks included in case OpenRouter changes the argument shape.
-  const actionPayloads = [
-    JSON.stringify([{ name: keyName }]),           // Confirmed correct shape
-    JSON.stringify([{ label: keyName }]),          // Alternative field name
-    JSON.stringify([{ title: keyName }]),          // Alternative field name
-    JSON.stringify([{ json: { name: keyName } }]), // tRPC-like wrapper
-    JSON.stringify([]),                            // Empty body
-    JSON.stringify([keyName]),                     // Direct string arg
-  ];
-
-  // Build headers for Server Action request
-  const buildHeaders = (contentType = 'text/plain;charset=UTF-8') => ({
-    'Content-Type': contentType,
+  // Body format confirmed from live capture. This is deliberately a single
+  // write attempt: management-key creation is not idempotent.
+  const body = JSON.stringify([{ name: keyName }]);
+  const headers = {
+    'Content-Type': 'text/plain;charset=UTF-8',
     'Cookie': cookieHeader,
     'User-Agent': USER_AGENT,
     'Origin': OR_ORIGIN,
     'Referer': `${OR_ORIGIN}/settings/management-keys`,
     ...(NEXT_ACTION_ID ? { 'Next-Action': NEXT_ACTION_ID } : {}),
     'Accept': 'text/x-component',
-  });
+  };
 
-  // Try different content types and body formats
-  const attempts = [
-    { contentType: 'text/plain;charset=UTF-8', payloads: actionPayloads },
-    { contentType: 'application/json', payloads: actionPayloads },
-  ];
-
-  for (const attempt of attempts) {
-    const headers = buildHeaders(attempt.contentType);
-
-    for (const body of attempt.payloads) {
-      throwIfAborted(signal);
-      try {
-        if (provisionStepLogEnabled()) {
-          dashboardError(`[tryManagementKeyServerActionReplay] POST ${url} with content-type=${attempt.contentType}, body=${body.slice(0, 100)}`);
-        }
-
-        const res = await fetch(url, fetchOptionsWithAccountProxy({
-          method: 'POST',
-          headers,
-          body,
-          signal,
-        }, automationRoute));
-
-        const contentType = res.headers.get('content-type') || '';
-
-        // Log response status for debugging
-        if (provisionStepLogEnabled()) {
-          dashboardError(`[tryManagementKeyServerActionReplay] Response: ${res.status} ${res.statusText}, content-type=${contentType}`);
-        }
-
-        // Check for auth failures
-        if (res.status === 401 || res.status === 403) {
-          dashboardWarn(`[dashboard-api] Server Action replay: auth failed (${res.status})`);
-          continue;
-        }
-
-        // Server Actions often return 200 even on errors (error encoded in RSC payload)
-        // A 404 specifically means the Next-Action hash is stale — try self-healing once
-        if (res.status === 404) {
-          dashboardWarn('[dashboard-api] Mgmt-key Server Action returned 404 — hash may be stale, attempting self-heal…');
-          const newHash = await selfHealHash('mgmt-key', url, headers, body, automationRoute, signal);
-          if (newHash) {
-            // Retry with the discovered hash
-            const retryRes = await fetch(url, fetchOptionsWithAccountProxy({
-              method: 'POST',
-              headers: { ...headers, 'Next-Action': newHash },
-              body,
-              signal,
-            }, automationRoute));
-            if (retryRes.ok || retryRes.status === 200) {
-              const { text: retryText, error: retryReadErr } = await safeResponseText(retryRes, 50000);
-              if (!retryReadErr) {
-                const key = extractManagementKeyFromResponseBody(retryText);
-                if (key) {
-                  dashboardError('[dashboard-api] Self-healed mgmt-key Server Action — captured management key');
-                  return key;
-                }
-              }
-            }
-          }
-          dashboardWarn('[dashboard-api] Mgmt-key Server Action hash remains stale; skipping equivalent payload retries');
-          return null;
-        }
-        if (!res.ok && res.status !== 200) {
-          continue;
-        }
-
-        // Read response body
-        const { text: responseText, error: readError } = await safeResponseText(res, 50000);
-
-        if (readError) {
-          dashboardWarn(`[dashboard-api] Server Action replay: failed to read response: ${readError}`);
-          continue;
-        }
-
-        // Use extractManagementKeyFromResponseBody which handles RSC format correctly —
-        // it uses global matchAll so it skips the masked preview key (first match in the
-        // existing-keys list) and finds the full key further in the payload.
-        const key = extractManagementKeyFromResponseBody(responseText);
-
-        if (key) {
-          dashboardError(`[dashboard-api] Server Action replay: captured management key`);
-          return key;
-        }
-
-        // Check if this looks like an error response
-        if (responseText.includes('error') || responseText.includes('Error')) {
-          if (provisionStepLogEnabled()) {
-            dashboardError(`[tryManagementKeyServerActionReplay] Response may contain error: ${responseText.slice(0, 500)}`);
-          }
-        }
-
-      } catch (err) {
-        throwIfAborted(signal);
-        dashboardWarn(`[dashboard-api] Server Action replay attempt failed: ${err.message}`);
-        if (provisionStepLogEnabled()) {
-          dashboardError(`[tryManagementKeyServerActionReplay] Error details:`, err);
-        }
-      }
+  throwIfAborted(signal);
+  try {
+    if (provisionStepLogEnabled()) {
+      dashboardError(`[tryManagementKeyServerActionReplay] POST ${url} with confirmed management-key payload`);
     }
-  }
 
-  dashboardWarn('[dashboard-api] Server Action replay: all attempts failed to capture key');
-  return null;
+    const res = await fetch(url, fetchOptionsWithAccountProxy({
+      method: 'POST',
+      headers,
+      body,
+      signal,
+    }, automationRoute));
+
+    const contentType = res.headers.get('content-type') || '';
+    if (provisionStepLogEnabled()) {
+      dashboardError(`[tryManagementKeyServerActionReplay] Response: ${res.status} ${res.statusText}, content-type=${contentType}`);
+    }
+
+    if (res.status === 404) {
+      dashboardWarn('[dashboard-api] Mgmt-key Server Action returned 404 — action ID drifted; using one isolated UI learner fallback');
+      return null;
+    }
+    if (!res.ok && res.status !== 200) {
+      dashboardWarn(`[dashboard-api] Server Action replay: request failed (${res.status})`);
+      return null;
+    }
+
+    const { text: responseText, error: readError } = await safeResponseText(res, 50000);
+    if (readError) {
+      const err = new Error(`Management-key Server Action completed but its response could not be read: ${readError}`);
+      err.code = 'PROVISION_SERVER_ACTION_RESPONSE_UNREADABLE';
+      throw err;
+    }
+
+    const key = extractManagementKeyFromResponseBody(responseText);
+    if (key) {
+      dashboardError('[dashboard-api] Server Action replay: captured management key');
+      return key;
+    }
+
+    // A successful write without a captured one-time key must fail closed.
+    // Retrying through UI could create a second orphan management key.
+    const err = new Error('Management-key Server Action completed without an extractable key. Check the OpenRouter dashboard before retrying.');
+    err.code = 'PROVISION_SERVER_ACTION_KEY_NOT_CAPTURED';
+    throw err;
+  } catch (err) {
+    throwIfAborted(signal);
+    if (err?.code === 'PROVISION_SERVER_ACTION_RESPONSE_UNREADABLE' || err?.code === 'PROVISION_SERVER_ACTION_KEY_NOT_CAPTURED') {
+      throw err;
+    }
+    dashboardWarn(`[dashboard-api] Server Action replay attempt failed: ${err.message}`);
+    if (provisionStepLogEnabled()) {
+      dashboardError('[tryManagementKeyServerActionReplay] Error details:', err);
+    }
+    return null;
+  }
 }
 
 /**
@@ -1516,173 +1444,6 @@ function redeemFailurePayload(source, err) {
 }
 
 /**
- * For management-key provisioning only: abort when auth/session is dead.
- * Other tRPC errors (wrong procedure, shape drift, business validation) still allow
- * trying more candidates and server Playwright — a valid session may succeed in the browser.
- */
-function shouldAbortProvisioning(err) {
-  // Hardened: Handle HTML responses (likely auth/Cloudflare issues)
-  if (err.isHtml && (err.status === 401 || err.status === 403)) return true;
-  // Hardened: Handle HTML responses even with 200 status (Cloudflare challenges often return 200)
-  if (err.isHtml && err.httpStatus === 200) {
-    // Check if it looks like a Cloudflare challenge
-    if (err.htmlInfo?.looksLikeCloudflare) return true;
-    // DON'T abort on login page - might be wrong endpoint, try others
-    // if (err.htmlInfo?.looksLikeLoginPage) return true;
-  }
-  // Hardened: Handle trpcCodes that indicate permanent failures
-  if (err.trpcCode === 'HTML_RESPONSE' || err.trpcCode === 'OVERSIZED_RESPONSE') {
-    // Don't abort - try other routes or fallbacks
-    return false;
-  }
-  if ([401, 403, 423, 429].includes(err.httpStatus)) return true;
-  return false;
-}
-
-function isMissingTrpcSurface(err) {
-  return err?.isHtml === true && err?.httpStatus === 404;
-}
-
-/**
- * Try to create management key via REST API using session JWT as Bearer token.
- * Fallback when tRPC fails with HTML responses.
- * @param {string} sessionCookie - Session JWT
- * @param {string} clientCookie - Client cookies
- * @param {string} keyName - Name for the new key
- * @returns {Promise<{key?: string, error?: string}>}
- */
-async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute = null, signal = null) {
-  try {
-    // Get fresh JWT first
-    const freshJwt = await getFreshJwt(sessionCookie, clientCookie, { signal });
-    const jwtToUse = freshJwt || sessionCookie;
-    const cookieHeader = dashboardCookieHeader(jwtToUse, clientCookie);
-    
-    // Vetted legacy management-key candidates. Do not probe POST /api/v1/keys:
-    // OpenRouter documents that route for API-key creation with a management key,
-    // not management-key minting from a Clerk session.
-    const endpoints = [
-      { url: `${OR_BASE}/api/v1/management-keys`, method: 'POST', body: { name: keyName } },
-      { url: `${OR_BASE}/api/management/keys`, method: 'POST', body: { name: keyName } },
-      { url: `${OR_BASE}/api/keys/management`, method: 'POST', body: { name: keyName } },
-    ];
-    
-    for (const endpoint of endpoints) {
-      throwIfAborted(signal);
-      try {
-        dashboardError(`[tryRestApiCreateKey] Trying ${endpoint.method} ${endpoint.url}`);
-        
-        const res = await fetch(endpoint.url, fetchOptionsWithAccountProxy({
-          method: endpoint.method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwtToUse}`,
-            'Cookie': cookieHeader,
-            'Origin': OR_ORIGIN,
-            'User-Agent': USER_AGENT,
-          },
-          body: JSON.stringify(endpoint.body),
-          signal,
-        }, automationRoute));
-        
-        if (!res.ok) {
-          dashboardError(`[tryRestApiCreateKey] ${endpoint.url} returned ${res.status}`);
-          continue;
-        }
-        
-        const contentType = res.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          dashboardError(`[tryRestApiCreateKey] ${endpoint.url} returned non-JSON: ${contentType}`);
-          continue;
-        }
-        
-        const data = await res.json();
-        
-        // Look for key in response
-        const key =
-          data?.key ??
-          data?.managementKey ??
-          data?.apiKey ??
-          data?.secret ??
-          data?.token ??
-          data?.data?.key ??
-          data?.data?.managementKey;
-        
-        if (key && key.startsWith('sk-or-v1-')) {
-          dashboardError(`[tryRestApiCreateKey] Success with ${endpoint.url}`);
-          return { key };
-        }
-      } catch (err) {
-        throwIfAborted(signal);
-        dashboardError(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
-      }
-    }
-    
-    // Additional legacy dashboard candidates retained as compatibility fallbacks.
-    const expandedEndpoints = [
-      { url: `${OR_BASE}/api/v1/keys/create`, method: 'POST', body: { name: keyName } },
-      { url: `${OR_BASE}/api/v1/account/keys`, method: 'POST', body: { name: keyName, type: 'management' } },
-      { url: `${OR_BASE}/api/v1/user/keys`, method: 'POST', body: { name: keyName } },
-      { url: `${OR_BASE}/api/v1/settings/keys`, method: 'POST', body: { name: keyName } },
-    ];
-
-    for (const endpoint of expandedEndpoints) {
-      throwIfAborted(signal);
-      try {
-        dashboardError(`[tryRestApiCreateKey] Trying expanded ${endpoint.method} ${endpoint.url}`);
-        const res = await fetch(endpoint.url, fetchOptionsWithAccountProxy({
-          method: endpoint.method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwtToUse}`,
-            'Cookie': cookieHeader,
-            'Origin': OR_ORIGIN,
-            'User-Agent': USER_AGENT,
-          },
-          body: JSON.stringify(endpoint.body),
-          signal,
-        }, automationRoute));
-
-        // Log EVERY response status — even 404s tell us what doesn't exist
-        dashboardError(`[tryRestApiCreateKey] ${endpoint.url} → HTTP ${res.status} ${res.statusText}`);
-
-        if (!res.ok) continue;
-
-        const contentType = res.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          dashboardError(`[tryRestApiCreateKey] ${endpoint.url} returned non-JSON: ${contentType}`);
-          continue;
-        }
-
-        const data = await res.json();
-        const key =
-          data?.key ??
-          data?.managementKey ??
-          data?.apiKey ??
-          data?.secret ??
-          data?.token ??
-          data?.data?.key ??
-          data?.data?.managementKey;
-
-        if (key && key.startsWith('sk-or-v1-')) {
-          dashboardError(`[tryRestApiCreateKey] Success with expanded ${endpoint.url}`);
-          return { key };
-        }
-      } catch (err) {
-        throwIfAborted(signal);
-        dashboardError(`[tryRestApiCreateKey] ${endpoint.url} error: ${err.message}`);
-      }
-    }
-
-    return { error: 'All REST endpoints failed' };
-  } catch (err) {
-    throwIfAborted(signal);
-    dashboardError(`[tryRestApiCreateKey] Fatal error: ${err.message}`);
-    return { error: err.message };
-  }
-}
-
-/**
  * Try to redeem a code via REST API using session JWT as Bearer token.
  * Fallback when Server Action and tRPC both fail.
  * EXPLOIT #12: REST fallback probes for credit redemption.
@@ -1841,137 +1602,21 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     return { key: fromSa, source: 'server-action' };
   }
 
-  dashboardError('[dashboard-api] Server Action failed, falling back to tRPC discovery and Playwright');
-  const endpoint = endpoints.createManagementKey;
-
-  const mgmtKeyPayloads = [
-    { name: keyName },
-    { label: keyName },
-    { title: keyName },
-    { keyName },
-  ];
-
-  // Context for Cloudflare cookie migration
-  const migrationContext = { userId, accountId, accountProxy: automationRoute, signal };
-
-  let lastTrpcRouteAttempted = null;
-  let skipTrpcDiscovery = false;
-  if (endpoint) {
-    lastTrpcRouteAttempted = endpoint.route;
-    for (const input of mgmtKeyPayloads) {
-      throwIfAborted(signal);
-      try {
-        const result = await trpcCallWithMigration(endpoint.route, input, sessionCookie, clientCookie, {}, migrationContext);
-        const picked =
-          result?.key ??
-          result?.managementKey ??
-          result?.apiKey ??
-          result?.secret ??
-          result?.token ??
-          result?.management_key ??
-          result?.api_key;
-        if (picked) {
-          const key = picked;
-          if (!key.startsWith('sk-or-v1-')) {
-            throw new Error('tRPC returned a non-management key for management key creation.');
-          }
-          await persistProvisionedManagementKey(userId, accountId, key, 'trpc-cached', keyName);
-          return { key, source: 'trpc-cached' };
-        }
-      } catch (err) {
-        throwIfAborted(signal);
-        if (isMissingTrpcSurface(err)) {
-          skipTrpcDiscovery = true;
-          dashboardWarn('[dashboard-api] Cached tRPC endpoint returned generic 404 HTML; skipping equivalent tRPC candidate fan-out');
-          break;
-        }
-        if (shouldAbortProvisioning(err)) {
-          return { success: false, message: err.message, source: 'trpc-cached' };
-        }
-        dashboardWarn(`[dashboard-api] Cached tRPC failed: ${err.message}, trying discovery`);
-      }
-    }
-  }
-
-  const candidates = [
-    'managementKeys.create',
-    'managementKey.create',
-    'keys.createManagement',
-    'managementKeys.createKey',
-    'managementKeys.createManagementKey',
-    'management.createManagementKey',
-    'management.createKey',
-    'apiKeys.createManagement',
-    'apiKeys.createManagementKey',
-    'settings.managementKeys.create',
-    'dashboard.managementKeys.create',
-    'management.managementKeys.create',
-  ];
-  let lastTrpcError = null;
-  if (!skipTrpcDiscovery) {
-    trpcCandidates:
-    for (const route of candidates) {
-      lastTrpcRouteAttempted = route;
-      for (const input of mgmtKeyPayloads) {
-        throwIfAborted(signal);
-        try {
-          dashboardError(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
-          const result = await trpcCallWithMigration(route, input, sessionCookie, clientCookie, {}, migrationContext);
-          dashboardError(`[dashboard-api] tRPC route ${route} result:`, { hasResult: !!result, keys: Object.keys(result || {}) });
-          const key =
-            result?.key ??
-            result?.managementKey ??
-            result?.apiKey ??
-            result?.secret ??
-            result?.token ??
-            result?.management_key ??
-            result?.api_key;
-          if (key && key.startsWith('sk-or-v1-')) {
-            dashboardError(`[dashboard-api] Success via tRPC route: ${route}`);
-            await store.saveDiscoveredEndpoints({ createManagementKey: { route, discoveredAt: new Date().toISOString() } });
-            await persistProvisionedManagementKey(userId, accountId, key, `trpc-${route}`, keyName);
-            return { key, source: `trpc-${route}` };
-          }
-          // No key returned - route exists but wrong payload or unexpected response shape
-          dashboardError(`[dashboard-api] tRPC route ${route} returned result but no management key`);
-        } catch (err) {
-          throwIfAborted(signal);
-          lastTrpcError = err;
-          dashboardError(`[dashboard-api] tRPC route ${route} failed: ${err.message} (httpStatus: ${err.httpStatus}, trpcCode: ${err.trpcCode})`);
-          if (isMissingTrpcSurface(err)) {
-            skipTrpcDiscovery = true;
-            dashboardWarn('[dashboard-api] tRPC endpoint returned generic 404 HTML; skipping equivalent tRPC candidate fan-out');
-            break trpcCandidates;
-          }
-          if (shouldAbortProvisioning(err)) {
-            return { success: false, message: err.message, source: `trpc-${route}` };
-          }
-          // Try next payload / candidate
-        }
-      }
-    }
-  }
-
-  dashboardError(
-    `[dashboard-api] ${skipTrpcDiscovery ? 'tRPC surface unavailable' : 'All tRPC routes exhausted'}, trying REST API fallback. Last error: ${lastTrpcError?.message || 'none'}`,
+  // The dashboard Server Action is the only observed Clerk-session bootstrap
+  // request. Official /api/v1/keys calls require an existing management key,
+  // and speculative POST fan-out can mint orphan credentials. When the
+  // private action drifts, use one isolated UI flow to create the key and
+  // learn the replacement Next-Action header for later direct HTTPS replay.
+  dashboardError('[dashboard-api] Server Action unavailable, falling back to one isolated UI learner');
+  return await createManagementKeyViaPlaywright(
+    userId,
+    accountId,
+    sessionCookie,
+    clientCookie,
+    keyName,
+    automationRoute,
+    signal,
   );
-
-  // Try REST API with session JWT as Bearer token
-  const restResult = await tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute, signal);
-  if (restResult?.key) {
-    dashboardError(`[dashboard-api] Success via REST API`);
-    await persistProvisionedManagementKey(userId, accountId, restResult.key, 'rest-api', keyName);
-    return { key: restResult.key, source: 'rest-api' };
-  }
-
-  dashboardError(
-    `[dashboard-api] REST API failed, falling back to browser UI automation (Chromium).`,
-  );
-
-  return await createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, automationRoute, {
-    ...summarizeTrpcFailure(lastTrpcError),
-    trpcLastRoute: lastTrpcRouteAttempted,
-  }, signal);
 }
 
 /** H2: Replay vault session + Clerk device cookies on openrouter.ai. Third-party cookies (e.g. CF) are not in the vault — if tRPC returns 403, re-login in Hydra to refresh. */
@@ -2419,7 +2064,7 @@ async function launchManagedChromium(chromium, launchOptions, contextOptions = {
   }
 }
 
-async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, selectedAutomationRoute = null, trpcPhaseSummary = {}, signal = null) {
+async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie, clientCookie, keyName, selectedAutomationRoute = null, signal = null) {
   throwIfAborted(signal);
   // playwright-core: API-only package, no auto-downloaded browser bundle.
   // We supply the Chromium binary path via resolveChromiumLaunchOptions().
@@ -2476,18 +2121,25 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       traceStarted = true;
     }
     page = await context.newPage();
-    page.on('request', (request) => {
+    const rememberManagementKeyServerAction = (nextAction) => {
+      if (!/^[0-9a-f]{40}$/i.test(String(nextAction || ''))) return false;
+      discoveredServerActionFromUi = nextAction;
+      return true;
+    };
+    const captureManagementKeyServerAction = async (request) => {
       try {
         if (request.method() !== 'POST') return;
         if (new URL(request.url()).pathname !== '/settings/management-keys') return;
-        const nextAction = request.headers()['next-action'];
-        if (/^[0-9a-f]{40}$/i.test(String(nextAction || ''))) {
-          discoveredServerActionFromUi = nextAction;
-        }
+        if (rememberManagementKeyServerAction(request.headers()['next-action'])) return;
+        const requestHeaders = await request.allHeaders().catch(() => request.headers());
+        rememberManagementKeyServerAction(requestHeaders['next-action']);
       } catch (err) {
         provisionStepLog(accountId, `management-key Next-Action capture failed: ${err.message}`);
       }
-    });
+    };
+    // Listen at context scope so the learner still sees a dashboard request
+    // if OpenRouter submits it from a popup or replaces the initial page.
+    context.on('request', captureManagementKeyServerAction);
 
     if (provisionNetworkLogEnabled()) {
       page.on('response', async (response) => {
@@ -2565,7 +2217,6 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
 
     /** Set after a matching response is parsed — persist outside the predicate to avoid store I/O in the waiter. */
     let capturedFromWait = null;
-    let discoveredRouteFromWait = null;
     /** H10: Last tRPC error from a create-mutation response (no key in body) — surfaced on final failure. */
     let lastProvisionTrpcBusinessError = null;
 
@@ -2633,9 +2284,6 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
             }
             if (!key) return false;
             capturedFromWait = key;
-            if (isTrpc) {
-              discoveredRouteFromWait = normalizeDiscoveredCreateRoute(rawPath);
-            }
             return true;
           } catch {
             return false;
@@ -2688,12 +2336,6 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
         provisionStepLog(accountId, 'Copy/reveal UI did not return key');
       }
     }
-    if (discoveredRouteFromWait) {
-      await store.saveDiscoveredEndpoints({
-        createManagementKey: { route: discoveredRouteFromWait, discoveredAt: new Date().toISOString() },
-      });
-    }
-
     if (provisionNetworkLogEnabled()) {
       await writeProvisionNetworkLog(accountId, networkLogLines);
     }
@@ -2900,7 +2542,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
                 : ''
             }.`
           : '';
-      const phasesTried = ['server_action_replay_attempted', 'trpc_http'];
+      const phasesTried = ['server_action_replay_attempted'];
       phasesTried.push('browser_ui');
       let pageUrlAtFailure = '';
       try {
@@ -2910,14 +2552,10 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       }
       const debugDir = join(tmpdir(), PROVISION_DEBUG_DIR_BASENAME);
       throw new ProvisionKeyNotCapturedError(
-        `Could not capture management key after HTTP (tRPC) and browser UI automation.${extra}`,
+        `Could not capture management key after direct HTTPS replay and browser UI automation.${extra}`,
         {
           stage: 'browser_ui',
           phasesTried,
-          trpcLastError: trpcPhaseSummary.trpcLastError,
-          trpcLastCode: trpcPhaseSummary.trpcLastCode,
-          trpcLastHttp: trpcPhaseSummary.trpcLastHttp,
-          trpcLastRoute: trpcPhaseSummary.trpcLastRoute,
           trpcBusinessMessage: lastProvisionTrpcBusinessError?.message,
           trpcBusinessCode: lastProvisionTrpcBusinessError?.trpcCode,
           createClicked: clicked,
@@ -3186,7 +2824,7 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, acco
 
   if (res.status === 404) {
     // ── Self-healing: attempt to discover the new hash and retry ──
-    const newHash = await selfHealHash('redeem', url, headers, JSON.stringify([code]), accountProxy, signal);
+    const newHash = await selfHealRedeemHash(url, headers, JSON.stringify([code]), accountProxy, signal);
     throwIfAborted(signal);
     if (newHash) {
       // Retry with the healed hash

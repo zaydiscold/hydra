@@ -1626,9 +1626,13 @@ closed-app CLI commands, tests, and repo-local documentation.
   OpenRouter documentation comparison corrected metadata reads to canonical
   `GET /api/v1/key`, preserved `/api/v1/auth/key` only as a `404` fallback,
   removed `POST /api/v1/keys` from Clerk-session management-key mint guesses,
-  bounded stale Server Action and tRPC fan-out, and teaches UI fallback to save
-  the current `Next-Action` ID for later replay. The guarded live `hydra-148`
-  provision succeeded without printing secret material. The final rebuilt ARM
+  then removed the remaining speculative management-key write probes after
+  source review found that candidate self-heal, tRPC, and legacy REST POSTs
+  could mint orphan keys. Bootstrap now performs one confirmed HTTPS Server
+  Action write and moves directly to one isolated UI learner on private-action
+  drift; that learner saves the current `Next-Action` ID at browser-context
+  scope for later replay. The guarded live `hydra-148` provision succeeded
+  without printing secret material before the follow-up hardening. The final rebuilt ARM
   candidate passed package smoke, strict deep codesign, embedded-source
   inspection, and a LaunchServices settle window with four owned processes,
   zero stale profiles, and `0.0%` CPU at both `+60s` and `+90s`. The local ARM

@@ -2783,3 +2783,25 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   smoke plus launch-and-cleanup proof for both unpacked and NSIS-installed
   executables. CI run `26792854933`, Docker run `26792854912`, and Auto-version
   run `26792854913` also completed successfully.
+- 2026-06-02 post-`v1.4.8` management-key bootstrap hardening candidate:
+  current OpenRouter docs still require an existing management key for
+  `POST /api/v1/keys`, so that documented route cannot bootstrap Hydra's first
+  management key from a Clerk session. Source review found that the private
+  dashboard Server Action lane still attempted speculative write probes after
+  drift. Hydra now performs one confirmed HTTPS Server Action write, fails
+  closed if a successful write response does not expose the one-time key, and
+  moves directly to one isolated UI learner on `404`. The learner captures
+  `Next-Action` at browser-context scope and persists it for subsequent direct
+  replay. The local database had zero active no-key accounts, so no redundant
+  upstream key was minted to fabricate live evidence. Source-only verification
+  passed syntax, lint, full `npm test`, production build, gate `12/12`, OpenAPI
+  regeneration (`84` operations), focused background contracts `34/34`,
+  focused cancellation plus background contracts `39/39`, diff hygiene, and
+  audit `30 ok / 5 deferred / 1 missing / 0 blockers`. The remaining local
+  audit miss is the intentionally absent macOS Intel artifact in the ARM-only
+  local release tree. The
+  already-running exact-public `v1.4.8` package remained at four Hydra-owned
+  processes with zero stale Hydra Playwright profiles and `0.1%` sampled CPU;
+  this is runtime-baseline evidence, not evidence that the unbuilt candidate
+  executed inside the packaged app. The durable note is
+  `docs/recon/OPENROUTER_KEY_ENDPOINTS_AND_PROVISION_FALLBACKS.md`.

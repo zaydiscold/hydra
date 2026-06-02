@@ -392,7 +392,6 @@ test('dashboard Playwright automation soft failures are logged', () => {
   assert.match(automationNetwork, /ProxyAgent/);
   assert.match(source, /fetchOptionsWithAutomationProxy/);
   assert.match(source, /tryManagementKeyServerActionReplay\(sessionCookie, clientCookie, keyName, automationRoute, signal\)/);
-  assert.match(source, /tryRestApiCreateKey\(sessionCookie, clientCookie, keyName, automationRoute, signal\)/);
   assert.match(source, /redeemCodeViaServerAction\(sessionCookie, clientCookie, code, automationRoute, signal\)/);
   assert.match(source, /trpcCall\(route, input, sessionCookie, clientCookie, headerOverrides, \{\s*accountProxy: context\.accountProxy,\s*signal: context\.signal,/);
   assert.match(source, /tryRestApiRedeemCode\(sessionCookie, clientCookie, code, automationRoute, signal\)/);
@@ -433,7 +432,7 @@ test('dashboard Playwright automation soft failures are logged', () => {
   assert.match(source, /Browser close failed:/);
   assert.match(source, /Hash auto-discovery bundle fetch returned HTTP \$\{jsRes\.status\}: \$\{url\}/);
   assert.match(source, /Hash auto-discovery bundle fetch failed for \$\{url\}: \$\{err\?\.message \|\| err\}/);
-  assert.match(source, /Self-heal \$\{kind\} hash probe failed for candidate \$\{candidate\}: \$\{err\?\.message \|\| err\}/);
+  assert.match(source, /Self-heal redeem hash probe failed for candidate \$\{candidate\}: \$\{err\?\.message \|\| err\}/);
   assert.match(source, /Redeem credit poll failed \(attempt \$\{i \+ 1\}\/\$\{attempts\}\): \$\{err\?\.\message \|\| err\}/);
   assert.match(source, /Redeem tRPC route persistence failed: \$\{err\?\.\message \|\| err\}/);
   assert.match(source, /Redeem tRPC outcome parse failed; falling through to UI\/credits: \$\{err\?\.message \|\| err\}/);
@@ -648,26 +647,33 @@ test('bulk import avoids local self-rate-limit and handles duplicate replacement
   assert.match(authUtils, /export function remainingEmailTextAfterUse/);
 });
 
-test('management-key provisioning preserves labels and excludes the documented API-key creation route from session mint fallbacks', () => {
+test('management-key provisioning is a bounded request-first bootstrap with one UI learner fallback', () => {
   const source = readRepoFile('server/services/dashboard-api.js');
-  const fallback = source.slice(
-    source.indexOf('async function tryRestApiCreateKey'),
-    source.indexOf('async function tryRestApiRedeemCode'),
+  const replay = source.slice(
+    source.indexOf('async function tryManagementKeyServerActionReplay'),
+    source.indexOf('async function captureProvisionDebugArtifacts'),
   );
 
   assert.match(source, /const normalizedName = String\(requestedName \|\| ''\)\.trim\(\) \|\| `Hydra Auto Key \(\$\{source\}\)`/);
   assert.match(source, /name: normalizedName/);
   assert.match(source, /metadata: \{ source, requestedName: normalizedName \}/);
   assert.match(source, /persistProvisionedManagementKey\(userId, accountId, fromSa, 'server-action', keyName\)/);
-  assert.match(source, /Mgmt-key Server Action hash remains stale; skipping equivalent payload retries/);
-  assert.match(source, /function isMissingTrpcSurface\(err\)/);
-  assert.match(source, /tRPC endpoint returned generic 404 HTML; skipping equivalent tRPC candidate fan-out/);
+  assert.match(replay, /const body = JSON\.stringify\(\[\{ name: keyName \}\]\)/);
+  assert.match(replay, /management-key creation is not idempotent/);
+  assert.match(replay, /action ID drifted; using one isolated UI learner fallback/);
+  assert.match(replay, /PROVISION_SERVER_ACTION_KEY_NOT_CAPTURED/);
+  assert.doesNotMatch(replay, /selfHealHash\('mgmt-key'/);
+  assert.doesNotMatch(replay, /label: keyName|title: keyName|json: \{ name: keyName \}/);
+  assert.doesNotMatch(source, /async function tryRestApiCreateKey/);
+  assert.doesNotMatch(source, /managementKeys\.create|apiKeys\.createManagementKey|settings\.managementKeys\.create/);
   assert.match(source, /const learnedActionId = endpoints\.managementKeyServerAction\?\.actionId/);
+  assert.match(source, /context\.on\('request', captureManagementKeyServerAction\)/);
+  assert.match(source, /rememberManagementKeyServerAction\(request\.headers\(\)\['next-action'\]\)/);
+  assert.match(source, /request\.allHeaders\(\)\.catch\(\(\) => request\.headers\(\)\)/);
   assert.match(source, /managementKeyServerAction: \{\s*actionId: discoveredServerActionFromUi,/);
   assert.match(source, /learned current management-key Next-Action from UI fallback/);
-  assert.match(fallback, /OpenRouter documents that route for API-key creation with a management key/);
-  assert.doesNotMatch(fallback, /`\$\{OR_BASE\}\/api\/v1\/keys`/);
-  assert.match(fallback, /`\$\{OR_BASE\}\/api\/v1\/keys\/create`/);
+  assert.match(source, /Official \/api\/v1\/keys calls require an existing management key/);
+  assert.match(source, /speculative POST fan-out can mint orphan credentials/);
 });
 
 test('account generator browser signup uses the encrypted proxy pool when present', () => {
