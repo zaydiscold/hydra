@@ -44,6 +44,15 @@ force path plus DOM fallback, clicks the current modal Continue control, and
 uses checkpoint truth to unlock OTP entry if the browser has already reached the
 code screen before the status poll updates.
 
+Follow-up operator report on 2026-06-02 found a fifth handoff drift:
+the isolated browser could reach a waiting-for-code surface while Hydra still
+timed out after Playwright's familiar `30000ms` shape. Hydra `1.5.5` expands
+OTP detection to renamed `otp`, `code`, `digit`, and `verification` fields,
+segmented one-digit code boxes, and current copy such as "we sent a code",
+"six-digit", and "resend code". The browser wait is now `75s`, and the isolated
+browser opens at `1360x900` so OpenRouter's modal/buttons render in the desktop
+layout instead of cramped responsive states.
+
 ## How It Was Found
 
 - The reported error matched Playwright's 30-second wait shape:
@@ -80,6 +89,23 @@ code screen before the status poll updates.
 - `v1.5.4` source dev visual smoke for `/generator` saved a screenshot and
   measured zero overflow after replacing the inner Start button `btn-icon`
   span with `generator-button-label`.
+- `v1.5.5` focused contracts verified the expanded OTP detector, the `75s`
+  wait, the `1360x900` isolated-browser viewport/screen, and the active-job
+  layout shell/button sizing:
+  - `npm run test:background-failure-visibility`
+  - `npm run test:ui-static`
+  - direct `node --check` on touched server/test modules
+  - `npm run lint`
+  - `npm run build`
+  - `git diff --check`
+- `v1.5.5` package verification rebuilt the local macOS ARM app, passed package
+  smoke and strict deep codesign, inspected the embedded source for the `75s`
+  OTP wait and `1360x900` browser viewport, and sampled a clean LaunchServices
+  relaunch at `t+35s`, `t+75s`, and `t+120s` with four Hydra-owned processes,
+  zero stale Hydra Playwright profiles, and CPU at `0.0%`, `0.0%`, and `0.6%`.
+  Computer Use timed out against the packaged app on this machine, and
+  `osascript` System Events reported missing assistive-access permission, so
+  the native desktop walkthrough remains an environment boundary.
 - `v1.5.3` focused verification:
   - `node --check server/services/account-generator.js`
   - `node --check server/controllers/GeneratorController.js`

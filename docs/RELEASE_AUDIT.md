@@ -19,6 +19,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Account Generator signup form drift | `1.5.2` fills required OpenRouter signup password/legal fields, detects hidden Turnstile state as `manual_verification`, keeps waits abort-aware, and documents the current selector evidence. | Source verified; final OTP remains operator-owned |
 | Account Generator browser-state rescue | `1.5.3` passes Playwright wait timeouts in the correct options slot, reports sanitized signup/security/OTP checkpoints to the renderer, and adds a `POST /api/generator/:taskId/focus` browser-focus path. | Source and bounded live smoke verified; final OTP remains operator-owned |
 | Account Generator modal-form repair | `1.5.4` fills OpenRouter's current duplicate Clerk modal fields, handles first/last/email/password/terms, force-accepts terms through portal overlays, and unlocks OTP entry from checkpoint truth. | Source, visual, and bounded live service smoke verified; final OTP remains operator-owned |
+| Account Generator OTP readiness repair | `1.5.5` expands Clerk/OpenRouter OTP detection to renamed and segmented code fields, extends the screen wait beyond Playwright's default 30 seconds, opens the isolated browser at a stable desktop viewport, and makes the active job controls render evenly while the browser task continues. | Source, package, codesign, and clean LaunchServices settle verified; final OTP remains operator-owned |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
 | Release artifacts | GitHub release v1.4.7 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26782121839` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; v1.4.7 released |
 | macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-local public `v1.4.7` macOS arm64 app verifies with `codesign --verify --deep --strict`; release-matrix package smoke passed on macOS arm64 and macOS Intel. | Verified by release artifact dogfood |
@@ -3139,3 +3140,32 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   codesign verification, bundle version `1.5.4`, and zip SHA-256
   `5e5abf48c3fe2daa286160f55b06309f7a1d7cc18e25fb7c0ac603c8c353d8a6`.
   Final human verification and OTP entry remain operator-owned.
+- 2026-06-02 `1.5.5` Account Generator OTP-readiness repair: a reported
+  `Timeout 30000ms exceeded` at the waiting-for-OTP stage matched the remaining
+  brittle boundary after the modal-form repair. Hydra now waits up to
+  `75s` for the OTP screen, detects Clerk variants with renamed OTP/code/
+  verification fields, segmented one-digit code boxes, and current copy such as
+  "we sent a code", "six-digit", and "resend code", and opens the isolated
+  account browser with a `1360x900` viewport/screen so OpenRouter's modal and
+  buttons render in the desktop layout. The Generator active-job card now uses a
+  dedicated status shell, wider OTP row, and grid-based action buttons so the
+  local "Show account browser" and "Submit code" controls stay evenly rendered
+  while the browser task continues in the background. Focused verification
+  passed `npm run test:background-failure-visibility`, `npm run test:ui-static`,
+  direct syntax checks for touched server/test modules, `npm run lint`,
+  `npm run build`, `npm run test:dogfood-evidence`,
+  `npm run test:workflow-contract`, `npm run gate`, `npm run openapi:hydra`,
+  `npm run test:openrouter-request-cancellation`, and `git diff --check`.
+  Local macOS arm64 packaging passed `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  codesign verification, bundle version `1.5.5`, and zip SHA-256
+  `2883665cc3f2784cd0ac16d3cb299cd69fdcc5b94e457d3226a5bd74e365f389`.
+  Embedded source inspection of the packaged app confirmed the `75s` OTP wait,
+  expanded digit/verification selector, `1360x900` browser viewport/screen, and
+  package metadata. A clean LaunchServices-only relaunch settled to the expected
+  four Hydra-owned processes and zero Hydra Playwright profiles, with doctor
+  samples at `0.0%` CPU at `t+35s`, `0.0%` at `t+75s`, and `0.6%` at `t+120s`.
+  Computer Use timed out against this local packaged app and System Events
+  reported missing assistive-access permission for `osascript`, so direct
+  desktop-control walkthrough remains environment-blocked. Final human
+  verification and OTP entry remain operator-owned.

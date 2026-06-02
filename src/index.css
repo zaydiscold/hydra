@@ -4527,6 +4527,11 @@ select:-webkit-autofill {
   border-left-width: 8px;
 }
 
+.generator-status-shell {
+  margin-top: var(--space-md);
+  min-width: 0;
+}
+
 .generator-active-heading {
   display: flex;
   align-items: flex-start;
@@ -4572,13 +4577,13 @@ select:-webkit-autofill {
 }
 
 .generator-otp-panel {
-  max-width: 560px;
+  max-width: 620px;
 }
 
 .generator-otp-row {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(128px, auto);
-  gap: var(--space-md);
+  grid-template-columns: minmax(184px, 260px) minmax(148px, max-content);
+  gap: var(--space-sm);
   align-items: stretch;
   margin-top: var(--space-md);
   margin-bottom: var(--space-sm);
@@ -4595,7 +4600,7 @@ select:-webkit-autofill {
 }
 
 .generator-otp-submit {
-  min-width: 128px;
+  min-width: 148px;
   min-height: 48px;
   padding-inline: 1rem;
   justify-content: center;
@@ -4603,8 +4608,8 @@ select:-webkit-autofill {
 }
 
 .generator-job-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, max-content));
   align-items: center;
   gap: var(--space-sm);
   margin-top: var(--space-lg);
@@ -4612,10 +4617,14 @@ select:-webkit-autofill {
 
 .generator-browser-focus {
   min-height: 42px;
+  min-width: 168px;
+  justify-content: center;
 }
 
 .generator-cancel-btn {
   color: var(--status-error);
+  min-width: 148px;
+  justify-content: center;
 }
 
 .redeemer-grid {
@@ -4767,6 +4776,7 @@ select:-webkit-autofill {
 }
 
 .app-shell--density-compact .main-content .generator-job-actions {
+  grid-template-columns: repeat(auto-fit, minmax(148px, max-content));
   margin-top: 12px;
 }
 
@@ -4790,6 +4800,11 @@ select:-webkit-autofill {
   .generator-job-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .generator-job-actions {
+    width: 100%;
+    grid-template-columns: 1fr;
   }
 
   .generator-mode-pill,

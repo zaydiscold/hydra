@@ -15,12 +15,12 @@ attempt telemetry, bounded proxy failover, real Command Grid/List/Map modes,
 desktop density, stronger proximity navigation, Pool Manager ergonomics, Bulk
 Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 
-Tracked `package.json` and `package-lock.json` now target `1.5.4`, a focused
-patch on top of the prior `v1.5.3` baseline. It keeps the Account Generator
-rescue lane narrow while repairing OpenRouter's current signup modal shape:
-Hydra fills the visible duplicate Clerk form fields, accepts terms despite the
-floating portal, keeps sanitized checkpoints current, and unlocks OTP entry from
-checkpoint truth when the status poll is behind.
+Tracked `package.json` and `package-lock.json` now target `1.5.5`, a focused
+patch on top of the prior `v1.5.4` baseline. It keeps the Account Generator
+rescue lane narrow while repairing the next OpenRouter OTP handoff drift: Hydra
+recognizes more Clerk email-code variants, opens the isolated browser at a
+stable desktop viewport, keeps the active-job controls evenly rendered, and
+continues to leave final OTP entry/operator security checks human-owned.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -109,7 +109,8 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`1.5.4` is the current patch lane for the Account Generator modal-form repair.
+`1.5.5` is the current patch lane for the Account Generator OTP-readiness and
+isolated-browser viewport repair.
 Continue using `[skip-bump]` for audit, dogfood, and isolated
 documentation checkpoints after a release ships unless a real source fix must
 go to users. Do not produce a second minor bump merely to record manual

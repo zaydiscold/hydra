@@ -435,7 +435,7 @@ export default function Generator({ addToast }) {
             </p>
           )}
 
-            <div className="status-indicator" style={{ marginTop: 'var(--space-md)' }}>
+          <div className="status-indicator generator-status-shell">
             {otpReady ? (
               <div className="otp-box generator-otp-panel">
                 <p className="generator-status-copy">

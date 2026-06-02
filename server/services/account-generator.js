@@ -56,7 +56,7 @@ import {
 // while still cleaning up browser resources promptly.
 const GENERATOR_TTL_MS = 5 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 45 * 1000;
-const OTP_WAIT_TIMEOUT_MS = 30 * 1000;
+const OTP_WAIT_TIMEOUT_MS = 75 * 1000;
 const OTP_CHECK_INTERVAL_MS = 350;
 const SIGNUP_FORM_BLOCKED_GRACE_MS = 3 * 1000;
 const MANUAL_VERIFICATION_TIMEOUT_MS = 4 * 60 * 1000;
@@ -64,12 +64,18 @@ const COMPLETION_TIMEOUT_MS = 30 * 1000;
 const OTP_INPUT_SELECTOR = [
   'input[autocomplete="one-time-code"]',
   'input.cl-otpCodeFieldInput',
+  'input[name*="otp" i]',
+  'input[id*="otp" i]',
   'input[data-testid*="otp" i]',
   'input[data-testid*="code" i]',
+  'input[data-testid*="verification" i]',
   'input[name*="code" i]',
   'input[id*="code" i]',
   'input[aria-label*="code" i]',
+  'input[aria-label*="digit" i]',
+  'input[aria-label*="verification" i]',
   'input[placeholder*="code" i]',
+  'input[placeholder*="verification" i]',
   'input[inputmode="numeric"]',
   'input[maxlength="6"]',
   'input[maxlength="1"][type="text"]',
@@ -113,6 +119,35 @@ async function readSignupCheckpoint(page) {
     const lastNameInput = visibleInputs.find((input) => /last[-_\s]*name/i.test(describeInput(input)));
     const passwordInput = visibleInputs.find((input) => input.type === 'password' || /password/i.test(describeInput(input)));
     const legalCheckbox = visibleInputs.find((input) => input.type === 'checkbox' && /legal|terms|privacy|agree|accepted/i.test(describeInput(input)));
+    const otpInputs = visibleInputs.filter((input) => {
+      const descriptor = describeInput(input);
+      return /otp|code|digit|verification/i.test(descriptor)
+        || input.autocomplete === 'one-time-code'
+        || input.inputMode === 'numeric'
+        || input.maxLength === 6
+        || (input.maxLength === 1 && /text|tel|number/i.test(input.type || 'text'));
+    });
+    const segmentedOtpVisible = otpInputs.filter((input) => input.maxLength === 1).length >= 4;
+    const otpTextVisible = text.includes('check your email')
+      || text.includes('verification code')
+      || text.includes('verification email')
+      || text.includes('verify your email')
+      || text.includes('enter code')
+      || text.includes('enter the code')
+      || text.includes('enter your code')
+      || text.includes('enter your verification code')
+      || text.includes('one-time code')
+      || text.includes('one time code')
+      || text.includes('six digit')
+      || text.includes('six-digit')
+      || text.includes('6 digit')
+      || text.includes('6-digit')
+      || text.includes('code sent')
+      || text.includes('sent a code')
+      || text.includes('we sent a code')
+      || text.includes('resend code')
+      || text.includes("didn't receive")
+      || text.includes('did not receive');
     const signupFormVisible = Boolean(emailInput || firstNameInput || lastNameInput || passwordInput || legalCheckbox)
       || text.includes('create your account')
       || text.includes('password')
@@ -133,13 +168,9 @@ async function readSignupCheckpoint(page) {
     const turnstileProbe = document.querySelector('input[name="cf-turnstile-response"], input[name*="turnstile" i], [id*="cf-chl-widget"], [class*="turnstile" i]');
     const turnstilePending = Boolean(turnstileProbe)
       && (!('value' in turnstileProbe) || !String(turnstileProbe.value || '').trim());
-    const otpVisible = text.includes('check your email')
-      || text.includes('verification code')
-      || text.includes('verify your email')
-      || text.includes('enter code')
-      || text.includes('enter the code')
-      || text.includes('one-time code')
-      || text.includes('code sent')
+    const otpVisible = otpTextVisible
+      || segmentedOtpVisible
+      || otpInputs.length > 0
       || Boolean(document.querySelector(otpSelector));
     const manualVisible = text.includes('captcha')
       || text.includes('verify you are human')
@@ -675,6 +706,8 @@ async function launchSignupFlowPlaywright(task) {
       const context = await launchChromiumPersistentContext(chromium, launchOptions, {
         userAgent: USER_AGENT,
         proxy: playwrightProxyForAutomation(automationRoute),
+        viewport: { width: 1360, height: 900 },
+        screen: { width: 1360, height: 900 },
       });
       const browser = context.browser();
       const page = await context.newPage();

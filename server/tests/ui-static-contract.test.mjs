@@ -697,13 +697,18 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(css, /\.generator-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/);
   assert.match(css, /\.generator-steps\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(css, /\.generator-start-btn:disabled\s*\{[\s\S]*?filter:\s*saturate\(0\.55\) brightness\(0\.85\);/);
-  assert.match(css, /\.generator-otp-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(180px,\s*240px\)\s+minmax\(128px,\s*auto\);/);
+  assert.match(generator, /className="status-indicator generator-status-shell"/);
+  assert.match(css, /\.generator-status-shell\s*\{[\s\S]*?margin-top:\s*var\(--space-md\);/);
+  assert.match(css, /\.generator-otp-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(184px,\s*260px\)\s+minmax\(148px,\s*max-content\);/);
   assert.match(css, /\.generator-otp-row \.otp-input\s*\{[\s\S]*?letter-spacing:\s*0\.14em;/);
   assert.match(css, /\.generator-otp-row \.otp-input\s*\{[\s\S]*?border-width:\s*2px;/);
-  assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?min-width:\s*128px;/);
+  assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?min-width:\s*148px;/);
   assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?padding-inline:\s*1rem;/);
   assert.match(css, /\.generator-active-card\s*\{[\s\S]*?border-left-width:\s*8px;/);
+  assert.match(css, /\.generator-job-actions\s*\{[\s\S]*?display:\s*grid;/);
+  assert.match(css, /\.generator-job-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(168px,\s*max-content\)\);/);
   assert.match(css, /\.generator-browser-focus\s*\{[\s\S]*?min-height:\s*42px;/);
+  assert.match(css, /\.generator-browser-focus\s*\{[\s\S]*?min-width:\s*168px;/);
 });
 
 test('first-run setup is a guided password key tour instead of a login dead end', () => {
