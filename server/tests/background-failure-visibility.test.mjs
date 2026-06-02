@@ -34,6 +34,7 @@ test('generator resource cleanup failures are visible', () => {
 
 test('generator owns late start responses and gates duplicate submissions', () => {
   const source = readRepoFile('src/pages/Generator.jsx');
+  const api = readRepoFile('src/api.js');
 
   assert.match(source, /const lifecycleClosedRef = useRef\(false\)/);
   assert.match(source, /const startInFlightRef = useRef\(false\)/);
@@ -44,6 +45,8 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /activeTaskRef\.current = startedTaskId/);
   assert.match(source, /api\.cleanupGeneratorJob\(lateTaskId, 'client_disconnect', \{ keepalive: true \}\)/);
   assert.match(source, /if \(otp\.length !== 6 \|\| !taskId \|\| verifyInFlightRef\.current\) return/);
+  assert.match(source, /api\.submitGeneratorOtpQuiet\(renderedTaskId, otp\)/);
+  assert.match(api, /submitGeneratorOtpQuiet = \(taskId, otp\) =>\s*request\(`\/generator\/verify\/\$\{taskId\}`, \{ method: 'POST', body: \{ otp \}, trackLoading: false \}\)/);
   assert.match(source, /if \(lifecycleClosedRef\.current \|\| activeTaskRef\.current !== renderedTaskId\) return/);
   assert.match(source, /disabled=\{!emailTemplate \|\| starting\}/);
   assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying \|\| status !== 'awaiting_otp'\}/);
@@ -694,7 +697,14 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /proxy: playwrightProxyForAutomation\(automationRoute\)/);
   assert.match(source, /headless: config\.HYDRA_GENERATOR_HEADLESS/);
   assert.match(source, /manual_verification/);
+  assert.match(source, /const OTP_CHECK_INTERVAL_MS = 350/);
+  assert.match(source, /readSignupCheckpoint\(page\)/);
+  assert.match(source, /Manual upstream verification visible/);
+  assert.match(source, /GENERATOR_OTP_SCREEN_TIMEOUT/);
   assert.match(source, /waitForOtpChallenge\(task, page\)/);
+  assert.match(source, /fillVisibleOtpInput\(page, otpCode, task\.taskId\)/);
+  assert.match(source, /input\[name\*="code" i\]/);
+  assert.match(source, /input\[inputmode="numeric"\]/);
   assert.match(source, /clickVisibleOtpSubmitControl\(page, task\.taskId\)/);
   assert.match(source, /Submitted OTP challenge for \$\{taskId\} with visible button/);
 });

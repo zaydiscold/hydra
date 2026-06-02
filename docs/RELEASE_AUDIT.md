@@ -2938,3 +2938,28 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   to four Hydra-owned processes, zero stale Playwright profiles, `0.0%`
   aggregate CPU, and `591.64 MB` RSS. Local notarization remains deferred
   because Apple signing credentials are absent; local ad-hoc codesign is valid.
+- 2026-06-02 `1.5.1` Account Generator OTP timeout rescue: source trace of the
+  reported `Timeout 30000ms exceeded` path found that browser signup checked
+  for human verification only after the full 30-second OTP wait failed. Hydra
+  now polls the isolated browser every `350ms`, reports `manual_verification`
+  immediately when CAPTCHA, Cloudflare, or similar security UI is visible,
+  broadens OTP detection to Clerk segmented fields plus single six-digit and
+  generic code/numeric inputs, fills both OTP layouts, and submits the visible
+  Clerk control before Enter fallback. The renderer uses
+  `submitGeneratorOtpQuiet()` so OTP submit no longer raises the app-wide
+  loading veil, and the Generator page now shows a normal **Submit code**
+  button with clearer status copy. No supplied signup password was used to
+  create a live upstream account during verification. Evidence passed: syntax
+  check, background contracts, UI static contracts, request-cancellation
+  contracts, Clerk signup-boundary contract, lint, renderer build, gate, OpenAPI
+  generation, Clerk connectivity, and diff hygiene. Clerk bootstrap returned
+  HTTP `200` and set the expected `__client` cookie. Detailed recon lives in
+  `docs/recon/GENERATOR_OTP_TIMEOUT_AND_MANUAL_VERIFICATION.md`. Local ARM
+  packaging passed renderer build, resource prep, package smoke, plist version
+  `1.5.1`, strict deep codesign, and embedded-source inspection; the ARM zip
+  SHA-256 is
+  `728c2a618f5cbc225b271a14cc9a5f0d021668ef0f3afe8fa1a92a251d091984`.
+  Local Intel packaging was not faked on Apple Silicon: package prep correctly
+  refused `darwin-x64` because the local Playwright cache contains only the ARM
+  Chromium payload. The Intel artifact remains assigned to the hosted Intel
+  macOS runner.

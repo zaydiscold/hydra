@@ -18,13 +18,13 @@ const STATUS_COPY = {
   navigating_signup: 'Opening OpenRouter signup.',
   waiting_for_page_hydrate: 'Waiting for Clerk to render the signup form.',
   entering_email: 'Entering the signup email.',
-  waiting_for_otp_screen: 'Waiting for the verification-code screen.',
-  manual_verification: 'Complete the human verification in the account browser, then Hydra will continue to OTP.',
+  waiting_for_otp_screen: 'Watching the isolated browser for email-code or human-verification state.',
+  manual_verification: 'Finish the verification in the account browser. Hydra will enable the code field when the OTP screen appears.',
   sending_otp: 'Sending the email code through direct HTTPS.',
   awaiting_otp: 'Enter the 6-digit code from your email.',
-  submitting_otp: 'Submitting the code.',
+  submitting_otp: 'Code submitted. Hydra is finishing signup in the background.',
   verifying_otp: 'Verifying the code.',
-  waiting_for_completion: 'Waiting for OpenRouter to finish signup.',
+  waiting_for_completion: 'Waiting for OpenRouter to finish the dashboard handoff.',
   setting_password: 'Setting the account password.',
   extracting_session: 'Capturing the finished dashboard session.',
   activating_session: 'Extending the fresh OTP session.',
@@ -252,7 +252,7 @@ export default function Generator({ addToast }) {
     setVerifying(true);
     try {
       setError(null);
-      await api.submitGeneratorOtp(renderedTaskId, otp);
+      await api.submitGeneratorOtpQuiet(renderedTaskId, otp);
       if (lifecycleClosedRef.current || activeTaskRef.current !== renderedTaskId) return;
       setStatus('submitting_otp');
     } catch (err) {
@@ -334,7 +334,7 @@ export default function Generator({ addToast }) {
             <div className="generator-steps" aria-label="Generator flow">
               <span>1. Email alias</span>
               <span>2. Isolated browser</span>
-              <span>3. Paste OTP</span>
+              <span>3. Email code</span>
               <span>4. Session saved</span>
             </div>
           </div>
@@ -357,11 +357,11 @@ export default function Generator({ addToast }) {
         </div>
       ) : (
         <div className="card active-job-card shine-sweep animate-spring stagger-delay-50" style={{ borderColor: 'var(--accent-primary)', borderLeftWidth: 8 }}>
-          <h3>Active Job</h3>
+          <h3>Active job</h3>
           <p style={{ marginTop: 'var(--space-sm)' }}>
-            [STATUS]{' '}
+            Status{' '}
             <span className="status-dot success" style={{ color: 'var(--accent-primary)', fontWeight: 800 }}>
-              [{status.toUpperCase()}]
+              {status.replace(/_/g, ' ').toUpperCase()}
             </span>
           </p>
           {taskId && (
@@ -395,7 +395,7 @@ export default function Generator({ addToast }) {
                     autoComplete="one-time-code"
                   />
                   <button type="submit" className="btn btn-primary generator-otp-submit" disabled={otp.length !== 6 || verifying || status !== 'awaiting_otp'}>
-                    {verifying ? '[VERIFYING]' : '[VERIFY]'}
+                    {verifying ? 'Submitting...' : 'Submit code'}
                   </button>
                 </form>
               </div>
@@ -409,7 +409,7 @@ export default function Generator({ addToast }) {
           <button type="button" className="btn btn-ghost" onClick={cancelJob} style={{ marginTop: 'var(--space-xl)', color: 'var(--status-error)' }}>
             <span className="btn-icon">
               <PowerIcon size={18} />
-              <span>CANCEL & CLEANUP</span>
+              <span>Cancel job</span>
             </span>
           </button>
         </div>

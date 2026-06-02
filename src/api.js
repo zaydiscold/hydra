@@ -405,6 +405,8 @@ export const heartbeatGeneratorJobQuiet = (taskId, signal) =>
   request(`/generator/${taskId}/heartbeat`, { method: 'POST', signal, trackLoading: false });
 export const submitGeneratorOtp = (taskId, otp) => 
   request(`/generator/verify/${taskId}`, { method: 'POST', body: { otp } });
+export const submitGeneratorOtpQuiet = (taskId, otp) =>
+  request(`/generator/verify/${taskId}`, { method: 'POST', body: { otp }, trackLoading: false });
 export const cleanupGeneratorJob = (taskId, reason = 'cancelled', options = {}) => 
   request(`/generator/${taskId}`, { method: 'DELETE', body: { reason }, ...options });
 

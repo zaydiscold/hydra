@@ -10,17 +10,15 @@ parity, Bulk Auth callback truthfulness, Account Detail action repair, direct
 HTTPS OTP signup boundaries, request-first management-key bootstrap, and
 pending-account recovery all shipped in the `1.4.x` lane.
 
-Tracked `package.json` and `package-lock.json` now target `1.5.0` for the next
-review candidate. This is a coherent minor release rather than another patch:
-Traffic Console gains request-attempt and price visibility, proxy failover
-becomes a configurable bounded eight-key lane, Command gains working
-Grid/List/Map modes, desktop density becomes selectable, and high-frequency
-navigation, Pool Manager, Bulk Import, and ambient graphics receive one
-operator-facing refinement pass.
+`v1.5.0` shipped the coherent minor release for Traffic Console pricing and
+attempt telemetry, bounded proxy failover, real Command Grid/List/Map modes,
+desktop density, stronger proximity navigation, Pool Manager ergonomics, Bulk
+Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 
-The latest public release remains immutable `v1.4.9` until the `1.5.0` pull
-request passes its hosted matrix and is merged. Documentation must call
-`1.5.0` a candidate before that boundary, not a published artifact.
+Tracked `package.json` and `package-lock.json` now target `1.5.1`, a focused
+patch on top of `v1.5.0`. It fixes Account Generator OTP/manual-verification
+handoff behavior without changing the release lane's data model or operator
+contracts.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater

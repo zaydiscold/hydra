@@ -57,8 +57,23 @@ import {
 const GENERATOR_TTL_MS = 5 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 45 * 1000;
 const OTP_WAIT_TIMEOUT_MS = 30 * 1000;
+const OTP_CHECK_INTERVAL_MS = 350;
 const MANUAL_VERIFICATION_TIMEOUT_MS = 4 * 60 * 1000;
 const COMPLETION_TIMEOUT_MS = 30 * 1000;
+const OTP_INPUT_SELECTOR = [
+  'input[autocomplete="one-time-code"]',
+  'input.cl-otpCodeFieldInput',
+  'input[data-testid*="otp" i]',
+  'input[data-testid*="code" i]',
+  'input[name*="code" i]',
+  'input[id*="code" i]',
+  'input[aria-label*="code" i]',
+  'input[placeholder*="code" i]',
+  'input[inputmode="numeric"]',
+  'input[maxlength="6"]',
+  'input[maxlength="1"][type="text"]',
+  'input[maxlength="1"][type="tel"]',
+].join(', ');
 
 function serializeGeneratorTask(task) {
   const payload = taskSupervisor.serializeTask(task);
@@ -80,41 +95,90 @@ function serializeGeneratorTask(task) {
 }
 
 function otpChallengeVisiblePredicate() {
+  const otpSelector = [
+    'input[autocomplete="one-time-code"]',
+    'input.cl-otpCodeFieldInput',
+    'input[data-testid*="otp" i]',
+    'input[data-testid*="code" i]',
+    'input[name*="code" i]',
+    'input[id*="code" i]',
+    'input[aria-label*="code" i]',
+    'input[placeholder*="code" i]',
+    'input[inputmode="numeric"]',
+    'input[maxlength="6"]',
+    'input[maxlength="1"][type="text"]',
+    'input[maxlength="1"][type="tel"]',
+  ].join(', ');
   const text = document.body?.innerText?.toLowerCase?.() || '';
   return text.includes('check your email')
     || text.includes('verification code')
+    || text.includes('verify your email')
     || text.includes('enter code')
-    || Boolean(document.querySelector('input[autocomplete="one-time-code"], input.cl-otpCodeFieldInput, input[data-testid*="otp"], input[maxlength="1"][type="text"], input[maxlength="1"][type="tel"]'));
+    || text.includes('enter the code')
+    || text.includes('one-time code')
+    || text.includes('code sent')
+    || Boolean(document.querySelector(otpSelector));
 }
 
-function manualVerificationVisiblePredicate() {
-  const text = document.body?.innerText?.toLowerCase?.() || '';
-  return text.includes('captcha')
-    || text.includes('verify you are human')
-    || text.includes('human verification')
-    || text.includes('security check')
-    || Boolean(document.querySelector('iframe[src*="captcha" i], iframe[src*="turnstile" i], iframe[src*="hcaptcha" i], iframe[src*="recaptcha" i], [class*="captcha" i], [id*="captcha" i]'));
+async function readSignupCheckpoint(page) {
+  return page.evaluate((otpSelector) => {
+    const text = document.body?.innerText?.toLowerCase?.() || '';
+    const otpVisible = text.includes('check your email')
+      || text.includes('verification code')
+      || text.includes('verify your email')
+      || text.includes('enter code')
+      || text.includes('enter the code')
+      || text.includes('one-time code')
+      || text.includes('code sent')
+      || Boolean(document.querySelector(otpSelector));
+    const manualVisible = text.includes('captcha')
+      || text.includes('verify you are human')
+      || text.includes('human verification')
+      || text.includes('security check')
+      || text.includes('checking if the site connection is secure')
+      || text.includes('review the security of your connection')
+      || Boolean(document.querySelector('iframe[src*="captcha" i], iframe[src*="turnstile" i], iframe[src*="hcaptcha" i], iframe[src*="recaptcha" i], iframe[src*="challenges.cloudflare.com" i], .cf-turnstile, [data-sitekey], [class*="captcha" i], [id*="captcha" i]'));
+    return {
+      otpVisible,
+      manualVisible,
+      url: document.location.href,
+    };
+  }, OTP_INPUT_SELECTOR).catch((err) => ({
+    otpVisible: false,
+    manualVisible: false,
+    url: page.url?.() ?? 'unknown',
+    error: err.message,
+  }));
 }
 
 async function waitForOtpChallenge(task, page) {
-  try {
-    await page.waitForFunction(otpChallengeVisiblePredicate, { timeout: OTP_WAIT_TIMEOUT_MS });
-    return;
-  } catch (err) {
-    const needsManualVerification = await page
-      .waitForFunction(manualVerificationVisiblePredicate, { timeout: 1000 })
-      .then(() => true)
-      .catch(() => false);
+  const startedAt = Date.now();
+  let manualReported = false;
 
-    if (!needsManualVerification) throw err;
-
-    taskSupervisor.updateTask(task.taskId, {
-      status: 'manual_verification',
-      metadata: { ...task.metadata, mode: 'browser_signup' },
-    });
-    logger.warn(`[Account Generator] Manual upstream verification required for ${task.taskId}; waiting for the OTP screen in the isolated browser`);
-    await page.waitForFunction(otpChallengeVisiblePredicate, { timeout: MANUAL_VERIFICATION_TIMEOUT_MS });
+  while (Date.now() - startedAt < OTP_WAIT_TIMEOUT_MS) {
+    const checkpoint = await readSignupCheckpoint(page);
+    if (checkpoint.otpVisible) return;
+    if (checkpoint.manualVisible) {
+      manualReported = true;
+      taskSupervisor.updateTask(task.taskId, {
+        status: 'manual_verification',
+        metadata: { ...task.metadata, mode: 'browser_signup' },
+      });
+      logger.warn(`[Account Generator] Manual upstream verification visible for ${task.taskId}; waiting for OTP screen in the isolated browser`);
+      break;
+    }
+    await page.waitForTimeout(OTP_CHECK_INTERVAL_MS);
   }
+
+  if (manualReported) {
+    await page.waitForFunction(otpChallengeVisiblePredicate, { timeout: MANUAL_VERIFICATION_TIMEOUT_MS });
+    return;
+  }
+
+  const checkpoint = await readSignupCheckpoint(page);
+  const err = new Error(`Timed out waiting for OpenRouter's OTP screen after ${OTP_WAIT_TIMEOUT_MS}ms; current page ${checkpoint.url}`);
+  err.code = 'GENERATOR_OTP_SCREEN_TIMEOUT';
+  throw err;
 }
 
 async function clickVisibleOtpSubmitControl(page, taskId) {
@@ -146,6 +210,26 @@ async function clickVisibleOtpSubmitControl(page, taskId) {
     logger.warn(`[Account Generator] OTP Enter fallback failed for ${taskId}: ${err.message}`);
     return false;
   }
+}
+
+async function fillVisibleOtpInput(page, otpCode, taskId) {
+  const input = page.locator(OTP_INPUT_SELECTOR).first();
+  await input.waitFor({ state: 'visible', timeout: 5000 });
+  await input.click();
+
+  const maxLength = await input.getAttribute('maxlength').catch(() => null);
+  if (maxLength === '1') {
+    await page.keyboard.type(otpCode, { delay: 75 });
+    logger.info(`[Account Generator] Filled segmented OTP challenge for ${taskId}`);
+    return;
+  }
+
+  await input.fill(otpCode);
+  await input.evaluate((el) => {
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }).catch(() => {});
+  logger.info(`[Account Generator] Filled OTP challenge for ${taskId}`);
 }
 
 function getRecentGeneratorTask(taskId, ownerUserId) {
@@ -369,12 +453,7 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
       }
 
       taskSupervisor.updateTask(task.taskId, { status: 'submitting_otp' });
-      const firstDigitInput = page
-        .locator('input[autocomplete="one-time-code"], input.cl-otpCodeFieldInput, input[data-testid*="otp"], input[maxlength="1"][type="text"], input[maxlength="1"][type="tel"]')
-        .first();
-      await firstDigitInput.waitFor({ state: 'visible', timeout: 5000 });
-      await firstDigitInput.click();
-      await page.keyboard.type(otpCode, { delay: 75 });
+      await fillVisibleOtpInput(page, otpCode, task.taskId);
       await page.waitForTimeout(250);
       await clickVisibleOtpSubmitControl(page, task.taskId);
 

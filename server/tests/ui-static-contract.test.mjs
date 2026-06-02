@@ -680,6 +680,8 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(generator, /generatorModeLabel\(jobMode\)/);
   assert.match(generator, /className="generator-otp-row"/);
   assert.match(generator, /onChange=\{e => setOtp\(e\.target\.value\.replace\(\/\\D\/g, ''\)\.slice\(0, 6\)\)\}/);
+  assert.match(generator, /Submit code/);
+  assert.doesNotMatch(generator, /\[VERIFY\]/);
   assert.doesNotMatch(generator, /className="card generator-instructions/);
   assert.doesNotMatch(generator, /Playwright paused/);
   assert.match(css, /\.generator-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/);
