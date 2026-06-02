@@ -3502,3 +3502,13 @@ items by itself.
   edit, and create paths. `docs/releases/1.5.9.md` documents this patch's
   purpose, verification, and manual boundary before the tag exists, so the next
   release can publish with notes on the first pass.
+- 2026-06-02 `1.5.9` public release closeout: Auto-version run
+  `26843751423` tagged `v1.5.9` from commit `eb69380`; CI run `26843751050`
+  passed; Docker run `26843751009` passed runtime smoke plus GHCR publishing;
+  Release Desktop Apps run `26843763247` completed successfully across shared
+  `lint, test, gate`, Linux x64 AppImage, Windows x64 NSIS, macOS ARM zip,
+  macOS Intel x64 zip, and merged macOS updater metadata. Public release
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.5.9` has `52` lines,
+  `12` bullets, and all ten expected assets: Linux AppImage, macOS ARM
+  zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap,
+  `latest-linux.yml`, `latest-mac.yml`, and `latest.yml`.
