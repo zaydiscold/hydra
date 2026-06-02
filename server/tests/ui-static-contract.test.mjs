@@ -56,7 +56,8 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
   const tab = readRepoFile('src/components/EmailLinkTab.jsx');
   const authUtils = readRepoFile('src/utils/auth.js');
 
-  assert.match(page, /Tenant allowlist required/);
+  assert.match(page, /Owner-only; use OTP/);
+  assert.match(page, /Email Link is owner-only/);
   assert.match(page, /supported direct HTTPS code import/);
   assert.match(page, /magicLinkCapability=\{auth\.magicLinkCapability\}/);
   assert.match(page, /onRefreshCapability=\{auth\.refreshMagicLinkCapability\}/);

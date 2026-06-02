@@ -6,7 +6,7 @@ import OtpTab from '../components/OtpTab';
 
 const TABS = [
   { id: 'otp', label: '# OTP', subtitle: 'Enter 6-digit code' },
-  { id: 'email-link', label: '✉ Email Link', subtitle: 'Tenant allowlist required' },
+  { id: 'email-link', label: '✉ Email Link', subtitle: 'Owner-only; use OTP' },
 ];
 
 export default function BulkAuthWizard({ addToast }) {
@@ -20,7 +20,7 @@ export default function BulkAuthWizard({ addToast }) {
           <AnimeText as="h2" mode="lines" variant="scanline" delay={36} style={{ margin: 0 }}>Bulk Account Import</AnimeText>
           <p className="page-header__lede">
             Import OpenRouter accounts into Hydra. Use <strong>OTP</strong> for the supported direct HTTPS code import.
-            Email Link remains visible for Clerk tenants with an owner-allowlisted HTTPS relay.
+            Email Link is owner-only and remains visible for Clerk tenants with an owner-allowlisted HTTPS relay.
           </p>
         </div>
       </header>

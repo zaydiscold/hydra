@@ -1586,6 +1586,32 @@ closed-app CLI commands, tests, and repo-local documentation.
   network and `docker desktop stop` removed the Desktop runtime in one
   bounded stop. The durable note is
   `docs/recon/PROXIMITY_FIELD_GEOMETRY_CACHE.md`.
+- OpenRouter Email Link owner-boundary follow-up: current Clerk documentation,
+  live machine state, and Hydra's callback contract were rechecked before
+  attempting any relay setup. OpenRouter owns the Clerk tenant, so Hydra users
+  cannot add a callback allowlist entry; a generic Cloudflare or Tailscale
+  tunnel would still be rejected and would expose unnecessary ingress. No
+  tunnel was started and no `.env` opt-in was forged. The Bulk Import tab now
+  says `Owner-only; use OTP`, the backend error says Email Link cannot be
+  self-enabled for OpenRouter accounts, and `.env.example` reserves the relay
+  variables for a genuinely owner-controlled Clerk tenant. The broad
+  `.env.*` ignore rule now explicitly unignores that placeholder-only template
+  so the operator guidance ships with the repo. Focused UI
+  contracts passed `46/46`, API integration passed `11/11`, background
+  contracts passed `33/33`, lint passed, build passed, and diff hygiene passed.
+  The rebuilt ARM package passed smoke, strict deep codesign, and embedded
+  Bulk Import renderer hash equality. Its local archive SHA-256 before
+  reversible cleanup was
+  `461bf8e32d93582544eb87042ed4a62deb418ae1d2ddc1123371cf61a66f61e1`.
+  LaunchServices reopened the sole Spotlight bundle; the bounded startup
+  sample settled from `53.8%` CPU at `+30s` to `0.3%` at `+65s`, with four
+  owned processes and zero stale profiles. A final literal recheck passed
+  lint, full `npm test`, gate `12/12`, OpenAPI generation (`84 operations`,
+  no tracked drift), diff hygiene, audit, and local Docker smoke with a
+  rebuilt image and real containerized Playwright Chromium launch. Teardown
+  left no `hydra_default` network and stopped Docker Desktop cleanly. The
+  durable note is
+  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

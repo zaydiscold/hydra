@@ -62,7 +62,7 @@ function isAuthoritativeSessionFailure(errLike) {
 
 function magicLinkCallbackUnavailableError() {
   const err = new Error(
-    'Email Link is unavailable for OpenRouter Clerk unless the Clerk tenant owner has allowlisted a public HTTPS relay. Hydra cannot safely register a localhost or arbitrary tunnel callback against OpenRouter. Use OTP for the direct HTTPS bulk import flow.',
+    'Email Link cannot be self-enabled for OpenRouter accounts. OpenRouter owns the Clerk tenant and must allowlist a public HTTPS relay first. Hydra cannot safely register a localhost or arbitrary tunnel callback. Use OTP for the supported direct HTTPS bulk import flow.',
   );
   err.status = 409;
   err.code = 'MAGIC_LINK_CALLBACK_UNAVAILABLE';

@@ -1894,6 +1894,32 @@ This evidence file is not release-complete by itself. The release remains not co
   network and `docker desktop stop` removed the Desktop runtime in one
   bounded stop. The durable note is
   `docs/recon/PROXIMITY_FIELD_GEOMETRY_CACHE.md`.
+- OpenRouter Email Link owner-boundary follow-up: current Clerk documentation,
+  live machine state, and Hydra's callback contract were rechecked before
+  attempting any relay setup. OpenRouter owns the Clerk tenant, so Hydra users
+  cannot add a callback allowlist entry; a generic Cloudflare or Tailscale
+  tunnel would still be rejected and would expose unnecessary ingress. No
+  tunnel was started and no `.env` opt-in was forged. The Bulk Import tab now
+  says `Owner-only; use OTP`, the backend error says Email Link cannot be
+  self-enabled for OpenRouter accounts, and `.env.example` reserves the relay
+  variables for a genuinely owner-controlled Clerk tenant. The broad
+  `.env.*` ignore rule now explicitly unignores that placeholder-only template
+  so the operator guidance ships with the repo. Focused UI
+  contracts passed `46/46`, API integration passed `11/11`, background
+  contracts passed `33/33`, lint passed, build passed, and diff hygiene passed.
+  The rebuilt ARM package passed smoke, strict deep codesign, and embedded
+  Bulk Import renderer hash equality. Its local archive SHA-256 before
+  reversible cleanup was
+  `461bf8e32d93582544eb87042ed4a62deb418ae1d2ddc1123371cf61a66f61e1`.
+  LaunchServices reopened the sole Spotlight bundle; the bounded startup
+  sample settled from `53.8%` CPU at `+30s` to `0.3%` at `+65s`, with four
+  owned processes and zero stale profiles. A final literal recheck passed
+  lint, full `npm test`, gate `12/12`, OpenAPI generation (`84 operations`,
+  no tracked drift), diff hygiene, audit, and local Docker smoke with a
+  rebuilt image and real containerized Playwright Chromium launch. Teardown
+  left no `hydra_default` network and stopped Docker Desktop cleanly. The
+  durable note is
+  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`.
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under
   `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`

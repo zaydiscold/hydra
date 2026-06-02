@@ -109,10 +109,12 @@ that Hydra must not write the two opt-in environment variables automatically:
 No tunnel was started and no `.env` value was changed. Setting
 `HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED=1` without a tenant-owner
 allowlist entry would be false and would re-enable the rejected-request loop.
-For OpenRouter accounts, use Bulk OTP. If an owner-controlled Clerk tenant is
-introduced later, configure an authenticated named tunnel that forwards only
-`/api/auth/magic-callback`, register that exact HTTPS relay with the Clerk
-tenant owner, and only then set both opt-in variables.
+For OpenRouter accounts, use Bulk OTP. Hydra users cannot self-enable Email
+Link for OpenRouter accounts because OpenRouter owns the Clerk tenant. If an
+owner-controlled Clerk tenant is introduced later, configure an authenticated
+named tunnel that forwards only `/api/auth/magic-callback`, register that exact
+HTTPS relay with the Clerk tenant owner, and only then set both opt-in
+variables.
 
 ## OTP Guidance Follow-Up
 
@@ -156,3 +158,45 @@ sampled the same still-installed exact-public package 11 more times at
 30-second intervals. It retained four Hydra-owned processes and zero stale
 profiles throughout; CPU stayed within `0.0-0.4%`, averaged `0.073%`, and
 ended at `0.0%`; RSS moved `509345792 -> 513179648` bytes (`+3833856`).
+
+## Owner-Only Operator Copy
+
+Date: 2026-06-02
+
+A fresh setup request exposed that the dormant Email Link tab subtitle could
+still read like a local setup task even though OpenRouter owns the required
+Clerk allowlist. Hydra now says `Owner-only; use OTP` in the tab switcher. The
+backend error explicitly says Email Link cannot be self-enabled for OpenRouter
+accounts, and `.env.example` reserves relay configuration for a genuinely
+owner-controlled Clerk tenant. No tunnel was started and no `.env` opt-in was
+forged. The broad `.env.*` ignore rule now explicitly unignores that
+placeholder-only template so the operator guidance ships with the repo.
+
+Focused verification passed:
+
+- `npm run test:ui-static` (`46/46`)
+- `npm run test:api-integration` (`11/11`)
+- `npm run test:background-failure-visibility` (`33/33`)
+- `npm run lint`
+- `npm run build`
+- `git diff --check`
+
+The rebuilt ARM package passed smoke, strict deep codesign, and Bulk Import
+renderer hash equality:
+
+```text
+6dda6c27f1bef4efbf0feea42b2326d60519a03cfc183495e79097b7abfbb05b  dist/assets/BulkAuthWizard-CfkZ2A5T.js
+6dda6c27f1bef4efbf0feea42b2326d60519a03cfc183495e79097b7abfbb05b  release/mac-arm64/Hydra.app/Contents/Resources/app/dist/assets/BulkAuthWizard-CfkZ2A5T.js
+461bf8e32d93582544eb87042ed4a62deb418ae1d2ddc1123371cf61a66f61e1  release/Hydra-1.4.7-mac-arm64.zip
+```
+
+Generated archive metadata moved reversibly to Trash. LaunchServices reopened
+the sole Spotlight `Hydra.app`; the bounded startup sample settled from
+`53.8%` CPU at `+30s` to `0.3%` at `+65s`, with four owned processes and zero
+stale profiles.
+
+The final literal recheck passed lint, full `npm test`, gate `12/12`, OpenAPI
+generation (`84 operations`, no tracked drift), diff hygiene, audit, and local
+Docker smoke with a rebuilt image and real containerized Playwright Chromium
+launch. Teardown left no `hydra_default` network and stopped Docker Desktop
+cleanly.

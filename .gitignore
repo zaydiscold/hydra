@@ -22,6 +22,7 @@ release/
 # Environment Variables and Secrets
 .env
 .env.*
+!.env.example
 *.env
 .key
 *.key
