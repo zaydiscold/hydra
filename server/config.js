@@ -71,14 +71,15 @@ const configSchema = z.object({
   /** Extra step-level stderr logs during management-key Playwright (goto, click, fill milestones). */
   HYDRA_PROVISION_VERBOSE: z.boolean().default(false),
   /**
-   * Reserved: when OpenRouter uses Server Actions for create, operators may enable after capturing URL/body.
-   * Currently logs a pointer to docs only — no replay is implemented until capture-derived wiring exists.
+   * Legacy compatibility marker for provision diagnostics. Direct replay is
+   * always attempted; Hydra learns a drifted Next-Action ID from UI fallback.
    */
   HYDRA_PROVISION_SERVER_ACTION_REPLAY: z.boolean().default(false),
   /**
    * Next.js Server Action ID for management key creation.
-   * Capture this from the dashboard using scripts/capture-mgmt-key-network.mjs
-   * when creating a management key (Next-Action header value).
+   * Capture this from the dashboard using
+   * scripts/recon/capture-mgmt-key-network.mjs when creating a management key
+   * (Next-Action header value).
    */
   HYDRA_MGMT_KEY_SERVER_ACTION_ID: z.string().min(1).optional(),
   /** Next.js Server Action hash for code redemption on /redeem. Override if OR redeploys. */

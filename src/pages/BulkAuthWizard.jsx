@@ -6,7 +6,7 @@ import OtpTab from '../components/OtpTab';
 
 const TABS = [
   { id: 'otp', label: '# OTP', subtitle: 'Enter 6-digit code' },
-  { id: 'email-link', label: '✉ Email Link', subtitle: 'Owner-only; use OTP' },
+  { id: 'email-link', label: 'Advanced relay', subtitle: 'Owner-only; not OpenRouter' },
 ];
 
 export default function BulkAuthWizard({ addToast }) {
@@ -19,8 +19,8 @@ export default function BulkAuthWizard({ addToast }) {
         <div>
           <AnimeText as="h2" mode="lines" variant="scanline" delay={36} style={{ margin: 0 }}>Bulk Account Import</AnimeText>
           <p className="page-header__lede">
-            Import OpenRouter accounts into Hydra. Use <strong>OTP</strong> for the supported direct HTTPS code import.
-            Email Link is owner-only and remains visible for Clerk tenants with an owner-allowlisted HTTPS relay.
+            Import existing OpenRouter accounts with <strong>OTP</strong>, the same direct HTTPS email-code login used by account cards.
+            Use Generator for a brand-new signup. Email Link is an owner-only advanced relay for compatible Clerk tenants, not OpenRouter.
           </p>
         </div>
       </header>
@@ -102,6 +102,7 @@ export default function BulkAuthWizard({ addToast }) {
           setOtpCode={auth.setOtpCode}
           keyName={auth.otpKeyName}
           setKeyName={auth.setOtpKeyName}
+          signupRequired={auth.otpSignupRequired}
           provisionEnabled={auth.otpProvisionEnabled}
           setProvisionEnabled={auth.setOtpProvisionEnabled}
           busy={auth.otpBusy}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { parseEmailEntries, clerkErrorHint } from '../utils/auth';
 import DevBackendHint from '../components/DevBackendHint';
 import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
@@ -16,6 +17,7 @@ export default function OtpTab({
   setOtpCode,
   keyName,
   setKeyName,
+  signupRequired,
   provisionEnabled,
   setProvisionEnabled,
   busy,
@@ -35,6 +37,7 @@ export default function OtpTab({
   onSkip,
   resetErrors
 }) {
+  const navigate = useNavigate();
   const current = queue[currentIdx] ?? null;
   const total = queue.length;
   const position = total ? currentIdx + 1 : 0;
@@ -217,6 +220,17 @@ export default function OtpTab({
                 <div>
                   <DevBackendHint message={localError} copyCommand={errorCopyCommand} />
                   {errorHint && <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 6 }}>{errorHint}</p>}
+                  {signupRequired && (
+                    <button
+                      type="button"
+                      data-testid="bulk-auth-open-generator"
+                      className="btn btn-secondary"
+                      style={{ marginTop: 8 }}
+                      onClick={() => navigate('/generator')}
+                    >
+                      Open Account Generator
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -240,13 +254,18 @@ export default function OtpTab({
                   placeholder="000000"
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    if (!busy && otpCode.length === 6 && signInId) void onVerify(current, otpCode);
+                  }}
                   spellCheck={false}
                   style={{ maxWidth: 160, fontFamily: 'var(--font-mono)', letterSpacing: '0.2em' }}
                 />
               </div>
 
               <button type="button" data-testid="bulk-auth-verify" className="btn btn-primary" onClick={() => onVerify(current, otpCode)} disabled={busy || otpCode.length !== 6 || !signInId}>
-                Verify code
+                {busy ? 'Submitting code…' : 'Verify code'}
               </button>
               {!signInId && <p style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>Send the code first — then enter the digits from your inbox.</p>}
 
@@ -330,6 +349,8 @@ export default function OtpTab({
         <h2 style={{ fontSize: '1rem', marginBottom: 'var(--space-sm)' }}>Activity log</h2>
         <pre
           data-testid="bulk-auth-log"
+          role="status"
+          aria-live="polite"
           style={{
             margin: 0, maxHeight: 200, overflow: 'auto', fontSize: '0.75rem',
             color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',

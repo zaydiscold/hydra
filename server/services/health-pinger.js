@@ -2,13 +2,13 @@ import { rotationManager } from './rotation-manager.js';
 import { logger } from './logger.js';
 import { config, OR_BASE } from '../config.js';
 import { recordUpstreamFailure, recordUpstreamHttpResult } from './upstream-health.js';
+import { fetchKeyMetadataResponse } from './openrouter.js';
 
 // How often to test a random key in the background (default 5 mins).
 const DEFAULT_PING_INTERVAL_MS = 5 * 60 * 1000;
 const PING_INTERVAL_MS = readNonNegativeMs('HYDRA_HEALTH_PING_INTERVAL_MS', DEFAULT_PING_INTERVAL_MS);
 const PING_STARTUP_DELAY_MS = readNonNegativeMs('HYDRA_HEALTH_PING_STARTUP_DELAY_MS', PING_INTERVAL_MS);
 // Validate key metadata without spending completion tokens.
-const PING_PATH = '/api/v1/auth/key';
 const PING_TIMEOUT_MS = 10 * 1000;
 const NETWORK_ERROR_LOG_WINDOW_MS = 60 * 1000;
 let timer = null;
@@ -43,10 +43,9 @@ async function pingRandomKey() {
     timeoutId = setTimeout(() => ctrl.abort(), PING_TIMEOUT_MS);
     timeoutId.unref?.();
 
-    const res = await fetch(`${OR_BASE}${PING_PATH}`, {
-      method: 'GET',
+    const res = await fetchKeyMetadataResponse(keyEntry.keyString, {
+      baseUrl: `${OR_BASE}/api/v1`,
       headers: {
-        'Authorization': `Bearer ${keyEntry.keyString}`,
         'HTTP-Referer': `http://localhost:${config.PORT}`,
       },
       signal: ctrl.signal

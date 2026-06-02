@@ -2714,3 +2714,67 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   returning to low idle and ending at `0.0%`; RSS moved
   `465502208 -> 470351872` bytes (`+4849664`). The full sample series and
   broad process inventories remain in that profile directory.
+- 2026-06-02 `v1.4.8` Bulk OTP signup-boundary candidate: Bulk OTP and the
+  account-card Authenticate modal continue to share direct HTTPS
+  `POST /api/accounts/:id/otp/start` and
+  `POST /api/accounts/:id/otp/verify` contracts for existing OpenRouter
+  accounts. Bulk OTP now stops before direct Clerk `sign_up` preparation for
+  an unknown email, returns structured `SIGNUP_INTERACTIVE_REQUIRED`, and
+  offers a Generator handoff for the required interactive signup boundary.
+  The renderer no longer presents Email Link as an OpenRouter setup path; it
+  remains an owner-only advanced relay for compatible Clerk tenants. Focused
+  verification passed signup-boundary `1/1`, UI static `46/46`, background
+  visibility `33/33`, API integration `11/11`, lint, full `npm test`,
+  production build, and diff hygiene. The rebuilt ARM package passed smoke,
+  strict deep codesign, bundle-version inspection, and embedded-source
+  inspection. Its archive SHA-256 before reversible cleanup was
+  `6a051e0f0f9f1f9c844c0600832e34629e9d1bd4b104259934d50b83ae577ba7`.
+  LaunchServices reopened the sole Desktop-tree canonical bundle with four
+  owned processes and zero stale profiles; CPU decayed from `270.2%` at
+  `+5s` to `60.5%` at `+15s`, then `0.0%` at `+20s` and `+30s`. Finite splash
+  teardown retained `target=72`, `duplicateShatterSkips=0`, `timers=0`,
+  `rafActive=false`, `bodyCount=0`, and `matterCleared=true`. Hosted Intel,
+  Windows, and Linux artifact publication remains pending until the
+  `v1.4.8` GitHub release workflow completes. The durable note is
+  `docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md`.
+- 2026-06-02 final `v1.4.8` auth, session, and OpenRouter fallback
+  reconciliation: OTP verification now returns as soon as the authenticated
+  Clerk session is persisted and starts management-key provisioning as a
+  supervised `otp_auto_provision` task, so sequential Bulk OTP advances
+  without waiting for isolated Chromium fallback. The renderer uses quiet OTP
+  APIs, reports the queued provision task immediately, polls supervised task
+  state, updates its activity log, and accepts Enter-key submission. Requested
+  labels such as `hydra-148` survive provisioning and encrypted persistence.
+  Existing placeholder aliases matching `Hydra Account <number>` migrate
+  uniqueness-safely to email-derived labels such as `zayd-zayd.world`, while
+  custom aliases remain untouched. Account Detail suppresses `[UNLOCK] Re-auth`
+  after a successful live Clerk probe; interactive-login age remains
+  historical context rather than a claim that the current cookie is expired.
+  A guarded live probe proved the old `delilah-zayd.wtf` Clerk session active
+  with one normalized cookie identity and redeem-ready state. A second active
+  no-key account passed dry-run provisioning, then completed one guarded
+  `--yes --name hydra-148` provision through the retained isolated Playwright
+  UI fallback and stored one active redacted `hydra-148` row. No credential
+  material was printed. Comparing Hydra with the local Printing Press
+  OpenRouter package and current OpenRouter docs corrected metadata probes to
+  canonical `GET /api/v1/key` with legacy `/api/v1/auth/key` fallback only on
+  canonical `404`, removed documented API-key creation route
+  `POST /api/v1/keys` from session-based management-key mint probes, bounded a
+  stale Server Action self-heal to one attempt, skips equivalent tRPC fan-out
+  after generic HTML `404`, and learns the current `Next-Action` ID from the
+  working UI fallback for later direct replay. The redacted recon note is
+  `docs/recon/OPENROUTER_KEY_ENDPOINTS_AND_PROVISION_FALLBACKS.md`.
+  Final-source verification passed lint, full `npm test`, production build,
+  gate `12/12`, OpenAPI regeneration (`84` operations), diff hygiene, ARM
+  package smoke, strict deep codesign, bundle-version inspection, and embedded
+  source inspection. The superseding ARM archive SHA-256 before reversible
+  cleanup was
+  `294024c55ea3e84e3b4bd25fe294cb063c49f4d905a7c5ad2c269176d23679e1`.
+  Archive byproducts and the prior ARM bundle moved reversibly to `~/.Trash/`;
+  `release/` contains only the canonical unpacked app and Spotlight resolves
+  only that bundle. A fresh LaunchServices run held four owned processes and
+  zero stale profiles throughout. Splash work sampled `76.9%`, `259.3%`,
+  `74.5%`, and `31.6%` CPU at `+5s`, `+15s`, `+30s`, and `+35s`, then settled
+  to `0.0%` at both `+60s` and `+90s`. Hosted Intel, Windows, and Linux
+  artifact publication remains pending until the GitHub release workflow
+  completes.

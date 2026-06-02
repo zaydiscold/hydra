@@ -55,6 +55,22 @@ export class NeedSecondFactorError extends Error {
   }
 }
 
+/** OpenRouter requires interactive CAPTCHA verification before a new Clerk account can be created. */
+export class SignupInteractiveRequiredError extends Error {
+  constructor() {
+    super(
+      'This email is not an existing OpenRouter account. New OpenRouter signup requires interactive verification. Use Account Generator for signup, then return to Bulk OTP for imports.',
+    );
+    this.name = 'SignupInteractiveRequiredError';
+    this.status = 409;
+    this.code = 'SIGNUP_INTERACTIVE_REQUIRED';
+    this.extra = {
+      hint: 'Bulk OTP intentionally handles existing-account login. Hydra will not retry CAPTCHA-gated sign_up as direct HTTPS.',
+      fallback: 'generator',
+    };
+  }
+}
+
 
 function sessionCookieFromSetCookieLines(setCookieLines) {
   return parseCookies(setCookieLines)['__session'] || null;
@@ -661,8 +677,12 @@ async function resolveSessionAfterCompletedAttempt(attemptData, setCookieLines, 
  * @param {string} email
  * @returns {{ signInId, clientCookie, emailAddressId }}
  */
-export async function startEmailOTP(email, { signal = null } = {}) {
+export async function startEmailOTP(email, { signal = null, allowSignUp = false } = {}) {
   const { isSignUp, signUpId, signInId, clientCookie, strategies, emailAddressId } = await detectAuthMethod(email, { signal });
+
+  if (isSignUp && !allowSignUp) {
+    throw new SignupInteractiveRequiredError();
+  }
 
   if (isSignUp) {
     // New account: send OTP via sign_up email verification path.

@@ -56,9 +56,10 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
   const tab = readRepoFile('src/components/EmailLinkTab.jsx');
   const authUtils = readRepoFile('src/utils/auth.js');
 
-  assert.match(page, /Owner-only; use OTP/);
-  assert.match(page, /Email Link is owner-only/);
-  assert.match(page, /supported direct HTTPS code import/);
+  assert.match(page, /Owner-only; not OpenRouter/);
+  assert.match(page, /Email Link is an owner-only advanced relay/);
+  assert.match(page, /same direct HTTPS email-code login used by account cards/);
+  assert.match(page, /Use Generator for a brand-new signup/);
   assert.match(page, /magicLinkCapability=\{auth\.magicLinkCapability\}/);
   assert.match(page, /onRefreshCapability=\{auth\.refreshMagicLinkCapability\}/);
   assert.match(tab, /bulk-auth-email-link-capability/);
@@ -68,6 +69,7 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
   assert.doesNotMatch(page, /One click link/);
   assert.doesNotMatch(tab, /Parallel status/);
   assert.match(authUtils, /Email Link works only when its capability banner says ready/);
+  assert.match(authUtils, /Generator handles a new OpenRouter signup through its isolated interactive flow/);
   assert.doesNotMatch(authUtils, /Try the Email Link tab instead/);
   assert.match(authUtils, /Too many OTP requests sent from this IP/);
   assert.doesNotMatch(authUtils, /Too many OTP requests send from this IP/);
@@ -997,6 +999,11 @@ test('session ages are labeled as historical context while live probes show obse
   assert.match(accountDetail, /last silent renewal/);
   assert.match(accountDetail, /Next local renewal checkpoint/);
   assert.match(accountDetail, /not the login's total lifetime/);
+  assert.equal(
+    (accountDetail.match(/hasCredentials && accountNeedsSession\(/g) || []).length,
+    2,
+    'Account Detail must hide re-auth recovery actions while a Clerk session is live',
+  );
   assert.match(accountCard, />login \{timeAgo\(account\.lastLoginAt\)\}</);
   assert.match(vault, /login \{timeAgo\(acc\.lastLoginAt\)\}/);
   assert.match(vault, /Live probe: \$\{checkResults\[acc\.id\]\.observedAt\}/);

@@ -293,6 +293,25 @@ test('bulk OTP stubs skip duplicate saved emails unless forceReplace is explicit
   assert.equal(replaced.json.data.results[0].success, true);
   assert.equal(replaced.json.data.results[0].replaced, true);
   assert.equal(replaced.json.data.results[0].account.email, 'duplicate@example.test');
+  assert.equal(replaced.json.data.results[0].account.alias, 'bulk-duplicate-source');
+
+  const legacy = await getJson('/api/accounts/with-credentials', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      alias: 'Hydra Account 91',
+      email: 'legacy@example.test',
+      authMethod: 'otp',
+    }),
+  });
+  assert.equal(legacy.res.status, 201);
+
+  const migrated = await getJson('/api/accounts', { headers });
+  assert.equal(migrated.res.status, 200);
+  assert.equal(
+    migrated.json.data.find((account) => account.email === 'legacy@example.test')?.alias,
+    'legacy-example.test',
+  );
 });
 
 test('protected account routes reject anonymous requests', async () => {

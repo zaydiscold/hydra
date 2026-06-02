@@ -51,6 +51,23 @@ checkpoint must never be presented as the login's total remaining lifetime.
 
 Clerk device identity cookies are the durable refresh material. OpenRouter
 dashboard and Cloudflare cookies can change during otherwise equivalent probes.
+
+## Re-auth Versus Provision
+
+Re-authentication and management-key provisioning are separate actions:
+
+- A successful live Clerk probe means the stored dashboard login works now.
+  Account Detail suppresses the re-auth recovery button in this state even
+  when the historical interactive sign-in is many weeks old.
+- A missing management key is a control-plane setup gap, not proof that login
+  expired. When the live Clerk probe is active, Hydra can provision the key
+  directly from that stored session.
+- Re-auth is shown as a recovery action only when Clerk truth is missing,
+  expired, or errored.
+
+On 2026-06-02 a live CLI probe renewed an old stored Clerk identity
+successfully, and a separate guarded provision created and stored one
+management key named `hydra-148` without printing credential material.
 Hydra keeps genuinely distinct Clerk device identities newest-first, but
 replaces snapshots that differ only in transient dashboard material. The stack
 remains capped at 25 identities as a final bound.

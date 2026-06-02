@@ -248,8 +248,7 @@ class PoolController extends BaseController {
       }
 
       // Validate the pasted key and make sure it matches the target record.
-      const orTest = await fetch('https://openrouter.ai/api/v1/auth/key', {
-        headers: { 'Authorization': `Bearer ${keyString}` },
+      const orTest = await openrouter.fetchKeyMetadataResponse(keyString, {
         signal: combineAbortSignals(requestAbort.signal, AbortSignal.timeout(30_000)),
       });
       if (!orTest.ok) {

@@ -17,7 +17,7 @@
  *
  * Usage (from repo root, after exporting cookies from a logged-in session):
  *   HYDRA_CAPTURE_OR_SESSION='eyJ...' HYDRA_CAPTURE_OR_CLIENT='__client=...' \
- *     HYDRA_PLAYWRIGHT_HEADED=1 node scripts/capture-mgmt-key-network.mjs
+ *     HYDRA_PLAYWRIGHT_HEADED=1 node scripts/recon/capture-mgmt-key-network.mjs
  */
 
 import { appendFile, mkdir } from 'node:fs/promises';
@@ -355,7 +355,7 @@ async function main() {
     const header = `# Hydra capture-mgmt-key-network — ${new Date().toISOString()}\n\n`;
     await appendFile(logFile, header + networkLines.join('\n') + serverActionDoc, 'utf8');
     console.error(`\n[capture] Wrote ${logFile}`);
-    console.error('[capture] Copy relevant POST lines into docs/recon/TRPC_ROUTES.md → Management keys — captured network.');
+    console.error('[capture] Copy relevant POST lines into docs/recon/OPENROUTER_KEY_ENDPOINTS_AND_PROVISION_FALLBACKS.md (redacted).');
 
     if (serverActions.length > 0) {
       console.error('\n[capture] Server Actions captured! To enable replay:');

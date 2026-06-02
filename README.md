@@ -197,7 +197,7 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, the current refined desktop release is `v1.4.7`, and
+first as `v1.1.0`, the current refined desktop release is `v1.4.8`, and
 remaining manual dogfood evidence stays explicit in the audit.
 
 Current release-train docs:
@@ -214,6 +214,8 @@ Current release-train docs:
 - [Bulk Auth Import Redirect And Dedupe](docs/recon/BULK_AUTH_IMPORT_REDIRECT_AND_DEDUPE.md):
   Email Link callback limits, direct-HTTPS OTP import, duplicate handling, and
   Force Replace behavior.
+- [OpenRouter Key Endpoints And Provision Fallbacks](docs/recon/OPENROUTER_KEY_ENDPOINTS_AND_PROVISION_FALLBACKS.md):
+  canonical API-key metadata, management-key boundaries, and bounded fallback learning.
 - [Release Audit](docs/RELEASE_AUDIT.md): measured performance evidence,
   packaged-app evidence, and the remaining manual dogfood blockers.
 - [Accessibility Profiling Distortion](docs/ACCESSIBILITY_PROFILING_DISTORTION.md):

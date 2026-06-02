@@ -292,7 +292,7 @@ function provisionNetworkLogEnabled() {
  */
 
 
-async function persistProvisionedManagementKey(userId, accountId, key, source = 'unknown') {
+async function persistProvisionedManagementKey(userId, accountId, key, source = 'unknown', requestedName = null) {
   if (!key || typeof key !== 'string' || !key.startsWith('sk-or-v1-')) {
     const err = new Error('Provisioning returned an invalid management key format (expected sk-or-v1-*)');
     err.code = 'PROVISION_INVALID_KEY_FORMAT';
@@ -311,9 +311,10 @@ async function persistProvisionedManagementKey(userId, accountId, key, source = 
   }
 
   // Canonical save: ManagementKey table via store abstraction.
+  const normalizedName = String(requestedName || '').trim() || `Hydra Auto Key (${source})`;
   await store.updateAccountManagementKey(userId, accountId, key, {
-    name: `Hydra Auto Key (${source})`,
-    metadata: { source },
+    name: normalizedName,
+    metadata: { source, requestedName: normalizedName },
   });
 
   // Verify it was saved
@@ -440,7 +441,7 @@ function summarizeTrpcFailure(err) {
 /**
  * Next.js Server Action replay for management key creation.
  * Used when dashboard create hits Server Actions instead of `/api/trpc/*`.
- * Enable with HYDRA_PROVISION_SERVER_ACTION_REPLAY=1.
+ * Direct replay is always attempted before slower compatibility fallbacks.
  *
  * The Server Action request format (captured from real dashboard):
  * - POST to /settings/management-keys
@@ -558,7 +559,8 @@ async function tryManagementKeyServerActionReplay(sessionCookie, clientCookie, k
               }
             }
           }
-          continue;
+          dashboardWarn('[dashboard-api] Mgmt-key Server Action hash remains stale; skipping equivalent payload retries');
+          return null;
         }
         if (!res.ok && res.status !== 200) {
           continue;
@@ -1537,6 +1539,10 @@ function shouldAbortProvisioning(err) {
   return false;
 }
 
+function isMissingTrpcSurface(err) {
+  return err?.isHtml === true && err?.httpStatus === 404;
+}
+
 /**
  * Try to create management key via REST API using session JWT as Bearer token.
  * Fallback when tRPC fails with HTML responses.
@@ -1552,10 +1558,11 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
     const jwtToUse = freshJwt || sessionCookie;
     const cookieHeader = dashboardCookieHeader(jwtToUse, clientCookie);
     
-    // Try various REST endpoints that might work
+    // Vetted legacy management-key candidates. Do not probe POST /api/v1/keys:
+    // OpenRouter documents that route for API-key creation with a management key,
+    // not management-key minting from a Clerk session.
     const endpoints = [
       { url: `${OR_BASE}/api/v1/management-keys`, method: 'POST', body: { name: keyName } },
-      { url: `${OR_BASE}/api/v1/keys`, method: 'POST', body: { name: keyName, type: 'management' } },
       { url: `${OR_BASE}/api/management/keys`, method: 'POST', body: { name: keyName } },
       { url: `${OR_BASE}/api/keys/management`, method: 'POST', body: { name: keyName } },
     ];
@@ -1611,11 +1618,8 @@ async function tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automat
       }
     }
     
-    // ── Expanded REST probe endpoints (EXPLOIT #12) ──
-    // Also try /api/v1/keys with minimal body and additional path variants.
+    // Additional legacy dashboard candidates retained as compatibility fallbacks.
     const expandedEndpoints = [
-      { url: `${OR_BASE}/api/v1/keys`, method: 'POST', body: { name: keyName } },
-      { url: `${OR_BASE}/api/v1/keys`, method: 'POST', body: { name: keyName, type: 'management' } },
       { url: `${OR_BASE}/api/v1/keys/create`, method: 'POST', body: { name: keyName } },
       { url: `${OR_BASE}/api/v1/account/keys`, method: 'POST', body: { name: keyName, type: 'management' } },
       { url: `${OR_BASE}/api/v1/user/keys`, method: 'POST', body: { name: keyName } },
@@ -1819,6 +1823,11 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   const { sessionCookie, clientCookie } = await ensureSession(userId, accountId, { signal });
   logProvisionOpenRouterBase(accountId, sessionCookie);
   const automationRoute = pickAutomationNetworkRoute();
+  const endpoints = await store.getDiscoveredEndpoints();
+  const learnedActionId = endpoints.managementKeyServerAction?.actionId;
+  if (/^[0-9a-f]{40}$/i.test(String(learnedActionId || ''))) {
+    CREATE_MGMT_KEY_ACTION_HASH = learnedActionId;
+  }
   if (automationRoute.accountProxy) {
     dashboardWarn(`[dashboard-api] Using account proxy ${describeAutomationNetworkRoute(automationRoute)} for management-key automation account=${accountId}`);
   }
@@ -1828,12 +1837,11 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   // The Next-Action hash and body format were captured from live browser traffic.
   const fromSa = await tryManagementKeyServerActionReplay(sessionCookie, clientCookie, keyName, automationRoute, signal);
   if (fromSa) {
-    await persistProvisionedManagementKey(userId, accountId, fromSa, 'server-action');
+    await persistProvisionedManagementKey(userId, accountId, fromSa, 'server-action', keyName);
     return { key: fromSa, source: 'server-action' };
   }
 
   dashboardError('[dashboard-api] Server Action failed, falling back to tRPC discovery and Playwright');
-  const endpoints = await store.getDiscoveredEndpoints();
   const endpoint = endpoints.createManagementKey;
 
   const mgmtKeyPayloads = [
@@ -1847,6 +1855,7 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
   const migrationContext = { userId, accountId, accountProxy: automationRoute, signal };
 
   let lastTrpcRouteAttempted = null;
+  let skipTrpcDiscovery = false;
   if (endpoint) {
     lastTrpcRouteAttempted = endpoint.route;
     for (const input of mgmtKeyPayloads) {
@@ -1866,11 +1875,16 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
           if (!key.startsWith('sk-or-v1-')) {
             throw new Error('tRPC returned a non-management key for management key creation.');
           }
-          await persistProvisionedManagementKey(userId, accountId, key, 'trpc-cached');
+          await persistProvisionedManagementKey(userId, accountId, key, 'trpc-cached', keyName);
           return { key, source: 'trpc-cached' };
         }
       } catch (err) {
         throwIfAborted(signal);
+        if (isMissingTrpcSurface(err)) {
+          skipTrpcDiscovery = true;
+          dashboardWarn('[dashboard-api] Cached tRPC endpoint returned generic 404 HTML; skipping equivalent tRPC candidate fan-out');
+          break;
+        }
         if (shouldAbortProvisioning(err)) {
           return { success: false, message: err.message, source: 'trpc-cached' };
         }
@@ -1894,51 +1908,59 @@ export async function createManagementKey(userId, accountId, keyName = 'Hydra Au
     'management.managementKeys.create',
   ];
   let lastTrpcError = null;
-  for (const route of candidates) {
-    lastTrpcRouteAttempted = route;
-    for (const input of mgmtKeyPayloads) {
-      throwIfAborted(signal);
-      try {
-        dashboardError(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
-        const result = await trpcCallWithMigration(route, input, sessionCookie, clientCookie, {}, migrationContext);
-        dashboardError(`[dashboard-api] tRPC route ${route} result:`, { hasResult: !!result, keys: Object.keys(result || {}) });
-        const key =
-          result?.key ??
-          result?.managementKey ??
-          result?.apiKey ??
-          result?.secret ??
-          result?.token ??
-          result?.management_key ??
-          result?.api_key;
-        if (key && key.startsWith('sk-or-v1-')) {
-          dashboardError(`[dashboard-api] Success via tRPC route: ${route}`);
-          await store.saveDiscoveredEndpoints({ createManagementKey: { route, discoveredAt: new Date().toISOString() } });
-          await persistProvisionedManagementKey(userId, accountId, key, `trpc-${route}`);
-          return { key, source: `trpc-${route}` };
-        }
-        // No key returned - route exists but wrong payload or unexpected response shape
-        dashboardError(`[dashboard-api] tRPC route ${route} returned result but no management key`);
-      } catch (err) {
+  if (!skipTrpcDiscovery) {
+    trpcCandidates:
+    for (const route of candidates) {
+      lastTrpcRouteAttempted = route;
+      for (const input of mgmtKeyPayloads) {
         throwIfAborted(signal);
-        lastTrpcError = err;
-        dashboardError(`[dashboard-api] tRPC route ${route} failed: ${err.message} (httpStatus: ${err.httpStatus}, trpcCode: ${err.trpcCode})`);
-        if (shouldAbortProvisioning(err)) {
-          return { success: false, message: err.message, source: `trpc-${route}` };
+        try {
+          dashboardError(`[dashboard-api] Trying tRPC route: ${route} with payload: ${JSON.stringify(input)}`);
+          const result = await trpcCallWithMigration(route, input, sessionCookie, clientCookie, {}, migrationContext);
+          dashboardError(`[dashboard-api] tRPC route ${route} result:`, { hasResult: !!result, keys: Object.keys(result || {}) });
+          const key =
+            result?.key ??
+            result?.managementKey ??
+            result?.apiKey ??
+            result?.secret ??
+            result?.token ??
+            result?.management_key ??
+            result?.api_key;
+          if (key && key.startsWith('sk-or-v1-')) {
+            dashboardError(`[dashboard-api] Success via tRPC route: ${route}`);
+            await store.saveDiscoveredEndpoints({ createManagementKey: { route, discoveredAt: new Date().toISOString() } });
+            await persistProvisionedManagementKey(userId, accountId, key, `trpc-${route}`, keyName);
+            return { key, source: `trpc-${route}` };
+          }
+          // No key returned - route exists but wrong payload or unexpected response shape
+          dashboardError(`[dashboard-api] tRPC route ${route} returned result but no management key`);
+        } catch (err) {
+          throwIfAborted(signal);
+          lastTrpcError = err;
+          dashboardError(`[dashboard-api] tRPC route ${route} failed: ${err.message} (httpStatus: ${err.httpStatus}, trpcCode: ${err.trpcCode})`);
+          if (isMissingTrpcSurface(err)) {
+            skipTrpcDiscovery = true;
+            dashboardWarn('[dashboard-api] tRPC endpoint returned generic 404 HTML; skipping equivalent tRPC candidate fan-out');
+            break trpcCandidates;
+          }
+          if (shouldAbortProvisioning(err)) {
+            return { success: false, message: err.message, source: `trpc-${route}` };
+          }
+          // Try next payload / candidate
         }
-        // Try next payload / candidate
       }
     }
   }
 
   dashboardError(
-    `[dashboard-api] All tRPC routes exhausted, trying REST API fallback. Last error: ${lastTrpcError?.message || 'none'}`,
+    `[dashboard-api] ${skipTrpcDiscovery ? 'tRPC surface unavailable' : 'All tRPC routes exhausted'}, trying REST API fallback. Last error: ${lastTrpcError?.message || 'none'}`,
   );
 
   // Try REST API with session JWT as Bearer token
   const restResult = await tryRestApiCreateKey(sessionCookie, clientCookie, keyName, automationRoute, signal);
   if (restResult?.key) {
     dashboardError(`[dashboard-api] Success via REST API`);
-    await persistProvisionedManagementKey(userId, accountId, restResult.key, 'rest-api');
+    await persistProvisionedManagementKey(userId, accountId, restResult.key, 'rest-api', keyName);
     return { key: restResult.key, source: 'rest-api' };
   }
 
@@ -2429,6 +2451,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
     })();
   let page;
   let capturedKey = null;
+  let discoveredServerActionFromUi = null;
   const networkLogLines = [];
   let traceStarted = false;
   const closeOnAbort = () => {
@@ -2453,6 +2476,18 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       traceStarted = true;
     }
     page = await context.newPage();
+    page.on('request', (request) => {
+      try {
+        if (request.method() !== 'POST') return;
+        if (new URL(request.url()).pathname !== '/settings/management-keys') return;
+        const nextAction = request.headers()['next-action'];
+        if (/^[0-9a-f]{40}$/i.test(String(nextAction || ''))) {
+          discoveredServerActionFromUi = nextAction;
+        }
+      } catch (err) {
+        provisionStepLog(accountId, `management-key Next-Action capture failed: ${err.message}`);
+      }
+    });
 
     if (provisionNetworkLogEnabled()) {
       page.on('response', async (response) => {
@@ -2463,6 +2498,8 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
           if (!u.startsWith(OR_ORIGIN)) return;
           const postData = truncateForLog(req.postData() || '', 2000);
           let line = `${new Date().toISOString()} POST ${response.status()} ${u}\npostData: ${postData || '(empty)'}`;
+          const nextAction = req.headers()['next-action'];
+          if (nextAction) line += `\nnext-action: ${nextAction}`;
           if (u.includes('/api/trpc/')) {
             line += `\npathname: ${new URL(u).pathname}`;
           }
@@ -2863,8 +2900,7 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
                 : ''
             }.`
           : '';
-      const phasesTried = ['trpc_http'];
-      if (config.HYDRA_PROVISION_SERVER_ACTION_REPLAY) phasesTried.push('server_action_replay_attempted');
+      const phasesTried = ['server_action_replay_attempted', 'trpc_http'];
       phasesTried.push('browser_ui');
       let pageUrlAtFailure = '';
       try {
@@ -2903,7 +2939,19 @@ async function createManagementKeyViaPlaywright(userId, accountId, sessionCookie
       traceStarted = false;
     }
 
-    await persistProvisionedManagementKey(userId, accountId, capturedKey, 'playwright');
+    if (discoveredServerActionFromUi) {
+      CREATE_MGMT_KEY_ACTION_HASH = discoveredServerActionFromUi;
+      await store.saveDiscoveredEndpoints({
+        managementKeyServerAction: {
+          actionId: discoveredServerActionFromUi,
+          discoveredAt: new Date().toISOString(),
+          source: 'playwright-ui',
+        },
+      });
+      provisionStepLog(accountId, 'learned current management-key Next-Action from UI fallback');
+    }
+
+    await persistProvisionedManagementKey(userId, accountId, capturedKey, 'playwright', keyName);
     return { key: capturedKey, source: 'playwright' };
   } catch (err) {
     if (traceStarted && context) {

@@ -174,7 +174,7 @@ async function main() {
   console.log('   - Then: curl -X POST http://localhost:3001/api/accounts/<id>/otp/verify');
   console.log('');
   console.log('2. CAPTURE LIVE TRAFFIC');
-  console.log('   - Use scripts/capture-mgmt-key-network.mjs to capture actual dashboard requests');
+  console.log('   - Use scripts/recon/capture-mgmt-key-network.mjs to capture actual dashboard requests');
   console.log('   - This requires browser automation and valid login');
   console.log('');
   console.log('3. CHECK FOR SERVER ACTIONS');

@@ -87,6 +87,47 @@ function resolveMagicLinkCallbackOrigin() {
   return `${url.origin}${url.pathname.replace(/\/$/, '')}`;
 }
 
+function startOtpAutoProvisionTask(userId, accountId, keyName = 'Hydra Auto Key') {
+  const task = taskSupervisor.register({
+    type: 'otp_auto_provision',
+    ownerUserId: userId,
+    status: 'checking_management_keys',
+    metadata: { accountId, keyName },
+  });
+
+  const pending = (async () => {
+    const { getManagementKeys } = await import('../services/management-key-store.js');
+    const existingKeys = await getManagementKeys(accountId);
+    if (existingKeys.length > 0) {
+      logger.info(`[ACCOUNT] OTP auto-provision skipped - ${existingKeys.length} key(s) already stored (account=${accountId})`);
+      return { accountId, autoProvision: 'skipped', managementKey: true };
+    }
+
+    taskSupervisor.updateTask(task.taskId, { status: 'provisioning_management_key' });
+    const result = await dashboardApi.createManagementKey(userId, accountId, keyName, {
+      signal: task.abortController.signal,
+    });
+    if (!result?.key) {
+      throw new Error(result?.message || 'OTP auto-provision finished without a captured management key');
+    }
+
+    invalidateSnapshotCache(accountId);
+    logger.info(`[ACCOUNT] OTP auto-provisioned management key in background (account=${accountId}, task=${task.taskId})`);
+    return { accountId, autoProvision: 'completed', managementKey: true };
+  })();
+
+  taskSupervisor.attachResources(task.taskId, { pending });
+  void pending
+    .then((result) => taskSupervisor.complete(task.taskId, result))
+    .catch((err) => {
+      logger.warn(`[ACCOUNT] OTP auto-provision failed in background (account=${accountId}, task=${task.taskId}): ${err.message}`);
+      return taskSupervisor.fail(task.taskId, err);
+    })
+    .finally(() => taskSupervisor.detachPending(task.taskId, pending));
+
+  return task.taskId;
+}
+
 export class AccountController extends BaseController {
   async getAccounts(req, res) {
     const accounts = await store.getAccounts(req.user.id);
@@ -261,8 +302,19 @@ export class AccountController extends BaseController {
        * On alias collision the suffix increments: admin-zayd.world-2, -3, …
        */
       function emailToAlias(email, suffix = 0) {
-        const base = String(email || '').trim().toLowerCase().replace('@', '-');
-        return suffix === 0 ? base : `${base}-${suffix + 1}`;
+        return store.deriveAccountAliasFromEmail(email, suffix);
+      }
+
+      function availableReplacementAlias(email, replacedAccountId) {
+        for (let suffix = 0; suffix < 30; suffix += 1) {
+          const candidate = emailToAlias(email, suffix);
+          const occupied = allAccounts.some((account) => (
+            account.id !== replacedAccountId
+            && String(account.alias || '').trim().toLowerCase() === candidate.toLowerCase()
+          ));
+          if (!occupied) return candidate;
+        }
+        return undefined;
       }
 
       for (const email of unique) {
@@ -299,7 +351,16 @@ export class AccountController extends BaseController {
                 const existing = allAccounts.find((a) => String(a.email || '').toLowerCase() === normalizedEmail);
                 if (existing) {
                   if (forceReplace) {
-                    const replaced = await store.replaceAccountWithOtpStub(req.user.id, existing.id, normalizedEmail);
+                    const replacementAlias = store.isLegacyPlaceholderAlias(existing.alias)
+                      ? availableReplacementAlias(normalizedEmail, existing.id)
+                      : undefined;
+                    const replaced = await store.replaceAccountWithOtpStub(
+                      req.user.id,
+                      existing.id,
+                      normalizedEmail,
+                      { alias: replacementAlias },
+                    );
+                    existing.alias = replaced.alias;
                     results.push({
                       email,
                       success: true,
@@ -534,7 +595,10 @@ export class AccountController extends BaseController {
       });
     } catch (err) {
       if (requestAbort.signal.aborted) return;
-      return this.error(res, err.message, err.status || 500, 'INTERNAL_ERROR', clerkDebugOtpExtra());
+      return this.error(res, err.message, err.status || 500, err.code || 'INTERNAL_ERROR', {
+        ...clerkDebugOtpExtra(),
+        ...(err.extra || {}),
+      });
     } finally {
       requestAbort.dispose();
     }
@@ -543,7 +607,7 @@ export class AccountController extends BaseController {
   async verifyOTP(req, res) {
     const requestAbort = bindRequestAbort(req, res, 'account OTP verify request');
     try {
-      const { signInId, code, totpSecondFactor, isSignUp } = this.validate(req.body, otpVerifySchema);
+      const { signInId, code, totpSecondFactor, isSignUp, autoProvision = true, keyName } = this.validate(req.body, otpVerifySchema);
 
       const accountSession = await store.getAccountSession(req.user.id, req.params.id);
       const storedClient = latestClientCookie(accountSession);
@@ -577,45 +641,18 @@ export class AccountController extends BaseController {
       const { rotationManager } = await import('../services/rotation-manager.js');
       rotationManager.resetLoginAttempts(req.params.id);
 
-      // OTP sessions are SHORT-LIVED (1 min). Must provision SYNCHRONOUSLY before session expires.
-      const userId = req.user.id;
-      const accountId = req.params.id;
-      let autoProvision = 'skipped';
-      let provisionResult = null;
-      try {
-        // Check ManagementKey table (new system), not config (old system)
-        const { getManagementKeys } = await import('../services/management-key-store.js');
-        const existingKeys = await getManagementKeys(accountId);
-        
-        if (existingKeys.length === 0) {
-          autoProvision = 'started';
-          // SYNCHRONOUS - OTP sessions expire too fast for background processing
-          provisionResult = await dashboardApi.createManagementKey(userId, accountId, undefined, {
-            signal: requestAbort.signal,
-          });
-          if (provisionResult?.key) {
-            autoProvision = 'completed';
-            logger.info(`[ACCOUNT] Auto-provisioned management key after OTP (account=${accountId})`);
-            // Invalidate dashboard cache since we have a new management key
-            invalidateSnapshotCache(accountId);
-          } else {
-            autoProvision = 'failed';
-            logger.warn(`[ACCOUNT] Auto-provision after OTP got no key (account=${accountId}): ${provisionResult?.message || 'unknown'}`);
-          }
-        } else {
-          logger.info(`[ACCOUNT] Skipping auto-provision - ${existingKeys.length} key(s) already in ManagementKey table`);
-        }
-      } catch (checkErr) {
-        throwIfAborted(requestAbort.signal);
-        autoProvision = 'error';
-        logger.warn(`[ACCOUNT] Auto-provision after OTP failed (account=${accountId}): ${checkErr.message}`);
-      }
+      // Return as soon as Clerk login is durable. Management-key provisioning
+      // continues under task supervision so the renderer can advance without
+      // issuing a second foreground request or losing shutdown cleanup.
+      const provisionTaskId = autoProvision
+        ? startOtpAutoProvisionTask(req.user.id, req.params.id, keyName)
+        : null;
 
       return this.success(res, { 
         sessionExpiry: session.sessionExpiry, 
         status: 'active', 
-        autoProvision,
-        managementKey: provisionResult?.key ? true : false
+        autoProvision: provisionTaskId ? 'queued' : 'skipped',
+        provisionTaskId,
       });
     } catch (err) {
       if (requestAbort.signal.aborted) return;
@@ -702,7 +739,7 @@ export class AccountController extends BaseController {
         const debugDir = err.provisionDetails?.debugDir ?? join(tmpdir(), 'hydra-provision-debug');
         return this.error(res, err.message, err.status || 500, err.code || 'PROVISION_KEY_NOT_CAPTURED', {
           hint:
-            'Hydra tried dashboard tRPC over HTTP first, then browser UI automation if needed. For stderr step logs use HYDRA_PROVISION_VERBOSE=1; for screenshots/traces/network POST lines use HYDRA_PROVISION_DEBUG=1 and HYDRA_PROVISION_NETWORK_LOG=1. When routes drift, capture live POSTs with scripts/capture-mgmt-key-network.mjs (see docs/recon/TRPC_ROUTES.md).',
+            'Hydra tried dashboard tRPC over HTTP first, then browser UI automation if needed. For stderr step logs use HYDRA_PROVISION_VERBOSE=1; for screenshots/traces/network POST lines use HYDRA_PROVISION_DEBUG=1 and HYDRA_PROVISION_NETWORK_LOG=1. When routes drift, capture live POSTs with scripts/recon/capture-mgmt-key-network.mjs (see docs/recon/OPENROUTER_KEY_ENDPOINTS_AND_PROVISION_FALLBACKS.md).',
           details: err.provisionDetails,
           legacyCode: err.legacyCode ?? 'PROVISION_PLAYWRIGHT_EXTRACT',
           debugDir,
@@ -715,7 +752,7 @@ export class AccountController extends BaseController {
       ) {
         const debugDir = join(tmpdir(), 'hydra-provision-debug');
         return this.error(res, msg, err.status || 500, 'PROVISION_KEY_NOT_CAPTURED', {
-          hint: `Check server stderr and ${debugDir} (screenshots, provision-network-*.log, provision-trace-*.zip when HYDRA_PROVISION_DEBUG=1). For route drift run scripts/capture-mgmt-key-network.mjs and update docs/recon/TRPC_ROUTES.md (redacted).`,
+          hint: `Check server stderr and ${debugDir} (screenshots, provision-network-*.log, provision-trace-*.zip when HYDRA_PROVISION_DEBUG=1). For route drift run scripts/recon/capture-mgmt-key-network.mjs and update docs/recon/OPENROUTER_KEY_ENDPOINTS_AND_PROVISION_FALLBACKS.md (redacted).`,
           legacyCode: 'PROVISION_PLAYWRIGHT_EXTRACT',
           details: { stage: 'browser_ui', debugDir },
         });
@@ -968,8 +1005,7 @@ export class AccountController extends BaseController {
       if (!localKey || !localKey.key) {
         return this.error(res, 'Full key not stored locally — register the key string in Pool Manager first', 400);
       }
-      const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
-        headers: { 'Authorization': `Bearer ${localKey.key}` },
+      const response = await openrouter.fetchKeyMetadataResponse(localKey.key, {
         signal: combineAbortSignals(requestAbort.signal, AbortSignal.timeout(30_000)),
       });
       const data = await response.json();

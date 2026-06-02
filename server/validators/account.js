@@ -74,4 +74,8 @@ export const otpVerifySchema = z.object({
   totpSecondFactor: z.boolean().optional(),
   /** True when the email is new to OpenRouter — routes through Clerk sign_up instead of sign_in. */
   isSignUp: z.boolean().optional(),
+  /** Queue management-key provisioning after session persistence instead of blocking OTP verification. */
+  autoProvision: z.boolean().optional(),
+  /** Preserve the operator's chosen management-key label through detached provisioning. */
+  keyName: z.string().trim().min(1).max(120).optional(),
 });

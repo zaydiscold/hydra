@@ -27,6 +27,12 @@ const TASK_CONFIG = {
     maxConcurrent: BATCH_CONCURRENCY,
     queue: true,
   },
+  otp_auto_provision: {
+    interactive: false,
+    ttlMs: 5 * 60 * 1000,
+    maxConcurrent: Infinity,
+    queue: false,
+  },
   proxy_request: {
     interactive: false,
     ttlMs: 30 * 1000,

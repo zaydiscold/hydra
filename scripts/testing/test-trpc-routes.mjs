@@ -330,7 +330,7 @@ async function main() {
     console.log('  - Check browser network logs when creating a management key');
     console.log('  - Look for POST requests to /api/trpc/* with the actual route name');
     console.log('  - Look for POST requests with Next-Action headers');
-    console.log('  - Try the scripts/capture-mgmt-key-network.mjs script');
+    console.log('  - Try the scripts/recon/capture-mgmt-key-network.mjs script');
   } else {
     console.log(`\n✅ Found ${keyCreatingRoutes.length} working route(s)!`);
     console.log('See above for details.');

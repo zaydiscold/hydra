@@ -47,6 +47,9 @@ export function remainingEmailTextAfterUse(text, usedEmails = []) {
 export function clerkErrorHint(message) {
   if (!message) return '';
   const m = message.toLowerCase();
+  if (m.includes('interactive verification') || m.includes('account generator')) {
+    return 'Bulk OTP signs in existing accounts. Generator handles a new OpenRouter signup through its isolated interactive flow.';
+  }
   if (m.includes('rate') || m.includes('429')) {
     return 'Too many OTP requests sent from this IP — wait 5-10 min.';
   }

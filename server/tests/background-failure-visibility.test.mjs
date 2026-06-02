@@ -583,20 +583,28 @@ test('bulk import avoids local self-rate-limit and handles duplicate replacement
   const validator = readRepoFile('server/validators/account.js');
   const store = readRepoFile('server/services/store.js');
   const controller = readRepoFile('server/controllers/AccountController.js');
+  const clerk = readRepoFile('server/services/clerk-auth.js');
   const bulkAuth = readRepoFile('src/hooks/useBulkAuth.js');
+  const rendererApi = readRepoFile('src/api.js');
   const emailTab = readRepoFile('src/components/EmailLinkTab.jsx');
   const otpTab = readRepoFile('src/components/OtpTab.jsx');
   const authUtils = readRepoFile('src/utils/auth.js');
+  const taskSupervisor = readRepoFile('server/services/task-supervisor.js');
 
   assert.match(routes, /router\.post\('\/bulk-otp-stubs', requireUnlocked, controller\.catchAsync\(controller\.bulkOtpStubs\)\)/);
   assert.doesNotMatch(routes, /router\.post\('\/bulk-otp-stubs', requireUnlocked, highCostRouteLimiter/);
   assert.match(routes, /router\.get\('\/magic-link\/capability', requireUnlocked, controller\.catchAsync\(controller\.magicLinkCapability\)\)/);
   assert.match(validator, /forceReplace: z\.boolean\(\)\.default\(false\)/);
+  assert.match(validator, /autoProvision: z\.boolean\(\)\.optional\(\)/);
+  assert.match(validator, /keyName: z\.string\(\)\.trim\(\)\.min\(1\)\.max\(120\)\.optional\(\)/);
   assert.match(store, /export async function getAccounts\(userId, \{ includePending = false \} = \{\}\)/);
-  assert.match(store, /export async function replaceAccountWithOtpStub\(userId, id, email\)/);
+  assert.match(store, /export function deriveAccountAliasFromEmail\(email, suffix = 0\)/);
+  assert.match(store, /export function isLegacyPlaceholderAlias\(alias\)/);
+  assert.match(store, /await backfillLegacyPlaceholderAliases\(userId, accounts\)/);
+  assert.match(store, /export async function replaceAccountWithOtpStub\(userId, id, email, \{ alias \} = \{\}\)/);
   assert.match(store, /invalidateSessionStatusCache\(id\)/);
   assert.match(controller, /store\.getAccounts\(req\.user\.id, \{ includePending: true \}\)/);
-  assert.match(controller, /store\.replaceAccountWithOtpStub\(req\.user\.id, existing\.id, normalizedEmail\)/);
+  assert.match(controller, /store\.replaceAccountWithOtpStub\(\s*req\.user\.id,\s*existing\.id,\s*normalizedEmail,\s*\{ alias: replacementAlias \}/);
   assert.match(controller, /async magicLinkCapability/);
   assert.match(controller, /MAGIC_LINK_CALLBACK_UNAVAILABLE/);
   assert.match(controller, /HYDRA_MAGIC_LINK_CALLBACK_ALLOWLIST_CONFIRMED/);
@@ -613,8 +621,53 @@ test('bulk import avoids local self-rate-limit and handles duplicate replacement
   assert.match(emailTab, /Force replace matching saved emails/);
   assert.match(emailTab, /r\.canRetry !== false/);
   assert.match(otpTab, /Force replace matching saved emails/);
+  assert.match(controller, /err\.code \|\| 'INTERNAL_ERROR'/);
+  assert.match(clerk, /class SignupInteractiveRequiredError extends Error/);
+  assert.match(clerk, /if \(isSignUp && !allowSignUp\)/);
+  assert.match(clerk, /SIGNUP_INTERACTIVE_REQUIRED/);
+  assert.match(bulkAuth, /err\.code === 'SIGNUP_INTERACTIVE_REQUIRED'/);
+  assert.match(controller, /type: 'otp_auto_provision'/);
+  assert.match(controller, /startOtpAutoProvisionTask\(req\.user\.id, req\.params\.id, keyName\)/);
+  assert.match(controller, /autoProvision: provisionTaskId \? 'queued' : 'skipped'/);
+  assert.doesNotMatch(controller, /SYNCHRONOUS - OTP sessions expire too fast for background processing/);
+  assert.match(taskSupervisor, /otp_auto_provision: \{/);
+  assert.match(rendererApi, /verifyOTPQuiet/);
+  assert.match(rendererApi, /getSystemTasksQuiet/);
+  assert.match(rendererApi, /getAccountManagementKeyQuiet/);
+  assert.match(bulkAuth, /verification submitted → \$\{current\.email\}/);
+  assert.match(bulkAuth, /provision queued in background → \$\{current\.email\}/);
+  assert.match(bulkAuth, /keyName: otpKeyName/);
+  assert.match(bulkAuth, /api\.getSystemTasksQuiet\(signal\)/);
+  assert.match(bulkAuth, /api\.getAccountManagementKeyQuiet\(poll\.accountId, signal\)/);
+  assert.doesNotMatch(bulkAuth, /api\.provisionManagementKey\(current\.id, otpKeyName\)\s*\.then/);
+  assert.match(otpTab, /bulk-auth-open-generator/);
+  assert.match(otpTab, /navigate\('\/generator'\)/);
+  assert.match(otpTab, /if \(e\.key !== 'Enter'\) return/);
+  assert.match(otpTab, /aria-live="polite"/);
   assert.match(authUtils, /export function parseEmailEntries/);
   assert.match(authUtils, /export function remainingEmailTextAfterUse/);
+});
+
+test('management-key provisioning preserves labels and excludes the documented API-key creation route from session mint fallbacks', () => {
+  const source = readRepoFile('server/services/dashboard-api.js');
+  const fallback = source.slice(
+    source.indexOf('async function tryRestApiCreateKey'),
+    source.indexOf('async function tryRestApiRedeemCode'),
+  );
+
+  assert.match(source, /const normalizedName = String\(requestedName \|\| ''\)\.trim\(\) \|\| `Hydra Auto Key \(\$\{source\}\)`/);
+  assert.match(source, /name: normalizedName/);
+  assert.match(source, /metadata: \{ source, requestedName: normalizedName \}/);
+  assert.match(source, /persistProvisionedManagementKey\(userId, accountId, fromSa, 'server-action', keyName\)/);
+  assert.match(source, /Mgmt-key Server Action hash remains stale; skipping equivalent payload retries/);
+  assert.match(source, /function isMissingTrpcSurface\(err\)/);
+  assert.match(source, /tRPC endpoint returned generic 404 HTML; skipping equivalent tRPC candidate fan-out/);
+  assert.match(source, /const learnedActionId = endpoints\.managementKeyServerAction\?\.actionId/);
+  assert.match(source, /managementKeyServerAction: \{\s*actionId: discoveredServerActionFromUi,/);
+  assert.match(source, /learned current management-key Next-Action from UI fallback/);
+  assert.match(fallback, /OpenRouter documents that route for API-key creation with a management key/);
+  assert.doesNotMatch(fallback, /`\$\{OR_BASE\}\/api\/v1\/keys`/);
+  assert.match(fallback, /`\$\{OR_BASE\}\/api\/v1\/keys\/create`/);
 });
 
 test('account generator browser signup uses the encrypted proxy pool when present', () => {

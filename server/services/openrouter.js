@@ -5,6 +5,30 @@ const BASE_URL = 'https://openrouter.ai/api/v1';
 
 const RETRY_DELAYS = [500, 1000, 2000];
 const DEFAULT_TIMEOUT_MS = 30000;
+export const KEY_METADATA_PATH = '/key';
+export const LEGACY_KEY_METADATA_PATH = '/auth/key';
+
+export async function fetchKeyMetadataResponse(apiKey, {
+  baseUrl = BASE_URL,
+  signal = null,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  headers = {},
+} = {}) {
+  const fetchPath = (path) => fetch(`${baseUrl}${path}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      ...headers,
+    },
+    signal: combineAbortSignals(signal, AbortSignal.timeout(timeoutMs)),
+  });
+
+  const canonical = await fetchPath(KEY_METADATA_PATH);
+  if (canonical.status !== 404) return canonical;
+
+  logger.warn(`[OpenRouter] ${KEY_METADATA_PATH} returned 404; trying legacy ${LEGACY_KEY_METADATA_PATH}`);
+  return fetchPath(LEGACY_KEY_METADATA_PATH);
+}
 
 async function apiRequest(path, managementKey, options = {}) {
   const { method = 'GET', body, retries = 2, timeoutMs = DEFAULT_TIMEOUT_MS, signal = null } = options;
@@ -45,7 +69,9 @@ async function apiRequest(path, managementKey, options = {}) {
         } catch {
           message = errorBody;
         }
-        throw new Error(`OpenRouter API error (${response.status}): ${message}`);
+        const err = new Error(`OpenRouter API error (${response.status}): ${message}`);
+        err.status = response.status;
+        throw err;
       }
 
       return await response.json();

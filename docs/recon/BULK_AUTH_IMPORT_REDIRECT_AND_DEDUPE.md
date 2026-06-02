@@ -200,3 +200,77 @@ generation (`84 operations`, no tracked drift), diff hygiene, audit, and local
 Docker smoke with a rebuilt image and real containerized Playwright Chromium
 launch. Teardown left no `hydra_default` network and stopped Docker Desktop
 cleanly.
+
+## Existing Import Versus New Signup
+
+Date: 2026-06-02
+
+A follow-up source trace confirmed that Bulk OTP and the account-card
+Authenticate modal use the same direct HTTPS endpoints:
+
+```text
+POST /api/accounts/:id/otp/start
+POST /api/accounts/:id/otp/verify
+```
+
+That lane is correct for importing an existing OpenRouter account and does not
+need a public callback URL. The separate Email Link relay is not a setup step
+for OpenRouter.
+
+The trace also exposed one unsafe ambiguity: an email unknown to OpenRouter
+could still enter Clerk's direct `sign_up` preparation from Bulk OTP even
+though OpenRouter requires interactive CAPTCHA verification for new signup.
+Hydra now fails closed before that direct preparation with structured code
+`SIGNUP_INTERACTIVE_REQUIRED`. The renderer shows an **Open Account Generator**
+action, and Generator retains the isolated interactive signup lane. Hydra does
+not retry or bypass the CAPTCHA-gated signup boundary.
+
+Reproduction:
+
+1. Open Bulk Account Import and keep the default OTP lane.
+2. Paste an existing OpenRouter account email, build the queue, and send the
+   email code. Hydra uses the same direct HTTPS OTP path as account-card
+   Authenticate.
+3. Paste an email that is not registered with OpenRouter, build the queue, and
+   send the code. Hydra returns `SIGNUP_INTERACTIVE_REQUIRED` before attempting
+   direct Clerk `sign_up` preparation and offers the Generator handoff.
+
+Source contracts:
+
+- `server/services/clerk-auth.js`: typed interactive-signup boundary before
+  direct `sign_up` preparation.
+- `server/controllers/AccountController.js`: preserves the structured error
+  code and safe hint.
+- `src/hooks/useBulkAuth.js`, `src/components/OtpTab.jsx`: structured Generator
+  handoff.
+- `src/pages/BulkAuthWizard.jsx`: existing-import versus new-signup copy.
+
+Verification passed:
+
+- `npm run test:clerk-signup-boundary` (`1/1`)
+- `npm run test:ui-static` (`46/46`)
+- `npm run test:background-failure-visibility` (`33/33`)
+- `npm run test:api-integration` (`11/11`)
+- `npm run lint`
+- `npm test`
+- `npm run build`
+- `git diff --check`
+
+The local ARM `v1.4.8` candidate replaced the prior canonical bundle through a
+reversible Trash move. It passed explicit package smoke, strict deep codesign,
+bundle-version inspection, and embedded-source inspection. The generated
+archive hashed to:
+
+```text
+6a051e0f0f9f1c844c0600832e34629e9d1bd4b104259934d50b83ae577ba7  Hydra-1.4.8-mac-arm64.zip
+```
+
+Generated archive metadata moved reversibly to
+`~/.Trash/hydra-v148-bulk-signup-boundary-package-byproducts-20260602T005805Z`.
+LaunchServices reopened the sole Desktop-tree `Hydra.app`. The bounded startup
+sample retained four Hydra-owned processes and zero stale profiles while CPU
+decayed from `270.2%` at `+5s` to `60.5%` at `+15s`, then `0.0%` at both
+`+20s` and `+30s`. Splash diagnostics reported `target=72`,
+`duplicateShatterSkips=0`, `timers=0`, `rafActive=false`, `bodyCount=0`,
+`matterCleared=true`, `portalCollisionDisabled=true`, and
+`portalLiftApplied=true`.

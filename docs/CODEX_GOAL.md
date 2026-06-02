@@ -1615,6 +1615,27 @@ closed-app CLI commands, tests, and repo-local documentation.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17
+- Final `v1.4.8` reconciliation keeps login-session truth, management-key
+  storage, and API-key metadata explicit. A live Clerk probe proved an old
+  interactive-login session still active and redeem-ready; Account Detail now
+  suppresses re-auth whenever that live truth is present. Sequential Bulk OTP
+  returns after authenticated-session persistence, supervises
+  `otp_auto_provision` in the background, updates activity state, accepts Enter,
+  preserves requested key labels, and migrates only legacy
+  `Hydra Account <number>` aliases to email-derived labels. Printing Press and
+  OpenRouter documentation comparison corrected metadata reads to canonical
+  `GET /api/v1/key`, preserved `/api/v1/auth/key` only as a `404` fallback,
+  removed `POST /api/v1/keys` from Clerk-session management-key mint guesses,
+  bounded stale Server Action and tRPC fan-out, and teaches UI fallback to save
+  the current `Next-Action` ID for later replay. The guarded live `hydra-148`
+  provision succeeded without printing secret material. The final rebuilt ARM
+  candidate passed package smoke, strict deep codesign, embedded-source
+  inspection, and a LaunchServices settle window with four owned processes,
+  zero stale profiles, and `0.0%` CPU at both `+60s` and `+90s`. The local ARM
+  archive hash before reversible cleanup was
+  `294024c55ea3e84e3b4bd25fe294cb063c49f4d905a7c5ad2c269176d23679e1`.
+  Hosted Intel, Windows, and Linux artifacts remain workflow-owned release
+  outputs after the final GitHub push.
 
 ---
 

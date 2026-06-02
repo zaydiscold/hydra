@@ -378,6 +378,67 @@ export async function probeSessionLive(userId, id, { signal = null } = {}) {
   };
 }
 
+export function deriveAccountAliasFromEmail(email, suffix = 0) {
+  const base = String(email || '').trim().toLowerCase().replace('@', '-');
+  return suffix === 0 ? base : `${base}-${suffix + 1}`;
+}
+
+export function isLegacyPlaceholderAlias(alias) {
+  return /^hydra account \d+$/i.test(String(alias || '').trim());
+}
+
+async function backfillLegacyPlaceholderAliases(userId, accounts) {
+  const usedAliases = new Set(
+    accounts
+      .map((account) => String(account.alias || '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  for (const account of accounts) {
+    if (!isLegacyPlaceholderAlias(account.alias)) continue;
+
+    let config;
+    try {
+      config = readConfig(account);
+    } catch (err) {
+      logger.warn(`[STORE] Legacy placeholder alias migration skipped unreadable account=${account.id}: ${err.message}`);
+      continue;
+    }
+
+    if (!config.email) continue;
+    const previousAlias = String(account.alias || '').trim();
+    usedAliases.delete(previousAlias.toLowerCase());
+
+    let nextAlias = null;
+    for (let suffix = 0; suffix < 30; suffix += 1) {
+      const candidate = deriveAccountAliasFromEmail(config.email, suffix);
+      if (!usedAliases.has(candidate.toLowerCase())) {
+        nextAlias = candidate;
+        break;
+      }
+    }
+
+    if (!nextAlias) {
+      usedAliases.add(previousAlias.toLowerCase());
+      logger.warn(`[STORE] Legacy placeholder alias migration could not allocate alias for account=${account.id}`);
+      continue;
+    }
+
+    try {
+      await prisma.account.update({
+        where: { id: account.id },
+        data: { alias: nextAlias },
+      });
+      account.alias = nextAlias;
+      usedAliases.add(nextAlias.toLowerCase());
+      logger.info(`[STORE] Migrated legacy placeholder alias for account=${account.id} to ${nextAlias}`);
+    } catch (err) {
+      usedAliases.add(previousAlias.toLowerCase());
+      logger.warn(`[STORE] Legacy placeholder alias migration failed for account=${account.id}: ${err.message}`);
+    }
+  }
+}
+
 /**
  * Get all accounts for a user.
  * 
@@ -387,6 +448,7 @@ export async function probeSessionLive(userId, id, { signal = null } = {}) {
  */
 export async function getAccounts(userId, { includePending = false } = {}) {
   const accounts = await prisma.account.findMany({ where: { userId } });
+  await backfillLegacyPlaceholderAliases(userId, accounts);
 
   const shaped = await Promise.all(accounts.map(async (account) => {
     const { config, managementKey } = await canonicalizeManagementKeyState(account);
@@ -456,6 +518,7 @@ export async function getAccountWithKey(userId, id) {
 
 export async function getAllAccountsWithKeys(userId) {
   const accounts = await prisma.account.findMany({ where: { userId } });
+  await backfillLegacyPlaceholderAliases(userId, accounts);
 
   const hydrated = await Promise.all(accounts.map(async (account) => {
     try {
@@ -528,13 +591,17 @@ export async function addAccountWithCredentials(userId, alias, email, password, 
   return { id: account.id, alias, email, authMethod: config.authMethod, createdAt: account.createdAt };
 }
 
-export async function replaceAccountWithOtpStub(userId, id, email) {
+export async function replaceAccountWithOtpStub(userId, id, email, { alias } = {}) {
   const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) throw new Error('Account not found');
 
   const config = readConfig(account);
   const normalizedEmail = String(email || config.email || '').trim().toLowerCase();
+  const normalizedAlias = String(alias || '').trim();
   if (!normalizedEmail) throw new Error('Email is required to replace an account auth stub');
+  if (normalizedAlias && normalizedAlias !== account.alias) {
+    await assertAccountUniqueForUser(userId, { alias: normalizedAlias }, id);
+  }
 
   config.email = normalizedEmail;
   config.password = null;
@@ -549,6 +616,7 @@ export async function replaceAccountWithOtpStub(userId, id, email) {
   const updated = await prisma.account.update({
     where: { id },
     data: {
+      alias: normalizedAlias || account.alias,
       sessionToken: encrypt(''),
       config: encryptConfig(config),
     },

@@ -692,7 +692,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
               </button>
             </span>
           )}
-          {accountMeta.hasCredentials && (
+          {accountMeta.hasCredentials && accountNeedsSession(displayStatus) && (
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -1065,7 +1065,7 @@ export default function AccountDetail({ accountId, onBack, addToast }) {
             </span>
           );
         })()}
-        {accountMeta?.hasCredentials && (
+        {accountMeta?.hasCredentials && accountNeedsSession(liveSessionStatus ?? accountMeta?.sessionStatus) && (
           <button
             type="button"
             className="btn btn-secondary btn-sm"

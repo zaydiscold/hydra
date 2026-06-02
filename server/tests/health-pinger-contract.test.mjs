@@ -13,11 +13,16 @@ function readRepoFile(path) {
 
 test('background health pinger validates keys without completion traffic', () => {
   const source = readRepoFile('server/services/health-pinger.js');
+  const openrouter = readRepoFile('server/services/openrouter.js');
 
-  assert.match(source, /const PING_PATH = '\/api\/v1\/auth\/key';/);
+  assert.match(source, /fetchKeyMetadataResponse\(keyEntry\.keyString, \{/);
+  assert.match(source, /baseUrl: `\$\{OR_BASE\}\/api\/v1`/);
+  assert.match(openrouter, /export const KEY_METADATA_PATH = '\/key';/);
+  assert.match(openrouter, /export const LEGACY_KEY_METADATA_PATH = '\/auth\/key';/);
+  assert.match(openrouter, /if \(canonical\.status !== 404\) return canonical;/);
+  assert.match(openrouter, /trying legacy \$\{LEGACY_KEY_METADATA_PATH\}/);
   assert.match(source, /HYDRA_HEALTH_PING_STARTUP_DELAY_MS/);
   assert.match(source, /HYDRA_HEALTH_PING_INTERVAL_MS/);
-  assert.match(source, /method:\s*'GET'/);
   assert.match(source, /await rotationManager\.getNextKey\(\)/);
   assert.match(source, /recordUpstreamHttpResult\(\{/);
   assert.match(source, /Health check returned upstream HTTP \$\{res\.status\}; leaving key state unchanged/);

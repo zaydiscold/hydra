@@ -11,6 +11,7 @@ import {
 } from '../lib/runtimeDiagnostics.js';
 
 const POLL_INTERVAL = 5000;
+const OTP_PROVISION_POLL_INTERVAL = 1200;
 const BULK_MAGIC_LINK_SEND_DELAY_MS = 6500;
 
 function normalizeMagicLinkCapability(response) {
@@ -65,6 +66,9 @@ export function useBulkAuth(addToast) {
   const [emailLinkLog, setEmailLinkLog] = useState([]);
   const pollRefs = useRef({});
   const pollTimerRef = useRef(null);
+  const otpProvisionPollsRef = useRef({});
+  const otpProvisionPollTimerRef = useRef(null);
+  const otpProvisionPollInFlightRef = useRef(false);
   const unmountedRef = useRef(false);
   const lifecycleAbortRef = useRef(null);
   const magicLinkSendDelayCancelsRef = useRef(new Set());
@@ -81,6 +85,7 @@ export function useBulkAuth(addToast) {
   const [otpProvisionEnabled, setOtpProvisionEnabled] = useState(true);
   const [otpKeyName, setOtpKeyName] = useState('hydra-bulk');
   const [otpStubSummary, setOtpStubSummary] = useState(null);
+  const [otpSignupRequired, setOtpSignupRequired] = useState(false);
 
   const appendEmailLinkLog = useCallback((msg) => {
     setEmailLinkLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 100));
@@ -90,9 +95,14 @@ export function useBulkAuth(addToast) {
     setOtpLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 100));
   }, []);
 
+  const updateOtpQueueAccount = useCallback((accountId, patch) => {
+    setOtpQueue((prev) => prev.map((item) => (item.id === accountId ? { ...item, ...patch } : item)));
+  }, []);
+
   const resetErrors = useCallback(() => {
     setLocalError('');
     setErrorCopyCommand('');
+    setOtpSignupRequired(false);
   }, []);
 
   // --- Email Link Logic ---
@@ -240,12 +250,102 @@ export function useBulkAuth(addToast) {
     ensureMagicLinkPoller();
   }, [ensureMagicLinkPoller]);
 
+  const stopOtpProvisionPolling = useCallback((taskId) => {
+    delete otpProvisionPollsRef.current[taskId];
+    if (Object.keys(otpProvisionPollsRef.current).length === 0 && otpProvisionPollTimerRef.current) {
+      clearTrackedInterval(otpProvisionPollTimerRef.current);
+      otpProvisionPollTimerRef.current = null;
+    }
+  }, []);
+
+  const ensureOtpProvisionPoller = useCallback(() => {
+    if (otpProvisionPollTimerRef.current) return;
+
+    otpProvisionPollTimerRef.current = setTrackedInterval('useBulkAuth.otpProvisionPoller', () => {
+      if (unmountedRef.current) {
+        clearTrackedInterval(otpProvisionPollTimerRef.current);
+        otpProvisionPollTimerRef.current = null;
+        return;
+      }
+      if (otpProvisionPollInFlightRef.current) return;
+
+      const entries = Object.entries(otpProvisionPollsRef.current);
+      if (entries.length === 0) return;
+      const signal = lifecycleAbortRef.current?.signal;
+      if (!signal || signal.aborted) return;
+
+      otpProvisionPollInFlightRef.current = true;
+      void api.getSystemTasksQuiet(signal)
+        .then(async (res) => {
+          if (signal.aborted || unmountedRef.current) return;
+          const payload = res?.data ?? res ?? {};
+          const tasks = [...(payload.active ?? []), ...(payload.recent ?? [])];
+
+          for (const [taskId, poll] of entries) {
+            const task = tasks.find((candidate) => candidate.taskId === taskId);
+            if (!task) {
+              poll.misses += 1;
+              if (poll.misses < 4) continue;
+              stopOtpProvisionPolling(taskId);
+              updateOtpQueueAccount(poll.accountId, { provisioning: false });
+              appendOtpLog(`provision status lost → ${poll.email}; use Fetch provisioned keys`);
+              continue;
+            }
+
+            poll.misses = 0;
+            if (task.status === 'completed') {
+              stopOtpProvisionPolling(taskId);
+              if (!task.result?.managementKey) {
+                updateOtpQueueAccount(poll.accountId, { provisioning: false });
+                appendOtpLog(`provision finished (no key) → ${poll.email}`);
+                continue;
+              }
+              try {
+                const keyRes = await api.getAccountManagementKeyQuiet(poll.accountId, signal);
+                if (signal.aborted || unmountedRef.current) return;
+                const key = keyRes?.data?.managementKey ?? keyRes?.managementKey;
+                updateOtpQueueAccount(poll.accountId, { managementKey: key || null, provisioning: false });
+                appendOtpLog(`provisioned → ${poll.email}`);
+                addToast?.(`Management key provisioned for ${poll.email}`, 'success');
+              } catch (err) {
+                if (signal.aborted || unmountedRef.current) return;
+                updateOtpQueueAccount(poll.accountId, { provisioning: false });
+                appendOtpLog(`provision stored; fetch failed → ${poll.email}: ${err.message}`);
+              }
+              continue;
+            }
+
+            if (['failed', 'cancelled', 'expired'].includes(task.status)) {
+              stopOtpProvisionPolling(taskId);
+              updateOtpQueueAccount(poll.accountId, { provisioning: false });
+              appendOtpLog(`provision fail → ${poll.email}: ${task.error || task.cancelReason || task.status}`);
+              addToast?.(`Verified but key provision failed for ${poll.email}`, 'warn');
+            }
+          }
+        })
+        .catch((err) => {
+          if (signal.aborted || unmountedRef.current) return;
+          appendOtpLog(`provision status poll failed: ${err.message}`);
+        })
+        .finally(() => {
+          otpProvisionPollInFlightRef.current = false;
+        });
+    }, OTP_PROVISION_POLL_INTERVAL);
+  }, [addToast, appendOtpLog, stopOtpProvisionPolling, updateOtpQueueAccount]);
+
+  const startOtpProvisionPolling = useCallback((taskId, accountId, email) => {
+    if (!taskId || unmountedRef.current) return;
+    otpProvisionPollsRef.current[taskId] = { accountId, email, misses: 0 };
+    ensureOtpProvisionPoller();
+  }, [ensureOtpProvisionPoller]);
+
   useEffect(() => {
     unmountedRef.current = false;
     const controller = new AbortController();
     lifecycleAbortRef.current = controller;
     const signal = controller.signal;
     const activePolls = pollRefs.current;
+    const activeOtpProvisionPolls = otpProvisionPollsRef.current;
     const delayCancels = magicLinkSendDelayCancelsRef.current;
     const onMessage = (evt) => {
       if (!evt.data || evt.data.type !== 'hydra:magic-link-done') return;
@@ -283,10 +383,16 @@ export function useBulkAuth(addToast) {
       for (const cancel of delayCancels) cancel();
       delayCancels.clear();
       for (const email of Object.keys(activePolls)) delete activePolls[email];
+      for (const taskId of Object.keys(activeOtpProvisionPolls)) delete activeOtpProvisionPolls[taskId];
       if (pollTimerRef.current) {
         clearTrackedInterval(pollTimerRef.current);
         pollTimerRef.current = null;
       }
+      if (otpProvisionPollTimerRef.current) {
+        clearTrackedInterval(otpProvisionPollTimerRef.current);
+        otpProvisionPollTimerRef.current = null;
+      }
+      otpProvisionPollInFlightRef.current = false;
     };
   }, [addToast, appendEmailLinkLog, refreshMagicLinkCapability, stopMagicLinkPolling, updateEmailLinkRow]);
 
@@ -493,6 +599,7 @@ export function useBulkAuth(addToast) {
     } catch (err) {
       setLocalError(api.formatApiErrorMessage(err));
       setErrorCopyCommand(err.hydraCopyCommand ?? '');
+      setOtpSignupRequired(err.code === 'SIGNUP_INTERACTIVE_REQUIRED');
     } finally {
       setOtpBusy(false);
     }
@@ -502,8 +609,13 @@ export function useBulkAuth(addToast) {
     if (!current || code.length !== 6) return;
     resetErrors();
     setOtpBusy(true);
+    appendOtpLog(`verification submitted → ${current.email}`);
     try {
-      await api.verifyOTP(current.id, otpSignInId, code);
+      const res = await api.verifyOTPQuiet(current.id, otpSignInId, code, {
+        autoProvision: otpProvisionEnabled,
+        keyName: otpKeyName,
+      });
+      const provisionTaskId = res?.data?.provisionTaskId ?? res?.provisionTaskId ?? null;
       appendOtpLog(`verified → ${current.email}`);
       setOtpQueue((q) => q.map((item, i) => (i === otpCurrentIdx ? { ...item, verified: true } : item)));
       addToast?.(`${current.email} verified`, 'success');
@@ -511,39 +623,23 @@ export function useBulkAuth(addToast) {
       setOtpCode('');
       
       // Auto-provision if enabled
-      if (otpProvisionEnabled) {
-        // Parallel provisioning — don't await, let it run in background
+      if (otpProvisionEnabled && provisionTaskId) {
         setOtpQueue((q) => q.map((item, i) => (i === otpCurrentIdx ? { ...item, provisioning: true } : item)));
-        api.provisionManagementKey(current.id, otpKeyName)
-          .then((pres) => {
-            const key = pres?.data?.key ?? pres?.key;
-            if (key) {
-              setOtpQueue((q) => q.map((item) => (item.id === current.id ? { ...item, managementKey: key, provisioning: false } : item)));
-              appendOtpLog(`provisioned → ${current.email}`);
-              addToast?.(`Management key provisioned for ${current.email}`, 'success');
-            } else {
-              setOtpQueue((q) => q.map((item) => (item.id === current.id ? { ...item, provisioning: false } : item)));
-              appendOtpLog(`provision finished (no key) → ${current.email}`);
-              addToast?.('Verified but key provision failed — check account detail', 'warn');
-            }
-          })
-          .catch((perr) => {
-            setOtpQueue((q) => q.map((item) => (item.id === current.id ? { ...item, provisioning: false } : item)));
-            appendOtpLog(`provision fail → ${current.email}: ${perr.message}`);
-            addToast?.('Verified but key provision failed — check account detail', 'warn');
-          });
+        appendOtpLog(`provision queued in background → ${current.email}`);
+        startOtpProvisionPolling(provisionTaskId, current.id, current.email);
       }
 
       setOtpCurrentIdx((i) => Math.min(i + 1, otpQueue.length - 1));
       return true;
     } catch (err) {
+      appendOtpLog(`verification failed → ${current.email}: ${err.message}`);
       setLocalError(api.formatApiErrorMessage(err));
       setErrorCopyCommand(err.hydraCopyCommand ?? '');
       return false;
     } finally {
       setOtpBusy(false);
     }
-  }, [addToast, appendOtpLog, otpQueue.length, otpSignInId, otpCurrentIdx, otpProvisionEnabled, otpKeyName, resetErrors]);
+  }, [addToast, appendOtpLog, otpQueue.length, otpSignInId, otpCurrentIdx, otpKeyName, otpProvisionEnabled, resetErrors, startOtpProvisionPolling]);
 
   const handleProvisionOtpKey = useCallback(async (current, silent = false) => {
     if (!current) return;
@@ -682,6 +778,7 @@ export function useBulkAuth(addToast) {
     otpProvisionEnabled, setOtpProvisionEnabled,
     otpKeyName, setOtpKeyName,
     otpStubSummary,
+    otpSignupRequired,
     handleCreateOtpStubs,
     handleSendOtpCode,
     handleVerifyOtp,

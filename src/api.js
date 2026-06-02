@@ -315,6 +315,8 @@ export const updateAccount = (id, updates) =>
 export const deleteAccount = (id) => request(`/accounts/${id}`, { method: 'DELETE' });
 export const getAccountSnapshot = (id, signal) => request(`/accounts/${id}/snapshot`, { signal });
 export const getAccountManagementKey = (id, signal) => request(`/accounts/${id}/management-key`, { signal });
+export const getAccountManagementKeyQuiet = (id, signal) =>
+  request(`/accounts/${id}/management-key`, { signal, trackLoading: false });
 
 // Auth flows
 export const detectAuthMethod = (id) =>
@@ -327,6 +329,12 @@ export const verifyOTP = (id, signInId, code, options = {}) =>
   request(`/accounts/${id}/otp/verify`, {
     method: 'POST',
     body: { ...options, signInId, code },
+  });
+export const verifyOTPQuiet = (id, signInId, code, options = {}) =>
+  request(`/accounts/${id}/otp/verify`, {
+    method: 'POST',
+    body: { ...options, signInId, code },
+    trackLoading: false,
   });
 export const refreshAccountLogin = (id) =>
   request(`/accounts/${id}/refresh-login`, { method: 'POST' });
@@ -424,6 +432,7 @@ export const rotateMasterKey = () => request('/pool/rotate-master-key', { method
 
 // System
 export const getSystemTasks = () => request('/system/tasks');
+export const getSystemTasksQuiet = (signal) => request('/system/tasks', { signal, trackLoading: false });
 export const cancelSystemTask = (taskId, reason = 'operator_cancelled') => request(`/system/tasks/${taskId}/cancel`, { method: 'POST', body: { reason } });
 export const getSystemHealth = (signal) => request('/system/health', { signal });
 export const getSystemHealthQuiet = (signal) => request('/system/health', { signal, trackLoading: false });
