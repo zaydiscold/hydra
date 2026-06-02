@@ -29,6 +29,51 @@ export function useProximityField({
   const fieldRef = useRef(null);
   const pointerRef = useRef(null);
   const frameRef = useRef(null);
+  const geometryRef = useRef(null);
+  const observedFieldRef = useRef(null);
+  const resizeObserverRef = useRef(null);
+  const mutationObserverRef = useRef(null);
+
+  const invalidateGeometry = useCallback(() => {
+    geometryRef.current = null;
+  }, []);
+
+  const disconnectGeometryObservers = useCallback(() => {
+    resizeObserverRef.current?.disconnect();
+    mutationObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+    mutationObserverRef.current = null;
+    observedFieldRef.current = null;
+  }, []);
+
+  const observeField = useCallback((field) => {
+    if (!field || observedFieldRef.current === field) return;
+    disconnectGeometryObservers();
+    observedFieldRef.current = field;
+
+    resizeObserverRef.current = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(invalidateGeometry)
+      : null;
+    resizeObserverRef.current?.observe(field);
+
+    mutationObserverRef.current = typeof MutationObserver === 'function'
+      ? new MutationObserver(invalidateGeometry)
+      : null;
+    mutationObserverRef.current?.observe(field, { childList: true, subtree: true });
+  }, [disconnectGeometryObservers, invalidateGeometry]);
+
+  const measureTargets = useCallback(() => {
+    const field = fieldRef.current;
+    if (!field) return [];
+    observeField(field);
+    if (!geometryRef.current) {
+      geometryRef.current = Array.from(field.querySelectorAll(TARGET_SELECTOR), (target) => ({
+        target,
+        bounds: target.getBoundingClientRect(),
+      }));
+    }
+    return geometryRef.current;
+  }, [observeField]);
 
   const reset = useCallback(() => {
     if (frameRef.current) {
@@ -36,8 +81,10 @@ export function useProximityField({
       frameRef.current = null;
     }
     pointerRef.current = null;
-    fieldRef.current?.querySelectorAll(TARGET_SELECTOR).forEach(resetTarget);
-  }, []);
+    const cachedTargets = geometryRef.current?.map(({ target }) => target);
+    (cachedTargets || fieldRef.current?.querySelectorAll(TARGET_SELECTOR))?.forEach(resetTarget);
+    invalidateGeometry();
+  }, [invalidateGeometry]);
 
   const paint = useCallback(() => {
     frameRef.current = null;
@@ -45,8 +92,7 @@ export function useProximityField({
     const pointer = pointerRef.current;
     if (!field || !pointer) return;
 
-    field.querySelectorAll(TARGET_SELECTOR).forEach((target) => {
-      const bounds = target.getBoundingClientRect();
+    measureTargets().forEach(({ target, bounds }) => {
       const dx = pointer.x - (bounds.left + bounds.width / 2);
       const dy = pointer.y - (bounds.top + bounds.height / 2);
       const strength = Math.max(0, 1 - Math.hypot(dx, dy) / radius);
@@ -58,7 +104,7 @@ export function useProximityField({
       target.style.setProperty('--proximity-attract-y', `${Math.max(-maxAttractY, Math.min(maxAttractY, dy * strength * 0.1)).toFixed(2)}px`);
       target.style.setProperty('--proximity-brightness', (1 + strength * brightnessDelta).toFixed(3));
     });
-  }, [brightnessDelta, maxAttractX, maxAttractY, maxLift, maxScale, maxShiftX, radius]);
+  }, [brightnessDelta, maxAttractX, maxAttractY, maxLift, maxScale, maxShiftX, measureTargets, radius]);
 
   const onPointerMove = useCallback((event) => {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
@@ -71,7 +117,16 @@ export function useProximityField({
     }
   }, [owner, paint, reset]);
 
-  useEffect(() => reset, [reset]);
+  useEffect(() => {
+    window.addEventListener('resize', invalidateGeometry, { passive: true });
+    observeField(fieldRef.current);
+
+    return () => {
+      window.removeEventListener('resize', invalidateGeometry);
+      disconnectGeometryObservers();
+      reset();
+    };
+  }, [disconnectGeometryObservers, invalidateGeometry, observeField, reset]);
 
   return {
     ref: fieldRef,

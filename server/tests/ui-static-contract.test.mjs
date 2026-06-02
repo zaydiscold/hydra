@@ -1012,7 +1012,14 @@ test('dashboard, sidebar, and settings actions use bounded reduced-motion-safe p
   assert.match(hook, /requestTrackedAnimationFrame\(owner, paint\)/);
   assert.match(hook, /Math\.hypot\(dx, dy\) \/ radius/);
   assert.match(hook, /prefers-reduced-motion: reduce/);
-  assert.match(hook, /querySelectorAll\(TARGET_SELECTOR\)\.forEach\(resetTarget\)/);
+  assert.match(hook, /const geometryRef = useRef\(null\)/);
+  assert.match(hook, /geometryRef\.current = Array\.from\(field\.querySelectorAll\(TARGET_SELECTOR\)/);
+  assert.match(hook, /measureTargets\(\)\.forEach\(\(\{ target, bounds \}\) => \{/);
+  assert.match(hook, /new ResizeObserver\(invalidateGeometry\)/);
+  assert.match(hook, /new MutationObserver\(invalidateGeometry\)/);
+  assert.match(hook, /observeField\(field\)/);
+  assert.match(hook, /resizeObserverRef\.current\?\.disconnect\(\)/);
+  assert.match(hook, /mutationObserverRef\.current\?\.disconnect\(\)/);
   assert.match(hook, /brightnessDelta = 0\.08/);
   assert.match(hook, /maxAttractX = 0/);
   assert.match(hook, /maxAttractY = 0/);

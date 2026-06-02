@@ -2429,6 +2429,21 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   with a real containerized Playwright Chromium launch. Teardown left no
   `hydra_default` network and `docker desktop stop` removed the Desktop
   runtime in one second.
+- 2026-06-02 proximity-field geometry-cache follow-up: source tracing found
+  that `useProximityField()` already throttled pointer floods behind one
+  tracked RAF, but each painted frame still re-queried all targets and called
+  `getBoundingClientRect()` after compositor transforms had changed. The
+  shared hook now snapshots target geometry once per pointer pass and
+  invalidates it for viewport resize, field resize, child-list changes, leave,
+  and unmount. Lazy observer attachment preserves correctness for
+  conditionally mounted account grids, and cleanup disconnects both observers.
+  The deterministic nine-card grid benchmark under
+  `/private/tmp/hydra-proximity-geometry-cache-20260602T001207Z` reduces
+  geometry reads from `1080 -> 9` across 120 pointer frames (`-1071`,
+  `99.167%`). UI static contracts passed `46/46`, lint passed, build passed,
+  diff hygiene passed, and `hydra audit --json` remains
+  `31 ok / 5 deferred / 0 missing / 0 blockers`. The durable note is
+  `docs/recon/PROXIMITY_FIELD_GEOMETRY_CACHE.md`.
 - 2026-06-01 post-release literal-gate recheck: `npm run lint`, full
   `npm test`, and `npm run gate` (`12/12`) passed against the docs-reconciled
   `v1.4.6` tree. Bare `HYDRA_BUILD_TARGET=darwin-arm64 npm run

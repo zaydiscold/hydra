@@ -781,6 +781,9 @@ function buildAudit() {
         && dashboardPage.includes('maxAttractY: 8')
         && proximityField.includes('dx * strength * 0.12')
         && proximityField.includes('dy * strength * 0.1')
+        && proximityField.includes('geometryRef.current = Array.from(field.querySelectorAll(TARGET_SELECTOR)')
+        && proximityField.includes('new ResizeObserver(invalidateGeometry)')
+        && proximityField.includes('new MutationObserver(invalidateGeometry)')
         && designEngineering.includes('### Proximity implementation map')
         && designEngineering.includes('## Anime.js Text Treatments')
         && designEngineering.includes('## Graphics Maintenance Checklist'),

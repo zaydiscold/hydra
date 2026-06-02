@@ -1556,6 +1556,18 @@ closed-app CLI commands, tests, and repo-local documentation.
   `hydra_default` network and `docker desktop stop` removed the Desktop
   runtime in one second. The durable note is
   `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`.
+- Proximity-field geometry-cache follow-up: the existing tracked-RAF throttle
+  still re-queried every tagged target and called `getBoundingClientRect()` on
+  every painted pointer frame, including after transforms changed. The shared
+  hook now snapshots field geometry once per pointer pass and invalidates it
+  only for viewport resize, field resize, child-list changes, leave, or
+  unmount. The deterministic nine-card grid benchmark under
+  `/private/tmp/hydra-proximity-geometry-cache-20260602T001207Z` reduces
+  geometry reads from `1080 -> 9` across 120 pointer frames (`-1071`,
+  `99.167%`). UI static contracts passed `46/46`, lint passed, build passed,
+  diff hygiene passed, and audit remains
+  `31 ok / 5 deferred / 0 missing / 0 blockers`. The durable note is
+  `docs/recon/PROXIMITY_FIELD_GEOMETRY_CACHE.md`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16
 - Browser isolation regression test asserts default launches do not use real Chrome, every managed `userDataDir` is fresh under the OS temp dir and never points at real Chrome/Chromium profile dirs, packaged mode extracts archived Chromium into userData, and stale profile sweep failures keep path-level warning evidence; `npm run test:browser-isolation` passed on 2026-05-17

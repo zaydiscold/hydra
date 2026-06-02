@@ -1863,6 +1863,19 @@ This evidence file is not release-complete by itself. The release remains not co
   `hydra_default` network and `docker desktop stop` removed the Desktop
   runtime in one second. The durable note is
   `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`.
+- Proximity-field geometry-cache follow-up: the tracked-RAF pointer field now
+  snapshots target geometry once per pointer pass and invalidates only on
+  viewport resize, field resize, child-list changes, leave, or unmount. This
+  removes repeated `getBoundingClientRect()` layout reads after compositor
+  transforms change while preserving the existing account-grid attraction,
+  sidebar nudge, Settings groups, and reduced-motion bypass. The deterministic
+  nine-card benchmark under
+  `/private/tmp/hydra-proximity-geometry-cache-20260602T001207Z` reduces
+  geometry reads from `1080 -> 9` across 120 pointer frames (`-1071`,
+  `99.167%`). UI static contracts passed `46/46`, lint passed, build passed,
+  diff hygiene passed, and audit remains
+  `31 ok / 5 deferred / 0 missing / 0 blockers`. The durable note is
+  `docs/recon/PROXIMITY_FIELD_GEOMETRY_CACHE.md`.
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under
   `/private/tmp/hydra-v143-final-controlled-background-soak-20260601T.9yB5Ve`

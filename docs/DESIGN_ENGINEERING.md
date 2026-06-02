@@ -75,8 +75,12 @@ the cursor's Euclidean distance from each tagged target and writes restrained
 CSS variables for scale, lift, horizontal shift, and brightness.
 
 The implementation batches pointer work through one tracked animation frame
-per field, changes only composited transforms and filters, resets cleanly on
-leave or unmount, and disables the effect under `prefers-reduced-motion`.
+per field, snapshots target geometry once per pointer pass, changes only
+composited transforms and filters, resets cleanly on leave or unmount, and
+disables the effect under `prefers-reduced-motion`. Cached geometry invalidates
+when the field resizes, its child structure changes, or the viewport resizes.
+That avoids repeated `getBoundingClientRect()` layout reads after transforms
+have changed while still handling conditionally mounted account grids.
 Account cards use a slightly larger field and vertical lift. Sidebar targets
 use a smaller field and horizontal nudge. Compact adjacent buttons receive a
 subtle scale/lift response while their stable dimensions prevent layout shift.
@@ -96,7 +100,8 @@ are grouped together instead of appearing as uneven inline controls.
 ### Proximity implementation map
 
 - `src/hooks/useProximityField.js` owns the reusable field. Each mounted field
-  receives one pointer handler, one tracked RAF slot, and one cleanup path.
+  receives one pointer handler, one tracked RAF slot, one cached geometry
+  snapshot, resize and child-list invalidation, and one cleanup path.
 - `src/App.jsx` applies the tight sidebar profile: `105px` radius, `3.5%`
   maximum scale, and `3px` horizontal shift. It affects primary navigation and
   footer controls without moving the sidebar track itself.
