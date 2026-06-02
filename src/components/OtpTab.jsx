@@ -148,19 +148,20 @@ export default function OtpTab({
 
         <div style={{ marginTop: 'var(--space-md)', paddingTop: 'var(--space-md)', borderTop: '1px solid var(--border-subtle)' }}>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
-            Already imported accounts that need to be signed in again?
+            Need to sign in saved accounts again?
           </p>
           <p style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: 8 }}>
-            This pulls saved OTP or email accounts from your vault that do not currently have a live dashboard session, and appends them to this queue for re-authentication.
+            Add saved accounts without a live session to this queue.
           </p>
           <button
             type="button"
             data-testid="bulk-auth-merge-existing"
-            className="btn btn-ghost"
+            className="btn btn-secondary bulk-auth-recovery-btn"
             onClick={onMergeExisting}
             disabled={mergeBusy || creating}
+            title="Find saved OTP or email accounts without a live dashboard session and append them to this queue."
           >
-            {mergeBusy ? 'Finding saved accounts…' : 'Add saved accounts that need re-authentication'}
+            {mergeBusy ? 'Finding saved accounts…' : 'Add saved sign-ins'}
           </button>
         </div>
       </section>

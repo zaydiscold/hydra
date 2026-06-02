@@ -2872,3 +2872,69 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   final process exit was intentional, not a crash: Electron logged
   `lifecycle:tray-quit-click` followed by `exitCode=0`, and macOS produced no
   Hydra diagnostic report.
+- 2026-06-02 `1.5.0` priced-routing and desktop-operator refinement candidate:
+  the old proxy loop rotated keys but stopped after three attempts and Traffic
+  Console displayed raw status rows without the decision context. Hydra now
+  uses an eight-key bounded eligible-key failover default, configurable with
+  `HYDRA_PROXY_MAX_KEY_ATTEMPTS` and clamped to `32`; emits
+  `X-Hydra-Attempts` and `X-Hydra-Rotated`; records attempt, outcome, exact
+  upstream cost, and cost provenance; retains OpenRouter catalog prompt,
+  completion, and request prices; and renders explicit route plus input/output
+  price columns. Exact upstream `usage.cost` wins, while catalog-only splits
+  render as marked estimates. Client-visible OpenRouter `404` remains an
+  `upstream_response` because changing credentials cannot repair an invalid
+  model or endpoint; key-level `429` records cooldown and continues to another
+  eligible key. The deprecated `stream_options.include_usage` injection is
+  removed because current OpenRouter usage accounting is automatic. Command
+  now has real persisted Grid/List/Map views; the sidebar has visible labels,
+  stronger bounded proximity response, Settings beside lock/quit, and
+  Generator at the bottom of the main workflow stack; Pool Manager gets larger
+  key hitboxes, account-level pool toggles, and a subdued Paste Key action;
+  Bulk Import copy is shorter and OTP/relay activity logs survive route
+  changes through session storage; Settings gets Standard/Compact density; Code
+  Redeemer tightens its textarea; and the Jupiter-like ambient planet gains a
+  launch-bounded reduced-motion-safe moon orbit. Focused verification passed
+  schema sync, syntax, telemetry `5/5`, request-log buffer `5/5`, background
+  contracts `34/34`, UI contracts `47/47`, chain completeness `2/2`, lint,
+  production renderer build, and diff hygiene. The durable release inventory is
+  `docs/releases/1.5.0.md`; routing recon is
+  `docs/recon/TRAFFIC_ROUTING_AND_PRICING.md`. Full source, CLI/API, package,
+  native spot, and hosted PR matrix evidence must still be appended before
+  merge. The local package lane is now complete: full `npm test`, gate `12/12`,
+  OpenAPI regeneration (`84` operations), ARM package smoke, strict deep
+  codesign, and LaunchServices native spot checks passed. The generated ARM
+  zip SHA-256 before reversible metadata cleanup was
+  `016010d098faf19cbe8659b10880cf8dfa6ef54cd83e32d8c7fd16ed54cdc6bc`.
+  Splash diagnostics reported finite teardown with `timers=0`,
+  `rafActive=false`, `bodyCount=0`, and `matterCleared=true`; the settled
+  packaged runtime reported four Hydra-owned processes, zero stale Playwright
+  profiles, `0.0%` aggregate CPU, and `528.55 MB` RSS. Native checks covered
+  all `13` Dashboard accounts, Grid/List/Map, Traffic, Pool Manager, Settings
+  density switching, and the shortened Bulk OTP surface. Hosted PR checks
+  remain the merge boundary.
+- 2026-06-02 final `1.5.0` Generator OTP and startup-reveal package proof:
+  Account Generator now defaults its isolated signup browser to visible mode
+  for upstream human verification, reports `manual_verification` instead of
+  hanging silently, sanitizes OTP input to six digits, supports Enter-submit,
+  and explicitly clicks Clerk's visible OTP submit control before falling back
+  to Enter. No real signup was started from the supplied `admin@preheat.cc`
+  credentials during this verification because the upstream OTP/human
+  verification step belongs to the operator. The final source patch also
+  hardened the splash-to-main handoff after LaunchServices exposed an
+  intermittent invisible-window reveal: startup now waits briefly for macOS
+  Dock presentation, shows inactive, activates/focuses, logs
+  `main-window:startup-reveal`, and retries visibility if macOS keeps the
+  window hidden. Focused main-process regression passed `31/31`, package smoke
+  passed, strict deep codesign passed, bundle version reported `1.5.0`, and
+  embedded-source inspection found the Generator, splash timing, and reveal
+  anchors inside the packaged app. The final local ARM zip SHA-256 is
+  `49d191e7a9cfb72193abf5b10e4cb96c18c9bb0bee35d687b019f7ddce63ab44`.
+  LaunchServices opened the exact rebuilt bundle without a browser; splash
+  diagnostics stayed finite with `durationMs=16000`, `exitMs=11750`,
+  `portalMs=4250`, `timers=0`, `rafActive=false`, `bodyCount=0`, and
+  `matterCleared=true`. The reveal log reported `visible=true` at initial
+  loadURL fallback, `+300ms`, and `+1200ms`. The first post-splash sample
+  caught the expected compositor tail, then the untouched idle sample settled
+  to four Hydra-owned processes, zero stale Playwright profiles, `0.0%`
+  aggregate CPU, and `591.64 MB` RSS. Local notarization remains deferred
+  because Apple signing credentials are absent; local ad-hoc codesign is valid.

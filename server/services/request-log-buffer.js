@@ -1,6 +1,7 @@
 import { prisma } from './db.js';
 import { logger } from './logger.js';
 import { noteRequestLogActivity } from './request-log-retention.js';
+import { normalizeUsageCost } from './proxy-telemetry.js';
 
 const FLUSH_INTERVAL_MS = Number(process.env.HYDRA_REQUEST_LOG_FLUSH_MS || 1000);
 const MAX_QUEUE = Number(process.env.HYDRA_REQUEST_LOG_QUEUE_MAX || 2000);
@@ -18,8 +19,9 @@ let lastDropWarnAt = 0;
 
 function normalizeTokens(tokens = {}) {
   return {
-    promptTokens: tokens.prompt_tokens || null,
-    completionTokens: tokens.completion_tokens || null,
+    promptTokens: tokens.prompt_tokens ?? null,
+    completionTokens: tokens.completion_tokens ?? null,
+    ...normalizeUsageCost(tokens),
   };
 }
 
@@ -39,7 +41,16 @@ function ensureTimer() {
   timer.unref?.();
 }
 
-export function enqueueRequestLog({ keyHash, model, status, latencyMs, tokens = {}, clientHint = null }) {
+export function enqueueRequestLog({
+  keyHash,
+  model,
+  status,
+  latencyMs,
+  tokens = {},
+  clientHint = null,
+  attempt = 1,
+  outcome = null,
+}) {
   if (queue.length >= MAX_QUEUE) {
     dropped += 1;
     warnDropped();
@@ -52,6 +63,8 @@ export function enqueueRequestLog({ keyHash, model, status, latencyMs, tokens = 
     status,
     latencyMs,
     clientHint,
+    attempt,
+    outcome,
     ...normalizeTokens(tokens),
   });
   noteRequestLogActivity();

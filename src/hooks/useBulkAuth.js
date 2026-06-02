@@ -9,6 +9,7 @@ import {
   setTrackedInterval,
   setTrackedTimeout,
 } from '../lib/runtimeDiagnostics.js';
+import { useSessionStorageState } from './useSessionStorageState.js';
 
 const POLL_INTERVAL = 5000;
 const OTP_PROVISION_POLL_INTERVAL = 1200;
@@ -63,7 +64,7 @@ export function useBulkAuth(addToast) {
 
   // Email Link (Magic Link) Tab State
   const [emailLinkRows, setEmailLinkRows] = useState([]);
-  const [emailLinkLog, setEmailLinkLog] = useState([]);
+  const [emailLinkLog, setEmailLinkLog] = useSessionStorageState('hydra.bulkAuth.emailLinkLog', []);
   const pollRefs = useRef({});
   const pollTimerRef = useRef(null);
   const otpProvisionPollsRef = useRef({});
@@ -76,7 +77,7 @@ export function useBulkAuth(addToast) {
   // OTP Tab State
   const [otpQueue, setOtpQueue] = useState([]);
   const [otpCurrentIdx, setOtpCurrentIdx] = useState(0);
-  const [otpLog, setOtpLog] = useState([]);
+  const [otpLog, setOtpLog] = useSessionStorageState('hydra.bulkAuth.otpLog', []);
   const [otpSignInId, setOtpSignInId] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpBusy, setOtpBusy] = useState(false);
@@ -89,11 +90,11 @@ export function useBulkAuth(addToast) {
 
   const appendEmailLinkLog = useCallback((msg) => {
     setEmailLinkLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 100));
-  }, []);
+  }, [setEmailLinkLog]);
 
   const appendOtpLog = useCallback((msg) => {
     setOtpLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 100));
-  }, []);
+  }, [setOtpLog]);
 
   const updateOtpQueueAccount = useCallback((accountId, patch) => {
     setOtpQueue((prev) => prev.map((item) => (item.id === accountId ? { ...item, ...patch } : item)));

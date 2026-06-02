@@ -7,6 +7,7 @@ import { isElectron, native, tryNative, useNativeInfo } from '../lib/native';
 import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';
 import { useProximityField } from '../hooks/useProximityField.js';
 import { DiagnosticsPanel } from './Diagnostics.jsx';
+import { getStoredUiDensity, setStoredUiDensity } from '../lib/uiDensity.js';
 
 function SettingsActionGroup({ children, className = '' }) {
   const proximity = useProximityField({
@@ -35,6 +36,7 @@ export default function Settings({ addToast }) {
   const [accountProxies, setAccountProxies] = useState('');
   const [accountProxyCount, setAccountProxyCount] = useState(0);
   const [proxySaving, setProxySaving] = useState(false);
+  const [uiDensity, setUiDensity] = useState(getStoredUiDensity);
   const copiedTimerRef = useRef(null);
 
   // Electron native info — single hook handles in-Electron check + load
@@ -249,6 +251,33 @@ export default function Settings({ addToast }) {
       </div>
 
       <div className="settings-grid">
+
+        {/* Display density */}
+        <div className="card settings-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <SettingsIcon size={15} style={{ color: 'var(--accent-secondary)' }} />
+            <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Display Density</span>
+          </div>
+          <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', margin: '0 0 10px' }}>
+            Compact mode fits more controls and rows on screen.
+          </p>
+          <div className="settings-density-control" role="group" aria-label="Display density">
+            {[
+              ['comfortable', 'Standard'],
+              ['compact', 'Compact'],
+            ].map(([density, label]) => (
+              <button
+                type="button"
+                key={density}
+                className={`btn btn-sm ${uiDensity === density ? 'btn-primary' : 'btn-secondary'}`}
+                aria-pressed={uiDensity === density}
+                onClick={() => setUiDensity(setStoredUiDensity(density))}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Endpoint */}
         <div className="card settings-card">

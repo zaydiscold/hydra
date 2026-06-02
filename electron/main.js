@@ -27,6 +27,8 @@ import { showStartupErrorDialog } from './app/startupError.js';
 import { initTelemetry, captureError } from './app/telemetry.js';
 import { setupAutoUpdates } from './app/autoUpdate.js';
 import { completePendingUpdate, readPendingUpdate } from './app/updateHandoff.js';
+import { canPromptBiometric } from './app/biometric.js';
+import { initializeBiometricDefault } from './app/userPrefs.js';
 import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -258,10 +260,18 @@ app.whenReady().then(async () => {
     console.warn('[electron] telemetry init failed:', e?.message || e);
   });
 
-  // Biometric auto-enable was removed 2026-05-06: auto-prompts on every
-  // launch were racing the auth-token release and force-routing users to
-  // login. Biometric is now opt-in via Settings → Touch ID Unlock. The
-  // Settings UI probes availability through electron/app/ipc.js, not here.
+  // Touch ID-capable Macs default biometric unlock on once. The preference
+  // initializer preserves a Settings opt-out and keeps unsupported platforms
+  // off. The IPC token gate still checks for a usable saved token before
+  // prompting, so first launch and expired-token flows go straight to the
+  // password fallback instead of showing a pointless OS prompt.
+  await initializeBiometricDefault(canPromptBiometric()).then((result) => {
+    if (result.changed) {
+      console.warn(`[electron] biometric default initialized: enabled=${result.enabled} source=${result.source}`);
+    }
+  }).catch((e) => {
+    console.warn('[electron] biometric default initialization failed:', e?.message || e);
+  });
 
   try {
     // createSplashWindow already calls setSplashWindow(win) internally, so we
@@ -412,9 +422,11 @@ app.whenReady().then(async () => {
     //  12000 ms — +2s density pass (2026-05-26). User feedback: the new
     //             falling animation looks good; let it breathe longer and
     //             fill more of the screen before the main window takes over.
-    //  16000 ms — +33% elegance pass (2026-05-30). The final three seconds
-    //             now pull settled glyphs into an accelerating center portal
+    //  16000 ms — +33% elegance pass (2026-05-30). The final portal phase
+    //             now pulls settled glyphs into an accelerating center orbit
     //             instead of disappearing behind a hard gravity flip.
+    //             A 2026-06-02 refinement starts that phase at 11.75s, giving
+    //             the bounded glyph light wave 4.25s without extending launch.
     //
     // PROGRESS-BAR LOCKSTEP: the splash canvas physics is self-contained,
     // but the `fillbar` keyframe in windows.js still measures perceived
@@ -459,24 +471,83 @@ app.whenReady().then(async () => {
     // Show on ready-to-show (paint complete). 5s safety timeout in case
     // ready-to-show never fires (e.g. React threw on import) — we'd rather
     // show a half-loaded window than leave the user staring at a dock icon.
-    let mainShown = false;
-    const showMainOnce = () => {
-      if (mainShown || !mainWindow || mainWindow.isDestroyed()) return;
-      mainShown = true;
+    let mainRevealStarted = false;
+    // If macOS accepts the show request but still reports the window hidden
+    // (LaunchServices occasionally does this during relaunch/activate races),
+    // try the shared tray/activate path once boot has been released.
+    const armLateRecover = () => {
+      setTimeout(() => {
+        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isVisible()) return;
+        console.warn('[electron] main reveal late recovery — using shared show/focus path');
+        showAndFocusMainWindow().catch?.((err) => {
+          console.warn('[electron] main reveal late recovery failed:', err?.message || err);
+        });
+      }, 2200).unref?.();
+    };
+
+    const revealMainWindow = async (reason = 'ready-to-show') => {
+      if (mainRevealStarted || !mainWindow || mainWindow.isDestroyed()) return;
+      mainRevealStarted = true;
       performance.mark('hydra:startup:ready-to-show');
+      if (process.platform === 'darwin') {
+        try {
+          await Promise.race([
+            Promise.resolve(app.dock?.show()),
+            new Promise(resolve => setTimeout(resolve, 500)),
+          ]);
+        } catch (err) {
+          console.warn('[electron] dock show before main reveal failed:', err?.message || err);
+        }
+      }
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.showInactive();
       mainWindow.show();
+      if (process.platform === 'darwin') {
+        try {
+          app.focus({ steal: true });
+        } catch (err) {
+          console.warn('[electron] app focus before main reveal failed:', err?.message || err);
+        }
+      }
       mainWindow.focus();
+      mainWindow.moveTop();
+
+      const verifyVisible = (label) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (!mainWindow.isVisible()) {
+          console.warn(`[electron] main reveal did not become visible after ${label} — retrying show`);
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.showInactive();
+          mainWindow.show();
+          mainWindow.focus();
+          mainWindow.moveTop();
+        }
+        console.warn(`[electron] main-window:startup-reveal ${JSON.stringify({
+          reason,
+          label,
+          visible: mainWindow.isVisible(),
+          minimized: mainWindow.isMinimized(),
+          focused: mainWindow.isFocused(),
+        })}`);
+      };
+      verifyVisible(reason);
+      setTimeout(() => verifyVisible(`${reason}+300ms`), 300).unref?.();
+      setTimeout(() => verifyVisible(`${reason}+1200ms`), 1200).unref?.();
       // Boot complete — release the gate so activate / second-instance /
       // tray-click handlers can spawn windows again from this point on.
       setBootingSplash(false);
+      armLateRecover();
     };
-    mainWindow.once('ready-to-show', showMainOnce);
+    mainWindow.once('ready-to-show', () => {
+      void revealMainWindow('ready-to-show');
+    });
     const safetyTimeout = setTimeout(() => {
-      if (!mainShown) {
+      if (!mainRevealStarted) {
         console.warn('[electron] ready-to-show did not fire within 5s — showing main window anyway');
-        showMainOnce();
+        void revealMainWindow('ready-timeout');
       }
     }, 5000);
+    safetyTimeout.unref?.();
 
     performance.mark('hydra:startup:loadurl-begin');
     let loadSucceeded = false;
@@ -485,9 +556,9 @@ app.whenReady().then(async () => {
       loadSucceeded = true;
     } finally {
       clearTimeout(safetyTimeout);
-      if (loadSucceeded && !mainShown) {
+      if (loadSucceeded && !mainRevealStarted) {
         console.warn('[electron] loadURL resolved before ready-to-show — showing main window');
-        showMainOnce();
+        await revealMainWindow('loadURL-resolved');
       }
     }
     performance.mark('hydra:startup:loadurl-done');

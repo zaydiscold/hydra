@@ -9,6 +9,7 @@ import { assertManagementKey, assertStandardKey } from '../services/key-utils.js
 import { rotateProxySecret } from '../services/local-secrets.js';
 import { logger } from '../services/logger.js';
 import { bindRequestAbort, combineAbortSignals, throwIfAborted } from '../lib/abort.js';
+import { enrichRequestLogPricing, getProxyMaxKeyAttempts } from '../services/proxy-telemetry.js';
 
 // Cache OpenRouter listKeys results per account — 2 min TTL.
 // Pool Manager hits this on every page load; no need to hammer OR on every visit.
@@ -468,7 +469,7 @@ class PoolController extends BaseController {
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       // Fetch latest 100 requests for the log table
-      const [logs, metrics] = await Promise.all([
+      const [rawLogs, metrics, modelPrices, routing] = await Promise.all([
         prisma.requestLog.findMany({
           take: 100,
           orderBy: { createdAt: 'desc' },
@@ -481,6 +482,10 @@ class PoolController extends BaseController {
             promptTokens: true,
             completionTokens: true,
             clientHint: true,
+            attempt: true,
+            outcome: true,
+            totalCost: true,
+            costSource: true,
             createdAt: true,
             key: { select: { name: true, account: { select: { alias: true } } } },
           },
@@ -491,9 +496,27 @@ class PoolController extends BaseController {
           where: { createdAt: { gte: oneDayAgo } },
           _count: { id: true },
         }),
+        prisma.cachedModel.findMany({
+          select: {
+            id: true,
+            promptPrice: true,
+            completionPrice: true,
+            requestPrice: true,
+          },
+        }),
+        rotationManager.getStatusAsync(),
       ]);
+      const pricesByModel = new Map(modelPrices.map((model) => [model.id, model]));
+      const logs = rawLogs.map((log) => enrichRequestLogPricing(log, pricesByModel.get(log.model)));
 
-      return this.success(res, { logs, metrics });
+      return this.success(res, {
+        logs,
+        metrics,
+        routing: {
+          ...routing,
+          maxKeyAttempts: getProxyMaxKeyAttempts(),
+        },
+      });
     } catch (err) {
       const { classifyPrismaError, formatPrismaError } = await import('../lib/prisma-error.js');
       const { logger } = await import('../services/logger.js');

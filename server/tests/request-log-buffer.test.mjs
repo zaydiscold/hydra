@@ -84,8 +84,12 @@ test('request-log buffer batches proxy log writes off the hot path', async () =>
     status: 200,
     latencyMs: 42,
     clientHint: 'cursor',
+    attempt: 1,
+    outcome: null,
     promptTokens: 10,
     completionTokens: 20,
+    totalCost: null,
+    costSource: null,
   }]);
   assert.equal(getRequestLogBufferSnapshot().queued, 0);
 });

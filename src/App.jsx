@@ -7,6 +7,7 @@ import { isElectron, native as nativeBridge, tryNative, useNativeInfo } from './
 import { useOwnedTimeouts } from './hooks/useOwnedTimeouts';
 import { useVisibleRecurringTask } from './hooks/useVisibleRecurringTask.js';
 import { useProximityField } from './hooks/useProximityField.js';
+import { getStoredUiDensity, subscribeUiDensity } from './lib/uiDensity.js';
 import {
   cancelTrackedAnimationFrame,
   clearTrackedTimeout,
@@ -22,6 +23,7 @@ import {
   GeneratorIcon,
   SettingsIcon,
   LockIcon,
+  ShieldIcon,
   PowerIcon,
   NetworkIcon,
   ActivityIcon,
@@ -123,6 +125,8 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
   const [error, setError] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [touchIdAvailable, setTouchIdAvailable] = useState(false);
+  const [touchIdLoading, setTouchIdLoading] = useState(false);
   const [setupAccount, setSetupAccount] = useState(null);
 
   // ── Nuclear Reset Logic ──
@@ -189,6 +193,23 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
     }
   }, [isSetup]);
 
+  useEffect(() => {
+    let mounted = true;
+    if (isSetup || !isElectron()) {
+      setTouchIdAvailable(false);
+      return () => { mounted = false; };
+    }
+    nativeBridge.biometricDescribe()
+      .then((info) => {
+        if (mounted) setTouchIdAvailable(Boolean(info?.available));
+      })
+      .catch((err) => {
+        logger.warn('Touch ID status check failed on unlock screen:', err.message);
+        if (mounted) setTouchIdAvailable(false);
+      });
+    return () => { mounted = false; };
+  }, [isSetup]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -229,6 +250,29 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
       setError(err.message);
     }
     setLoading(false);
+  }
+
+  async function handleTouchIdUnlock() {
+    setError('');
+    setTouchIdLoading(true);
+    try {
+      const token = await api.hydrateToken();
+      if (!token) {
+        throw new Error('Touch ID unlock needs a saved device session. Unlock once with your password to refresh it.');
+      }
+      const res = await api.getAuthStatus();
+      const payload = res?.data ?? res ?? {};
+      if (!payload.authenticated) {
+        await api.clearToken();
+        throw new Error('The saved device session expired. Unlock once with your password to refresh it.');
+      }
+      onSuccess();
+    } catch (err) {
+      logger.warn('Touch ID unlock failed:', err.message);
+      setError(err.message);
+    } finally {
+      setTouchIdLoading(false);
+    }
   }
 
   async function handleManagementKeySubmit(e) {
@@ -356,10 +400,6 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
 
   return (
     <div className="lock-screen">
-      <div className="lock-bg-orbs">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-      </div>
       <div className="lock-card animate-spring" style={{ maxWidth: '600px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-xs)' }}>
           <div className="lock-card-icon" style={{ margin: 0 }}>HYDRA</div>
@@ -381,6 +421,12 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
             ? 'Create a local password to protect your account data. This only lives on your machine.'
             : 'Enter your password to access your OpenRouter accounts.'}
         </p>
+        {!isSetup && (
+          <div className="desktop-unlock-note" role="note">
+            <span className="desktop-unlock-note__tag">DESKTOP UNLOCK</span>
+            <span>Touch ID checks your saved 24-hour unlock first when available. Password stays ready as the secure fallback.</span>
+          </div>
+        )}
         {renderSetupStepper()}
 
         {isSetup && setupStage === 'key' ? renderSetupKeyStage() : isSetup && setupStage === 'tour' ? renderSetupTourStage() : (
@@ -442,6 +488,22 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
               : isSetup ? 'Create Password' : 'Unlock'
             }
           </button>
+          {!isSetup && touchIdAvailable && (
+            <>
+              <div className="desktop-unlock-divider"><span>or</span></div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-full desktop-touch-id-btn"
+                disabled={loading || touchIdLoading}
+                onClick={handleTouchIdUnlock}
+              >
+                {touchIdLoading
+                  ? <><div className="spinner-sm" /> Checking Touch ID...</>
+                  : <><ShieldIcon size={15} /> Unlock with Touch ID</>
+                }
+              </button>
+            </>
+          )}
         </form>
         )}
 
@@ -507,9 +569,8 @@ const navItems = [
   { id: 'vault', label: 'Vault', icon: <VaultIcon size={18} />, path: '/vault' },
   { id: 'pool', label: 'Pool Manager', icon: <NetworkIcon size={18} />, path: '/pool' },
   { id: 'codes', label: 'Redeem', icon: <TicketIcon size={18} />, path: '/codes' },
-  { id: 'generator', label: 'Generator', icon: <GeneratorIcon size={18} />, path: '/generator' },
   { id: 'traffic', label: 'Traffic', icon: <ActivityIcon size={18} />, path: '/traffic' },
-  { id: 'settings', label: 'Settings', icon: <SettingsIcon size={18} />, path: '/settings' }
+  { id: 'generator', label: 'Generator', icon: <GeneratorIcon size={18} />, path: '/generator' },
 ];
 
 function isMacUserAgent() {
@@ -579,6 +640,7 @@ export default function App() {
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
   const [ambientMotion, setAmbientMotion] = useState(true);
+  const [uiDensity, setUiDensity] = useState(getStoredUiDensity);
   const [toasts, setToasts] = useState([]);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const [upstreamHealth, setUpstreamHealth] = useState(null);
@@ -596,11 +658,14 @@ export default function App() {
   const rendererChrome = electronMode;
   const sidebarProximity = useProximityField({
     owner: 'App.sidebarNav',
-    radius: 105,
-    maxScale: 0.035,
+    radius: 150,
+    maxScale: 0.14,
     maxLift: 0,
-    maxShiftX: 3,
+    maxShiftX: 10,
+    brightnessDelta: 0.22,
   });
+
+  useEffect(() => subscribeUiDensity(setUiDensity), []);
 
   // #70: Keep Electron/Finder window titles aligned with the current route.
   useEffect(() => {
@@ -814,7 +879,12 @@ export default function App() {
       logger.warn('Logout request failed before local lock:', err.message);
       addToast('Server logout failed; local session was cleared.', 'warning');
     }
-    await api.clearToken();
+    try {
+      await api.lockToken();
+    } catch (err) {
+      logger.warn('Device unlock retention failed during local lock:', err.message);
+      addToast('Vault locked, but the saved Touch ID unlock could not be retained.', 'warning');
+    }
     setManualAuthState('login');
     navigate('/dashboard');
   }, [addToast, navigate, setManualAuthState]);
@@ -944,7 +1014,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className={`app-shell${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}`}>
+      <div className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}`}>
         <AppChrome />
         <AppVersionStamp />
         <GlobalLoadingBar />
@@ -957,7 +1027,11 @@ export default function App() {
           <div className="meteor" />
           <div className="meteor" />
         </div>
-        <div className="planet planet-1" />
+        <div className="planet planet-1">
+          <span className="planet-moon-orbit planet-moon-orbit--primary" aria-hidden="true"><span className="planet-moon planet-moon--primary" /></span>
+          <span className="planet-moon-orbit planet-moon-orbit--inner" aria-hidden="true"><span className="planet-moon planet-moon--ember" /></span>
+          <span className="planet-moon-orbit planet-moon-orbit--outer" aria-hidden="true"><span className="planet-moon planet-moon--ice" /></span>
+        </div>
         <div className="planet planet-2" />
 
         {authState === 'setup' || authState === 'login' ? (
@@ -1015,6 +1089,7 @@ export default function App() {
                   >
                     <span className="nav-icon">{item.icon}</span>
                     {!sidebarCollapsed && <span>{item.label}</span>}
+                    <span className="sidebar-tooltip" role="tooltip">{item.label}</span>
                   </button>
                 );
               })}
@@ -1035,16 +1110,27 @@ export default function App() {
                   </svg>
                 </span>
                 {!sidebarCollapsed && <span>Collapse</span>}
+                <span className="sidebar-tooltip" role="tooltip">{sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}</span>
+              </button>
+              <button type="button" data-proximity-target className="nav-link"
+                onClick={() => navigate('/settings')}
+                title="Settings"
+              >
+                <span className="nav-icon"><SettingsIcon size={18} /></span>
+                {!sidebarCollapsed && <span>Settings</span>}
+                <span className="sidebar-tooltip" role="tooltip">Settings</span>
               </button>
               {isElectron() ? (
                 <>
                   <button type="button" data-proximity-target className="nav-link nav-link-lock" onClick={handleLogout} title="Lock Vault">
                     <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock Vault</span>}
+                    <span className="sidebar-tooltip" role="tooltip">Lock Vault</span>
                   </button>
                   <button type="button" data-proximity-target className="nav-link" style={{ color: 'var(--status-error)' }} onClick={handleQuit} title="Quit">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Quit</span>}
+                    <span className="sidebar-tooltip" role="tooltip">Quit</span>
                   </button>
                 </>
               ) : (
@@ -1052,10 +1138,12 @@ export default function App() {
                   <button type="button" data-proximity-target className="nav-link nav-link-lock" onClick={handleLogout} title="Lock">
                     <span className="nav-icon"><LockIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Lock</span>}
+                    <span className="sidebar-tooltip" role="tooltip">Lock</span>
                   </button>
                   <button type="button" data-proximity-target className="nav-link" style={{ marginTop: '4px', color: 'var(--status-error)' }} onClick={handleShutdown} title="Shutdown">
                     <span className="nav-icon"><PowerIcon size={18} /></span>
                     {!sidebarCollapsed && <span>Shutdown</span>}
+                    <span className="sidebar-tooltip" role="tooltip">Shutdown</span>
                   </button>
                 </>
               )}

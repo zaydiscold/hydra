@@ -43,10 +43,13 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /if \(lifecycleClosedRef\.current\) \{[\s\S]*cleanupLateStartedTask\(startedTaskId\)/);
   assert.match(source, /activeTaskRef\.current = startedTaskId/);
   assert.match(source, /api\.cleanupGeneratorJob\(lateTaskId, 'client_disconnect', \{ keepalive: true \}\)/);
-  assert.match(source, /if \(!otp \|\| !taskId \|\| verifyInFlightRef\.current\) return/);
+  assert.match(source, /if \(otp\.length !== 6 \|\| !taskId \|\| verifyInFlightRef\.current\) return/);
   assert.match(source, /if \(lifecycleClosedRef\.current \|\| activeTaskRef\.current !== renderedTaskId\) return/);
   assert.match(source, /disabled=\{!emailTemplate \|\| starting\}/);
-  assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying\}/);
+  assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying \|\| status !== 'awaiting_otp'\}/);
+  assert.match(source, /inputMode="numeric"/);
+  assert.match(source, /generatorModeLabel\(jobMode\)/);
+  assert.doesNotMatch(source, /Playwright paused/);
 });
 
 test('request-log retention shutdown wait failures are logged', () => {
@@ -523,6 +526,7 @@ test('proxy request body encoding is cached across retries', () => {
   assert.match(buildBody, /encodedBodyCache\.set\(cacheKey, encoded\)/);
   assert.match(buildBody, /const body = Array\.isArray\(baseBody\) \? \[\.\.\.baseBody\] : \{ \.\.\.baseBody \}/);
   assert.doesNotMatch(buildBody, /JSON\.parse\(JSON\.stringify/);
+  assert.doesNotMatch(proxyHandler, /stream_options|include_usage/, 'OpenRouter usage is automatic; retries must not inject deprecated stream flags');
 });
 
 test('proxy aborts ordinary upstream work when its client disconnects', () => {
@@ -553,7 +557,7 @@ test('traffic backend runs independent request-log reads in parallel', () => {
     source.indexOf('/** GET /pool/models'),
   );
 
-  assert.match(handler, /const \[logs, metrics\] = await Promise\.all\(\[/);
+  assert.match(handler, /const \[rawLogs, metrics, modelPrices, routing\] = await Promise\.all\(\[/);
   assert.match(handler, /prisma\.requestLog\.findMany\(/);
   assert.match(handler, /prisma\.requestLog\.groupBy\(/);
   assert.doesNotMatch(handler, /const logs = await[\s\S]*const metrics = await/);
@@ -688,6 +692,11 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /Using account proxy \$\{describeAutomationNetworkRoute\(automationRoute\)\} for task \$\{task\.taskId\}/);
   assert.match(source, /automationRoute: automationRoute\.label/);
   assert.match(source, /proxy: playwrightProxyForAutomation\(automationRoute\)/);
+  assert.match(source, /headless: config\.HYDRA_GENERATOR_HEADLESS/);
+  assert.match(source, /manual_verification/);
+  assert.match(source, /waitForOtpChallenge\(task, page\)/);
+  assert.match(source, /clickVisibleOtpSubmitControl\(page, task\.taskId\)/);
+  assert.match(source, /Submitted OTP challenge for \$\{taskId\} with visible button/);
 });
 
 test('OpenRouter model-list cache requests are timeout bounded', () => {

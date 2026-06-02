@@ -57,9 +57,8 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
   const authUtils = readRepoFile('src/utils/auth.js');
 
   assert.match(page, /Owner-only; not OpenRouter/);
-  assert.match(page, /Email Link is an owner-only advanced relay/);
-  assert.match(page, /same direct HTTPS email-code login used by account cards/);
-  assert.match(page, /Use Generator for a brand-new signup/);
+  assert.match(page, /Import existing OpenRouter accounts with direct HTTPS/);
+  assert.match(page, /Use Generator for new signups/);
   assert.match(page, /magicLinkCapability=\{auth\.magicLinkCapability\}/);
   assert.match(page, /onRefreshCapability=\{auth\.refreshMagicLinkCapability\}/);
   assert.match(tab, /bulk-auth-email-link-capability/);
@@ -162,6 +161,17 @@ test('ambient app chrome animations settle after launch instead of running forev
   assert.doesNotMatch(css, /@keyframes edm-flow/);
 });
 
+test('desktop unlock fallback stays polished without an idle backdrop-filter repaint', () => {
+  const app = readRepoFile('src/App.jsx');
+  const css = readRepoFile('src/index.css');
+
+  assert.match(app, /className="desktop-unlock-note" role="note"/);
+  assert.match(app, /Touch ID checks your saved 24-hour unlock first when available/);
+  assert.match(css, /\.desktop-unlock-note\s*\{[\s\S]*?border-left:\s*4px solid var\(--accent-secondary\);/);
+  assert.doesNotMatch(cssRuleBlock(css, '.lock-card {'), /backdrop-filter:/);
+  assert.doesNotMatch(cssRuleBlock(css, '.vault-indicator {'), /backdrop-filter:/);
+});
+
 test('steady status dots keep their glow without perpetual compositor animation', () => {
   const css = readRepoFile('src/index.css');
 
@@ -199,9 +209,9 @@ test('splash owns one throttled physics and render loop', () => {
     .map(([, label]) => label);
 
   assert.match(windowsJs, /HYDRA_SPLASH_DURATION_MS=16000/);
-  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=13000/);
-  assert.match(windowsJs, /HYDRA_SPLASH_PORTAL_MS=3000/);
-  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FADE_DELAY_MS=2700/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=11750/);
+  assert.match(windowsJs, /HYDRA_SPLASH_PORTAL_MS=4250/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FADE_DELAY_MS=3825/);
   assert.match(windowsJs, /HYDRA_SPLASH_DISPOSE_MS=18500/);
   assert.match(windowsJs, /HYDRA_SPLASH_TARGET=72/);
   assert.ok(splashLabels.length >= 72, 'splash corpus must cover the bounded queue without refill');
@@ -235,7 +245,10 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
   assert.match(windowsJs, /hydraSplashDiagnostics\.portalLiftApplied=true/);
   assert.match(windowsJs, /const stems=9/);
-  assert.match(windowsJs, /baseFontSize\*\(0\.86\+Math\.random\(\)\*1\.04\)/);
+  assert.match(windowsJs, /baseFontSize\*\(0\.903\+Math\.random\(\)\*1\.092\)/);
+  assert.match(windowsJs, /const wave=\.5\+\.5\*Math\.sin/);
+  assert.match(windowsJs, /ctx\.shadowBlur=4\+portalRatio\*8\+wave\*3/);
+  assert.match(windowsJs, /const delay=30\+Math\.random\(\)\*104\+\(Math\.random\(\)<0\.16\?Math\.random\(\)\*138:0\)/);
   assert.match(windowsJs, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
   assert.match(windowsJs, /Welcome, /);
   assert.match(windowsJs, /function drawHydraPortal\(now,ratio\)/);
@@ -528,7 +541,7 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(dashboard, /data-testid="fleet-health-donut"/);
   assert.match(dashboard, /strokeDasharray=\{`\$\{healthyLen\} \$\{circumference\}`\}/);
   assert.match(dashboard, /<ActivityPanel events=\{activity\} \/>/);
-  assert.match(dashboard, /className="accounts-grid dashboard-mini-grid proximity-field"/);
+  assert.match(dashboard, /accounts-grid dashboard-mini-grid proximity-field/);
   assert.match(dashboard, /<AccountCard[\s\S]*compact\s*\/>/);
   assert.match(dashboard, /onResumeAuth=\{handleResumeBulkAuth\}/);
   assert.match(dashboard, /account\.pendingVerification[\s\S]*title: 'OTP sign-in pending'/);
@@ -537,9 +550,14 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(accountCard, />\s*Resume\s*<\/button>/);
   assert.match(accountCard, /if \(account\.pendingVerification\) \{[\s\S]*onResumeAuth\?\.\(\)/);
   assert.match(dashboard, /className="dashboard-view-toggle"/);
-  assert.match(dashboard, /<span className="active">GRID<\/span>/);
-  assert.match(dashboard, /<span>LIST<\/span>/);
-  assert.match(dashboard, /<span>MAP<\/span>/);
+  assert.match(dashboard, /\['grid', 'list', 'map'\]\.map/);
+  assert.match(dashboard, /onClick=\{\(\) => setViewMode\(mode\)\}/);
+  assert.match(dashboard, /dashboard-account-viewport dashboard-account-viewport--\$\{viewMode\}/);
+  assert.match(dashboard, /className="dashboard-account-list proximity-field"/);
+  assert.match(dashboard, /function DashboardAccountListRow/);
+  assert.match(dashboard, /<span>Account<\/span>[\s\S]*?<span>Balance<\/span>[\s\S]*?<span>Control<\/span>[\s\S]*?<span>API<\/span>[\s\S]*?<span>Session<\/span>[\s\S]*?<span>Used<\/span>/);
+  assert.match(dashboard, /function AccountTopologyMap/);
+  assert.match(css, /\.dashboard-account-map__node/);
   assert.doesNotMatch(dashboard, /dashboard-stats-strip/);
   assert.doesNotMatch(dashboard, /<SummaryCard/);
   assert.match(dashboard, /function getFleetHealth\(accounts, liveStatuses = \{\}\)/);
@@ -565,6 +583,8 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(css, /\.activity-row--warning\s*\{[\s\S]*?var\(--status-warning\)/);
   assert.match(css, /\.account-card--compact\s*\{/);
   assert.match(css, /\.dashboard-mini-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /\.dashboard-account-viewport--grid,[\s\S]*?max-height:\s*clamp\(320px,\s*calc\(100vh - 230px\),\s*720px\);[\s\S]*?overflow:\s*auto;/);
+  assert.match(css, /\.dashboard-account-list__row\s*\{[\s\S]*?grid-template-columns:/);
   assert.doesNotMatch(css, /\.dashboard-stats-strip\s*\{/);
   assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.dashboard-command-layout\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.dashboard-mini-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
@@ -655,9 +675,18 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
 
   assert.match(generator, /className="generator-steps"/);
   assert.match(generator, /1\. Email alias/);
+  assert.match(generator, /<label>Email alias<\/label>/);
+  assert.doesNotMatch(generator, /Gmail Alias/);
+  assert.match(generator, /generatorModeLabel\(jobMode\)/);
+  assert.match(generator, /className="generator-otp-row"/);
+  assert.match(generator, /onChange=\{e => setOtp\(e\.target\.value\.replace\(\/\\D\/g, ''\)\.slice\(0, 6\)\)\}/);
   assert.doesNotMatch(generator, /className="card generator-instructions/);
+  assert.doesNotMatch(generator, /Playwright paused/);
   assert.match(css, /\.generator-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/);
   assert.match(css, /\.generator-steps\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(css, /\.generator-start-btn:disabled\s*\{[\s\S]*?filter:\s*saturate\(0\.55\) brightness\(0\.85\);/);
+  assert.match(css, /\.generator-otp-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(180px,\s*240px\)\s+minmax\(128px,\s*auto\);/);
+  assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?min-width:\s*128px;/);
 });
 
 test('first-run setup is a guided password key tour instead of a login dead end', () => {
@@ -694,6 +723,9 @@ test('desktop auth bootstrap renders password fallback while Touch ID release is
   assert.match(checkAuth, /authStateRef\.current !== 'login'/);
   assert.match(checkAuth, /Persisted desktop unlock unavailable/);
   assert.match(app, /authBootstrapRef\.current \+= 1/);
+  assert.match(app, /Unlock with Touch ID/);
+  assert.match(app, /await api\.lockToken\(\)/);
+  assert.match(app, /Device unlock retention failed during local lock:/);
 });
 
 test('sidebar navigation paths are backed by concrete routes', () => {
@@ -710,9 +742,8 @@ test('sidebar navigation paths are backed by concrete routes', () => {
     '/vault',
     '/pool',
     '/codes',
-    '/generator',
     '/traffic',
-    '/settings',
+    '/generator',
   ]);
 
   const routePaths = new Set([...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((match) => match[1]));
@@ -720,8 +751,64 @@ test('sidebar navigation paths are backed by concrete routes', () => {
     assert.equal(routePaths.has(path), true, `${path} is missing a <Route>`);
   }
 
+  assert.match(app, /onClick=\{\(\) => navigate\('\/settings'\)\}/);
+  assert.match(app, /<span className="sidebar-tooltip" role="tooltip">Settings<\/span>/);
   assert.match(app, /<Route path="\/diagnostics" element=\{<Navigate to="\/settings#diagnostics" replace \/>\}/);
   assert.match(readRepoFile('src/pages/Settings.jsx'), /location\.hash !== '#diagnostics'/);
+});
+
+test('1.5 desktop operator polish stays wired to real controls', () => {
+  const app = readRepoFile('src/App.jsx');
+  const css = readRepoFile('src/index.css');
+  const traffic = readRepoFile('src/pages/Traffic.jsx');
+  const settings = readRepoFile('src/pages/Settings.jsx');
+  const keyRow = readRepoFile('src/components/KeyRow.jsx');
+  const accountRow = readRepoFile('src/components/AccountRow.jsx');
+  const bulkAuth = readRepoFile('src/hooks/useBulkAuth.js');
+  const sessionStorage = readRepoFile('src/hooks/useSessionStorageState.js');
+
+  assert.match(app, /radius:\s*150/);
+  assert.match(app, /maxScale:\s*0\.14/);
+  assert.match(app, /maxShiftX:\s*10/);
+  assert.match(app, /brightnessDelta:\s*0\.22/);
+  assert.match(app, /<span className="sidebar-tooltip" role="tooltip">\{item\.label\}<\/span>/);
+  assert.match(css, /\.sidebar-tooltip\s*\{/);
+  assert.match(css, /\.sidebar--collapsed \.nav-link:hover \.sidebar-tooltip,/);
+
+  assert.match(app, /planet-moon-orbit/);
+  assert.match(app, /planet-moon-orbit--primary/);
+  assert.match(app, /planet-moon-orbit--inner/);
+  assert.match(app, /planet-moon-orbit--outer/);
+  assert.match(css, /\.app-shell--ambient-motion \.planet-moon-orbit\s*\{/);
+  assert.match(css, /animation:\s*moonOrbit var\(--moon-orbit-duration\) linear infinite/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*16s;[\s\S]*?transform:\s*rotate\(var\(--moon-orbit-start\)\);/);
+  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*11\.5s;/);
+  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*22s;/);
+
+  assert.match(traffic, /formatUsd\(log\.inputCost\)/);
+  assert.match(traffic, /formatUsd\(log\.outputCost\)/);
+  assert.match(traffic, /formatUsd\(log\.totalCost\)/);
+  assert.match(traffic, /describeRoute\(log\)/);
+  assert.match(traffic, /OpenRouter reported/);
+  assert.match(traffic, /catalog_estimate/);
+
+  assert.match(settings, /Display Density/);
+  assert.match(settings, /setStoredUiDensity\(density\)/);
+  assert.match(css, /\.app-shell--density-compact \.main-content \.page-header/);
+  assert.match(css, /\.app-shell--density-compact \.main-content \.stats-grid/);
+  assert.match(css, /\.app-shell--density-compact \.main-content \.form-input/);
+  assert.match(css, /\.app-shell--density-compact \.main-content \.dashboard-command-panel/);
+  assert.doesNotMatch(css, /\.app-shell--density-compact \.sidebar/);
+
+  assert.match(keyRow, /pool-toggle-hitbox/);
+  assert.match(keyRow, /pool-paste-key-btn/);
+  assert.match(accountRow, /pool-account-toggle/);
+  assert.match(css, /\.pool-toggle-hitbox\s*\{/);
+  assert.match(css, /\.pool-paste-key-btn\s*\{/);
+
+  assert.match(bulkAuth, /useSessionStorageState\('hydra\.bulkAuth\.emailLinkLog'/);
+  assert.match(bulkAuth, /useSessionStorageState\('hydra\.bulkAuth\.otpLog'/);
+  assert.match(sessionStorage, /window\.sessionStorage\?\.setItem\(key, JSON\.stringify\(value\)\)/);
 });
 
 test('Electron document title follows the active app route', () => {
@@ -787,9 +874,13 @@ test('settings toggles are backed by persisted native preferences', () => {
 
   assert.match(prefs, /const DEFAULTS = Object\.freeze\(\{/);
   assert.match(prefs, /biometricEnabled: false/);
+  assert.match(prefs, /biometricDefaultInitialized: false/);
+  assert.match(prefs, /export async function initializeBiometricDefault\(canPrompt\)/);
+  assert.match(prefs, /if \(key === 'biometricEnabled'\) next\.biometricDefaultInitialized = true/);
   assert.match(prefs, /telemetryEnabled: false/);
   assert.match(prefs, /await rename\(tmp, dest\)/);
   assert.match(prefsTest, /user preferences persist across cache reset and keep owner-only permissions/);
+  assert.match(prefsTest, /Touch ID defaults on once for supported Macs and preserves a later explicit opt-out/);
 });
 
 test('frontend API failures surface backend-down recovery guidance', () => {

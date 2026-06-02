@@ -1,12 +1,13 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMetrics } from '../hooks/useMetrics';
 import AccountCard from '../components/AccountCard';
 import AddAccountModal from '../components/AddAccountModal';
 import AnimeText from '../components/AnimeText';
 import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, getBalanceStatus } from '../utils/format';
 import { getCardHealth } from '../utils/cardHealth';
+import { timeAgo } from '../utils/time';
 import { PlusIcon } from '../components/Icons';
 import { useProximityField } from '../hooks/useProximityField.js';
 
@@ -25,6 +26,11 @@ export default function Dashboard({ onSelectAccount, addToast }) {
   } = useMetrics({ addToast });
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [viewMode, setViewMode] = useState(() => (
+    ['grid', 'list', 'map'].includes(window.localStorage?.getItem('hydra.dashboard.viewMode'))
+      ? window.localStorage.getItem('hydra.dashboard.viewMode')
+      : 'grid'
+  ));
   const accountProximity = useProximityField({
     owner: 'Dashboard.accountGrid',
     radius: 250,
@@ -55,6 +61,9 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     fetchDashboard(true);
   }, [addToast, fetchDashboard]);
   const handleResumeBulkAuth = useCallback(() => navigate('/bulk-auth'), [navigate]);
+  useEffect(() => {
+    window.localStorage?.setItem('hydra.dashboard.viewMode', viewMode);
+  }, [viewMode]);
 
   const dashboardView = useMemo(() => {
     const totals = data?.totals || {};
@@ -170,9 +179,17 @@ export default function Dashboard({ onSelectAccount, addToast }) {
               )}
             </div>
             <div className="dashboard-view-toggle" aria-label="Dashboard view mode">
-              <span className="active">GRID</span>
-              <span>LIST</span>
-              <span>MAP</span>
+              {['grid', 'list', 'map'].map((mode) => (
+                <button
+                  type="button"
+                  key={mode}
+                  className={viewMode === mode ? 'active' : ''}
+                  aria-pressed={viewMode === mode}
+                  onClick={() => setViewMode(mode)}
+                >
+                  {mode.toUpperCase()}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -191,22 +208,54 @@ export default function Dashboard({ onSelectAccount, addToast }) {
               </div>
             </div>
           ) : (
-            <div className="accounts-grid dashboard-mini-grid proximity-field" {...accountProximity}>
-              {accounts.map((account, index) => (
-                <AccountCard
-                  key={account.id}
-                  account={account}
-                  index={index}
-                  onSelect={onSelectAccount}
-                  onProvision={handleProvision}
-                  provisioningIds={provisioningIds}
+            <div className={`dashboard-account-viewport dashboard-account-viewport--${viewMode}`}>
+              {viewMode === 'map' ? (
+                <AccountTopologyMap
+                  accounts={accounts}
                   liveStatuses={liveStatuses}
-                  actionSessionTruth={actionSessionTruth}
-                  cooldownMap={cooldownMap}
+                  onSelectAccount={onSelectAccount}
                   onResumeAuth={handleResumeBulkAuth}
-                  compact
+                  proximity={accountProximity}
                 />
-              ))}
+              ) : viewMode === 'list' ? (
+                <div className="dashboard-account-list proximity-field" {...accountProximity}>
+                  <div className="dashboard-account-list__header" aria-hidden="true">
+                    <span>Account</span>
+                    <span>Balance</span>
+                    <span>Control</span>
+                    <span>API</span>
+                    <span>Session</span>
+                    <span>Used</span>
+                  </div>
+                  {accounts.map((account) => (
+                    <DashboardAccountListRow
+                      key={account.id}
+                      account={account}
+                      liveStatuses={liveStatuses}
+                      onSelectAccount={onSelectAccount}
+                      onResumeAuth={handleResumeBulkAuth}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="accounts-grid dashboard-mini-grid proximity-field" {...accountProximity}>
+                  {accounts.map((account, index) => (
+                    <AccountCard
+                      key={account.id}
+                      account={account}
+                      index={index}
+                      onSelect={onSelectAccount}
+                      onProvision={handleProvision}
+                      provisioningIds={provisioningIds}
+                      liveStatuses={liveStatuses}
+                      actionSessionTruth={actionSessionTruth}
+                      cooldownMap={cooldownMap}
+                      onResumeAuth={handleResumeBulkAuth}
+                      compact
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -227,6 +276,84 @@ export default function Dashboard({ onSelectAccount, addToast }) {
       )}
 
     </>
+  );
+}
+
+function DashboardAccountListRow({ account, liveStatuses, onSelectAccount, onResumeAuth }) {
+  const sessionStatus = liveStatuses[account.id] ?? account.sessionStatus ?? 'none';
+  const pendingVerification = !!account.pendingVerification;
+  const hasErrorState = account.status === 'error' || account.sessionDecryptFailed;
+  const health = pendingVerification
+    ? 'partial'
+    : getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
+  const balanceStatus = getBalanceStatus(account.credits);
+  const sessionLabel = pendingVerification
+    ? 'OTP pending'
+    : sessionStatus === 'active' || sessionStatus === 'expiring'
+      ? account.lastLoginAt ? `live · ${timeAgo(account.lastLoginAt)}` : 'live'
+      : sessionStatus === 'expired' ? 'expired' : 'offline';
+
+  return (
+    <button
+      type="button"
+      data-proximity-target
+      className={`dashboard-account-list__row dashboard-account-list__row--${health}`}
+      title={pendingVerification ? `${account.alias}: resume OTP sign-in` : `${account.alias}: open account`}
+      onClick={() => pendingVerification ? onResumeAuth() : onSelectAccount(account.id)}
+    >
+      <span className="dashboard-account-list__identity">
+        <span className={`dashboard-account-list__dot dashboard-account-list__dot--${health}`} />
+        <span>
+          <strong>{account.alias}</strong>
+          <em>{account.email || 'No email saved'}</em>
+        </span>
+      </span>
+      <strong className={`dashboard-account-list__balance dashboard-account-list__balance--${balanceStatus}`}>
+        {account.status === 'error' || pendingVerification ? '—' : formatCurrency(account.credits?.remaining)}
+      </strong>
+      <span className={account.hasManagementKey ? 'dashboard-account-list__ready' : 'dashboard-account-list__missing'}>
+        {account.hasManagementKey ? 'READY' : 'MISSING'}
+      </span>
+      <strong>{account.keys?.active || 0}</strong>
+      <span className="dashboard-account-list__session">{sessionLabel}</span>
+      <span className="dashboard-account-list__used">{formatCurrency(account.credits?.used)}</span>
+      <span className="dashboard-account-list__arrow" aria-hidden="true">›</span>
+    </button>
+  );
+}
+
+function AccountTopologyMap({ accounts, liveStatuses, onSelectAccount, onResumeAuth, proximity }) {
+  return (
+    <div className="dashboard-account-map proximity-field" {...proximity}>
+      <div className="dashboard-account-map__rings" aria-hidden="true" />
+      <div className="dashboard-account-map__router">
+        <strong>HYDRA</strong>
+        <span>ROUTER</span>
+      </div>
+      {accounts.map((account, index) => {
+        const sessionStatus = liveStatuses[account.id] ?? account.sessionStatus ?? 'none';
+        const hasErrorState = account.status === 'error' || account.sessionDecryptFailed;
+        const health = account.pendingVerification
+          ? 'partial'
+          : getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
+        const angle = (360 / Math.max(accounts.length, 1)) * index - 90;
+        const radius = index % 2 === 0 ? 166 : 220;
+        return (
+          <button
+            type="button"
+            data-proximity-target
+            key={account.id}
+            className={`dashboard-account-map__node dashboard-account-map__node--${health}`}
+            style={{ '--map-angle': `${angle}deg`, '--map-radius': `${radius}px` }}
+            title={`${account.alias}: ${health}`}
+            onClick={() => account.pendingVerification ? onResumeAuth() : onSelectAccount(account.id)}
+          >
+            <strong>{account.alias}</strong>
+            <span>{account.keys?.active || 0} API</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

@@ -33,7 +33,7 @@ import * as store from './store.js';
 import * as dashboardApi from './dashboard-api.js';
 import { logger } from './logger.js';
 import { taskSupervisor } from './task-supervisor.js';
-import { USER_AGENT, OR_BASE } from '../config.js';
+import { USER_AGENT, OR_BASE, config } from '../config.js';
 import { sleepWithSignal, throwIfAborted } from '../lib/abort.js';
 import {
   describeAutomationNetworkRoute,
@@ -57,6 +57,7 @@ import {
 const GENERATOR_TTL_MS = 5 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 45 * 1000;
 const OTP_WAIT_TIMEOUT_MS = 30 * 1000;
+const MANUAL_VERIFICATION_TIMEOUT_MS = 4 * 60 * 1000;
 const COMPLETION_TIMEOUT_MS = 30 * 1000;
 
 function serializeGeneratorTask(task) {
@@ -68,12 +69,83 @@ function serializeGeneratorTask(task) {
     email: payload.metadata?.email ?? null,
     error: payload.error,
     account: payload.result?.account ?? payload.metadata?.account ?? null,
+    mode: payload.metadata?.mode ?? null,
+    automationRoute: payload.metadata?.automationRoute ?? null,
     startedAt: payload.startedAt,
     endedAt: payload.endedAt,
     lastHeartbeatAt: payload.lastHeartbeatAt,
     ttlMs: payload.ttlMs,
     cancelReason: payload.cancelReason,
   };
+}
+
+function otpChallengeVisiblePredicate() {
+  const text = document.body?.innerText?.toLowerCase?.() || '';
+  return text.includes('check your email')
+    || text.includes('verification code')
+    || text.includes('enter code')
+    || Boolean(document.querySelector('input[autocomplete="one-time-code"], input.cl-otpCodeFieldInput, input[data-testid*="otp"], input[maxlength="1"][type="text"], input[maxlength="1"][type="tel"]'));
+}
+
+function manualVerificationVisiblePredicate() {
+  const text = document.body?.innerText?.toLowerCase?.() || '';
+  return text.includes('captcha')
+    || text.includes('verify you are human')
+    || text.includes('human verification')
+    || text.includes('security check')
+    || Boolean(document.querySelector('iframe[src*="captcha" i], iframe[src*="turnstile" i], iframe[src*="hcaptcha" i], iframe[src*="recaptcha" i], [class*="captcha" i], [id*="captcha" i]'));
+}
+
+async function waitForOtpChallenge(task, page) {
+  try {
+    await page.waitForFunction(otpChallengeVisiblePredicate, { timeout: OTP_WAIT_TIMEOUT_MS });
+    return;
+  } catch (err) {
+    const needsManualVerification = await page
+      .waitForFunction(manualVerificationVisiblePredicate, { timeout: 1000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!needsManualVerification) throw err;
+
+    taskSupervisor.updateTask(task.taskId, {
+      status: 'manual_verification',
+      metadata: { ...task.metadata, mode: 'browser_signup' },
+    });
+    logger.warn(`[Account Generator] Manual upstream verification required for ${task.taskId}; waiting for the OTP screen in the isolated browser`);
+    await page.waitForFunction(otpChallengeVisiblePredicate, { timeout: MANUAL_VERIFICATION_TIMEOUT_MS });
+  }
+}
+
+async function clickVisibleOtpSubmitControl(page, taskId) {
+  const candidates = [
+    page.getByRole('button', { name: /continue|verify|submit|next/i }).first(),
+    page.locator('button[type="submit"]').first(),
+    page.locator('button.cl-formButtonPrimary').first(),
+    page.locator('button[class*="primary" i]').first(),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (await candidate.count() === 0) continue;
+      if (!await candidate.isVisible({ timeout: 1000 })) continue;
+      if (!await candidate.isEnabled({ timeout: 1000 }).catch(() => true)) continue;
+      await candidate.click({ timeout: 3000 });
+      logger.info(`[Account Generator] Submitted OTP challenge for ${taskId} with visible button`);
+      return true;
+    } catch (err) {
+      logger.warn(`[Account Generator] OTP submit candidate failed for ${taskId}: ${err.message}`);
+    }
+  }
+
+  try {
+    await page.keyboard.press('Enter');
+    logger.info(`[Account Generator] Submitted OTP challenge for ${taskId} with Enter fallback`);
+    return true;
+  } catch (err) {
+    logger.warn(`[Account Generator] OTP Enter fallback failed for ${taskId}: ${err.message}`);
+    return false;
+  }
 }
 
 function getRecentGeneratorTask(taskId, ownerUserId) {
@@ -159,12 +231,13 @@ async function launchSignupFlowPlaywright(task) {
         });
       }
       const launchOptions = resolveChromiumLaunchOptions({
-        headless: true,
+        headless: config.HYDRA_GENERATOR_HEADLESS,
         args: mergeAutomationLaunchArgs(launchArgs, automationRoute),
       });
       const profileDir = launchOptions.userDataDir;
       taskSupervisor.updateTask(task.taskId, {
         cleanup: async () => cleanupEphemeralProfileDir(profileDir),
+        metadata: { ...task.metadata, mode: 'browser_signup' },
       });
       const context = await launchChromiumPersistentContext(chromium, launchOptions, {
         userAgent: USER_AGENT,
@@ -263,10 +336,7 @@ async function launchSignupFlowPlaywright(task) {
       }
 
       taskSupervisor.updateTask(task.taskId, { status: 'waiting_for_otp_screen' });
-      await page.waitForFunction(() => {
-        const text = document.body?.innerText?.toLowerCase?.() || '';
-        return text.includes('check your email') || text.includes('verification code') || text.includes('enter code');
-      }, { timeout: OTP_WAIT_TIMEOUT_MS });
+      await waitForOtpChallenge(task, page);
 
       taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });
     } catch (err) {
@@ -304,7 +374,9 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
         .first();
       await firstDigitInput.waitFor({ state: 'visible', timeout: 5000 });
       await firstDigitInput.click();
-      await page.keyboard.type(otpCode, { delay: 100 });
+      await page.keyboard.type(otpCode, { delay: 75 });
+      await page.waitForTimeout(250);
+      await clickVisibleOtpSubmitControl(page, task.taskId);
 
       taskSupervisor.updateTask(task.taskId, { status: 'waiting_for_completion' });
       await page.waitForURL(/.*(settings|chat|dashboard).*/, { timeout: COMPLETION_TIMEOUT_MS }).catch(async () => {
@@ -462,6 +534,9 @@ async function launchSignupFlow(task) {
         clientCookie: otpInfo.clientCookie,
         isSignUp: otpInfo.isSignUp,
         httpMode: true,
+      });
+      taskSupervisor.updateTask(task.taskId, {
+        metadata: { ...task.metadata, mode: 'https_otp' },
       });
 
       taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });

@@ -20,9 +20,10 @@ import { getMasterProxyKey, getGenericProxyKey } from '../services/store.js';
 import { enqueueRequestLog, getRequestLogBufferSnapshot } from '../services/request-log-buffer.js';
 import { noteRequestLogActivity } from '../services/request-log-retention.js';
 import { bindRequestAbort } from '../lib/abort.js';
+import { getProxyMaxKeyAttempts, normalizeUsageCost } from '../services/proxy-telemetry.js';
 
 const router = Router();
-const MAX_RETRIES = 3;
+const MAX_KEY_ATTEMPTS = getProxyMaxKeyAttempts();
 const MAX_IN_FLIGHT = Number(process.env.HYDRA_PROXY_MAX_IN_FLIGHT || 128);
 let inFlightProxyRequests = 0;
 
@@ -57,9 +58,13 @@ async function resolveFreeModel(requestedModel) {
   return freeModels[0].id;
 }
 
-function sendHydraError(res, status, message, code, headerValue) {
+function sendHydraError(res, status, message, code, headerValue, attempts = null) {
   if (headerValue) {
     res.setHeader('X-Hydra', headerValue);
+  }
+  if (Number.isInteger(attempts)) {
+    res.setHeader('X-Hydra-Attempts', String(attempts));
+    res.setHeader('X-Hydra-Rotated', attempts > 1 ? 'true' : 'false');
   }
 
   return res.status(status).json({
@@ -105,7 +110,7 @@ async function validateMasterKey(authHeader) {
 }
 
 /** Asynchronously log proxy requests to the DB */
-function logRequest(keyHash, model, status, latencyMs, tokens = {}, clientHint = null) {
+function logRequest(keyHash, model, status, latencyMs, tokens = {}, clientHint = null, route = {}) {
   enqueueRequestLog({
     keyHash,
     model,
@@ -113,10 +118,12 @@ function logRequest(keyHash, model, status, latencyMs, tokens = {}, clientHint =
     latencyMs,
     tokens,
     clientHint,
+    attempt: route.attempt ?? 1,
+    outcome: route.outcome ?? null,
   });
 }
 
-async function createRequestLog(keyHash, model, status, latencyMs, clientHint = null) {
+async function createRequestLog(keyHash, model, status, latencyMs, clientHint = null, route = {}) {
   noteRequestLogActivity();
   try {
     return await prisma.requestLog.create({
@@ -126,6 +133,8 @@ async function createRequestLog(keyHash, model, status, latencyMs, clientHint = 
         status,
         latencyMs,
         clientHint,
+        attempt: route.attempt ?? 1,
+        outcome: route.outcome ?? null,
       },
     });
   } catch (err) {
@@ -138,6 +147,8 @@ async function createRequestLog(keyHash, model, status, latencyMs, clientHint = 
             status,
             latencyMs,
             clientHint,
+            attempt: route.attempt ?? 1,
+            outcome: route.outcome ?? null,
           },
         });
       } catch (fallbackErr) {
@@ -158,8 +169,9 @@ function updateRequestLog(logId, model, latencyMs, tokens = {}) {
     data: {
       model,
       latencyMs,
-      promptTokens: tokens.prompt_tokens || null,
-      completionTokens: tokens.completion_tokens || null,
+      promptTokens: tokens.prompt_tokens ?? null,
+      completionTokens: tokens.completion_tokens ?? null,
+      ...normalizeUsageCost(tokens),
     },
   }).catch((err) => {
     logger.error(`[PROXY] Failed to update RequestLog: ${err.message}`);
@@ -266,7 +278,6 @@ router.use(async (req, res) => {
   const evicted = new Set();
   let lastError = null;
   let fallbackModel = forcedFreeModel;
-  const shouldIncludeStreamUsage = isStream && upstreamPathWithQuery.startsWith('/chat/completions');
   const encodedBodyCache = new Map();
 
   const currentModel = () => fallbackModel || baseBody?.model || 'unknown';
@@ -274,10 +285,10 @@ router.use(async (req, res) => {
     if (req.method === 'GET' || !baseBody) return undefined;
     if (typeof baseBody !== 'object') return JSON.stringify(baseBody);
 
-    const cacheKey = `${fallbackModel || ''}:${shouldIncludeStreamUsage ? 'usage' : 'plain'}`;
+    const cacheKey = fallbackModel || 'original';
     if (encodedBodyCache.has(cacheKey)) return encodedBodyCache.get(cacheKey);
 
-    if (!fallbackModel && !shouldIncludeStreamUsage) {
+    if (!fallbackModel) {
       const encoded = JSON.stringify(baseBody);
       encodedBodyCache.set(cacheKey, encoded);
       return encoded;
@@ -285,19 +296,13 @@ router.use(async (req, res) => {
 
     const body = Array.isArray(baseBody) ? [...baseBody] : { ...baseBody };
     if (fallbackModel && !Array.isArray(body)) body.model = fallbackModel;
-    if (shouldIncludeStreamUsage && !Array.isArray(body)) {
-      body.stream_options = {
-        ...(body.stream_options && typeof body.stream_options === 'object' ? body.stream_options : {}),
-        include_usage: true,
-      };
-    }
     const encoded = JSON.stringify(body);
     encodedBodyCache.set(cacheKey, encoded);
     return encoded;
   };
 
   // ── Failover loop ──
-  for (let attempt = 0; attempt < MAX_RETRIES;) {
+  for (let attempt = 0; attempt < MAX_KEY_ATTEMPTS;) {
     if (clientDisconnected) return;
     const keyEntry = await rotationManager.getNextKey(attempted);
     if (clientDisconnected) return;
@@ -311,7 +316,18 @@ router.use(async (req, res) => {
           429,
           'All Hydra pool keys are cooling down. Try again shortly.',
           'hydra_pool_exhausted',
-          'all-keys-cooling'
+          'all-keys-cooling',
+          attempted.size,
+        );
+      }
+      if (attempted.size > 0) {
+        return sendHydraError(
+          res,
+          502,
+          'Hydra exhausted the eligible key set before an upstream request succeeded.',
+          'hydra_pool_attempts_exhausted',
+          'eligible-keys-exhausted',
+          attempted.size,
         );
       }
 
@@ -320,7 +336,8 @@ router.use(async (req, res) => {
         503,
         'Hydra pool is empty. Enable keys in the Pool Manager tab.',
         'hydra_pool_empty',
-        'pool-empty'
+        'pool-empty',
+        attempted.size,
       );
     }
 
@@ -403,14 +420,20 @@ router.use(async (req, res) => {
           await rotationManager.recordFailure(keyEntry.hash, 429, cooldownMs);
         }
         lastError = { status: 429, hash: keyEntry.hash };
-        logRequest(keyEntry.hash, currentModel(), 429, Date.now() - startTime, {}, clientHint);
+        logRequest(keyEntry.hash, currentModel(), 429, Date.now() - startTime, {}, clientHint, {
+          attempt,
+          outcome: isIpLimit ? 'ip_rate_limited' : 'key_rate_limited',
+        });
         continue;
       }
 
       if (upstreamRes.status === 402) {
         await rotationManager.recordFailure(keyEntry.hash, 402);
         lastError = { status: 402, hash: keyEntry.hash };
-        logRequest(keyEntry.hash, currentModel(), 402, Date.now() - startTime, {}, clientHint);
+        logRequest(keyEntry.hash, currentModel(), 402, Date.now() - startTime, {}, clientHint, {
+          attempt,
+          outcome: 'key_out_of_credits',
+        });
         continue;
       }
 
@@ -418,14 +441,20 @@ router.use(async (req, res) => {
         await rotationManager.recordFailure(keyEntry.hash, 401);
         await rotationManager.evict(keyEntry.hash);
         evicted.add(keyEntry.hash);
-        logRequest(keyEntry.hash, currentModel(), 401, Date.now() - startTime, {}, clientHint);
+        logRequest(keyEntry.hash, currentModel(), 401, Date.now() - startTime, {}, clientHint, {
+          attempt,
+          outcome: 'key_rejected',
+        });
         continue;
       }
 
       if (upstreamRes.status >= 500 && upstreamRes.status < 600) {
         const wasDropped = await rotationManager.recordFailure(keyEntry.hash, upstreamRes.status);
         lastError = { status: upstreamRes.status, hash: keyEntry.hash, message: `Upstream error ${upstreamRes.status}` };
-        logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime, {}, clientHint);
+        logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime, {}, clientHint, {
+          attempt,
+          outcome: 'upstream_5xx',
+        });
 
         // ── Model fallback chain (request-scoped + deterministic) ──
         if (!wasDropped && !fallbackModel && baseBody && baseBody.model) {
@@ -449,6 +478,8 @@ router.use(async (req, res) => {
       });
       res.setHeader('X-Hydra-Key-Hash', keyEntry.hash.slice(0, 8));
       res.setHeader('X-Hydra-Account', keyEntry.account?.alias ?? 'unknown');
+      res.setHeader('X-Hydra-Attempts', String(attempt));
+      res.setHeader('X-Hydra-Rotated', attempt > 1 ? 'true' : 'false');
       res.status(upstreamRes.status);
 
       if (isStream && upstreamRes.body) {
@@ -458,6 +489,7 @@ router.use(async (req, res) => {
           upstreamRes.status,
           Date.now() - startTime,
           clientHint,
+          { attempt, outcome: upstreamRes.ok ? 'served' : 'upstream_response' },
         );
         const sseObserver = new SseUsageObserver();
 
@@ -499,12 +531,18 @@ router.use(async (req, res) => {
       if (contentType.includes('application/json')) {
         const data = await upstreamRes.json();
         const tokens = data.usage || {};
-        logRequest(keyEntry.hash, data.model || currentModel(), upstreamRes.status, Date.now() - startTime, tokens, clientHint);
+        logRequest(keyEntry.hash, data.model || currentModel(), upstreamRes.status, Date.now() - startTime, tokens, clientHint, {
+          attempt,
+          outcome: upstreamRes.ok ? 'served' : 'upstream_response',
+        });
         return res.json(data);
       }
 
       const text = await upstreamRes.text();
-      logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime, {}, clientHint);
+      logRequest(keyEntry.hash, currentModel(), upstreamRes.status, Date.now() - startTime, {}, clientHint, {
+        attempt,
+        outcome: upstreamRes.ok ? 'served' : 'upstream_response',
+      });
       return res.send(text);
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -515,11 +553,19 @@ router.use(async (req, res) => {
         const phase = connectTimeoutId ? 'connect' : 'stream';
         logger.error(`[PROXY] Upstream fetch ${phase} timeout on attempt ${attempt}`);
         lastError = { status: 504, message: `Upstream ${phase} timeout` };
+        logRequest(keyEntry.hash, currentModel(), 504, Date.now() - startTime, {}, clientHint, {
+          attempt,
+          outcome: `${phase}_timeout`,
+        });
         continue;
       }
 
       logger.error(`[PROXY] Upstream fetch error (attempt ${attempt}): ${err.message}`);
       lastError = { status: 502, message: err.message };
+      logRequest(keyEntry.hash, currentModel(), 502, Date.now() - startTime, {}, clientHint, {
+        attempt,
+        outcome: 'network_error',
+      });
       // network error — try next key
     } finally {
       activeUpstreamController = null;
@@ -537,8 +583,9 @@ router.use(async (req, res) => {
         res,
         503,
         'All pooled keys were rejected upstream. Re-sync or replace them in Pool Manager.',
-        'hydra_pool_unusable',
-        'pool-drained'
+      'hydra_pool_unusable',
+        'pool-drained',
+        attempted.size,
       );
     }
   }
@@ -547,9 +594,10 @@ router.use(async (req, res) => {
     return sendHydraError(
       res,
       429,
-      'Every eligible key is rate-limited right now. Hydra will retry them automatically after cooldown.',
+      `Hydra exhausted its bounded failover budget after ${attempted.size} rate-limited key attempt(s). Cooling keys will rejoin automatically.`,
       'hydra_all_keys_rate_limited',
-      'all-rate-limited'
+      'all-rate-limited',
+      attempted.size,
     );
   }
 
@@ -557,9 +605,10 @@ router.use(async (req, res) => {
     return sendHydraError(
       res,
       503,
-      'Every eligible key is out of credits right now. Add credits or switch to other pooled keys.',
+      `Hydra exhausted its bounded failover budget after ${attempted.size} out-of-credit key attempt(s). Add credits or switch pooled keys.`,
       'hydra_all_keys_out_of_credits',
-      'all-out-of-credits'
+      'all-out-of-credits',
+      attempted.size,
     );
   }
 
@@ -567,7 +616,9 @@ router.use(async (req, res) => {
     res,
     lastError?.status === 504 ? 504 : 502,
     lastError?.message ?? 'Hydra proxy encountered an upstream error.',
-    lastError?.status === 504 ? 'hydra_timeout' : 'hydra_upstream_error'
+    lastError?.status === 504 ? 'hydra_timeout' : 'hydra_upstream_error',
+    null,
+    attempted.size,
   );
 });
 

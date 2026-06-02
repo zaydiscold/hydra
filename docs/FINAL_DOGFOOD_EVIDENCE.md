@@ -2244,3 +2244,51 @@ This evidence file is not release-complete by itself. The release remains not co
   to low idle on the next sample, and ended at `0.0%`; RSS moved
   `465502208 -> 470351872` bytes (`+4849664`). The full samples and broad
   process inventories remain under that profile directory.
+- `1.5.0` candidate source checkpoint: priced routing now records per-attempt
+  outcome and cost provenance, OpenRouter catalog prices survive model-cache
+  refresh, the local proxy defaults to eight bounded eligible-key attempts,
+  and Traffic Console exposes route attempts plus input/output prices. Desktop
+  refinements add real Command Grid/List/Map views, labeled sidebar hover
+  targets, stronger bounded proximity motion, forgiving Pool Manager toggles,
+  persisted Bulk Import logs, density controls, compact Code Redeemer spacing,
+  and a launch-bounded moon orbit. Focused verification passed schema sync,
+  syntax, telemetry `5/5`, request-log buffering `5/5`, background contracts
+  `34/34`, UI contracts `47/47`, test-chain completeness `2/2`, lint,
+  production renderer build, and diff hygiene. This is source evidence only;
+  append native packaged-app and hosted PR matrix evidence after those lanes
+  run.
+- `1.5.0` local ARM package checkpoint: full `npm test`, gate `12/12`, OpenAPI
+  regeneration (`84` operations), `electron:smoke`, and strict deep codesign
+  passed. LaunchServices opened the canonical `release/mac-arm64/Hydra.app`
+  bundle as version `1.5.0`. Native Computer Use spot checks covered the
+  `13`-account Dashboard, functional Grid/List/Map switching, topology Map,
+  Traffic routing/spend surface, Pool Manager account-level routing controls,
+  Settings Standard/Compact density switching, and shortened Bulk OTP copy.
+  Splash teardown was finite (`timers=0`, `rafActive=false`, `bodyCount=0`,
+  `matterCleared=true`). The settled packaged runtime had four Hydra-owned
+  processes, zero stale Playwright profiles, `0.0%` aggregate CPU, and
+  `528.55 MB` RSS. The generated ARM zip SHA-256 before reversible metadata
+  cleanup was
+  `016010d098faf19cbe8659b10880cf8dfa6ef54cd83e32d8c7fd16ed54cdc6bc`.
+  Hosted PR CI, Docker runtime, and cross-platform package lanes remain the
+  merge boundary.
+- `1.5.0` final Generator OTP and LaunchServices reveal checkpoint: the
+  superseding local ARM package includes the visible Generator browser default,
+  manual-verification state, sanitized six-digit OTP panel, Enter-submit form,
+  and explicit Clerk OTP submit-control click. The supplied signup credentials
+  were not used to create a live upstream account during verification because
+  the remaining OTP/human-verification step is operator-owned. The same rebuild
+  fixes an intermittent splash-to-main reveal race by restoring macOS Dock
+  presentation, activating/focusing the app, logging deterministic
+  `main-window:startup-reveal` evidence, and retrying hidden-window show
+  attempts. Package smoke, strict deep codesign, bundle version checks, and
+  embedded-source inspection passed. The final ARM zip SHA-256 is
+  `49d191e7a9cfb72193abf5b10e4cb96c18c9bb0bee35d687b019f7ddce63ab44`.
+  LaunchServices opened the rebuilt app without a browser; splash diagnostics
+  reported `durationMs=16000`, `exitMs=11750`, `portalMs=4250`, `timers=0`,
+  `rafActive=false`, `bodyCount=0`, and `matterCleared=true`. Startup reveal
+  reported `visible=true` at the initial loadURL fallback, `+300ms`, and
+  `+1200ms`. A later untouched idle sample settled to four Hydra-owned
+  processes, zero stale Playwright profiles, `0.0%` aggregate CPU, and
+  `591.64 MB` RSS. Local notarization remains deferred because Apple signing
+  credentials are absent; local ad-hoc codesign is valid.

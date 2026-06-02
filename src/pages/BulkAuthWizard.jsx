@@ -19,8 +19,7 @@ export default function BulkAuthWizard({ addToast }) {
         <div>
           <AnimeText as="h2" mode="lines" variant="scanline" delay={36} style={{ margin: 0 }}>Bulk Account Import</AnimeText>
           <p className="page-header__lede">
-            Import existing OpenRouter accounts with <strong>OTP</strong>, the same direct HTTPS email-code login used by account cards.
-            Use Generator for a brand-new signup. Email Link is an owner-only advanced relay for compatible Clerk tenants, not OpenRouter.
+            Import existing OpenRouter accounts with direct HTTPS <strong>OTP</strong>. Use Generator for new signups.
           </p>
         </div>
       </header>

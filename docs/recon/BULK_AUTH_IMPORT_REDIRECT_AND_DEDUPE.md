@@ -222,8 +222,11 @@ could still enter Clerk's direct `sign_up` preparation from Bulk OTP even
 though OpenRouter requires interactive CAPTCHA verification for new signup.
 Hydra now fails closed before that direct preparation with structured code
 `SIGNUP_INTERACTIVE_REQUIRED`. The renderer shows an **Open Account Generator**
-action, and Generator retains the isolated interactive signup lane. Hydra does
-not retry or bypass the CAPTCHA-gated signup boundary.
+action, and Generator retains the isolated interactive signup lane. In `1.5.0`,
+that signup browser is visible by default so the operator can complete upstream
+human verification when OpenRouter requires it; CI/server runs can set
+`HYDRA_GENERATOR_HEADLESS=1`. Hydra does not retry or bypass the CAPTCHA-gated
+signup boundary.
 
 Reproduction:
 
@@ -244,6 +247,9 @@ Source contracts:
 - `src/hooks/useBulkAuth.js`, `src/components/OtpTab.jsx`: structured Generator
   handoff.
 - `src/pages/BulkAuthWizard.jsx`: existing-import versus new-signup copy.
+- `src/pages/Generator.jsx`, `server/services/account-generator.js`: visible
+  isolated-browser signup status, manual-verification status copy, and explicit
+  OTP-page submit after the six digits are entered.
 
 Verification passed:
 
