@@ -2838,4 +2838,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   smoke passed after Docker Desktop reached a stable daemon state: compose
   validation, rebuilt production image, real containerized Playwright
   Chromium launch, and cleanup all completed. Teardown left no Hydra compose
-  service or `hydra_default` network and stopped Docker Desktop again.
+  service or `hydra_default` network and stopped Docker Desktop again. Public
+  checkpoint verification also passed: CI run `26794501452` closed green,
+  Docker workflow run `26794501428` passed runtime smoke plus registry image
+  push, and Auto-version run `26794501427` correctly skipped.

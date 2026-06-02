@@ -151,7 +151,9 @@ to fabricate one. The final documented-tree chain passed lint, full
 `npm test`, gate `12/12`, OpenAPI generation (`84` operations), diff hygiene,
 audit, and Docker smoke with a rebuilt production image plus a real
 containerized Playwright Chromium launch. Cleanup left no Hydra compose
-service or `hydra_default` network and stopped Docker Desktop.
+service or `hydra_default` network and stopped Docker Desktop. Public
+checkpoint CI run `26794501452` and Docker workflow run `26794501428`
+passed; Auto-version run `26794501427` correctly skipped.
 
 ## Reproduction
 

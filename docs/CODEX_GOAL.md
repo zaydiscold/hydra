@@ -1667,6 +1667,8 @@ closed-app CLI commands, tests, and repo-local documentation.
   operations), diff hygiene, audit, and Docker smoke with a rebuilt image and
   a real containerized Playwright Chromium launch. Cleanup left no Hydra
   compose service or `hydra_default` network and stopped Docker Desktop.
+  Public checkpoint CI run `26794501452` and Docker workflow run
+  `26794501428` passed; Auto-version run `26794501427` correctly skipped.
 
 ---
 
