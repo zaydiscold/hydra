@@ -1856,7 +1856,12 @@ This evidence file is not release-complete by itself. The release remains not co
   `/private/tmp/hydra-v147-magic-link-early-disarm-idle-profile-20260601T235802Z`
   retained four owned processes and zero stale profiles across 11 samples:
   CPU stayed `0.0-0.2%`, averaged `0.027%`, and ended at `0.0%`; RSS moved
-  `648937472 -> 533970944` bytes (`-114966528`). The durable note is
+  `648937472 -> 533970944` bytes (`-114966528`). The final literal chain
+  passed lint, full `npm test`, gate (`12/12`), OpenAPI regeneration (`84`
+  operations, no tracked drift), diff hygiene, audit, and local Docker smoke
+  with a real containerized Playwright Chromium launch. Teardown left no
+  `hydra_default` network and `docker desktop stop` removed the Desktop
+  runtime in one second. The durable note is
   `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`.
 - Close-to-background release blocker for `v1.4.3`: the controlled background
   soak under

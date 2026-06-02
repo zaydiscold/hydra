@@ -2423,7 +2423,12 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   `/private/tmp/hydra-v147-magic-link-early-disarm-idle-profile-20260601T235802Z`
   retained four processes and zero stale profiles across 11 samples:
   CPU stayed `0.0-0.2%`, averaged `0.027%`, and ended at `0.0%`; RSS moved
-  `648937472 -> 533970944` bytes (`-114966528`).
+  `648937472 -> 533970944` bytes (`-114966528`). The final literal chain
+  passed lint, full `npm test`, gate (`12/12`), OpenAPI regeneration (`84`
+  operations, no tracked drift), diff hygiene, audit, and local Docker smoke
+  with a real containerized Playwright Chromium launch. Teardown left no
+  `hydra_default` network and `docker desktop stop` removed the Desktop
+  runtime in one second.
 - 2026-06-01 post-release literal-gate recheck: `npm run lint`, full
   `npm test`, and `npm run gate` (`12/12`) passed against the docs-reconciled
   `v1.4.6` tree. Bare `HYDRA_BUILD_TARGET=darwin-arm64 npm run

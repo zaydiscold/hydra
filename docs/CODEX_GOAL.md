@@ -1549,7 +1549,12 @@ closed-app CLI commands, tests, and repo-local documentation.
   `/private/tmp/hydra-v147-magic-link-early-disarm-idle-profile-20260601T235802Z`
   retained four owned processes and zero stale profiles across 11 samples:
   CPU stayed `0.0-0.2%`, averaged `0.027%`, and ended at `0.0%`; RSS moved
-  `648937472 -> 533970944` bytes (`-114966528`). The durable note is
+  `648937472 -> 533970944` bytes (`-114966528`). The final literal chain
+  passed lint, full `npm test`, gate (`12/12`), OpenAPI regeneration (`84`
+  operations, no tracked drift), diff hygiene, audit, and local Docker smoke
+  with a real containerized Playwright Chromium launch. Teardown left no
+  `hydra_default` network and `docker desktop stop` removed the Desktop
+  runtime in one second. The durable note is
   `docs/recon/MAGIC_LINK_CLEANUP_TIMER_OWNERSHIP.md`.
 - CLI command tests are implemented in `server/tests/cli.test.mjs`; `npm run test:cli` passed with 43 tests on 2026-05-19, including the closed-app `hydra audit` evidence checks, guarded redacted metadata import, reversible DB reset, system-command data-dir consistency, packaged Chromium zip doctor detection, status warning-channel, log-tail follow behavior, local `/v1` AI chat, direct OpenRouter-compatible `ai chat --route direct`, `hydra openrouter models/key/credits`, lazy direct-OpenRouter cache writes, and stop timeout/non-JSON source-contract coverage. `server/tests/mcp-cli.test.mjs` additionally covers `hydra mcp --list-tools` and framed stdio JSON-RPC `initialize`/`tools/list`/`tools/call`.
 - API integration tests now boot a real Express server on port 0 and assert concrete auth/proxy/shutdown HTTP contracts; `npm run test:api-integration` passed on 2026-05-16

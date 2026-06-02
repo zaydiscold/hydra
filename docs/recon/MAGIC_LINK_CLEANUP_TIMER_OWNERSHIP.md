@@ -121,3 +121,9 @@ Untouched five-minute idle profile:
 /private/tmp/hydra-v147-magic-link-early-disarm-idle-profile-20260601T235802Z
 samples=11 owned=4 profiles=0 cpu_min=0.000 cpu_max=0.200 cpu_avg=0.027 cpu_end=0.000 rss_start=648937472 rss_end=533970944 rss_delta=-114966528
 ```
+
+The final literal chain passed lint, full `npm test`, gate (`12/12`), OpenAPI
+regeneration (`84` operations, no tracked drift), diff hygiene, audit, and
+local Docker smoke with a real containerized Playwright Chromium launch.
+Teardown left no `hydra_default` network and `docker desktop stop` removed the
+Desktop runtime in one second.
