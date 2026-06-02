@@ -27,6 +27,12 @@ Hydra is a packaged Electron app for running an OpenRouter account fleet from on
 
 It is designed for operators who want a native control plane without shipping account secrets to a hosted service.
 
+Hydra is useful in two ways at once:
+
+- Open the desktop app when you want a visual command center for accounts, sessions, keys, imports, redemption, and traffic.
+- Leave the router running in the background when local tools need an OpenAI-compatible endpoint backed by your pooled OpenRouter credentials.
+- Use the `hydra` CLI when you want the same operational facts in a terminal, a script, or an agent workflow.
+
 <p align="center">
   <img src="videos/hydra_showreel.gif" alt="Hydra desktop showreel — Vault, Command, routing, and terminal surfaces" width="720" />
 </p>
@@ -37,7 +43,8 @@ It is designed for operators who want a native control plane without shipping ac
 
 ## Navigation
 
-- [Highlights](#highlights)
+- [Start Here](#start-here)
+- [Feature Tour](#feature-tour)
 - [Install](#install)
 - [Quick Start From Source](#quick-start-from-source)
 - [Desktop App](#desktop-app)
@@ -45,20 +52,43 @@ It is designed for operators who want a native control plane without shipping ac
 - [Local API Router](#local-api-router)
 - [Operator Hardening](#operator-hardening)
 - [Development And Release Gates](#development-and-release-gates)
+- [Docs Index](#docs-index)
 - [Versioning](docs/VERSIONING.md)
 - [Gallery](#gallery)
 
-## Highlights
+## Start Here
+
+Hydra keeps local OpenRouter operations in one place:
+
+| Need | Where to go |
+| --- | --- |
+| See fleet health quickly | **Command**: switch between Grid, List, and Map views. |
+| Import existing accounts | **Bulk Import**: use the sequential direct-HTTPS OTP queue. |
+| Inspect saved logins | **Vault**: review account state and live-session evidence. |
+| Decide which keys may route | **Pool Manager**: enable accounts and keys with forgiving controls. |
+| Redeem codes across accounts | **Code Redeemer**: preflight first, then run a selected batch. |
+| Understand a failed local request | **Traffic Console**: inspect route attempts, status, model, latency, token count, and price. |
+| Adjust desktop behavior | **Settings**: Touch ID, telemetry, UI density, account proxies, and diagnostics. |
+| Automate without the GUI | **CLI** and the local **MCP** server. |
+
+The local proxy is OpenAI-compatible, so many SDKs can point at Hydra by
+changing only the base URL and local Hydra key. Hydra then selects an eligible
+pooled OpenRouter credential, applies cooldown behavior, and leaves a local
+traffic trail that explains what happened.
+
+## Feature Tour
 
 - **Native desktop control plane**: Electron shell with an embedded Express API, tray/menu lifecycle, platform-native user data paths, and packaged runtime resources.
 - **OpenAI-compatible local router**: `/v1/models` and `/v1/chat/completions` proxy traffic through the managed OpenRouter key pool.
-- **Long-running API behavior**: bounded proxy concurrency, buffered request-log writes, log rotation, request-log retention, upstream health checks, and graceful shutdown paths.
+- **Readable Traffic Console**: each recent request shows route attempt, outcome, model, account, key, client, latency, input/output tokens, and input/output price. Exact OpenRouter usage cost wins when upstream returns it; cached catalog prices provide an explicit estimate fallback.
+- **Long-running API behavior**: bounded proxy concurrency, bounded multi-key failover, buffered request-log writes, log rotation, request-log retention, upstream health checks, and graceful shutdown paths.
 - **Fleet account operations**: add accounts, track session health, provision management keys, sync balances, and inspect account readiness.
 - **Key pool management**: rotate across pooled keys, cool down rate-limited keys, disable unhealthy keys, and expose a single local Hydra proxy key.
 - **Account proxy pool**: optional encrypted per-task proxy list for signup, key, and code flows, including direct HTTPS and browser fallbacks.
 - **Promo-code workflows**: preflight readiness, redeem against selected accounts, and keep redemption history.
 - **Local-first security**: local vault password, optional Touch ID unlock gate, encrypted secrets, owner-only data directories, redacted CLI output, and loopback-first network binding.
 - **Scriptable operator CLI**: JSON-friendly commands for automation, diagnostics, imports/exports, fleet scans, and router lifecycle control.
+- **Operator-friendly desktop polish**: labeled sidebar hover tips, stronger proximity feedback, persisted Bulk Import activity, density controls, compact redemption layout, and a launch-bounded ambient moon orbit.
 - **Release-oriented quality gates**: linting, Electron packaging checks, API integration tests, UI static contracts, OpenAPI coverage, Docker smoke checks, and Windows path compatibility checks.
 
 ## Install
@@ -118,6 +148,12 @@ pools are valid; account tasks continue without proxies when no saved proxy is
 available. Hydra selects one random saved route per new task and reuses it
 across direct HTTPS probes and any browser fallback for that task.
 
+The sidebar keeps high-frequency operations together and moves Account
+Generator to the bottom of the main stack. Hover any icon in the collapsed
+sidebar to see its section name. Settings lives beside lock and quit actions at
+the bottom. Settings also includes **Standard** and **Compact** density modes
+for operators who want more information visible at once.
+
 ## CLI
 
 Hydra ships a local `hydra` binary for operator scripts. Link it during development:
@@ -162,11 +198,19 @@ curl http://127.0.0.1:3001/v1/chat/completions \
 
 The tracked API contract lives at [`openapi/hydra-api.openapi.json`](openapi/hydra-api.openapi.json).
 
+Hydra attempts up to eight eligible pooled keys for a request by default. That
+ceiling is intentionally bounded and can be adjusted with
+`HYDRA_PROXY_MAX_KEY_ATTEMPTS` up to `32`. Rate-limited keys cool down and
+rejoin later. A client-visible OpenRouter `404` is recorded separately because
+changing credentials cannot repair an unavailable model or incorrect endpoint.
+
 ## Operator Hardening
 
 Hydra is meant to sit open and take repeated local requests. The server includes guardrails for unattended use:
 
 - Bounded `/v1` in-flight request cap via `HYDRA_PROXY_MAX_IN_FLIGHT`.
+- Bounded eligible-key failover via `HYDRA_PROXY_MAX_KEY_ATTEMPTS` with an
+  eight-attempt default and a hard cap of `32`.
 - Buffered request-log writes via `HYDRA_REQUEST_LOG_QUEUE_MAX`, `HYDRA_REQUEST_LOG_FLUSH_MS`, and `HYDRA_REQUEST_LOG_FLUSH_BATCH`.
 - Bounded shutdown drain via `HYDRA_REQUEST_LOG_SHUTDOWN_DRAIN_MS`.
 - Request-log retention via `HYDRA_REQUEST_LOG_KEEP_DAYS` and `HYDRA_REQUEST_LOG_KEEP_COUNT`.
@@ -197,13 +241,21 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, the current refined desktop release is `v1.4.8`, and
-remaining manual dogfood evidence stays explicit in the audit.
+first as `v1.1.0`, the current public desktop release is `v1.4.9`, the active
+review candidate is `1.5.0`, and remaining manual dogfood evidence stays
+explicit in the audit.
 
-Current release-train docs:
+## Docs Index
+
+Start with these when you need more than the quick README tour:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
-  checkpoints, the active `1.4.x` lane, and completed release history.
+  checkpoints, the active `1.5.0` candidate, and completed release history.
+- [1.5.0 Release Candidate](docs/releases/1.5.0.md): detailed implementation
+  inventory, verification plan, and PR checklist.
+- [Traffic Routing And Pricing](docs/recon/TRAFFIC_ROUTING_AND_PRICING.md):
+  bounded multi-key failover, status interpretation, and OpenRouter price
+  provenance.
 - [Design Engineering](docs/DESIGN_ENGINEERING.md): splash portal composition,
   restrained proximity fields, session-truth copy, and embedded product credit.
 - [Splash Tilt Research](docs/SPLASH_TILT_RESEARCH.md): how the 16 second,
@@ -261,7 +313,7 @@ Captured from the packaged Electron app. Account aliases, emails, UUIDs, session
       <a href="videos/assets/traffic.png"><img src="videos/assets/traffic.png" alt="Hydra Traffic Console" /></a>
       <br/>
       <strong>Traffic Console</strong><br/>
-      <sub>Live proxy observability — RPM, 24h volume, error rates.</sub>
+      <sub>Live proxy observability: route attempts, outcomes, tokens, pricing, and error rates.</sub>
     </td>
   </tr>
 </table>

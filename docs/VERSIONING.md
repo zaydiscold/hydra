@@ -4,32 +4,23 @@ Hydra uses semantic version numbers in the shape `MAJOR.MINOR.PATCH`.
 
 ## Current Release Lane
 
-The renderer and desktop refinement shipped as `v1.4.0` on 2026-05-31. The
-artifact-parity hardening patch shipped as `v1.4.2` on 2026-06-01 after the
-immutable `v1.4.1` release-bootstrap failure was repaired. The Bulk Auth
-redirect/dedupe repair shipped as `v1.4.4`, and `1.4.5` is the callback-status
-UI gate that makes Email Link unavailability visible before a batch can start.
-`1.4.6` is the splash-overlay and Bulk Auth truthfulness refinement: the
-rigid nine-cell launch grid is replaced by a lower-node faceted glass aperture
-with translucent side wings, the renderer no longer blanks while native Touch
-ID token release is pending, and Email Link no longer advertises an arbitrary
-public-tunnel setup that OpenRouter's Clerk tenant will reject. OTP remains the
-supported direct-HTTPS OpenRouter bulk-import lane. `1.4.7` is the narrow
-Account Detail action repair: live-session probe, snapshot refresh, and
-management-key refresh click handlers now invoke their AbortSignal-aware
-callbacks without forwarding React click events as signals.
-The current public lane builds on the `v1.3.0` splash, proximity-field,
-Settings, artwork,
-auth/session, and cross-platform packaging tranche with scoped renderer
-memoization, stable Pool Manager callbacks, account-card aggregate-slice
-comparisons, the restored two-layer README media stack, request-owned
-cancellation and shutdown joins, bounded Windows lifecycle smoke, renderer
-observer cleanup, and demand-driven idle schedulers.
+The renderer and desktop refinement shipped as `v1.4.0` on 2026-05-31. Its
+stabilization patches culminated in public `v1.4.9` on 2026-06-02: artifact
+parity, Bulk Auth callback truthfulness, Account Detail action repair, direct
+HTTPS OTP signup boundaries, request-first management-key bootstrap, and
+pending-account recovery all shipped in the `1.4.x` lane.
 
-Tracked `package.json` and `package-lock.json` now target `1.4.7` for the
-Account Detail action repair. This remains the active `1.4.x`
-lane: normal public patch releases continue as `v1.4.x`, not another `1.0.x`
-or `1.1.x` release.
+Tracked `package.json` and `package-lock.json` now target `1.5.0` for the next
+review candidate. This is a coherent minor release rather than another patch:
+Traffic Console gains request-attempt and price visibility, proxy failover
+becomes a configurable bounded eight-key lane, Command gains working
+Grid/List/Map modes, desktop density becomes selectable, and high-frequency
+navigation, Pool Manager, Bulk Import, and ambient graphics receive one
+operator-facing refinement pass.
+
+The latest public release remains immutable `v1.4.9` until the `1.5.0` pull
+request passes its hosted matrix and is merged. Documentation must call
+`1.5.0` a candidate before that boundary, not a published artifact.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -118,9 +109,9 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.7` is the current public release. Continue
+`v1.4.9` is the current public release. Continue
 using `[skip-bump]` for audit, dogfood, and isolated documentation checkpoints
-after this patch ships unless a real source fix must go to users. Do not produce
+after a release ships unless a real source fix must go to users. Do not produce
 a second minor bump merely to record manual evidence.
 
 The post-`v1.4.0` stabilization tranche reached public desktop artifacts as
@@ -140,6 +131,17 @@ dormant Email Link relay path can activate.
 `v1.4.7` repairs the Account Detail renderer bindings for live-session,
 snapshot, and management-key refresh actions while preserving route-owned
 AbortSignal cancellation.
+`v1.4.8` makes Bulk OTP return immediately after Clerk session persistence,
+queues supervised management-key bootstrap in the background, preserves
+requested key names, and tightens request-first OpenRouter fallback behavior.
+`v1.4.9` restores pending OTP-stub visibility on Command and reuses saved
+sign-in-needed accounts in the Bulk Import queue.
+
+The `1.5.0` candidate adds priced proxy telemetry, explicit attempt outcomes,
+an eight-key bounded failover default, real Command Grid/List/Map views,
+sidebar labels and stronger proximity motion, forgiving Pool Manager controls,
+persisted Bulk Import activity, compact density controls, and a launch-bounded
+moon orbit.
 
 The first `v1.4.1` tag exposed a pre-publication gate cycle before any desktop
 artifact uploaded: `hydra audit` correctly reported that current-version Intel

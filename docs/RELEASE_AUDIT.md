@@ -2872,3 +2872,43 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   final process exit was intentional, not a crash: Electron logged
   `lifecycle:tray-quit-click` followed by `exitCode=0`, and macOS produced no
   Hydra diagnostic report.
+- 2026-06-02 `1.5.0` priced-routing and desktop-operator refinement candidate:
+  the old proxy loop rotated keys but stopped after three attempts and Traffic
+  Console displayed raw status rows without the decision context. Hydra now
+  uses an eight-key bounded eligible-key failover default, configurable with
+  `HYDRA_PROXY_MAX_KEY_ATTEMPTS` and clamped to `32`; emits
+  `X-Hydra-Attempts` and `X-Hydra-Rotated`; records attempt, outcome, exact
+  upstream cost, and cost provenance; retains OpenRouter catalog prompt,
+  completion, and request prices; and renders explicit route plus input/output
+  price columns. Exact upstream `usage.cost` wins, while catalog-only splits
+  render as marked estimates. Client-visible OpenRouter `404` remains an
+  `upstream_response` because changing credentials cannot repair an invalid
+  model or endpoint; key-level `429` records cooldown and continues to another
+  eligible key. The deprecated `stream_options.include_usage` injection is
+  removed because current OpenRouter usage accounting is automatic. Command
+  now has real persisted Grid/List/Map views; the sidebar has visible labels,
+  stronger bounded proximity response, Settings beside lock/quit, and
+  Generator at the bottom of the main workflow stack; Pool Manager gets larger
+  key hitboxes, account-level pool toggles, and a subdued Paste Key action;
+  Bulk Import copy is shorter and OTP/relay activity logs survive route
+  changes through session storage; Settings gets Standard/Compact density; Code
+  Redeemer tightens its textarea; and the Jupiter-like ambient planet gains a
+  launch-bounded reduced-motion-safe moon orbit. Focused verification passed
+  schema sync, syntax, telemetry `5/5`, request-log buffer `5/5`, background
+  contracts `34/34`, UI contracts `47/47`, chain completeness `2/2`, lint,
+  production renderer build, and diff hygiene. The durable release inventory is
+  `docs/releases/1.5.0.md`; routing recon is
+  `docs/recon/TRAFFIC_ROUTING_AND_PRICING.md`. Full source, CLI/API, package,
+  native spot, and hosted PR matrix evidence must still be appended before
+  merge. The local package lane is now complete: full `npm test`, gate `12/12`,
+  OpenAPI regeneration (`84` operations), ARM package smoke, strict deep
+  codesign, and LaunchServices native spot checks passed. The generated ARM
+  zip SHA-256 before reversible metadata cleanup was
+  `016010d098faf19cbe8659b10880cf8dfa6ef54cd83e32d8c7fd16ed54cdc6bc`.
+  Splash diagnostics reported finite teardown with `timers=0`,
+  `rafActive=false`, `bodyCount=0`, and `matterCleared=true`; the settled
+  packaged runtime reported four Hydra-owned processes, zero stale Playwright
+  profiles, `0.0%` aggregate CPU, and `528.55 MB` RSS. Native checks covered
+  all `13` Dashboard accounts, Grid/List/Map, Traffic, Pool Manager, Settings
+  density switching, and the shortened Bulk OTP surface. Hosted PR checks
+  remain the merge boundary.

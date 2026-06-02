@@ -2244,3 +2244,31 @@ This evidence file is not release-complete by itself. The release remains not co
   to low idle on the next sample, and ended at `0.0%`; RSS moved
   `465502208 -> 470351872` bytes (`+4849664`). The full samples and broad
   process inventories remain under that profile directory.
+- `1.5.0` candidate source checkpoint: priced routing now records per-attempt
+  outcome and cost provenance, OpenRouter catalog prices survive model-cache
+  refresh, the local proxy defaults to eight bounded eligible-key attempts,
+  and Traffic Console exposes route attempts plus input/output prices. Desktop
+  refinements add real Command Grid/List/Map views, labeled sidebar hover
+  targets, stronger bounded proximity motion, forgiving Pool Manager toggles,
+  persisted Bulk Import logs, density controls, compact Code Redeemer spacing,
+  and a launch-bounded moon orbit. Focused verification passed schema sync,
+  syntax, telemetry `5/5`, request-log buffering `5/5`, background contracts
+  `34/34`, UI contracts `47/47`, test-chain completeness `2/2`, lint,
+  production renderer build, and diff hygiene. This is source evidence only;
+  append native packaged-app and hosted PR matrix evidence after those lanes
+  run.
+- `1.5.0` local ARM package checkpoint: full `npm test`, gate `12/12`, OpenAPI
+  regeneration (`84` operations), `electron:smoke`, and strict deep codesign
+  passed. LaunchServices opened the canonical `release/mac-arm64/Hydra.app`
+  bundle as version `1.5.0`. Native Computer Use spot checks covered the
+  `13`-account Dashboard, functional Grid/List/Map switching, topology Map,
+  Traffic routing/spend surface, Pool Manager account-level routing controls,
+  Settings Standard/Compact density switching, and shortened Bulk OTP copy.
+  Splash teardown was finite (`timers=0`, `rafActive=false`, `bodyCount=0`,
+  `matterCleared=true`). The settled packaged runtime had four Hydra-owned
+  processes, zero stale Playwright profiles, `0.0%` aggregate CPU, and
+  `528.55 MB` RSS. The generated ARM zip SHA-256 before reversible metadata
+  cleanup was
+  `016010d098faf19cbe8659b10880cf8dfa6ef54cd83e32d8c7fd16ed54cdc6bc`.
+  Hosted PR CI, Docker runtime, and cross-platform package lanes remain the
+  merge boundary.
