@@ -44,7 +44,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | 9 | README clean, navigable, no Remotion references; audit anchors match | README navigation and release docs are reconciled; `rg -n "Remotion\|remotion" README.md` returns no matches; CLI audit remains `31 ok / 5 deferred / 0 missing / 0 blockers`. | Verified |
 | 10 | Every named long-running path measured or justified | Embedded server, proxy/router, automation, request-log buffering, health polling, and dashboard refresh are mapped with measurements below. | Verified |
 | 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | Public `v1.4.7` package proof passed local focused renderer/session tests, `npm run lint`, `npm run build`, `npm run test:dogfood-evidence` (`1/1`), `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep codesign, and embedded-source inspection. Public release run `26782121839` passed shared `test:ci`, lint, gate, and the cross-platform desktop matrix; CI run `26782110073` passed; Docker run `26782109931` passed runtime smoke and registry push. Post-release docs checkpoint `46b4bf1` also passed CI run `26783649083` and Docker build/push plus runtime-smoke run `26783649114`; Auto-version run `26783649079` skipped as intended. The final local literal chain now also passes in order: `npm run lint && npm test && npm run gate && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run docker:smoke && npm run openapi:hydra`. | Verified |
-| 12 | Final dogfood evidence refreshed with packaged-app screenshots | The exact public `v1.1.4` package has native-window captures for first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a synthetic-data Traffic console, plus rendered privacy-safe CLI captures for `hydra status`, `hydra proxy status`, and a compact `hydra doctor --json` excerpt. The exact-public `v1.3.0` canonical app adds a native CoreGraphics Dashboard privacy proof with all content below the titlebar pixelated before check-in. OCR found zero credential-shaped or endpoint-shaped hits and ImageMagick reported nonblank color variance. Computer Use attached successfully to the exact-public `v1.4.7` bundle and verified Dashboard plus the repaired Account Detail actions; final redacted screenshot review remains explicit. | Partial — interactive human visual review required |
+| 12 | Final dogfood evidence refreshed with packaged-app screenshots | The exact public `v1.1.4` package has native-window captures for first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a synthetic-data Traffic console, plus rendered privacy-safe CLI captures for `hydra status`, `hydra proxy status`, and a compact `hydra doctor --json` excerpt. Later packages add native Dashboard privacy proofs through current `v1.5.1`: the current artifact `docs/evidence/hydra-v151-packaged-dashboard-privacy-redacted.png` was captured from the packaged `Hydra — Dashboard` CoreGraphics window, pixelated below the titlebar, OCR-checked, and hashed. Computer Use still times out, so final human visual review remains explicit. | Current packaged screenshot refreshed; human visual review remains manual |
 
 ## Current Verified Evidence
 
@@ -3004,7 +3004,26 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   processes and zero profiles. Raw broad process grep files are preserved as
   `ps-before-launch.txt` (`265` lines), `ps-after-splash-teardown.txt`
   (`273`), `ps-after-profile.txt` (`273`), and `ps-after-native-quit.txt`
-  (`270`). Packaged screenshot evidence is still explicitly not promoted:
-  `screencapture` produced a black image and Computer Use timed out twice
-  against both `Hydra` and the explicit app bundle path, so this environment did
-  not produce a trustworthy refreshed packaged screenshot.
+  (`270`). A first full-screen `screencapture` produced a black image and
+  Computer Use timed out twice against both `Hydra` and the explicit app bundle
+  path, so those paths were not counted as screenshot evidence.
+- 2026-06-02 current-`1.5.1` packaged screenshot refresh: LaunchServices opened
+  `release/mac-arm64/Hydra.app`, CoreGraphics enumeration found the packaged
+  dashboard window `CGWindowID 6905`, owner `Hydra`, title `Hydra — Dashboard`,
+  layer `0`, alpha `1`, bounds `1412x882 @ 50,43`, plus the outer `Hydra`
+  window `6902`. `/usr/sbin/screencapture -l` returned `could not create image
+  from window` for both IDs on this macOS SDK/runtime, so the capture fell back
+  to direct CoreGraphics window-image capture with SDK availability checking
+  disabled for the still-present `CGWindowListCreateImage` symbol. Window
+  `6905` captured at `2880x1800`; ImageMagick reported nonblank variance
+  (`mean=0.320691`, `min=0`, `max=1`, `colors=16201`). The repository-safe
+  artifact pixelates/blurs everything below the titlebar and adds a dark
+  overlay:
+  `docs/evidence/hydra-v151-packaged-dashboard-privacy-redacted.png`
+  (`sha256 bff154ff91ad5fba41f90b5c138987098fac6671043d160ec72bc3613e9f25af`).
+  ImageMagick reported the checked-in PNG as `2880x1800`, `mean=0.293933`,
+  `min=0`, `max=1`, `colors=6895`; Tesseract OCR returned only harmless glyph
+  noise (`re © © ® wypra`) and no email, endpoint, key, or credential-shaped
+  text. The screenshot path is native packaged Electron, not browser, Vite, or
+  localhost capture. Native quit after capture returned to zero Hydra-owned
+  processes and zero stale Playwright profiles.

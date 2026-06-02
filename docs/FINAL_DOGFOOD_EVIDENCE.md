@@ -30,10 +30,17 @@ Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
 - Raw process grep artifacts for that run are preserved in the temp evidence
   directory as `ps-before-launch.txt`, `ps-after-splash-teardown.txt`,
   `ps-after-profile.txt`, and `ps-after-native-quit.txt`.
-- Refreshed screenshot capture is not complete in this environment:
-  `screencapture` produced a black image and Computer Use timed out twice
-  against the running packaged app, so no new screenshot is counted as dogfood
-  evidence from this pass.
+- Current `v1.5.1` packaged screenshot evidence is refreshed without browser
+  substitution:
+  `docs/evidence/hydra-v151-packaged-dashboard-privacy-redacted.png`. The raw
+  capture came from the packaged `Hydra — Dashboard` CoreGraphics window
+  (`CGWindowID 6905`) after LaunchServices startup. `/usr/sbin/screencapture -l`
+  failed with `could not create image from window`, so the working native path
+  used direct CoreGraphics window-image capture for the same packaged window,
+  then pixelated/blurred all content below the titlebar. SHA-256:
+  `bff154ff91ad5fba41f90b5c138987098fac6671043d160ec72bc3613e9f25af`.
+  ImageMagick reported nonblank variance; Tesseract OCR found only harmless
+  glyph noise and no email, endpoint, key, or credential-shaped text.
 - Dashboard metadata/status shaping is down 61.1% in the local DB microbench.
 - Proxy retry body encoding is down 86.9% in the request-body benchmark.
 - Vault status-total rendering is down 96.0% in the synthetic 5000-account

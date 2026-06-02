@@ -2,15 +2,19 @@
 
 This directory contains the public-safe packaged Electron screenshot checkpoint
 for Hydra. The full representative suite came from exact-public `v1.1.4`; the
-exact-public `v1.3.0`, `v1.4.0`, and `v1.4.7` canonical apps add native
-Dashboard privacy proofs. The `v1.4.7` package also adds a native splash
-capture.
+exact-public `v1.3.0`, `v1.4.0`, `v1.4.7`, and current `v1.5.1` canonical apps
+add native Dashboard privacy proofs. The `v1.4.7` package also adds a native
+splash capture.
 
 ## Capture Rules
 
 - App screenshots came from the exact public arm64 `Hydra.app` through native
   CoreGraphics window enumeration and `/usr/sbin/screencapture -l
   <CGWindowID>`.
+- The current `v1.5.1` refresh used the same CoreGraphics window enumeration,
+  then fell back to direct CoreGraphics window-image capture because
+  `/usr/sbin/screencapture -l` returned `could not create image from window` for
+  both Hydra window IDs on this macOS SDK/runtime.
 - Dashboard, Vault, and Pool sensitive fields were blurred or replaced in the
   packaged renderer before native capture. No unredacted live screenshot was
   written into the repository.
@@ -27,13 +31,12 @@ capture.
 
 ## Privacy Verification
 
-macOS Vision OCR scanned every PNG for email markers, `sk-` key prefixes,
-credential assignments, and uninterrupted token-shaped strings. It found zero
-hits. The `v1.3.0`, `v1.4.0`, and `v1.4.7` Dashboard proofs were additionally
-scanned with Tesseract OCR for credential-shaped and endpoint-shaped patterns
-after pixelation. The `v1.4.7` splash capture passed the same Vision and
-Tesseract scans before check-in. ImageMagick reported nonblank color variance
-for every PNG.
+macOS Vision OCR scanned the `v1.1.4` gallery and later `v1.4.7` splash proof
+for email markers, `sk-` key prefixes, credential assignments, and uninterrupted
+token-shaped strings. It found zero hits. The `v1.3.0`, `v1.4.0`, `v1.4.7`, and
+`v1.5.1` Dashboard proofs were additionally scanned with Tesseract OCR for
+credential-shaped and endpoint-shaped patterns after pixelation. ImageMagick
+reported nonblank color variance for every PNG.
 
 Computer Use still timed out against Hydra after `120s`, so final human visual
 review remains a manual release boundary.
@@ -55,3 +58,4 @@ review remains a manual release boundary.
 | `hydra-v140-packaged-dashboard-privacy-redacted.png` | Native exact-public Dashboard window without shadow, content pixelated below titlebar before check-in | `74789ea47e6a33fff972ac15a40667fe0e99af786aae9e13b3cc65cd3f92fc0f` |
 | `hydra-v147-packaged-splash.png` | Native exact-public splash window without browser or accessibility attachment | `3a608664fffde2b2976be1e1aacd9ca445056997854411396472c25f13b350fd` |
 | `hydra-v147-packaged-dashboard-privacy-redacted.png` | Native exact-public Dashboard window, content pixelated below titlebar before check-in | `c655726b575915159731242ebed34df96407f38b4cd6fb1a6c8e50750ed229e2` |
+| `hydra-v151-packaged-dashboard-privacy-redacted.png` | Native current `v1.5.1` Dashboard window, content pixelated below titlebar before check-in | `bff154ff91ad5fba41f90b5c138987098fac6671043d160ec72bc3613e9f25af` |
