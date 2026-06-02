@@ -671,6 +671,7 @@ test('active source JSX buttons do not guard required click handlers into silent
 
 test('generator keeps instructions compact instead of a second desktop-sized panel', () => {
   const generator = readRepoFile('src/pages/Generator.jsx');
+  const api = readRepoFile('src/api.js');
   const css = readRepoFile('src/index.css');
 
   assert.match(generator, /className="generator-steps"/);
@@ -680,6 +681,11 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(generator, /entering_signup_details: 'Entering the signup password and required OpenRouter consent\.'/);
   assert.match(generator, /manual_verification: 'Finish any OpenRouter security check in the account browser\./);
   assert.match(generator, /generatorModeLabel\(jobMode\)/);
+  assert.match(generator, /checkpointLabel\(checkpoint\)/);
+  assert.match(generator, /Browser state: \{checkpointText\}/);
+  assert.match(generator, /api\.focusGeneratorBrowserQuiet\(taskId\)/);
+  assert.match(generator, /Show account browser/);
+  assert.match(api, /focusGeneratorBrowserQuiet = \(taskId, signal\) =>\s*request\(`\/generator\/\$\{taskId\}\/focus`, \{ method: 'POST', signal, trackLoading: false \}\)/);
   assert.match(generator, /className="generator-otp-row"/);
   assert.match(generator, /onChange=\{e => setOtp\(e\.target\.value\.replace\(\/\\D\/g, ''\)\.slice\(0, 6\)\)\}/);
   assert.match(generator, /Submit code/);
@@ -694,6 +700,8 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(css, /\.generator-otp-row \.otp-input\s*\{[\s\S]*?border-width:\s*2px;/);
   assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?min-width:\s*128px;/);
   assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?padding-inline:\s*1rem;/);
+  assert.match(css, /\.generator-active-card\s*\{[\s\S]*?border-left-width:\s*8px;/);
+  assert.match(css, /\.generator-browser-focus\s*\{[\s\S]*?min-height:\s*42px;/);
 });
 
 test('first-run setup is a guided password key tour instead of a login dead end', () => {

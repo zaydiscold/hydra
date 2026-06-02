@@ -11,6 +11,15 @@ import {
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'expired']);
 const HEARTBEAT_INTERVAL_MS = 10 * 1000;
 const POLL_INTERVAL_MS = 2 * 1000;
+const BROWSER_BACKED_STATUSES = new Set([
+  'entering_email',
+  'entering_signup_details',
+  'waiting_for_otp_screen',
+  'manual_verification',
+  'awaiting_otp',
+  'submitting_otp',
+  'waiting_for_completion',
+]);
 const STATUS_COPY = {
   detecting_account: 'Checking whether this email already exists.',
   falling_back_to_browser: 'Opening the isolated account browser for signup.',
@@ -45,6 +54,26 @@ function generatorModeLabel(mode) {
   return 'Generator';
 }
 
+function checkpointLabel(checkpoint) {
+  switch (checkpoint?.state) {
+    case 'otp':
+      return 'OTP screen detected';
+    case 'manual_verification':
+      return 'Security check visible';
+    case 'signup_blocked': {
+      const fields = [
+        checkpoint.passwordBlocked ? 'password' : null,
+        checkpoint.legalBlocked ? 'terms' : null,
+      ].filter(Boolean).join(' + ');
+      return fields ? `Signup fields blocked: ${fields}` : 'Signup fields blocked';
+    }
+    case 'signup_form':
+      return 'Signup form visible';
+    default:
+      return null;
+  }
+}
+
 export default function Generator({ addToast }) {
   const [emailTemplate, setEmailTemplate] = useState('');
   const [password, setPassword] = useState('HydraGen2026!');
@@ -54,8 +83,10 @@ export default function Generator({ addToast }) {
   const [error, setError] = useState(null);
   const [createdAccount, setCreatedAccount] = useState(null);
   const [jobMode, setJobMode] = useState(null);
+  const [checkpoint, setCheckpoint] = useState(null);
   const [starting, setStarting] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [focusingBrowser, setFocusingBrowser] = useState(false);
 
   const activeTaskRef = useRef(null);
   const completedToastRef = useRef(false);
@@ -76,6 +107,7 @@ export default function Generator({ addToast }) {
     if (payload.error) setError(payload.error);
     if (payload.account) setCreatedAccount(payload.account);
     if (payload.mode) setJobMode(payload.mode);
+    if (payload.checkpoint) setCheckpoint(payload.checkpoint);
     if (payload.taskId && !taskId) setTaskId(payload.taskId);
   }, [taskId]);
 
@@ -202,7 +234,9 @@ export default function Generator({ addToast }) {
     setStatus('idle');
     setOtp('');
     setJobMode(null);
+    setCheckpoint(null);
     setVerifying(false);
+    setFocusingBrowser(false);
   }, []);
 
   useEffect(() => {
@@ -224,6 +258,7 @@ export default function Generator({ addToast }) {
       setError(null);
       setOtp('');
       setCreatedAccount(null);
+      setCheckpoint(null);
       completedToastRef.current = false;
       const res = await api.startGeneratorJob(emailTemplate, password, 1);
       const payload = res?.data ?? res ?? {};
@@ -266,6 +301,19 @@ export default function Generator({ addToast }) {
     }
   };
 
+  const handleFocusBrowser = async () => {
+    if (!taskId || focusingBrowser) return;
+    setFocusingBrowser(true);
+    try {
+      const res = await api.focusGeneratorBrowserQuiet(taskId);
+      applyTaskPayload(res?.data ?? res ?? {});
+    } catch (err) {
+      addToast?.(err.message || 'Could not show account browser', 'warning');
+    } finally {
+      if (!lifecycleClosedRef.current) setFocusingBrowser(false);
+    }
+  };
+
   const cancelJob = async () => {
     try {
       await cleanupActiveTask('user_cancelled');
@@ -273,6 +321,9 @@ export default function Generator({ addToast }) {
       resetFormState();
     }
   };
+
+  const checkpointText = checkpointLabel(checkpoint);
+  const canFocusBrowser = jobMode === 'browser_signup' && BROWSER_BACKED_STATUSES.has(status);
 
   return (
     <>
@@ -357,14 +408,19 @@ export default function Generator({ addToast }) {
           )}
         </div>
       ) : (
-        <div className="card active-job-card shine-sweep animate-spring stagger-delay-50" style={{ borderColor: 'var(--accent-primary)', borderLeftWidth: 8 }}>
-          <h3>Active job</h3>
-          <p style={{ marginTop: 'var(--space-sm)' }}>
-            Status{' '}
-            <span className="status-dot success" style={{ color: 'var(--accent-primary)', fontWeight: 800 }}>
-              {status.replace(/_/g, ' ').toUpperCase()}
-            </span>
-          </p>
+        <div className="card active-job-card generator-active-card shine-sweep animate-spring stagger-delay-50">
+          <div className="generator-active-heading">
+            <div>
+              <h3>Active job</h3>
+              <p>
+                Status{' '}
+                <span className="status-dot success">
+                  {status.replace(/_/g, ' ').toUpperCase()}
+                </span>
+              </p>
+            </div>
+            <span className="generator-mode-pill">{generatorModeLabel(jobMode)}</span>
+          </div>
           {taskId && (
             <p className="mono" style={{ marginTop: '0.5rem', opacity: 0.7 }}>
               TASK {taskId.slice(0, 8)}
@@ -401,18 +457,32 @@ export default function Generator({ addToast }) {
                 </form>
               </div>
             ) : (
-              <p className="generator-status-copy">
-                {STATUS_COPY[status] || 'Please wait while Hydra advances this generator job.'}
-              </p>
+              <>
+                <p className="generator-status-copy">
+                  {STATUS_COPY[status] || 'Please wait while Hydra advances this generator job.'}
+                </p>
+                {checkpointText && (
+                  <p className="generator-checkpoint-line" aria-live="polite">
+                    Browser state: {checkpointText}
+                  </p>
+                )}
+              </>
             )}
           </div>
 
-          <button type="button" className="btn btn-ghost" onClick={cancelJob} style={{ marginTop: 'var(--space-xl)', color: 'var(--status-error)' }}>
-            <span className="btn-icon">
-              <PowerIcon size={18} />
-              <span>Cancel job</span>
-            </span>
-          </button>
+          <div className="generator-job-actions">
+            {canFocusBrowser && (
+              <button type="button" className="btn btn-secondary generator-browser-focus" onClick={handleFocusBrowser} disabled={focusingBrowser}>
+                {focusingBrowser ? 'Showing...' : 'Show account browser'}
+              </button>
+            )}
+            <button type="button" className="btn btn-ghost generator-cancel-btn" onClick={cancelJob}>
+              <span className="btn-icon">
+                <PowerIcon size={18} />
+                <span>Cancel job</span>
+              </span>
+            </button>
+          </div>
         </div>
       )}
     </>

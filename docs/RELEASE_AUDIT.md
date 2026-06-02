@@ -17,6 +17,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Multi-arch macOS updater metadata | Release workflow includes `mac-update-metadata` and `scripts/merge-mac-update-yml.mjs`; workflow contract requires merged `latest-mac.yml` with arm64 and x64 files. v1.0.17 release artifact inspection verified `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` were published with macOS arm64/x64 and Windows artifacts. | Verified by release |
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
 | Account Generator signup form drift | `1.5.2` fills required OpenRouter signup password/legal fields, detects hidden Turnstile state as `manual_verification`, keeps waits abort-aware, and documents the current selector evidence. | Source verified; final OTP remains operator-owned |
+| Account Generator browser-state rescue | `1.5.3` passes Playwright wait timeouts in the correct options slot, reports sanitized signup/security/OTP checkpoints to the renderer, and adds a `POST /api/generator/:taskId/focus` browser-focus path. | Source and bounded live smoke verified; final OTP remains operator-owned |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
 | Release artifacts | GitHub release v1.4.7 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26782121839` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; v1.4.7 released |
 | macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-local public `v1.4.7` macOS arm64 app verifies with `codesign --verify --deep --strict`; release-matrix package smoke passed on macOS arm64 and macOS Intel. | Verified by release artifact dogfood |
@@ -3061,3 +3062,50 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   native quit returned to zero processes and zero profiles. The live service
   smoke reached `manual_verification` with `mode=browser_signup`; final OTP
   entry and upstream human verification remain operator-owned.
+- 2026-06-02 `1.5.3` Account Generator browser-state rescue: user-reported
+  Generator output showed `Timeout 30000ms exceeded` while the UI remained on
+  the browser signup/OTP wait lane. Runtime log inspection found the matching
+  failed path: Hydra detected a missing upstream account, fell back to the
+  isolated browser, found `input[name="emailAddress"]`, clicked Continue, and
+  then failed at Playwright's default 30-second `waitForFunction` timeout with
+  no password-fill or terms-acceptance trace. Source review found two
+  `waitForFunction` calls passing `{ timeout }` as the second argument, which is
+  Playwright's `arg` slot, not options. Hydra `1.5.3` now calls
+  `page.waitForFunction(..., undefined, { timeout: ... })`, records sanitized
+  signup-form / signup-blocked / manual-verification / OTP checkpoints in the
+  Generator task payload, shows a compact `Browser state:` line in the active
+  Generator card, and adds `POST /api/generator/:taskId/focus` plus a **Show
+  account browser** button so the isolated signup browser can be brought back
+  to the front. Verification passed `node --check` for
+  `server/services/account-generator.js`, `server/controllers/GeneratorController.js`,
+  and `server/routes/generator.js`; `npm run test:background-failure-visibility`;
+  `npm run test:ui-static`; `npm run lint`; `npm run build`; and
+  `git diff --check`. A source-level live Generator smoke with a throwaway
+  address and non-secret password followed
+  `detecting_account -> falling_back_to_browser -> launching_browser ->
+  navigating_signup -> waiting_for_page_hydrate -> entering_email ->
+  entering_signup_details -> manual_verification`, logged password fill,
+  terms acceptance, Continue click, sanitized `manual_verification` checkpoint,
+  and clean cancellation. No supplied operator password or target account email
+  was written into tracked files. Final source verification then passed the full
+  `npm test` chain, `npm run lint`, `npm run build`, `npm run gate`,
+  `npm run openapi:hydra`, and `git diff --check`. The rebuilt local ARM package
+  passed `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  codesign, plist version `1.5.3`, and embedded-source inspection for
+  `waitForSignupShell`, `focusSignupBrowser`, the explicit
+  `undefined, { timeout: ... }` Playwright options call, and the Generator
+  browser-state renderer strings. The local ARM zip SHA-256 is
+  `0087bcf8bb748de6f764c99f64710430b637bd9d206a36096356eddeae52c1e7`.
+  LaunchServices opened the rebuilt package with the expected four
+  Hydra-owned processes, zero stale Playwright profiles, and a bounded startup
+  CPU tail; the settled sample reached `0.0%` CPU, and native quit returned to
+  zero Hydra-owned processes and zero profiles. Superseded `1.5.2` archives and
+  generated builder debug metadata were moved reversibly to `~/.Trash`, leaving
+  `release/` with only the canonical `1.5.3` app, zip, blockmap, and
+  `latest-mac.yml`. Computer Use was retried against the exact package but this
+  local launch exposed no capturable CG window (`noWindowsAvailable`, then
+  `cgWindowNotFound`), and one System Events window-count request remained
+  blocked by macOS assistive-access permissions, so final human visual review
+  of the active Generator card remains explicit. Final human verification and
+  OTP entry remain operator-owned.

@@ -4513,6 +4513,55 @@ select:-webkit-autofill {
   font-weight: 800;
 }
 
+.generator-active-card {
+  border-color: rgba(0, 229, 255, 0.42);
+  border-left-width: 8px;
+}
+
+.generator-active-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.generator-active-heading h3 {
+  margin: 0;
+}
+
+.generator-active-heading p {
+  margin-top: var(--space-xs);
+}
+
+.generator-active-heading .status-dot {
+  color: var(--accent-primary);
+  font-weight: 800;
+}
+
+.generator-mode-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 0.72rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 229, 255, 0.26);
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.generator-checkpoint-line {
+  margin-top: var(--space-xs);
+  color: var(--accent-primary);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
 .generator-otp-panel {
   max-width: 560px;
 }
@@ -4542,6 +4591,22 @@ select:-webkit-autofill {
   padding-inline: 1rem;
   justify-content: center;
   white-space: nowrap;
+}
+
+.generator-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.generator-browser-focus {
+  min-height: 42px;
+}
+
+.generator-cancel-btn {
+  color: var(--status-error);
 }
 
 .redeemer-grid {
@@ -4688,6 +4753,14 @@ select:-webkit-autofill {
   min-height: 42px;
 }
 
+.app-shell--density-compact .main-content .generator-active-card {
+  padding: 14px !important;
+}
+
+.app-shell--density-compact .main-content .generator-job-actions {
+  margin-top: 12px;
+}
+
 .app-shell--density-compact .main-content .code-textarea-neo {
   min-height: 104px !important;
   padding: 10px;
@@ -4702,5 +4775,18 @@ select:-webkit-autofill {
   .generator-otp-row,
   .redeemer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .generator-active-heading,
+  .generator-job-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .generator-mode-pill,
+  .generator-browser-focus,
+  .generator-cancel-btn {
+    width: 100%;
+    justify-content: center;
   }
 }

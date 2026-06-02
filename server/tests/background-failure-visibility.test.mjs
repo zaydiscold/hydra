@@ -689,6 +689,8 @@ test('management-key provisioning is a bounded request-first bootstrap with one 
 
 test('account generator browser signup uses the encrypted proxy pool when present', () => {
   const source = readRepoFile('server/services/account-generator.js');
+  const routes = readRepoFile('server/routes/generator.js');
+  const controller = readRepoFile('server/controllers/GeneratorController.js');
 
   assert.match(source, /pickAutomationNetworkRoute/);
   assert.match(source, /mergeAutomationLaunchArgs\(launchArgs, automationRoute\)/);
@@ -703,13 +705,21 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /signupBlocked/);
   assert.match(source, /input\[name="cf-turnstile-response"\]/);
   assert.match(source, /turnstilePending/);
+  assert.match(source, /checkpoint: summarizeSignupCheckpoint\(checkpoint\)/);
   assert.match(source, /Manual upstream verification visible/);
   assert.match(source, /GENERATOR_SIGNUP_FORM_BLOCKED/);
   assert.match(source, /GENERATOR_OTP_SCREEN_TIMEOUT/);
   assert.match(source, /GENERATOR_MANUAL_VERIFICATION_TIMEOUT/);
   assert.match(source, /sleepWithSignal\(OTP_CHECK_INTERVAL_MS, signal\)/);
+  assert.match(source, /waitForSignupShell\(page\)/);
+  assert.match(source, /page\.waitForFunction\(\(\) => \{[\s\S]*?\}, undefined, \{ timeout: STARTUP_TIMEOUT_MS \}\)/);
+  assert.match(source, /\}, undefined, \{ timeout: 15000 \}\)/);
+  assert.doesNotMatch(source, /waitForFunction\(\(\) => \{[\s\S]{0,600}?\}, \{ timeout:/);
   assert.doesNotMatch(source, /page\.waitForFunction\(otpChallengeVisiblePredicate/);
   assert.match(source, /waitForOtpChallenge\(task, page\)/);
+  assert.match(source, /focusSignupBrowser\(taskId, ownerUserId\)/);
+  assert.match(routes, /router\.post\('\/:taskId\/focus'/);
+  assert.match(controller, /focusBrowser\(req, res\)/);
   assert.match(source, /const preDetailCheckpoint = await readSignupCheckpoint\(page\)/);
   assert.match(source, /!passwordFilled && preDetailCheckpoint\.passwordBlocked/);
   assert.match(source, /const postPasswordCheckpoint = await readSignupCheckpoint\(page\)/);

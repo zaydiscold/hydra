@@ -403,6 +403,8 @@ export const heartbeatGeneratorJob = (taskId, signal) =>
   request(`/generator/${taskId}/heartbeat`, { method: 'POST', signal });
 export const heartbeatGeneratorJobQuiet = (taskId, signal) =>
   request(`/generator/${taskId}/heartbeat`, { method: 'POST', signal, trackLoading: false });
+export const focusGeneratorBrowserQuiet = (taskId, signal) =>
+  request(`/generator/${taskId}/focus`, { method: 'POST', signal, trackLoading: false });
 export const submitGeneratorOtp = (taskId, otp) => 
   request(`/generator/verify/${taskId}`, { method: 'POST', body: { otp } });
 export const submitGeneratorOtpQuiet = (taskId, otp) =>

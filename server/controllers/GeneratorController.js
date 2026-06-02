@@ -44,6 +44,15 @@ class GeneratorController extends BaseController {
     }
   }
 
+  async focusBrowser(req, res) {
+    try {
+      const job = await generator.focusSignupBrowser(req.params.taskId, req.user.id);
+      return this.success(res, job);
+    } catch (err) {
+      return this.error(res, err.message, err.status || 500, err.code || 'GENERATOR_FOCUS_FAILED');
+    }
+  }
+
   async verifyOtp(req, res) {
     try {
       const { otp } = this.validate(req.body, verifyOtpSchema);

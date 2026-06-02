@@ -172,6 +172,7 @@ const routeDefs = [
   op('post', '/api/generator/start', { tag: 'generator', summary: 'Start account generator signup task', requestBody: body('Generator start options') }),
   op('get', '/api/generator/status/{taskId}', { tag: 'generator', summary: 'Read generator task status', parameters: [idParam('taskId')] }),
   op('post', '/api/generator/{taskId}/heartbeat', { tag: 'generator', summary: 'Heartbeat a generator task', parameters: [idParam('taskId')] }),
+  op('post', '/api/generator/{taskId}/focus', { tag: 'generator', summary: 'Bring the isolated generator browser to the front', parameters: [idParam('taskId')] }),
   op('post', '/api/generator/verify/{taskId}', { tag: 'generator', summary: 'Verify generator OTP', parameters: [idParam('taskId')], requestBody: body('OTP verification payload') }),
   op('delete', '/api/generator/{taskId}', { tag: 'generator', summary: 'Clean up generator task', parameters: [idParam('taskId')] }),
 

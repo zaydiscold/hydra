@@ -25,6 +25,16 @@ which means the form is waiting on Cloudflare/Turnstile verification even when
 there is no large visible CAPTCHA panel. The generator now treats that as
 `manual_verification`, not as an OTP wait.
 
+Follow-up packaged-path review on 2026-06-02 found a third wiring issue:
+two Playwright `waitForFunction` calls passed `{ timeout }` as the function
+argument instead of the third `options` parameter. That meant Playwright could
+silently use its default 30 second timeout and report
+`Timeout 30000ms exceeded`, even when Hydra intended a different wait contract.
+Hydra now passes `undefined` as the second argument and the timeout object as
+the third argument, records sanitized browser checkpoints, and exposes a
+Generator focus endpoint so the operator can bring the isolated account browser
+forward during security checks.
+
 ## How It Was Found
 
 - The reported error matched Playwright's 30-second wait shape:
@@ -51,9 +61,21 @@ there is no large visible CAPTCHA panel. The generator now treats that as
   - `npm run test:background-failure-visibility`
   - `npm run test:ui-static`
   - `npm run test:openrouter-request-cancellation`
-  - Direct service smoke through `startSignupJob()` reached
-    `manual_verification` with `mode=browser_signup` and cleaned up without a
-    false launch failure after cancellation.
+- Direct service smoke through `startSignupJob()` reached
+  `manual_verification` with `mode=browser_signup` and cleaned up without a
+  false launch failure after cancellation.
+- `v1.5.3` focused verification:
+  - `node --check server/services/account-generator.js`
+  - `node --check server/controllers/GeneratorController.js`
+  - `node --check server/routes/generator.js`
+  - `npm run test:background-failure-visibility`
+  - `npm run test:ui-static`
+  - `npm run lint`
+  - `npm run build`
+  - `git diff --check`
+  - Source-level live Generator smoke with a throwaway address reached
+    `manual_verification` after password fill, terms acceptance, Continue
+    click, checkpoint reporting, and clean cancellation.
 
 ## Why It Matters
 
@@ -98,6 +120,16 @@ src/pages/Generator.jsx
 - entering_signup_details: Entering the signup password and required OpenRouter consent.
 - manual_verification: Finish any OpenRouter security check in the account browser...
 - Submit code
+- Browser state: {checkpointText}
+- Show account browser
+
+server/routes/generator.js
+- POST /:taskId/focus
+
+server/services/account-generator.js
+- page.waitForFunction(..., undefined, { timeout: STARTUP_TIMEOUT_MS })
+- page.waitForFunction(..., undefined, { timeout: 15000 })
+- focusSignupBrowser(taskId, ownerUserId)
 ```
 
 No supplied signup password is recorded in this document. The verification

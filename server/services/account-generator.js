@@ -23,7 +23,7 @@
  *   navigating_signup → awaiting_otp → submitting_otp → completed
  */
 
-/* global document */
+/* global document, window */
 import {
   cleanupEphemeralProfileDir,
   launchChromiumPersistentContext,
@@ -87,6 +87,7 @@ function serializeGeneratorTask(task) {
     account: payload.result?.account ?? payload.metadata?.account ?? null,
     mode: payload.metadata?.mode ?? null,
     automationRoute: payload.metadata?.automationRoute ?? null,
+    checkpoint: payload.metadata?.checkpoint ?? null,
     startedAt: payload.startedAt,
     endedAt: payload.endedAt,
     lastHeartbeatAt: payload.lastHeartbeatAt,
@@ -138,6 +139,7 @@ async function readSignupCheckpoint(page) {
       passwordBlocked,
       legalBlocked,
       url: document.location.href,
+      title: document.title || '',
     };
   }, OTP_INPUT_SELECTOR).catch((err) => ({
     otpVisible: false,
@@ -147,8 +149,36 @@ async function readSignupCheckpoint(page) {
     passwordBlocked: false,
     legalBlocked: false,
     url: page.url?.() ?? 'unknown',
+    title: '',
     error: err.message,
   }));
+}
+
+function summarizeSignupCheckpoint(checkpoint) {
+  if (!checkpoint) return null;
+  let state = 'unknown';
+  if (checkpoint.otpVisible) state = 'otp';
+  else if (checkpoint.manualVisible) state = 'manual_verification';
+  else if (checkpoint.signupBlocked) state = 'signup_blocked';
+  else if (checkpoint.signupFormVisible) state = 'signup_form';
+  return {
+    state,
+    url: checkpoint.url,
+    title: checkpoint.title,
+    passwordBlocked: Boolean(checkpoint.passwordBlocked),
+    legalBlocked: Boolean(checkpoint.legalBlocked),
+    error: checkpoint.error || null,
+  };
+}
+
+function updateTaskCheckpoint(task, checkpoint, extraMetadata = {}) {
+  taskSupervisor.updateTask(task.taskId, {
+    metadata: {
+      ...task.metadata,
+      ...extraMetadata,
+      checkpoint: summarizeSignupCheckpoint(checkpoint),
+    },
+  });
 }
 
 async function waitForOtpChallenge(task, page) {
@@ -156,16 +186,25 @@ async function waitForOtpChallenge(task, page) {
   const startedAt = Date.now();
   let manualReported = false;
   let blockedSince = 0;
+  let lastCheckpointReportAt = 0;
 
   while (Date.now() - startedAt < OTP_WAIT_TIMEOUT_MS) {
     throwIfAborted(signal);
     const checkpoint = await readSignupCheckpoint(page);
+    if (Date.now() - lastCheckpointReportAt >= 2 * 1000) {
+      updateTaskCheckpoint(task, checkpoint, { mode: 'browser_signup' });
+      lastCheckpointReportAt = Date.now();
+    }
     if (checkpoint.otpVisible) return;
     if (checkpoint.manualVisible) {
       manualReported = true;
       taskSupervisor.updateTask(task.taskId, {
         status: 'manual_verification',
-        metadata: { ...task.metadata, mode: 'browser_signup' },
+        metadata: {
+          ...task.metadata,
+          mode: 'browser_signup',
+          checkpoint: summarizeSignupCheckpoint(checkpoint),
+        },
       });
       logger.warn(`[Account Generator] Manual upstream verification visible for ${task.taskId}; waiting for OTP screen in the isolated browser`);
       break;
@@ -179,6 +218,7 @@ async function waitForOtpChallenge(task, page) {
         ].filter(Boolean).join(' and ') || 'required signup fields';
         const err = new Error(`OpenRouter signup form did not advance because ${fields} is still required; current page ${checkpoint.url}`);
         err.code = 'GENERATOR_SIGNUP_FORM_BLOCKED';
+        updateTaskCheckpoint(task, checkpoint, { mode: 'browser_signup' });
         throw err;
       }
     } else {
@@ -192,6 +232,10 @@ async function waitForOtpChallenge(task, page) {
     while (Date.now() - manualStartedAt < MANUAL_VERIFICATION_TIMEOUT_MS) {
       throwIfAborted(signal);
       const checkpoint = await readSignupCheckpoint(page);
+      if (Date.now() - lastCheckpointReportAt >= 2 * 1000) {
+        updateTaskCheckpoint(task, checkpoint, { mode: 'browser_signup' });
+        lastCheckpointReportAt = Date.now();
+      }
       if (checkpoint.otpVisible) return;
       await sleepWithSignal(OTP_CHECK_INTERVAL_MS, signal);
     }
@@ -201,6 +245,7 @@ async function waitForOtpChallenge(task, page) {
   }
 
   const checkpoint = await readSignupCheckpoint(page);
+  updateTaskCheckpoint(task, checkpoint, { mode: 'browser_signup' });
   const err = new Error(`Timed out waiting for OpenRouter's OTP screen after ${OTP_WAIT_TIMEOUT_MS}ms; current page ${checkpoint.url}`);
   err.code = 'GENERATOR_OTP_SCREEN_TIMEOUT';
   throw err;
@@ -311,6 +356,18 @@ async function clickVisibleOtpSubmitControl(page, taskId) {
     logger.warn(`[Account Generator] OTP Enter fallback failed for ${taskId}: ${err.message}`);
     return false;
   }
+}
+
+async function waitForSignupShell(page) {
+  return page.waitForFunction(() => {
+    const hasInput = document.querySelector('input[type="email"], input[name="identifier"], input[name="emailAddress"], .cl-formFieldInput');
+    const hasButton = document.querySelector('button[type="submit"], button.cl-formButtonPrimary');
+    const text = document.body?.innerText?.toLowerCase?.() || '';
+    const hasSecurityGate = text.includes('verify you are human')
+      || text.includes('security check')
+      || Boolean(document.querySelector('iframe[src*="turnstile" i], iframe[src*="captcha" i], input[name="cf-turnstile-response"]'));
+    return hasInput || hasButton || hasSecurityGate;
+  }, undefined, { timeout: STARTUP_TIMEOUT_MS });
 }
 
 async function fillVisibleOtpInput(page, otpCode, taskId) {
@@ -444,12 +501,10 @@ async function launchSignupFlowPlaywright(task) {
       taskSupervisor.updateTask(task.taskId, { status: 'waiting_for_page_hydrate' });
       await page.waitForTimeout(3000);
 
-      // Wait for any form element to appear
-      await page.waitForFunction(() => {
-        const hasInput = document.querySelector('input[type="email"], input[name="identifier"], input[name="emailAddress"], .cl-formFieldInput');
-        const hasButton = document.querySelector('button[type="submit"], button.cl-formButtonPrimary');
-        return hasInput || hasButton;
-      }, { timeout: STARTUP_TIMEOUT_MS });
+      // Wait for any form or security element to appear. Playwright's
+      // waitForFunction signature is (fn, arg, options), so keep the timeout in
+      // the third slot; otherwise it silently falls back to 30 seconds.
+      await waitForSignupShell(page);
 
       taskSupervisor.updateTask(task.taskId, { status: 'entering_email' });
 
@@ -491,6 +546,7 @@ async function launchSignupFlowPlaywright(task) {
       taskSupervisor.updateTask(task.taskId, { status: 'entering_signup_details' });
 
       const preDetailCheckpoint = await readSignupCheckpoint(page);
+      updateTaskCheckpoint(task, preDetailCheckpoint, { mode: 'browser_signup' });
       const passwordFilled = await fillVisibleSignupPassword(page, task.metadata.password, task.taskId);
       if (!passwordFilled && preDetailCheckpoint.passwordBlocked) {
         const err = new Error('Could not find OpenRouter signup password field - page may have changed');
@@ -500,6 +556,7 @@ async function launchSignupFlowPlaywright(task) {
 
       const termsAccepted = await acceptVisibleSignupTerms(page, task.taskId);
       const postPasswordCheckpoint = await readSignupCheckpoint(page);
+      updateTaskCheckpoint(task, postPasswordCheckpoint, { mode: 'browser_signup' });
       if (!termsAccepted && postPasswordCheckpoint.legalBlocked) {
         const err = new Error('Could not accept OpenRouter signup terms - page may have changed');
         err.code = 'GENERATOR_SIGNUP_TERMS_FIELD_MISSING';
@@ -601,7 +658,7 @@ async function finalizeOtpSubmissionPlaywright(task, otpCode) {
             || text.includes('billing')
             || text.includes('dashboard')
             || text.includes('management keys');
-        }, { timeout: 15000 });
+        }, undefined, { timeout: 15000 });
       });
 
       taskSupervisor.updateTask(task.taskId, { status: 'extracting_session' });
@@ -894,6 +951,27 @@ export function getSignupJob(taskId, ownerUserId) {
 
 export function heartbeatJob(taskId, ownerUserId) {
   const task = taskSupervisor.heartbeat(taskId, ownerUserId);
+  return serializeGeneratorTask(task);
+}
+
+export async function focusSignupBrowser(taskId, ownerUserId) {
+  const task = taskSupervisor.assertOwnership(taskId, ownerUserId);
+  if (task.type !== 'generator_job') {
+    const error = new Error('Task not found');
+    error.status = 404;
+    throw error;
+  }
+
+  const page = task.resources?.page;
+  if (!page) {
+    const error = new Error('This generator job is not using an isolated browser.');
+    error.status = 409;
+    error.code = 'GENERATOR_BROWSER_NOT_AVAILABLE';
+    throw error;
+  }
+
+  await page.bringToFront();
+  await page.evaluate(() => window.focus()).catch(() => {});
   return serializeGeneratorTask(task);
 }
 

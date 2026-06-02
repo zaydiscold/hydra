@@ -9,6 +9,7 @@ const router = Router();
 router.post('/start', requireUnlocked, highCostRouteLimiter, BaseController.catchAsync(GeneratorController.startSignup.bind(GeneratorController)));
 router.get('/status/:taskId', requireUnlocked, BaseController.catchAsync(GeneratorController.getStatus.bind(GeneratorController)));
 router.post('/:taskId/heartbeat', requireUnlocked, BaseController.catchAsync(GeneratorController.heartbeat.bind(GeneratorController)));
+router.post('/:taskId/focus', requireUnlocked, BaseController.catchAsync(GeneratorController.focusBrowser.bind(GeneratorController)));
 router.post('/verify/:taskId', requireUnlocked, highCostRouteLimiter, BaseController.catchAsync(GeneratorController.verifyOtp.bind(GeneratorController)));
 router.delete('/:taskId', requireUnlocked, BaseController.catchAsync(GeneratorController.cleanupJob.bind(GeneratorController)));
 
