@@ -62,6 +62,18 @@ const SIGNUP_SHELL_CHECK_INTERVAL_MS = 500;
 const SIGNUP_FORM_BLOCKED_GRACE_MS = 3 * 1000;
 const MANUAL_VERIFICATION_TIMEOUT_MS = 4 * 60 * 1000;
 const COMPLETION_TIMEOUT_MS = 30 * 1000;
+const OTP_FINALIZATION_STATUSES = new Set([
+  'submitting_otp',
+  'verifying_otp',
+  'waiting_for_completion',
+  'setting_password',
+  'extracting_session',
+  'activating_session',
+  'activating_long_lived_session',
+  'saving_profile',
+  'saving_local_profile',
+  'provisioning_key',
+]);
 const OTP_INPUT_SELECTOR = [
   'input[autocomplete="one-time-code"]',
   'input.cl-otpCodeFieldInput',
@@ -1124,6 +1136,15 @@ export async function submitOtpForJob(taskId, ownerUserId, otpCode) {
     error.status = 404;
     throw error;
   }
+  if (!/^\d{6}$/.test(String(otpCode || ''))) {
+    const error = new Error('OTP must be a 6-digit code');
+    error.status = 400;
+    error.code = 'GENERATOR_OTP_INVALID';
+    throw error;
+  }
+  if (OTP_FINALIZATION_STATUSES.has(task.status)) {
+    return { success: true, message: 'OTP is already being processed.' };
+  }
   const checkpointOtpReady = task.metadata?.checkpoint?.state === 'otp';
   if (task.status !== 'awaiting_otp' && !checkpointOtpReady) {
     const error = new Error(`Cannot submit OTP in status: ${task.status}`);
@@ -1133,6 +1154,12 @@ export async function submitOtpForJob(taskId, ownerUserId, otpCode) {
   if (checkpointOtpReady && task.status !== 'awaiting_otp') {
     taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });
   }
+  taskSupervisor.updateTask(task.taskId, {
+    status: 'submitting_otp',
+    metadata: {
+      otpAcceptedAt: new Date().toISOString(),
+    },
+  });
 
   // Fire-and-forget — the promise is tracked via trackPromise inside finalizeOtpSubmission.
   void finalizeOtpSubmission(task, otpCode);

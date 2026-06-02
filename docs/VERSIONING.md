@@ -15,13 +15,12 @@ attempt telemetry, bounded proxy failover, real Command Grid/List/Map modes,
 desktop density, stronger proximity navigation, Pool Manager ergonomics, Bulk
 Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 
-Tracked `package.json` and `package-lock.json` now target `1.5.6`, a focused
-patch on top of the prior `v1.5.5` baseline. It keeps the Account Generator
-rescue lane narrow while retaining the OpenRouter OTP handoff repair, replaces
-the remaining brittle signup-shell wait with sanitized checkpoint polling, keeps
-Generator cancellation cleanup abort-aware, and adds an app-owned packaged
-self-capture dogfood path for machines where macOS Screen Recording or
-Accessibility permissions block external capture tools.
+Tracked `package.json` and `package-lock.json` now target `1.5.7`, a focused
+patch on top of the public `v1.5.6` baseline. It keeps the Account Generator
+rescue lane narrow while retaining the OpenRouter signup-shell and OTP-screen
+repairs, then fixes the local OTP-submit handoff so Enter/Submit moves
+immediately into `submitting_otp`, avoids the high-cost local route limiter, and
+keeps duplicate submits idempotent during background finalization.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -110,9 +109,10 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`1.5.6` is the current patch lane for the Account Generator signup-shell and
-OTP-readiness repair, isolated-browser viewport repair, abort-aware cleanup, and
-packaged self-capture evidence.
+`1.5.7` is the current patch lane for the Account Generator OTP-submit
+responsiveness repair. The prior `1.5.6` lane remains the packaged
+signup-shell, abort-aware cleanup, isolated-browser handoff, and self-capture
+evidence baseline.
 Continue using `[skip-bump]` for audit, dogfood, and isolated
 documentation checkpoints after a release ships unless a real source fix must
 go to users. Do not produce a second minor bump merely to record manual

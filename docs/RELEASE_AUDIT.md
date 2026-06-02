@@ -21,6 +21,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Account Generator modal-form repair | `1.5.4` fills OpenRouter's current duplicate Clerk modal fields, handles first/last/email/password/terms, force-accepts terms through portal overlays, and unlocks OTP entry from checkpoint truth. | Source, visual, and bounded live service smoke verified; final OTP remains operator-owned |
 | Account Generator OTP readiness repair | `1.5.5` expands Clerk/OpenRouter OTP detection to renamed and segmented code fields, extends the screen wait beyond Playwright's default 30 seconds, opens the isolated browser at a stable desktop viewport, and makes the active job controls render evenly while the browser task continues. | Source, package, codesign, and clean LaunchServices settle verified; final OTP remains operator-owned |
 | Account Generator signup-shell hardening | `1.5.6` replaces the remaining signup-shell wait with 500ms sanitized checkpoint polling, records manual-verification state before OTP, uses abort-aware Generator browser sleeps/form helpers, and keeps packaged cancellation logs tied to the supervisor reason instead of page-close noise. | Source, package, codesign, and bounded live packaged handoff verified; final OTP/human verification remains operator-owned |
+| Account Generator OTP-submit responsiveness | `1.5.7` removes the high-cost local limiter from OTP verification, validates six-digit codes, flips the renderer into `submitting_otp` before the quiet request returns, hides stale OTP controls during finalization, and makes duplicate submits idempotent while the browser finishes. | Source, production build, and bounded dev Generator smoke verified; final upstream OTP/human verification remains operator-owned |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
 | Release artifacts | GitHub release v1.4.7 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26782121839` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; v1.4.7 released |
 | macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-local public `v1.4.7` macOS arm64 app verifies with `codesign --verify --deep --strict`; release-matrix package smoke passed on macOS arm64 and macOS Intel. | Verified by release artifact dogfood |
@@ -192,7 +193,7 @@ items by itself.
 | 8 | Per-task encrypted random account-proxy rotation | Settings/API encrypted storage, empty-list fallback, signup, browser redemption, HTTP redemption, and shared route reuse are covered by integration/contracts and measured dispatcher reuse. | Verified |
 | 9 | README clean, navigable, no Remotion references; audit anchors match | README navigation and release docs are reconciled; `rg -n "Remotion\|remotion" README.md` returns no matches; CLI audit remains `31 ok / 5 deferred / 0 missing / 0 blockers`. | Verified |
 | 10 | Every named long-running path measured or justified | Embedded server, proxy/router, automation, request-log buffering, health polling, and dashboard refresh are mapped with measurements below. | Verified |
-| 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | Public `v1.4.7` package proof passed local focused renderer/session tests, `npm run lint`, `npm run build`, `npm run test:dogfood-evidence` (`1/1`), `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep codesign, and embedded-source inspection. Public release run `26782121839` passed shared `test:ci`, lint, gate, and the cross-platform desktop matrix; CI run `26782110073` passed; Docker run `26782109931` passed runtime smoke and registry push. Post-release docs checkpoint `46b4bf1` also passed CI run `26783649083` and Docker build/push plus runtime-smoke run `26783649114`; Auto-version run `26783649079` skipped as intended. The final local literal chain now also passes in order: `npm run lint && npm test && npm run gate && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run docker:smoke && npm run openapi:hydra`. The `v1.5.6` follow-up passed focused main-process/workflow/generator/UI contracts, production renderer build, local macOS ARM package smoke, strict deep codesign, bundle version inspection, embedded-source inspection, and a bounded LaunchServices Generator handoff on the packaged private API. | Verified locally; hosted `v1.5.6` release matrix pending push |
+| 11 | Final lint/test/gate/smoke/Docker/OpenAPI gates green | Public `v1.4.7` package proof passed local focused renderer/session tests, `npm run lint`, `npm run build`, `npm run test:dogfood-evidence` (`1/1`), `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep codesign, and embedded-source inspection. Public release run `26782121839` passed shared `test:ci`, lint, gate, and the cross-platform desktop matrix; CI run `26782110073` passed; Docker run `26782109931` passed runtime smoke and registry push. Post-release docs checkpoint `46b4bf1` also passed CI run `26783649083` and Docker build/push plus runtime-smoke run `26783649114`; Auto-version run `26783649079` skipped as intended. The final local literal chain now also passes in order: `npm run lint && npm test && npm run gate && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke && npm run docker:smoke && npm run openapi:hydra`. The `v1.5.6` follow-up passed focused main-process/workflow/generator/UI contracts, production renderer build, local macOS ARM package smoke, strict deep codesign, bundle version inspection, embedded-source inspection, and a bounded LaunchServices Generator handoff on the packaged private API. The `v1.5.7` OTP-submit follow-up passes focused generator/UI contracts, full `npm test`, lint, gate, production build, audit, local macOS ARM package smoke, strict deep codesign, bundle version inspection, embedded-source inspection, and bounded source-dev Generator smoke; final hosted release matrix evidence is collected after push. | Verified locally; hosted `v1.5.7` release matrix pending push |
 | 12 | Final dogfood evidence refreshed with packaged-app screenshots | The exact public `v1.1.4` package has native-window captures for first-run Vault setup, Dashboard, Vault, Pool, Settings Touch ID, and a synthetic-data Traffic console, plus rendered privacy-safe CLI captures for `hydra status`, `hydra proxy status`, and a compact `hydra doctor --json` excerpt. Later packages add native Dashboard privacy proofs through `v1.5.1`, and local `v1.5.6` adds an app-owned packaged self-capture proof at `docs/evidence/hydra-v156-packaged-dashboard-self-capture-redacted.png` (`sha256 c0c4d7e415417bf00b1ff06ae66b9d35523b9f35e66754171ba3507d20c9bdd9`). The raw `2880x1800` PNG was written by the packaged Electron main process via `webContents.capturePage()` after LaunchServices opened `release/mac-arm64/Hydra.app` with `--self-capture`; the checked-in image was pixelated, OCR-checked, and variance-checked. Computer Use still times out, so final human visual review remains explicit. | Current packaged screenshot refreshed; human visual review remains manual |
 
 ## Current Verified Evidence
@@ -3366,3 +3367,41 @@ items by itself.
   macOS updater metadata. GitHub release v1.5.6 is public with macOS arm64
   zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux AppImage,
   `latest-mac.yml`, `latest.yml`, and `latest-linux.yml`.
+- 2026-06-02 `1.5.7` Account Generator OTP-submit responsiveness: a current
+  operator report showed the Generator page greying out after OTP entry before
+  the job visibly moved into background finalization. Hydra now treats OTP
+  submit as part of the existing task instead of a new high-cost launch:
+  `POST /api/generator/verify/:taskId` is no longer behind
+  `highCostRouteLimiter`, the controller requires exactly six digits, the
+  renderer flips to `submitting_otp` before the quiet request returns, stale
+  OTP checkpoints are ignored during finalization/terminal states, and duplicate
+  submits return an idempotent "already processing" success. The server records
+  `otpAcceptedAt` when it accepts a code. Focused verification passed
+  `node --check server/controllers/GeneratorController.js`,
+  `node --check server/routes/generator.js`,
+  `node --check server/services/account-generator.js`,
+  `npm run test:background-failure-visibility` (`34/34`),
+  `npm run test:ui-static` (`48/48`), `npm run lint`, `npm run build`,
+  `npm run gate` (`12/12`), full `npm test`, and
+  `node bin/hydra.mjs audit --json`. The local ARM package passed
+  `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  codesign, plist version `1.5.7`, and embedded-source inspection for the
+  limiter-free verify route, `OTP_FINALIZATION_STATUSES`, six-digit validation,
+  idempotent duplicate-submit response, `otpAcceptedAt`, and the packaged
+  renderer's optimistic `submitting_otp` path. The local ARM zip SHA-256 is
+  `0dbda1ab09a220ec7a02c3a27aad287cfbe39b6ca1d7d35071fc6b3d2449e8d3`.
+  A source-dev live Generator smoke opened `/generator`, started a redacted
+  supplied alias through the browser fallback, reached OpenRouter's current
+  manual-verification boundary without the old generic timeout, rendered the
+  active-job controls cleanly, then cancelled through
+  `DELETE /api/generator/:taskId`; the supervisor reason was logged and the
+  isolated Playwright profile was removed. The non-secret source-dev Generator
+  proof is
+  `docs/evidence/hydra-v157-generator-dev-initial.png` (`sha256
+  a41c33c6c1eb766df52333ecddf09ad93bdbe3fb3e54b2595c465bf671bd95de`).
+  Computer Use could not attach to the transient Chrome-for-Testing signup
+  window on this macOS run (`timeoutReached`, then `cgWindowNotFound` after
+  native activation), so the browser proof rests on server logs, renderer
+  state, process/profile cleanup, and bounded cancellation evidence. Upstream
+  human verification and final OTP ownership remain operator-owned.

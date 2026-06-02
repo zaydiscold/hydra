@@ -48,6 +48,9 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /activeTaskRef\.current = startedTaskId/);
   assert.match(source, /api\.cleanupGeneratorJob\(lateTaskId, 'client_disconnect', \{ keepalive: true \}\)/);
   assert.match(source, /if \(otp\.length !== 6 \|\| !taskId \|\| verifyInFlightRef\.current\) return/);
+  assert.match(source, /const previousStatus = status/);
+  assert.match(source, /setStatus\('submitting_otp'\);[\s\S]*api\.submitGeneratorOtpQuiet\(renderedTaskId, otp\)/);
+  assert.match(source, /catch \(err\) \{[\s\S]*setStatus\(previousStatus\)/);
   assert.match(source, /api\.submitGeneratorOtpQuiet\(renderedTaskId, otp\)/);
   assert.match(api, /submitGeneratorOtpQuiet = \(taskId, otp\) =>\s*request\(`\/generator\/verify\/\$\{taskId\}`, \{ method: 'POST', body: \{ otp \}, trackLoading: false \}\)/);
   assert.match(source, /if \(lifecycleClosedRef\.current \|\| activeTaskRef\.current !== renderedTaskId\) return/);
@@ -744,7 +747,13 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /waitForOtpChallenge\(task, page\)/);
   assert.match(source, /focusSignupBrowser\(taskId, ownerUserId\)/);
   assert.match(routes, /router\.post\('\/:taskId\/focus'/);
+  assert.match(routes, /router\.post\('\/verify\/:taskId', requireUnlocked, BaseController\.catchAsync/);
+  assert.doesNotMatch(routes, /router\.post\('\/verify\/:taskId', requireUnlocked, highCostRouteLimiter/);
   assert.match(controller, /focusBrowser\(req, res\)/);
+  assert.match(controller, /otp: z\.string\(\)\.regex\(\/\^\\d\{6\}\$\/, 'OTP must be a 6-digit code'\)/);
+  assert.match(source, /const OTP_FINALIZATION_STATUSES = new Set/);
+  assert.match(source, /if \(OTP_FINALIZATION_STATUSES\.has\(task\.status\)\) \{[\s\S]*OTP is already being processed/);
+  assert.match(source, /status: 'submitting_otp'[\s\S]*otpAcceptedAt: new Date\(\)\.toISOString\(\)/);
   assert.match(source, /deriveSignupNames\(email\)/);
   assert.match(source, /const signal = task\.abortController\.signal/);
   assert.match(source, /throwIfAborted\(signal\)/);

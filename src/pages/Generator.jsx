@@ -9,6 +9,18 @@ import {
 } from '../components/Icons';
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'expired']);
+const OTP_FINALIZATION_STATUSES = new Set([
+  'submitting_otp',
+  'verifying_otp',
+  'waiting_for_completion',
+  'setting_password',
+  'extracting_session',
+  'activating_session',
+  'activating_long_lived_session',
+  'saving_profile',
+  'saving_local_profile',
+  'provisioning_key',
+]);
 const HEARTBEAT_INTERVAL_MS = 10 * 1000;
 const POLL_INTERVAL_MS = 2 * 1000;
 const BROWSER_BACKED_STATUSES = new Set([
@@ -78,6 +90,7 @@ function checkpointLabel(checkpoint) {
 }
 
 function isOtpReady(status, checkpoint) {
+  if (OTP_FINALIZATION_STATUSES.has(status) || isTerminalStatus(status)) return false;
   return status === 'awaiting_otp' || checkpoint?.state === 'otp';
 }
 
@@ -294,8 +307,10 @@ export default function Generator({ addToast }) {
   const handleVerify = async () => {
     if (otp.length !== 6 || !taskId || verifyInFlightRef.current) return;
     const renderedTaskId = taskId;
+    const previousStatus = status;
     verifyInFlightRef.current = true;
     setVerifying(true);
+    setStatus('submitting_otp');
     try {
       setError(null);
       await api.submitGeneratorOtpQuiet(renderedTaskId, otp);
@@ -303,6 +318,7 @@ export default function Generator({ addToast }) {
       setStatus('submitting_otp');
     } catch (err) {
       if (lifecycleClosedRef.current) return;
+      setStatus(previousStatus);
       setError(err.message);
       addToast?.(err.message, 'error');
     } finally {

@@ -683,6 +683,8 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(generator, /generatorModeLabel\(jobMode\)/);
   assert.match(generator, /checkpointLabel\(checkpoint\)/);
   assert.match(generator, /function isOtpReady\(status, checkpoint\)/);
+  assert.match(generator, /const OTP_FINALIZATION_STATUSES = new Set/);
+  assert.match(generator, /if \(OTP_FINALIZATION_STATUSES\.has\(status\) \|\| isTerminalStatus\(status\)\) return false/);
   assert.match(generator, /const otpReady = isOtpReady\(status, checkpoint\)/);
   assert.match(generator, /Browser state: \{checkpointText\}/);
   assert.match(generator, /api\.focusGeneratorBrowserQuiet\(taskId\)/);

@@ -53,6 +53,18 @@ segmented one-digit code boxes, and current copy such as "we sent a code",
 browser opens at `1360x900` so OpenRouter's modal/buttons render in the desktop
 layout instead of cramped responsive states.
 
+Follow-up operator report on 2026-06-02 found a sixth local handoff issue:
+after the operator typed a six-digit OTP and pressed Enter, the local page could
+appear grey and stuck before the task visibly moved into the background. The
+root cause was local orchestration, not upstream OTP ownership: the verify route
+still used the high-cost route limiter, the renderer waited for the quiet POST
+before showing `submitting_otp`, stale `checkpoint.state=otp` could keep the
+OTP form visible during finalization, and duplicate Enter/click submits could
+race the same browser finalization. Hydra `1.5.7` removes the high-cost limiter
+from OTP submit, validates six-digit codes at the controller boundary, flips the
+UI into `submitting_otp` immediately, hides stale OTP controls during
+finalization, records `otpAcceptedAt`, and makes duplicate submits idempotent.
+
 ## How It Was Found
 
 - The reported error matched Playwright's 30-second wait shape:
@@ -106,6 +118,20 @@ layout instead of cramped responsive states.
   Computer Use timed out against the packaged app on this machine, and
   `osascript` System Events reported missing assistive-access permission, so
   the native desktop walkthrough remains an environment boundary.
+- `v1.5.7` focused verification reproduced the current Generator route from the
+  source dev app. The patched page rendered cleanly at `/generator`, a supplied
+  alias/password reached the isolated OpenRouter signup browser, and the task
+  moved to `manual_verification` with equal-width active-job controls instead
+  of the old generic `Timeout 30000ms exceeded` behavior. The smoke was bounded
+  and cancelled through `DELETE /api/generator/:taskId`; the log recorded the
+  supervisor reason and the isolated Playwright profile was removed.
+- `v1.5.7` regression checks:
+  - `node --check server/controllers/GeneratorController.js`
+  - `node --check server/routes/generator.js`
+  - `node --check server/services/account-generator.js`
+  - `npm run test:background-failure-visibility`
+  - `npm run test:ui-static`
+  - `npm run build`
 - `v1.5.3` focused verification:
   - `node --check server/services/account-generator.js`
   - `node --check server/controllers/GeneratorController.js`
@@ -180,6 +206,21 @@ server/services/account-generator.js
 - page.waitForFunction(..., undefined, { timeout: STARTUP_TIMEOUT_MS })
 - page.waitForFunction(..., undefined, { timeout: 15000 })
 - focusSignupBrowser(taskId, ownerUserId)
+- OTP_FINALIZATION_STATUSES
+- GENERATOR_OTP_INVALID
+- otpAcceptedAt
+
+server/controllers/GeneratorController.js
+- otp: z.string().regex(/^\d{6}$/, 'OTP must be a 6-digit code')
+
+server/routes/generator.js
+- router.post('/verify/:taskId', authenticateUser, ...)
+- Generator start remains highCostRouteLimiter-protected
+
+src/pages/Generator.jsx
+- OTP_FINALIZATION_STATUSES
+- setStatus('submitting_otp')
+- isOtpReady blocks finalization and terminal statuses
 ```
 
 No supplied signup password is recorded in this document. The verification
@@ -202,4 +243,5 @@ creation remain operator-owned.
    move to `awaiting_otp`.
 7. Enter the six-digit code in Hydra and press Enter or **Submit code**. The app
    should stay responsive while the browser task submits the code and finishes
-   session capture/provisioning.
+   session capture/provisioning. A duplicate Enter or click during finalization
+   should be treated as already processing, not as a second browser race.

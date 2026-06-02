@@ -191,6 +191,17 @@ reason, not Playwright's page-close text, and should return to the normal
 Hydra-owned Electron process tree with no spawned OpenRouter browser left
 behind.
 
+## v1.5.7 Generator OTP-Submit Checkpoint
+
+The `v1.5.7` Generator patch makes the final OTP handoff a responsive local
+operation. The packaged smoke for this lane should verify the same shape as the
+source-dev run: submit a six-digit OTP only after the isolated browser is on a
+real code-entry screen, confirm the renderer moves immediately to
+`submitting_otp`, confirm duplicate Enter/click submits report that the OTP is
+already processing, then watch background finalization or cancel the job through
+the private API. The verify route is intentionally not high-cost limited; the
+Generator start route remains high-cost limited.
+
 ## v1.1.4 Screenshot Checkpoint
 
 The exact public `v1.1.4` arm64 package now has a privacy-checked screenshot

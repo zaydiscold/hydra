@@ -3,8 +3,9 @@
 This directory contains the public-safe packaged Electron screenshot checkpoint
 for Hydra. The full representative suite came from exact-public `v1.1.4`; the
 exact-public `v1.3.0`, `v1.4.0`, `v1.4.7`, current `v1.5.1`, and local
-`v1.5.6` canonical apps add Dashboard privacy proofs. The `v1.4.7` package also
-adds a native splash capture.
+`v1.5.6` canonical apps add Dashboard privacy proofs. The `v1.5.7` dev smoke
+adds a non-secret Generator page proof for the OTP-submit rescue. The `v1.4.7`
+package also adds a native splash capture.
 
 ## Capture Rules
 
@@ -42,7 +43,9 @@ for email markers, `sk-` key prefixes, credential assignments, and uninterrupted
 token-shaped strings. It found zero hits. The `v1.3.0`, `v1.4.0`, `v1.4.7`,
 `v1.5.1`, and `v1.5.6` Dashboard proofs were additionally scanned with
 Tesseract OCR for credential-shaped and endpoint-shaped patterns after
-pixelation. ImageMagick reported nonblank color variance for every PNG.
+pixelation. The `v1.5.7` Generator proof was captured before any account email
+or OTP value was entered. ImageMagick reported nonblank color variance for
+every PNG.
 
 Computer Use still timed out against Hydra after `120s`, so final human visual
 review remains a manual release boundary.
@@ -66,3 +69,4 @@ review remains a manual release boundary.
 | `hydra-v147-packaged-dashboard-privacy-redacted.png` | Native exact-public Dashboard window, content pixelated below titlebar before check-in | `c655726b575915159731242ebed34df96407f38b4cd6fb1a6c8e50750ed229e2` |
 | `hydra-v151-packaged-dashboard-privacy-redacted.png` | Native current `v1.5.1` Dashboard window, content pixelated below titlebar before check-in | `bff154ff91ad5fba41f90b5c138987098fac6671043d160ec72bc3613e9f25af` |
 | `hydra-v156-packaged-dashboard-self-capture-redacted.png` | Packaged `v1.5.6` Dashboard renderer self-capture via LaunchServices flag, content pixelated before check-in | `c0c4d7e415417bf00b1ff06ae66b9d35523b9f35e66754171ba3507d20c9bdd9` |
+| `hydra-v157-generator-dev-initial.png` | Source dev `/generator` page before account data entry, captured during the OTP-submit rescue smoke | `a41c33c6c1eb766df52333ecddf09ad93bdbe3fb3e54b2595c465bf671bd95de` |

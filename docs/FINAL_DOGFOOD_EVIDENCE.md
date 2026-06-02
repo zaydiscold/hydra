@@ -2426,3 +2426,24 @@ This evidence file is not release-complete by itself. The release remains not co
   executables and proved cleanup. GitHub release `v1.5.6` is public with macOS
   arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux
   AppImage, `latest-mac.yml`, `latest.yml`, and `latest-linux.yml`.
+- `1.5.7` Generator OTP-submit rescue: the local OTP verify endpoint is no
+  longer high-cost limited, six-digit OTP validation is explicit, the renderer
+  enters `submitting_otp` optimistically before the quiet request returns, stale
+  OTP checkpoints are hidden during finalization, duplicate submits are
+  idempotent, and `otpAcceptedAt` is recorded at server acceptance. Focused
+  checks passed `node --check` for the touched Generator server modules,
+  `npm run test:background-failure-visibility` (`34/34`),
+  `npm run test:ui-static` (`48/48`), `npm run lint`, `npm run build`,
+  `npm run gate` (`12/12`), full `npm test`, and
+  `node bin/hydra.mjs audit --json`. The local ARM package passed
+  `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  codesign, bundle version `1.5.7`, and embedded-source inspection for both
+  server and renderer OTP-submit changes. The local ARM zip SHA-256 is
+  `0dbda1ab09a220ec7a02c3a27aad287cfbe39b6ca1d7d35071fc6b3d2449e8d3`.
+  A source-dev live Generator smoke reached OpenRouter's current
+  manual-verification boundary for a redacted supplied alias, rendered
+  active-job controls correctly, then cancelled and removed the isolated
+  Playwright profile. The source-dev page proof is
+  `docs/evidence/hydra-v157-generator-dev-initial.png`
+  (`sha256 a41c33c6c1eb766df52333ecddf09ad93bdbe3fb3e54b2595c465bf671bd95de`).

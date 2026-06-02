@@ -10,7 +10,7 @@ const startSignupSchema = z.object({
 });
 
 const verifyOtpSchema = z.object({
-  otp: z.string().min(1, 'otp is required'),
+  otp: z.string().regex(/^\d{6}$/, 'OTP must be a 6-digit code'),
 });
 
 class GeneratorController extends BaseController {
