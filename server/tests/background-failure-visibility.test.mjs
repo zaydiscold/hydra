@@ -597,12 +597,16 @@ test('bulk import avoids local self-rate-limit and handles duplicate replacement
   assert.match(validator, /autoProvision: z\.boolean\(\)\.optional\(\)/);
   assert.match(validator, /keyName: z\.string\(\)\.trim\(\)\.min\(1\)\.max\(120\)\.optional\(\)/);
   assert.match(store, /export async function getAccounts\(userId, \{ includePending = false \} = \{\}\)/);
+  assert.match(store, /export async function getAllAccountsWithKeys\(userId, \{ includePending = false \} = \{\}\)/);
   assert.match(store, /export function deriveAccountAliasFromEmail\(email, suffix = 0\)/);
   assert.match(store, /export function isLegacyPlaceholderAlias\(alias\)/);
   assert.match(store, /await backfillLegacyPlaceholderAliases\(userId, accounts\)/);
   assert.match(store, /export async function replaceAccountWithOtpStub\(userId, id, email, \{ alias \} = \{\}\)/);
   assert.match(store, /invalidateSessionStatusCache\(id\)/);
   assert.match(controller, /store\.getAccounts\(req\.user\.id, \{ includePending: true \}\)/);
+  assert.match(controller, /const includePending = req\.query\.includePending === 'true'/);
+  assert.match(controller, /function accountNeedsOtpReuse\(account\)/);
+  assert.match(controller, /if \(accountNeedsOtpReuse\(existing\)\) \{[\s\S]*reused: true/);
   assert.match(controller, /store\.replaceAccountWithOtpStub\(\s*req\.user\.id,\s*existing\.id,\s*normalizedEmail,\s*\{ alias: replacementAlias \}/);
   assert.match(controller, /async magicLinkCapability/);
   assert.match(controller, /MAGIC_LINK_CALLBACK_UNAVAILABLE/);

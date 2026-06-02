@@ -575,7 +575,7 @@ export function useBulkAuth(addToast) {
       setOtpQueue(nextQueue);
       setOtpCurrentIdx(0);
       setOtpStubSummary({ created, reused, replaced, duplicateEmail: dup, failed, inputLines: emails.length, resultRows: results.length });
-      appendOtpLog(`Queue built in pasted order: ${created} new, ${reused} reused, ${replaced} replaced, ${dup} dup-skip, ${failed} errors`);
+      appendOtpLog(`Queue built in pasted order: ${created} new, ${reused} re-auth, ${replaced} replaced, ${dup} saved-active-skip, ${failed} errors`);
       if (usedEmails.length) setPasteText((prev) => remainingEmailTextAfterUse(prev, usedEmails));
       if (nextQueue.length) addToast?.(`Created ${nextQueue.length} OTP row(s)`, 'success');
     } catch (err) {
@@ -698,7 +698,7 @@ export function useBulkAuth(addToast) {
     setOtpSignInId('');
     setOtpCode('');
     try {
-      const res = await api.getAccounts();
+      const res = await api.getAccounts(lifecycleAbortRef.current?.signal, { includePending: true });
       const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : null;
       if (!list) {
         const err = new Error('Saved-account merge failed: malformed accounts response.');

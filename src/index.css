@@ -1519,6 +1519,24 @@ select:-webkit-autofill {
   gap: 10px;
 }
 
+.account-card-pending {
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, var(--status-warning) 45%, transparent);
+  color: var(--status-warning);
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 800;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.account-card-pending .btn {
+  min-height: 28px;
+  padding: 4px 8px;
+}
+
 .dashboard-mobile-only {
   display: none;
 }

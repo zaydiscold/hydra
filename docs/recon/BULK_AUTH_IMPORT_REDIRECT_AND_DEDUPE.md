@@ -274,3 +274,45 @@ decayed from `270.2%` at `+5s` to `60.5%` at `+15s`, then `0.0%` at both
 `duplicateShatterSkips=0`, `timers=0`, `rafActive=false`, `bodyCount=0`,
 `matterCleared=true`, `portalCollisionDisabled=true`, and
 `portalLiftApplied=true`.
+
+## Pending Vault Visibility And Recovery
+
+Date: 2026-06-02
+
+A live packaged-vault inspection explained why Bulk OTP could report saved
+duplicates while the Dashboard showed fewer cards:
+
+```text
+saved account rows: 14
+dashboard-visible rows before fix: 9
+pendingVerification OTP stubs: 5
+```
+
+Those five rows were not lost. They were encrypted local OTP stubs created by
+earlier imports and intentionally excluded from operational account reads
+until verification, but the dashboard had no recovery representation for
+them. The paste path could see them during dedupe and returned `Dup skip`,
+which left no actionable queue.
+
+Hydra `v1.4.9` now:
+
+- includes pending rows in the dashboard as lightweight local-only
+  `OTP SIGN-IN PENDING` cards without upstream balance requests for keyless
+  stubs;
+- routes pending cards back to Bulk OTP;
+- reuses pasted saved rows that still need OTP work;
+- lets the explicit recovery button request pending rows;
+- reserves `Saved active skip` for saved accounts that do not need sign-in;
+- keeps Force replace as the explicit destructive-auth reset choice.
+
+Focused verification passed API integration `11/11`, UI/background contracts
+`80/80`, lint, syntax, and diff hygiene.
+
+The final local `v1.4.9` ARM bundle passed packaged-resource smoke, strict deep
+codesign, and plist version checks. Its generated zip SHA-256 before reversible
+metadata cleanup was
+`472f1e34ec00d87d12653a075579d7068f595049df9fa5260fd1cf1adce78b66`.
+LaunchServices reopened the canonical bundle, finite splash teardown completed,
+and native sampling saw the expected four-process tree with zero stale
+profiles. The final exit was a recorded tray quit with `exitCode=0`, not a
+crash.

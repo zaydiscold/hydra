@@ -1669,6 +1669,19 @@ closed-app CLI commands, tests, and repo-local documentation.
   compose service or `hydra_default` network and stopped Docker Desktop.
   Public checkpoint CI run `26794501452` and Docker workflow run
   `26794501428` passed; Auto-version run `26794501427` correctly skipped.
+- `v1.4.9` closes the pending-account visibility gap exposed by Bulk OTP:
+  live vault inspection measured `14` saved rows, `9` dashboard-visible rows,
+  and `5` encrypted pending OTP stubs hidden by the prior dashboard read.
+  Pending rows now render as local-only `OTP SIGN-IN PENDING` cards and route
+  back to Bulk OTP. Pasted saved rows that still need sign-in re-enter the
+  sequential queue; only live saved rows report `Saved active skip`. The
+  explicit recovery button includes pending rows. Focused verification passed
+  API integration `11/11`, UI/background contracts `80/80`, lint, syntax, and
+  diff hygiene. The final local ARM package passed resource smoke, strict deep
+  codesign, and plist checks at `1.4.9`. LaunchServices reopened the canonical
+  bundle, finite splash teardown completed, the native runtime exposed the
+  expected four-process tree with zero stale profiles, and the final exit was
+  a recorded clean tray quit rather than a crash.
 
 ---
 

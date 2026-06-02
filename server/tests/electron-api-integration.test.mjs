@@ -247,7 +247,7 @@ test('magic-link cleanup timer disarms after the last pending link is forgotten 
   });
 });
 
-test('bulk OTP stubs skip duplicate saved emails unless forceReplace is explicit', async () => {
+test('bulk OTP stubs reuse saved emails that need sign-in and expose pending rows on the dashboard', async () => {
   const token = await getAuthToken();
   const headers = {
     'content-type': 'application/json',
@@ -265,7 +265,7 @@ test('bulk OTP stubs skip duplicate saved emails unless forceReplace is explicit
   });
   assert.equal(created.res.status, 201);
 
-  const skipped = await getJson('/api/accounts/bulk-otp-stubs', {
+  const reused = await getJson('/api/accounts/bulk-otp-stubs', {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -273,12 +273,34 @@ test('bulk OTP stubs skip duplicate saved emails unless forceReplace is explicit
       forceReplace: false,
     }),
   });
-  assert.equal(skipped.res.status, 201);
-  assert.equal(skipped.json.success, true);
-  const skippedRows = skipped.json.data.results;
-  assert.equal(skippedRows.length, 2);
-  assert.equal(skippedRows.find((row) => row.email === 'duplicate@example.test')?.skipped, 'duplicate_email');
-  assert.equal(skippedRows.find((row) => row.email === 'fresh@example.test')?.success, true);
+  assert.equal(reused.res.status, 201);
+  assert.equal(reused.json.success, true);
+  const reusedRows = reused.json.data.results;
+  assert.equal(reusedRows.length, 2);
+  assert.equal(reusedRows.find((row) => row.email === 'duplicate@example.test')?.reused, true);
+  assert.equal(reusedRows.find((row) => row.email === 'fresh@example.test')?.success, true);
+
+  const pendingAccounts = await getJson('/api/accounts', { headers });
+  assert.equal(
+    pendingAccounts.json.data.some((account) => account.email === 'fresh@example.test'),
+    false,
+    'unfinished OTP stubs stay out of generic account reads',
+  );
+  const pendingRecoveryAccounts = await getJson('/api/accounts?includePending=true', { headers });
+  assert.equal(
+    pendingRecoveryAccounts.json.data.some((account) => account.email === 'fresh@example.test'),
+    true,
+    'OTP recovery reads include unfinished stubs explicitly',
+  );
+
+  const dashboard = await getJson('/api/dashboard', { headers });
+  assert.equal(dashboard.res.status, 200);
+  assert.equal(dashboard.json.success, true);
+  const pendingDashboardRow = dashboard.json.data.accounts.find((account) => account.email === 'fresh@example.test');
+  assert.equal(pendingDashboardRow?.pendingVerification, true);
+  assert.equal(pendingDashboardRow?.status, 'pending');
+  assert.deepEqual(pendingDashboardRow?.credits, { total: 0, used: 0, remaining: 0 });
+  assert.deepEqual(pendingDashboardRow?.keys, { total: 0, active: 0, disabled: 0, list: [] });
 
   const replaced = await getJson('/api/accounts/bulk-otp-stubs', {
     method: 'POST',

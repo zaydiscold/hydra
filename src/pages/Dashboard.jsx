@@ -54,6 +54,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
     addToast(msg || 'Account added', 'success');
     fetchDashboard(true);
   }, [addToast, fetchDashboard]);
+  const handleResumeBulkAuth = useCallback(() => navigate('/bulk-auth'), [navigate]);
 
   const dashboardView = useMemo(() => {
     const totals = data?.totals || {};
@@ -202,6 +203,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
                   liveStatuses={liveStatuses}
                   actionSessionTruth={actionSessionTruth}
                   cooldownMap={cooldownMap}
+                  onResumeAuth={handleResumeBulkAuth}
                   compact
                 />
               ))}
@@ -371,7 +373,9 @@ function getDashboardActivity(accounts, liveStatuses = {}, cooldownMap = {}) {
     const syncTimestamp = getSyncTimestamp(account);
     const syncLabel = syncTimestamp == null ? 'no sync' : formatRelativeSyncLabel(syncTimestamp);
 
-    if (account.status === 'error' || account.sessionDecryptFailed) {
+    if (account.pendingVerification) {
+      events.push({ tone: 'warning', title: 'OTP sign-in pending', detail: alias, time: 'queue' });
+    } else if (account.status === 'error' || account.sessionDecryptFailed) {
       events.push({ tone: 'error', title: 'account needs repair', detail: alias, time: syncLabel });
     } else if (!account.hasManagementKey) {
       events.push({ tone: 'error', title: 'control key missing', detail: alias, time: syncLabel });

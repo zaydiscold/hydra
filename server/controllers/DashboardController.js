@@ -53,7 +53,7 @@ class DashboardController extends BaseController {
   async getDashboard(req, res) {
     const requestAbort = bindRequestAbort(req, res, 'dashboard request');
     try {
-      let accounts = await store.getAllAccountsWithKeys(req.user.id);
+      let accounts = await store.getAllAccountsWithKeys(req.user.id, { includePending: true });
       
       if (accounts.length === 0) {
         return this.success(res, {
@@ -119,7 +119,7 @@ class DashboardController extends BaseController {
       );
       
       if (refreshedSessions) {
-        accounts = await store.getAllAccountsWithKeys(req.user.id);
+        accounts = await store.getAllAccountsWithKeys(req.user.id, { includePending: true });
         rebuildHydratedAccountViews();
       }
 
@@ -133,6 +133,24 @@ class DashboardController extends BaseController {
           limit(async () => {
             throwIfAborted(requestAbort.signal);
             const meta = metaById.get(account.id) || {};
+
+            if (meta.pendingVerification && !account.managementKey) {
+              return {
+                id: account.id,
+                alias: account.alias,
+                status: 'pending',
+                email: meta.email,
+                authMethod: meta.authMethod,
+                passwordOnFile: meta.passwordOnFile,
+                sessionStatus: meta.sessionStatus,
+                sessionDecryptFailed: meta.sessionDecryptFailed,
+                hasManagementKey: meta.hasManagementKey,
+                hasCredentials: meta.hasCredentials,
+                pendingVerification: true,
+                credits: { total: 0, used: 0, remaining: 0 },
+                keys: { total: 0, active: 0, disabled: 0, list: [] },
+              };
+            }
             
             // Check cache first (unless account has error status)
             const cached = getCachedSnapshot(account.id);
@@ -149,6 +167,7 @@ class DashboardController extends BaseController {
                 sessionDecryptFailed: meta.sessionDecryptFailed,
                 hasManagementKey: meta.hasManagementKey,
                 hasCredentials: meta.hasCredentials,
+                pendingVerification: meta.pendingVerification,
                 _cached: true, // Flag for debugging
               };
             }
@@ -172,6 +191,7 @@ class DashboardController extends BaseController {
                 sessionDecryptFailed: meta.sessionDecryptFailed,
                 hasManagementKey: meta.hasManagementKey,
                 hasCredentials: meta.hasCredentials,
+                pendingVerification: meta.pendingVerification,
                 ...snapshot,
               };
               
@@ -200,6 +220,7 @@ class DashboardController extends BaseController {
                 sessionDecryptFailed: meta.sessionDecryptFailed,
                 hasManagementKey: meta.hasManagementKey,
                 hasCredentials: meta.hasCredentials,
+                pendingVerification: meta.pendingVerification,
                 credits: { total: 0, used: 0, remaining: 0 },
                 keys: { total: 0, active: 0, disabled: 0, list: [] },
               };

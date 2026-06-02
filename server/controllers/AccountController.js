@@ -60,6 +60,11 @@ function isAuthoritativeSessionFailure(errLike) {
   );
 }
 
+function accountNeedsOtpReuse(account) {
+  return !!account?.pendingVerification
+    || ['none', 'expired', 'error'].includes(account?.sessionStatus);
+}
+
 function magicLinkCallbackUnavailableError() {
   const err = new Error(
     'Email Link cannot be self-enabled for OpenRouter accounts. OpenRouter owns the Clerk tenant and must allowlist a public HTTPS relay first. Hydra cannot safely register a localhost or arbitrary tunnel callback. Use OTP for the supported direct HTTPS bulk import flow.',
@@ -130,7 +135,8 @@ function startOtpAutoProvisionTask(userId, accountId, keyName = 'Hydra Auto Key'
 
 export class AccountController extends BaseController {
   async getAccounts(req, res) {
-    const accounts = await store.getAccounts(req.user.id);
+    const includePending = req.query.includePending === 'true';
+    const accounts = await store.getAccounts(req.user.id, { includePending });
     return this.success(res, accounts);
   }
 
@@ -366,6 +372,21 @@ export class AccountController extends BaseController {
                       success: true,
                       replaced: true,
                       account: { id: replaced.id, alias: replaced.alias, email, authMethod: replaced.authMethod || 'otp' },
+                    });
+                    created = true;
+                    break;
+                  }
+                  if (accountNeedsOtpReuse(existing)) {
+                    results.push({
+                      email,
+                      success: true,
+                      reused: true,
+                      account: {
+                        id: existing.id,
+                        alias: existing.alias,
+                        email,
+                        authMethod: existing.authMethod || 'otp',
+                      },
                     });
                     created = true;
                     break;

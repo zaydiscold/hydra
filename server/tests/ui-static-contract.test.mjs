@@ -530,6 +530,12 @@ test('dashboard command center uses live fleet health data and compact account c
   assert.match(dashboard, /<ActivityPanel events=\{activity\} \/>/);
   assert.match(dashboard, /className="accounts-grid dashboard-mini-grid proximity-field"/);
   assert.match(dashboard, /<AccountCard[\s\S]*compact\s*\/>/);
+  assert.match(dashboard, /onResumeAuth=\{handleResumeBulkAuth\}/);
+  assert.match(dashboard, /account\.pendingVerification[\s\S]*title: 'OTP sign-in pending'/);
+  assert.match(accountCard, /const pendingVerification = !!account\.pendingVerification/);
+  assert.match(accountCard, /className="account-card-pending"/);
+  assert.match(accountCard, />\s*Resume\s*<\/button>/);
+  assert.match(accountCard, /if \(account\.pendingVerification\) \{[\s\S]*onResumeAuth\?\.\(\)/);
   assert.match(dashboard, /className="dashboard-view-toggle"/);
   assert.match(dashboard, /<span className="active">GRID<\/span>/);
   assert.match(dashboard, /<span>LIST<\/span>/);

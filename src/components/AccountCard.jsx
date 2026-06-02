@@ -8,7 +8,7 @@ import { canProvisionWithSession, isSessionProbePending } from '../utils/account
 function areAccountCardPropsEqual(prevProps, nextProps) {
   if (prevProps.account !== nextProps.account) return false;
   if (prevProps.index !== nextProps.index || prevProps.compact !== nextProps.compact) return false;
-  if (prevProps.onSelect !== nextProps.onSelect || prevProps.onProvision !== nextProps.onProvision) return false;
+  if (prevProps.onSelect !== nextProps.onSelect || prevProps.onProvision !== nextProps.onProvision || prevProps.onResumeAuth !== nextProps.onResumeAuth) return false;
 
   const accountId = prevProps.account.id;
   if (prevProps.provisioningIds?.has(accountId) !== nextProps.provisioningIds?.has(accountId)) return false;
@@ -31,6 +31,7 @@ const AccountCard = memo(function AccountCard({
   liveStatuses,
   actionSessionTruth,
   cooldownMap = {},
+  onResumeAuth,
   compact = false,
 }) {
   const [isVisible, setIsVisible] = useState(false);
@@ -51,7 +52,13 @@ const AccountCard = memo(function AccountCard({
     return () => observer.disconnect();
   }, []);
 
-  const handleClick = useCallback(() => onSelect(account.id), [onSelect, account.id]);
+  const handleClick = useCallback(() => {
+    if (account.pendingVerification) {
+      onResumeAuth?.();
+      return;
+    }
+    onSelect(account.id);
+  }, [account.id, account.pendingVerification, onResumeAuth, onSelect]);
   const handleProvision = useCallback((e) => {
     e.stopPropagation();
     onProvision(account.id);
@@ -59,6 +66,7 @@ const AccountCard = memo(function AccountCard({
 
   const sessionStatus = (liveStatuses && liveStatuses[account.id]) || account.sessionStatus || 'none';
   const provisionTruthStatus = (actionSessionTruth && actionSessionTruth[account.id]) || 'unknown';
+  const pendingVerification = !!account.pendingVerification;
 
   const balStatus = account.status === 'error' ? 'error' : getBalanceStatus(account.credits);
   const pct = account.credits?.total > 0
@@ -75,7 +83,7 @@ const AccountCard = memo(function AccountCard({
   // Unified health: drives both the status dot and the card border.
   // healthy = session active + mgmt key | partial = mgmt key, no session | dead = no mgmt key
   const hasErrorState = account.status === 'error' || account.sessionDecryptFailed;
-  const health = getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
+  const health = pendingVerification ? 'partial' : getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
   const { dot: dotColor, border: borderColor, glow: dotGlow } = CARD_HEALTH_COLORS[health];
 
   // MGMT KEY badge: success = has key, neutral = no key
@@ -127,7 +135,7 @@ const AccountCard = memo(function AccountCard({
       <div className="account-card-balance">
         <div className="account-card-balance-label">Remaining Balance</div>
         <div className={`account-card-balance-value mono ${balStatus === 'low' ? 'low' : ''} ${balStatus === 'depleted' ? 'depleted' : ''}`}>
-          {account.status === 'error' ? '—' : formatCurrency(account.credits?.remaining)}
+          {account.status === 'error' || pendingVerification ? '—' : formatCurrency(account.credits?.remaining)}
         </div>
       </div>
 
@@ -207,6 +215,22 @@ const AccountCard = memo(function AccountCard({
           </div>
         )}
       </div>
+
+      {pendingVerification && (
+        <div className="account-card-pending">
+          <span>OTP SIGN-IN PENDING</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              onResumeAuth?.();
+            }}
+          >
+            Resume
+          </button>
+        </div>
+      )}
 
       {account.status === 'error' && account.error && (
         <div style={{ marginTop: 6, fontSize: '0.68rem', color: 'var(--status-error)', fontFamily: 'var(--font-mono)', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={account.error}>

@@ -516,7 +516,7 @@ export async function getAccountWithKey(userId, id) {
   };
 }
 
-export async function getAllAccountsWithKeys(userId) {
+export async function getAllAccountsWithKeys(userId, { includePending = false } = {}) {
   const accounts = await prisma.account.findMany({ where: { userId } });
   await backfillLegacyPlaceholderAliases(userId, accounts);
 
@@ -544,7 +544,8 @@ export async function getAllAccountsWithKeys(userId) {
     }
   }));
 
-  return hydrated.flat().filter((a) => !a.pendingVerification);
+  const shaped = hydrated.flat();
+  return includePending ? shaped : shaped.filter((a) => !a.pendingVerification);
 }
 
 export async function addAccount(userId, alias, managementKey) {

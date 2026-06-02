@@ -298,7 +298,8 @@ export const getDashboard = (signal) => request('/dashboard', { signal });
 export const getDashboardQuiet = (signal) => request('/dashboard', { signal, trackLoading: false });
 
 // Accounts
-export const getAccounts = (signal) => request('/accounts', { signal });
+export const getAccounts = (signal, { includePending = false } = {}) =>
+  request(includePending ? '/accounts?includePending=true' : '/accounts', { signal });
 export const addAccount = (alias, managementKey) =>
   request('/accounts', { method: 'POST', body: { alias, managementKey } });
 export const addAccountWithCredentials = (alias, email, password, authMethod) =>

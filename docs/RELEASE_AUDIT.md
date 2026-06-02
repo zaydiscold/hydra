@@ -2842,3 +2842,33 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   checkpoint verification also passed: CI run `26794501452` closed green,
   Docker workflow run `26794501428` passed runtime smoke plus registry image
   push, and Auto-version run `26794501427` correctly skipped.
+- 2026-06-02 `v1.4.9` pending-account visibility and Bulk OTP recovery patch:
+  live packaged-vault inspection found `14` saved account rows while the
+  dashboard rendered only `9`; the other `5` were valid encrypted
+  `pendingVerification` OTP stubs hidden by the old dashboard read. Bulk OTP
+  dedupe could see those rows, but returned `Dup skip` instead of placing
+  sign-in-needed rows back into the sequential queue. The dashboard now
+  includes pending rows as lightweight local-only cards, labels them
+  `OTP SIGN-IN PENDING`, and routes them back to Bulk OTP without issuing
+  upstream balance requests for keyless stubs. Bulk import reuses saved rows
+  that still need sign-in, preserves Force replace for explicit reset, and
+  reports live saved duplicates as `Saved active skip`. The recovery button
+  explicitly requests pending rows. Focused verification passed API
+  integration `11/11`, UI/background contracts `80/80`, lint, syntax, and
+  diff hygiene. Hosted package matrix run `26794714439` also passed Linux x64,
+  macOS ARM, and macOS Intel smoke against checkpoint `0701ca0`; the Intel lane
+  built and smoked `Hydra-1.4.8-mac-x64.zip`. A follow-up local pulse sample
+  under
+  `/private/tmp/hydra-v148-http-bootstrap-post-matrix-pulse-20260602T024111Z`
+  retained four owned processes and zero profiles across `13` samples; CPU
+  ranged `0.0-0.5%`, averaged `0.069%`, and ended at `0.0%`.
+  The final local ARM package passed renderer build, packaged-resource smoke,
+  strict deep codesign, and plist version checks at `1.4.9`; its generated zip
+  SHA-256 before reversible metadata cleanup was
+  `472f1e34ec00d87d12653a075579d7068f595049df9fa5260fd1cf1adce78b66`.
+  LaunchServices evidence under
+  `/private/tmp/hydra-v149-final-launch-20260602T055722Z` recorded the expected
+  four-process tree and zero stale profiles after finite splash teardown. The
+  final process exit was intentional, not a crash: Electron logged
+  `lifecycle:tray-quit-click` followed by `exitCode=0`, and macOS produced no
+  Hydra diagnostic report.

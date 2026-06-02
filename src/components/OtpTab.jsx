@@ -181,7 +181,7 @@ export default function OtpTab({
           New <strong>{stubSummary.created}</strong>
           {stubSummary.reused > 0 && <> · Re-auth <strong>{stubSummary.reused}</strong></>}
           {stubSummary.replaced > 0 && <> · Replaced <strong>{stubSummary.replaced}</strong></>}
-          {stubSummary.duplicateEmail > 0 && <> · Dup skip <strong>{stubSummary.duplicateEmail}</strong></>}
+          {stubSummary.duplicateEmail > 0 && <> · Saved active skip <strong>{stubSummary.duplicateEmail}</strong></>}
           {stubSummary.failed > 0 && <> · Errors <strong>{stubSummary.failed}</strong></>}
           <span style={{ color: 'var(--text-tertiary)', marginLeft: 8 }}>({stubSummary.inputLines} unique emails parsed; queue keeps pasted order after dedup)</span>
         </div>
