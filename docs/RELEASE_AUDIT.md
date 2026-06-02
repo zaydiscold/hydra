@@ -33,6 +33,150 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Splash/browser/router/renderer performance and efficiency pass | Current local performance pass makes splash graphics finite and throttled, keeps the front splash at 16s with a bounded 72-word unique irregular shower and a staged 3s accelerating portal orbit, one-shot guards parent shattering, removes the ceiling collider that overlapped fresh top-edge spawns, disables collision response only after portal entry, strengthens real/fallback tilt lean through gravity plus spawn/velocity bias, stops Matter/RAF/timers/listeners on unload or after the visual window, removes Hydra-owned Playwright temp profile dirs after browser automation, stops request-log flush wakeups when the queue is empty, converts renderer health/dashboard/vault/traffic/generator polling to non-overlapping one-shot timers, collapses bulk magic-link polling to one shared guarded poller, exposes `window.__HYDRA_RENDERER_DIAGNOSTICS__` for Hydra-owned timers/intervals/RAFs/Anime.js effects, and adds `hydra doctor` performance diagnostics for stale Hydra Playwright profiles plus Hydra-owned process CPU/RAM snapshots where the OS permits `ps`. `hydra doctor --clean-stale-profiles` moves stale Hydra-owned profile dirs to a timestamped temp backup and reports `deleted: 0`; `hydra doctor` now separates unrelated browser tooling into `otherBrowserToolProcesses` for fan-pressure context. | Source verified; local macOS arm64 runtime sampled; full GUI/live dogfood still deferred |
 | Auto-version release dispatch | PR #19 merged as master 0b49f5a with `[skip-bump]`; Auto-version run 26238251024 skipped as intended, CI run 26238251136 passed, Docker run 26238251146 passed, and the workflow now dispatches `release.yml` after auto-version tags so future versions do not require manual rescue. The workflow now also supports deliberate `[bump:minor]` and `[bump:major]` release markers instead of forcing every shipped tranche through patch-only `1.0.x` bumps. | Source verified |
 
+## Current Continuous Profile Pass - 2026-06-02, `v1.5.5`
+
+Fresh packaged-app evidence was collected from the current local macOS ARM
+package at `release/mac-arm64/Hydra.app` after the public `v1.5.5` release.
+The run started from a clean LaunchServices quit state and did not use browser
+captures or a Vite preview.
+
+Evidence directory:
+`/private/tmp/hydra-v155-continuous-profile-20260602T140853Z`
+
+Commands and probes used:
+
+```bash
+osascript -e 'tell application id "com.zayd.hydra" to quit'
+open -n release/mac-arm64/Hydra.app
+ps -ax -o pid,ppid,stat,%cpu,%mem,rss,etime,command \
+  | grep -iE 'chrome|chromium|playwright|electron|hydra'
+node bin/hydra.mjs doctor --json
+top -l 1 -pid <Hydra PID> -pid <helper PIDs>
+```
+
+Five-minute no-interaction idle profile, sampled after the splash-to-main
+transition:
+
+```json
+{
+  "samples": 11,
+  "cpuMin": 0,
+  "cpuMax": 0.4,
+  "cpuAvg": 0.0727,
+  "rssStart": 668418048,
+  "rssEnd": 591642624,
+  "rssDelta": -76775424
+}
+```
+
+Owner-aware sample summary:
+
+| Label | CPU | RSS | Hydra processes | Hydra Playwright profiles |
+| --- | ---: | ---: | ---: | ---: |
+| `splash-t8` | `176.9%` | `701.14 MB` | `4` | `0` |
+| `idle-t35` | `0.0%` | `637.45 MB` | `4` | `0` |
+| `idle-t65` | `0.0%` | `598.28 MB` | `4` | `0` |
+| `idle-t95` | `0.0%` | `598.58 MB` | `4` | `0` |
+| `idle-t125` | `0.0%` | `599.33 MB` | `4` | `0` |
+| `idle-t155` | `0.0%` | `599.52 MB` | `4` | `0` |
+| `idle-t185` | `0.1%` | `599.89 MB` | `4` | `0` |
+| `idle-t215` | `0.4%` | `598.42 MB` | `4` | `0` |
+| `idle-t245` | `0.1%` | `598.45 MB` | `4` | `0` |
+| `idle-t275` | `0.2%` | `557.19 MB` | `4` | `0` |
+| `idle-t305` | `0.0%` | `563.95 MB` | `4` | `0` |
+| `idle-t335` | `0.0%` | `564.23 MB` | `4` | `0` |
+
+Required broad `ps` snapshots were preserved as raw files in the evidence
+directory. The broad files include unrelated Chrome/CDP/Playwright tooling from
+the local machine, so the Hydra-owned rows are pasted below as the release
+decision evidence.
+
+Before launch, `ps-before-launch.txt` had `266` broad matching rows and zero
+Hydra-owned rows for `release/mac-arm64/Hydra.app`.
+
+During splash at `t+8s`, `ps-during-splash-t8.txt` contained the expected
+temporary visual load:
+
+```text
+54178     1 S      0.0  0.4 220560 00:08 .../Hydra.app/Contents/MacOS/Hydra
+54180 54178 S     91.4  0.4 202272 00:08 .../Hydra Helper --type=gpu-process
+54181 54178 S      0.0  0.1  55472 00:08 .../Hydra Helper --type=utility
+54205 54178 R     89.0  0.5 238416 00:08 .../Hydra Helper (Renderer) --type=renderer
+```
+
+After splash teardown at `t+35s`, `ps-after-splash-t35.txt` showed the settled
+four-process tree with zero CPU:
+
+```text
+54178     1 S      0.0  0.5 231504 00:35 .../Hydra.app/Contents/MacOS/Hydra
+54180 54178 S      0.0  0.4 184848 00:35 .../Hydra Helper --type=gpu-process
+54181 54178 S      0.0  0.1  58448 00:35 .../Hydra Helper --type=utility
+54266 54178 S      0.0  0.4 177952 00:19 .../Hydra Helper (Renderer) --type=renderer
+```
+
+After the five-minute idle window, `ps-after-five-min.txt` still showed the
+same four-process shape with zero CPU:
+
+```text
+54178     1 S      0.0  0.4 212800 05:59 .../Hydra.app/Contents/MacOS/Hydra
+54180 54178 S      0.0  0.3 172752 05:59 .../Hydra Helper --type=gpu-process
+54181 54178 S      0.0  0.1  53872 05:59 .../Hydra Helper --type=utility
+54266 54178 S      0.0  0.3 138352 05:43 .../Hydra Helper (Renderer) --type=renderer
+```
+
+`top` corroborated the idle state from the OS side. At `t+35s` and `t+335s`,
+each Hydra PID reported `0.0%` CPU.
+
+Latest packaged splash diagnostics from the same relaunch:
+
+```json
+{
+  "durationMs": 16000,
+  "exitMs": 11750,
+  "portalMs": 4250,
+  "target": 72,
+  "queueLength": 72,
+  "duplicateShatterSkips": 0,
+  "timers": 0,
+  "rafActive": false,
+  "bodyCount": 0,
+  "dynamicBodyCount": 0,
+  "peakDynamicBodyCount": 538,
+  "portalCollisionDisabled": true,
+  "portalLiftApplied": true,
+  "renderFrames": 407,
+  "physicsSteps": 651,
+  "matterCleared": true
+}
+```
+
+Latest packaged renderer diagnostics from the same relaunch:
+
+```json
+{
+  "label": "loadURL-resolved+10s",
+  "activeTotal": 3,
+  "timeouts": {
+    "active": 3,
+    "byOwner": {
+      "App.ambientMotion": 1,
+      "App.upstreamHealth": 1,
+      "useMetrics.autoRefresh": 1
+    }
+  },
+  "intervals": { "active": 0, "byOwner": {} },
+  "animationFrames": { "active": 0, "byOwner": {} },
+  "animations": { "active": 0, "byOwner": {} }
+}
+```
+
+This current pass strengthens acceptance items 1-3 for the exact installed
+`v1.5.5` ARM package: the idle average is near zero, there are no Hydra-owned
+stale Playwright profiles, the splash renderer is replaced by the main renderer
+after teardown, and Matter/RAF/Anime.js activity is cleared after its owning
+visual window. It does not clear the remaining live/hardware/manual dogfood
+items by itself.
+
 ## Acceptance Snapshot — 2026-06-01
 
 | # | Acceptance item | Current evidence | State |

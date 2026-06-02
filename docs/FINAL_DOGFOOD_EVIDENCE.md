@@ -7,6 +7,30 @@ to create a redacted evidence artifact after you run the real app.
 Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
 `docs/RELEASE_AUDIT.md`. Source and local runtime measurements currently show:
 
+- 2026-06-02 current `v1.5.5` packaged continuous-profile pass is recorded in
+  `docs/RELEASE_AUDIT.md` and preserved under
+  `/private/tmp/hydra-v155-continuous-profile-20260602T140853Z`. The run started
+  from zero Hydra-owned processes, launched `release/mac-arm64/Hydra.app`
+  through LaunchServices, captured broad
+  `ps -ax -o pid,ppid,stat,%cpu,%mem,rss,etime,command | grep -iE 'chrome|chromium|playwright|electron|hydra'`
+  output before launch, during splash, after splash teardown, and after the
+  five-minute idle window, and sampled `hydra doctor --json` plus `top` for the
+  Hydra-owned PIDs.
+- The `v1.5.5` splash sample at `t+8s` showed expected visual load (`176.9%`
+  aggregate across GPU/renderer work, four Hydra-owned processes, zero stale
+  Playwright profiles). The no-interaction idle window then held four
+  Hydra-owned processes and zero stale Hydra Playwright profiles for all 11
+  samples from `t+35s` through `t+335s`. Idle CPU ranged from `0.0%` to `0.4%`,
+  averaged `0.0727%`, ended at `0.0%`, and RSS moved from `668418048` to
+  `591642624` bytes (`-76775424` bytes).
+- The same `v1.5.5` relaunch logged finite splash teardown:
+  `timers=0`, `rafActive=false`, `bodyCount=0`, `dynamicBodyCount=0`,
+  `matterCleared=true`, `target=72`, `duplicateShatterSkips=0`,
+  `portalCollisionDisabled=true`, and `portalLiftApplied=true`. Renderer
+  diagnostics at `loadURL-resolved+10s` reported `intervals.active=0`,
+  `animationFrames.active=0`, and `animations.active=0`; the only active
+  renderer timeouts were the expected owned one-shots
+  `App.ambientMotion`, `App.upstreamHealth`, and `useMetrics.autoRefresh`.
 - 2026-06-02 post-release `v1.5.1` packaged renderer diagnostics were rebuilt
   and profiled under
   `/private/tmp/hydra-v151-renderer-diag-20260602T111704Z`. The exact local ARM
