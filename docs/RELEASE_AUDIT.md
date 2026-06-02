@@ -3356,3 +3356,13 @@ items by itself.
   Silicon machine only has ARM Playwright Chromium, so Intel packaging remains
   a GitHub macOS Intel runner responsibility. Upstream human verification and
   final OTP entry remain operator-owned.
+- 2026-06-02 `1.5.6` public release closeout: Auto-version run `26829069491`
+  tagged `v1.5.6` from commit `1e06351`; CI run `26829069694` passed hosted
+  lint, build, `test:ci`, gate, and final build; Docker run `26829069056`
+  passed runtime smoke plus GHCR image build/push; Release Desktop Apps run
+  `26829086902` passed shared gates, macOS arm64 zip smoke, macOS Intel x64 zip
+  smoke, Linux x64 AppImage smoke, Windows x64 NSIS smoke, hosted unpacked and
+  NSIS-installed Windows executable launch checks, artifact uploads, and merged
+  macOS updater metadata. GitHub release v1.5.6 is public with macOS arm64
+  zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux AppImage,
+  `latest-mac.yml`, `latest.yml`, and `latest-linux.yml`.

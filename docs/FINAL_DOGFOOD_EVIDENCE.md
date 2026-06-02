@@ -2418,3 +2418,11 @@ This evidence file is not release-complete by itself. The release remains not co
   Playwright Chromium, so Intel packaging remains a GitHub macOS Intel runner
   responsibility. Upstream human verification and final OTP entry remain
   operator-owned.
+- `1.5.6` public artifact closeout: Auto-version run `26829069491`, CI run
+  `26829069694`, Docker run `26829069056`, and Release Desktop Apps run
+  `26829086902` all passed. The release matrix produced and smoke-verified
+  macOS arm64 zip, macOS Intel x64 zip, Linux x64 AppImage, and Windows x64 NSIS
+  artifacts; the Windows lane also launched both unpacked and NSIS-installed
+  executables and proved cleanup. GitHub release `v1.5.6` is public with macOS
+  arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux
+  AppImage, `latest-mac.yml`, `latest.yml`, and `latest-linux.yml`.
