@@ -2447,3 +2447,12 @@ This evidence file is not release-complete by itself. The release remains not co
   Playwright profile. The source-dev page proof is
   `docs/evidence/hydra-v157-generator-dev-initial.png`
   (`sha256 a41c33c6c1eb766df52333ecddf09ad93bdbe3fb3e54b2595c465bf671bd95de`).
+- `1.5.7` public artifact closeout: Auto-version run `26831257982`, CI run
+  `26831257315`, Docker run `26831257935`, and Release Desktop Apps run
+  `26831277740` all passed. The release matrix produced and smoke-verified
+  macOS arm64 zip, macOS Intel x64 zip, Linux x64 AppImage, and Windows x64
+  NSIS artifacts; the Windows lane also launched both unpacked and
+  NSIS-installed executables and proved cleanup. GitHub release `v1.5.7` is
+  public with macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows
+  NSIS/blockmap, Linux AppImage, `latest-mac.yml`, `latest.yml`, and
+  `latest-linux.yml`.
