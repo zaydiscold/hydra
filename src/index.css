@@ -3982,26 +3982,37 @@ select:-webkit-autofill {
   --moon-orbit-start: -18deg;
   --moon-orbit-end: 342deg;
   --moon-orbit-duration: 16s;
-  transform: rotate(var(--moon-orbit-start));
+  --moon-orbit-tilt: -18deg;
+  --moon-orbit-squash: 0.72;
+  --moon-orbit-delay: -2.5s;
+  animation: moonOrbit var(--moon-orbit-duration) linear infinite;
+  animation-delay: var(--moon-orbit-delay);
   transform-origin: 50% 50%;
+  will-change: transform;
 }
 
-.app-shell--ambient-motion .planet-moon-orbit {
-  animation: moonOrbit var(--moon-orbit-duration) linear infinite;
+.app-shell--motion-settled .planet-moon-orbit {
+  animation-play-state: running;
 }
 
 .planet-moon-orbit--inner {
-  inset: -23px;
+  inset: -20px -27px -26px -25px;
   --moon-orbit-start: 42deg;
   --moon-orbit-end: -318deg;
-  --moon-orbit-duration: 11.5s;
+  --moon-orbit-duration: 13.75s;
+  --moon-orbit-tilt: 24deg;
+  --moon-orbit-squash: 0.58;
+  --moon-orbit-delay: -6s;
 }
 
 .planet-moon-orbit--outer {
-  inset: -53px;
+  inset: -58px -66px -44px -62px;
   --moon-orbit-start: -132deg;
   --moon-orbit-end: 228deg;
-  --moon-orbit-duration: 22s;
+  --moon-orbit-duration: 26s;
+  --moon-orbit-tilt: -34deg;
+  --moon-orbit-squash: 0.64;
+  --moon-orbit-delay: -11s;
 }
 
 .planet-moon {
@@ -4037,8 +4048,15 @@ select:-webkit-autofill {
 }
 
 @keyframes moonOrbit {
-  from { transform: rotate(var(--moon-orbit-start)); }
-  to { transform: rotate(var(--moon-orbit-end)); }
+  from { transform: rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-start)); }
+  to { transform: rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-end)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planet-moon-orbit {
+    animation: none;
+    transform: rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-start));
+  }
 }
 
 .planet-2 {

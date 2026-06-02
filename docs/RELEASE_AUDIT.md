@@ -3456,3 +3456,49 @@ items by itself.
   `5200ms` portal window, and native Touch ID prompt reason. The local ARM zip
   SHA-256 is
   `6ab8cb3941a092c6d823322b725ed6e937221f3071d56984a4a8705d5e304e75`.
+- 2026-06-02 `1.5.8` ambient planet and release-note addendum: the
+  Jupiter-like sidebar planet's moon cluster no longer freezes when
+  `app-shell--ambient-motion` clears. The orbits are now continuous
+  transform-only CSS animations with varied elliptical squash, tilt, delay,
+  duration, and orbit distance; `prefers-reduced-motion` still disables them.
+  `server/tests/ui-static-contract.test.mjs` now rejects the old
+  `.app-shell--ambient-motion .planet-moon-orbit` dependency and anchors the
+  continuous, reduced-motion-safe contract. The design rationale is documented
+  in `docs/DESIGN_ENGINEERING.md`.
+- 2026-06-02 GitHub release-note audit for the `1.5.x` line: direct
+  `gh release view` API reads confirmed all public releases from `v1.5.0`
+  through `v1.5.8` have release bodies and multiple bullets. Counts at audit
+  time were `v1.5.0` 206 lines / 95 bullets, `v1.5.1` 56 / 21, `v1.5.2`
+  68 / 26, `v1.5.3` 83 / 21, `v1.5.4` 68 / 22, `v1.5.5` 73 / 26,
+  `v1.5.6` 121 / 39, `v1.5.7` 138 / 41, and `v1.5.8` 83 / 26 before the
+  addendum. `docs/releases/1.5.8.md` now additionally names the final
+  `78a1f04` commit, Auto-version run `26842624866`, CI run `26842624845`,
+  Docker run `26842624826`, Release Desktop Apps run `26842638298`, all ten
+  public assets, local ARM bundle version `1.5.8`, strict codesign smoke, and
+  zip SHA-256
+  `6ab8cb3941a092c6d823322b725ed6e937221f3071d56984a4a8705d5e304e75`.
+- 2026-06-02 `1.5.8` fresh packaged profile after the release-note audit:
+  LaunchServices opened `release/mac-arm64/Hydra.app` and evidence was written
+  to `/private/tmp/hydra-v158-fresh-profile-20260602T193427Z`. The exact
+  Hydra-owned subset after splash had four processes, and native quit returned
+  to zero Hydra-owned processes. Five-minute samples were:
+  `92.2, 0.1, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.1, 0.1, 0.6` percent aggregate
+  CPU with RSS moving from `611040 KB` to `459776 KB` (`-151264 KB`). This does
+  not prove the acceptance target of a clean 20% idle CPU reduction because
+  sample `0` caught a real GPU/compositor tail at `92.2%`; excluding that first
+  handoff sample, the remaining ten samples average `0.11%`. The broad
+  `ps -ax -o pid,ppid,stat,%cpu,%mem,rss,etime,command | grep -iE
+  'chrome|chromium|playwright|electron|hydra'` snapshots are preserved in the
+  evidence directory and were intentionally not pasted wholesale because they
+  include hundreds of unrelated Chrome/agent tooling rows from the user's
+  desktop. The Hydra-owned before/after/quit subset is the actionable process
+  ownership proof.
+- 2026-06-02 `1.5.9` release-note automation and ambient planet patch:
+  `.github/workflows/release.yml` now resolves
+  `docs/releases/${version}.md` from the pushed tag and uses it to create or
+  edit the GitHub release before artifact upload. The old blank `--notes ""`
+  path remains only as a fallback when no checked-in release note exists.
+  `server/tests/workflow-contract.test.mjs` anchors the notes-file lookup,
+  edit, and create paths. `docs/releases/1.5.9.md` documents this patch's
+  purpose, verification, and manual boundary before the tag exists, so the next
+  release can publish with notes on the first pass.

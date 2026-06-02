@@ -134,7 +134,17 @@ jobs:
           RELEASE_GLOB: ${{ matrix.release_glob }}
         run: |
           set -euo pipefail
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes ""
+          version="${GITHUB_REF_NAME#v}"
+          notes_file="docs/releases/${version}.md"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            if [ -f "$notes_file" ]; then
+              gh release edit "$GITHUB_REF_NAME" --notes-file "$notes_file"
+            fi
+          elif [ -f "$notes_file" ]; then
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$notes_file"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes ""
+          fi
           shopt -s nullglob
           files=()
           for pattern in $RELEASE_GLOB; do

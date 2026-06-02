@@ -827,11 +827,13 @@ test('1.5 desktop operator polish stays wired to real controls', () => {
   assert.match(app, /planet-moon-orbit--primary/);
   assert.match(app, /planet-moon-orbit--inner/);
   assert.match(app, /planet-moon-orbit--outer/);
-  assert.match(css, /\.app-shell--ambient-motion \.planet-moon-orbit\s*\{/);
+  assert.doesNotMatch(css, /\.app-shell--ambient-motion \.planet-moon-orbit\s*\{/);
+  assert.match(css, /\.app-shell--motion-settled \.planet-moon-orbit\s*\{[\s\S]*?animation-play-state:\s*running;/);
   assert.match(css, /animation:\s*moonOrbit var\(--moon-orbit-duration\) linear infinite/);
-  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*16s;[\s\S]*?transform:\s*rotate\(var\(--moon-orbit-start\)\);/);
-  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*11\.5s;/);
-  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*22s;/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*16s;[\s\S]*?--moon-orbit-squash:\s*0\.72;/);
+  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*13\.75s;[\s\S]*?--moon-orbit-squash:\s*0\.58;/);
+  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*26s;[\s\S]*?--moon-orbit-squash:\s*0\.64;/);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.planet-moon-orbit\s*\{[\s\S]*?animation:\s*none;/);
 
   assert.match(traffic, /formatUsd\(log\.inputCost\)/);
   assert.match(traffic, /formatUsd\(log\.outputCost\)/);

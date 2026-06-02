@@ -68,6 +68,15 @@ local jitter, which reads more like neurons or winter twigs than perfect
 curves. Glow is applied once at the SVG surface instead of once per primary
 stem.
 
+## Ambient Planet
+
+The Jupiter-like sidebar planet is intentionally decorative, so its orbiting
+bodies stay CSS-only. The three moons use transform-only elliptical tracks with
+different tilt, duration, delay, distance, and size so they feel less like a
+mechanical loading spinner. Unlike the meteor field and nebula, these orbits
+continue after the startup ambient window settles; they are small enough to keep
+running and `prefers-reduced-motion` still freezes them.
+
 ## Proximity Fields
 
 Dashboard account cards and list rows, command actions, empty-state actions,

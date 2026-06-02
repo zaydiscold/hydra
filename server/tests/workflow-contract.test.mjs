@@ -72,6 +72,9 @@ test('release workflow uploads current macOS, Windows, and Linux artifacts', () 
   assert.match(workflow, /npx electron-builder \$\{\{ matrix\.target \}\} --publish never/, 'release workflow must build before publishing verified artifacts');
   assert.match(workflow, /npm run electron:smoke/, 'release workflow must smoke-check packaged resources before upload');
   assert.match(workflow, /npm run electron:smoke[\s\S]*HYDRA_BUILD_TARGET:\s*\$\{\{ matrix\.build_target \}\}/, 'release smoke must verify the target-specific Chromium payload');
+  assert.match(workflow, /notes_file="docs\/releases\/\$\{version\}\.md"/, 'release workflow must look up checked-in release notes by tag version');
+  assert.match(workflow, /gh release edit "\$GITHUB_REF_NAME" --notes-file "\$notes_file"/, 'existing releases must be backfilled with checked-in notes before uploads');
+  assert.match(workflow, /gh release create "\$GITHUB_REF_NAME" --title "\$GITHUB_REF_NAME" --notes-file "\$notes_file"/, 'new releases must use checked-in notes when available');
   assert.match(workflow, /gh release upload "\$GITHUB_REF_NAME" "\$\{files\[@\]\}" --clobber/, 'release workflow must upload only after package smoke passes');
   assert.ok(
     workflow.indexOf('npm run electron:smoke') < workflow.indexOf('gh release upload "$GITHUB_REF_NAME"'),
