@@ -142,6 +142,13 @@ describe('browser isolation — knob 2: ephemeral userDataDir', () => {
     assert.ok(existsSync(foreign), 'non-Hydra temp dirs must not be removed');
   });
 
+  it('profile cleanup retries briefly so Chromium flush timing does not leave empty dirs', () => {
+    const source = readFileSync(new URL('../lib/playwright-browser.js', import.meta.url), 'utf8');
+    assert.match(source, /maxRetries:\s*5/);
+    assert.match(source, /retryDelay:\s*100/);
+    assert.match(source, /maxRetries:\s*3/);
+  });
+
   it('caller can opt out of ephemeral profile by passing userDataDir: null', () => {
     const opts = resolveChromiumLaunchOptions({ userDataDir: null });
     if (opts.userDataDir != null) cleanupDirs.push(opts.userDataDir);

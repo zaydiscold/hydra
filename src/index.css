@@ -4530,13 +4530,16 @@ select:-webkit-autofill {
   width: 100%;
   min-height: 48px;
   font-size: 1.55rem;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.14em;
   text-align: center;
+  border-width: 2px;
+  padding: 0.55rem 0.8rem;
 }
 
 .generator-otp-submit {
   min-width: 128px;
   min-height: 48px;
+  padding-inline: 1rem;
   justify-content: center;
   white-space: nowrap;
 }

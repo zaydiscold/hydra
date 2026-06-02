@@ -15,10 +15,12 @@ attempt telemetry, bounded proxy failover, real Command Grid/List/Map modes,
 desktop density, stronger proximity navigation, Pool Manager ergonomics, Bulk
 Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 
-Tracked `package.json` and `package-lock.json` now target `1.5.1`, a focused
-patch on top of `v1.5.0`. It fixes Account Generator OTP/manual-verification
-handoff behavior without changing the release lane's data model or operator
-contracts.
+Tracked `package.json` and `package-lock.json` now target `1.5.2`, a focused
+patch on top of public `v1.5.1`. It keeps the Account Generator rescue lane
+narrow while updating Hydra for OpenRouter's current signup form: password and
+legal consent are filled when required, hidden Turnstile state is reported as a
+manual verification boundary, and browser-profile cleanup retries through short
+Chromium flush races.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -107,10 +109,11 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`v1.4.9` is the current public release. Continue
-using `[skip-bump]` for audit, dogfood, and isolated documentation checkpoints
-after a release ships unless a real source fix must go to users. Do not produce
-a second minor bump merely to record manual evidence.
+`v1.5.1` is the current public release while `1.5.2` is the active local patch
+candidate. Continue using `[skip-bump]` for audit, dogfood, and isolated
+documentation checkpoints after a release ships unless a real source fix must
+go to users. Do not produce a second minor bump merely to record manual
+evidence.
 
 The post-`v1.4.0` stabilization tranche reached public desktop artifacts as
 `v1.4.2`: request-owned cancellation and shutdown joins, bounded Windows

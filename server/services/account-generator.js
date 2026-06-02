@@ -58,6 +58,7 @@ const GENERATOR_TTL_MS = 5 * 60 * 1000;
 const STARTUP_TIMEOUT_MS = 45 * 1000;
 const OTP_WAIT_TIMEOUT_MS = 30 * 1000;
 const OTP_CHECK_INTERVAL_MS = 350;
+const SIGNUP_FORM_BLOCKED_GRACE_MS = 3 * 1000;
 const MANUAL_VERIFICATION_TIMEOUT_MS = 4 * 60 * 1000;
 const COMPLETION_TIMEOUT_MS = 30 * 1000;
 const OTP_INPUT_SELECTOR = [
@@ -94,35 +95,25 @@ function serializeGeneratorTask(task) {
   };
 }
 
-function otpChallengeVisiblePredicate() {
-  const otpSelector = [
-    'input[autocomplete="one-time-code"]',
-    'input.cl-otpCodeFieldInput',
-    'input[data-testid*="otp" i]',
-    'input[data-testid*="code" i]',
-    'input[name*="code" i]',
-    'input[id*="code" i]',
-    'input[aria-label*="code" i]',
-    'input[placeholder*="code" i]',
-    'input[inputmode="numeric"]',
-    'input[maxlength="6"]',
-    'input[maxlength="1"][type="text"]',
-    'input[maxlength="1"][type="tel"]',
-  ].join(', ');
-  const text = document.body?.innerText?.toLowerCase?.() || '';
-  return text.includes('check your email')
-    || text.includes('verification code')
-    || text.includes('verify your email')
-    || text.includes('enter code')
-    || text.includes('enter the code')
-    || text.includes('one-time code')
-    || text.includes('code sent')
-    || Boolean(document.querySelector(otpSelector));
-}
-
 async function readSignupCheckpoint(page) {
   return page.evaluate((otpSelector) => {
     const text = document.body?.innerText?.toLowerCase?.() || '';
+    const formInputs = Array.from(document.querySelectorAll('input'));
+    const passwordInput = formInputs.find((input) => input.type === 'password' || /password/i.test(`${input.name || ''} ${input.id || ''} ${input.placeholder || ''}`));
+    const legalCheckbox = formInputs.find((input) => input.type === 'checkbox' && /legal|terms|privacy|agree|accepted/i.test(`${input.name || ''} ${input.id || ''} ${input.getAttribute('aria-label') || ''}`));
+    const signupFormVisible = Boolean(passwordInput || legalCheckbox)
+      || text.includes('create your account')
+      || text.includes('password')
+      || text.includes('terms of service');
+    const passwordBlocked = Boolean(passwordInput)
+      && !passwordInput.value
+      && (text.includes('password') || text.includes('8 or more characters'));
+    const legalBlocked = Boolean(legalCheckbox)
+      && !legalCheckbox.checked
+      && (text.includes('terms of service') || text.includes('privacy policy') || text.includes('model terms') || text.includes('i agree'));
+    const turnstileProbe = document.querySelector('input[name="cf-turnstile-response"], input[name*="turnstile" i], [id*="cf-chl-widget"], [class*="turnstile" i]');
+    const turnstilePending = Boolean(turnstileProbe)
+      && (!('value' in turnstileProbe) || !String(turnstileProbe.value || '').trim());
     const otpVisible = text.includes('check your email')
       || text.includes('verification code')
       || text.includes('verify your email')
@@ -137,25 +128,37 @@ async function readSignupCheckpoint(page) {
       || text.includes('security check')
       || text.includes('checking if the site connection is secure')
       || text.includes('review the security of your connection')
+      || turnstilePending
       || Boolean(document.querySelector('iframe[src*="captcha" i], iframe[src*="turnstile" i], iframe[src*="hcaptcha" i], iframe[src*="recaptcha" i], iframe[src*="challenges.cloudflare.com" i], .cf-turnstile, [data-sitekey], [class*="captcha" i], [id*="captcha" i]'));
     return {
       otpVisible,
       manualVisible,
+      signupFormVisible,
+      signupBlocked: !otpVisible && !manualVisible && signupFormVisible && (passwordBlocked || legalBlocked),
+      passwordBlocked,
+      legalBlocked,
       url: document.location.href,
     };
   }, OTP_INPUT_SELECTOR).catch((err) => ({
     otpVisible: false,
     manualVisible: false,
+    signupFormVisible: false,
+    signupBlocked: false,
+    passwordBlocked: false,
+    legalBlocked: false,
     url: page.url?.() ?? 'unknown',
     error: err.message,
   }));
 }
 
 async function waitForOtpChallenge(task, page) {
+  const signal = task.abortController.signal;
   const startedAt = Date.now();
   let manualReported = false;
+  let blockedSince = 0;
 
   while (Date.now() - startedAt < OTP_WAIT_TIMEOUT_MS) {
+    throwIfAborted(signal);
     const checkpoint = await readSignupCheckpoint(page);
     if (checkpoint.otpVisible) return;
     if (checkpoint.manualVisible) {
@@ -167,18 +170,116 @@ async function waitForOtpChallenge(task, page) {
       logger.warn(`[Account Generator] Manual upstream verification visible for ${task.taskId}; waiting for OTP screen in the isolated browser`);
       break;
     }
-    await page.waitForTimeout(OTP_CHECK_INTERVAL_MS);
+    if (checkpoint.signupBlocked) {
+      blockedSince ||= Date.now();
+      if (Date.now() - blockedSince >= SIGNUP_FORM_BLOCKED_GRACE_MS) {
+        const fields = [
+          checkpoint.passwordBlocked ? 'password' : null,
+          checkpoint.legalBlocked ? 'terms acceptance' : null,
+        ].filter(Boolean).join(' and ') || 'required signup fields';
+        const err = new Error(`OpenRouter signup form did not advance because ${fields} is still required; current page ${checkpoint.url}`);
+        err.code = 'GENERATOR_SIGNUP_FORM_BLOCKED';
+        throw err;
+      }
+    } else {
+      blockedSince = 0;
+    }
+    await sleepWithSignal(OTP_CHECK_INTERVAL_MS, signal);
   }
 
   if (manualReported) {
-    await page.waitForFunction(otpChallengeVisiblePredicate, { timeout: MANUAL_VERIFICATION_TIMEOUT_MS });
-    return;
+    const manualStartedAt = Date.now();
+    while (Date.now() - manualStartedAt < MANUAL_VERIFICATION_TIMEOUT_MS) {
+      throwIfAborted(signal);
+      const checkpoint = await readSignupCheckpoint(page);
+      if (checkpoint.otpVisible) return;
+      await sleepWithSignal(OTP_CHECK_INTERVAL_MS, signal);
+    }
+    const err = new Error(`Timed out waiting for OpenRouter's OTP screen after manual verification window; current page ${page.url?.() ?? 'unknown'}`);
+    err.code = 'GENERATOR_MANUAL_VERIFICATION_TIMEOUT';
+    throw err;
   }
 
   const checkpoint = await readSignupCheckpoint(page);
   const err = new Error(`Timed out waiting for OpenRouter's OTP screen after ${OTP_WAIT_TIMEOUT_MS}ms; current page ${checkpoint.url}`);
   err.code = 'GENERATOR_OTP_SCREEN_TIMEOUT';
   throw err;
+}
+
+async function fillVisibleSignupPassword(page, password, taskId) {
+  const selectors = [
+    'input[name="password"]',
+    'input[type="password"]',
+    'input[id*="password" i]',
+    'input[placeholder*="password" i]',
+    'input[autocomplete="new-password"]',
+  ];
+
+  for (const selector of selectors) {
+    const input = page.locator(selector).first();
+    try {
+      if (await input.count() === 0) continue;
+      if (!await input.isVisible({ timeout: 1000 })) continue;
+      await input.fill(password);
+      await input.evaluate((el) => {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }).catch(() => {});
+      logger.info(`[Account Generator] Filled signup password for ${taskId}`);
+      return true;
+    } catch (err) {
+      logger.warn(`[Account Generator] Signup password candidate failed for ${taskId}: ${err.message}`);
+    }
+  }
+
+  return false;
+}
+
+async function acceptVisibleSignupTerms(page, taskId) {
+  const selectors = [
+    'input[name="legalAccepted"]',
+    'input[id*="legal" i]',
+    'input[id*="terms" i]',
+    'input[name*="terms" i]',
+    'input[type="checkbox"]',
+  ];
+
+  for (const selector of selectors) {
+    const checkbox = page.locator(selector).first();
+    try {
+      if (await checkbox.count() === 0) continue;
+      if (!await checkbox.isVisible({ timeout: 1000 })) continue;
+      if (await checkbox.isChecked().catch(() => false)) {
+        logger.info(`[Account Generator] Signup terms already accepted for ${taskId}`);
+        return true;
+      }
+      await checkbox.check({ timeout: 3000 });
+      logger.info(`[Account Generator] Accepted signup terms for ${taskId}`);
+      return true;
+    } catch (err) {
+      logger.warn(`[Account Generator] Signup terms checkbox candidate failed for ${taskId}: ${err.message}`);
+    }
+  }
+
+  const labelCandidates = [
+    page.getByText(/I agree to the Terms of Service/i).first(),
+    page.getByText(/Terms of Service, Privacy Policy/i).first(),
+    page.locator('label:has-text("I agree")').first(),
+  ];
+
+  for (const candidate of labelCandidates) {
+    try {
+      if (await candidate.count() === 0) continue;
+      if (!await candidate.isVisible({ timeout: 1000 })) continue;
+      await candidate.click({ timeout: 3000 });
+      logger.info(`[Account Generator] Accepted signup terms via label for ${taskId}`);
+      return true;
+    } catch (err) {
+      logger.warn(`[Account Generator] Signup terms label candidate failed for ${taskId}: ${err.message}`);
+    }
+  }
+
+  return false;
 }
 
 async function clickVisibleOtpSubmitControl(page, taskId) {
@@ -387,15 +488,33 @@ async function launchSignupFlowPlaywright(task) {
       await emailInput.fill(task.metadata.email);
       await page.waitForTimeout(500);
 
+      taskSupervisor.updateTask(task.taskId, { status: 'entering_signup_details' });
+
+      const preDetailCheckpoint = await readSignupCheckpoint(page);
+      const passwordFilled = await fillVisibleSignupPassword(page, task.metadata.password, task.taskId);
+      if (!passwordFilled && preDetailCheckpoint.passwordBlocked) {
+        const err = new Error('Could not find OpenRouter signup password field - page may have changed');
+        err.code = 'GENERATOR_SIGNUP_PASSWORD_FIELD_MISSING';
+        throw err;
+      }
+
+      const termsAccepted = await acceptVisibleSignupTerms(page, task.taskId);
+      const postPasswordCheckpoint = await readSignupCheckpoint(page);
+      if (!termsAccepted && postPasswordCheckpoint.legalBlocked) {
+        const err = new Error('Could not accept OpenRouter signup terms - page may have changed');
+        err.code = 'GENERATOR_SIGNUP_TERMS_FIELD_MISSING';
+        throw err;
+      }
+
       // Try multiple continue button selectors
       const continueSelectors = [
         'button:has-text("Continue")',
-        'button[type="submit"]',
         'button.cl-formButtonPrimary',
         'button:has-text("Sign up")',
         'button:has-text("Next")',
         'button.cl-button',
         'button[class*="primary" i]',
+        'button[type="submit"]',
       ];
 
       let clicked = false;
@@ -424,6 +543,10 @@ async function launchSignupFlowPlaywright(task) {
 
       taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });
     } catch (err) {
+      if (signal.aborted) {
+        logger.info(`[Account Generator] Launch stopped for ${task.taskId}: ${err.message}`);
+        return;
+      }
       logger.error(`[Account Generator] Launch failed for ${task.taskId}: ${err.message}`);
       // Defensive: close any Playwright resources we managed to attach BEFORE
       // marking the task failed. taskSupervisor.fail also runs the configured

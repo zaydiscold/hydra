@@ -677,6 +677,8 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(generator, /1\. Email alias/);
   assert.match(generator, /<label>Email alias<\/label>/);
   assert.doesNotMatch(generator, /Gmail Alias/);
+  assert.match(generator, /entering_signup_details: 'Entering the signup password and required OpenRouter consent\.'/);
+  assert.match(generator, /manual_verification: 'Finish any OpenRouter security check in the account browser\./);
   assert.match(generator, /generatorModeLabel\(jobMode\)/);
   assert.match(generator, /className="generator-otp-row"/);
   assert.match(generator, /onChange=\{e => setOtp\(e\.target\.value\.replace\(\/\\D\/g, ''\)\.slice\(0, 6\)\)\}/);
@@ -688,7 +690,10 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(css, /\.generator-steps\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(css, /\.generator-start-btn:disabled\s*\{[\s\S]*?filter:\s*saturate\(0\.55\) brightness\(0\.85\);/);
   assert.match(css, /\.generator-otp-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(180px,\s*240px\)\s+minmax\(128px,\s*auto\);/);
+  assert.match(css, /\.generator-otp-row \.otp-input\s*\{[\s\S]*?letter-spacing:\s*0\.14em;/);
+  assert.match(css, /\.generator-otp-row \.otp-input\s*\{[\s\S]*?border-width:\s*2px;/);
   assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?min-width:\s*128px;/);
+  assert.match(css, /\.generator-otp-submit\s*\{[\s\S]*?padding-inline:\s*1rem;/);
 });
 
 test('first-run setup is a guided password key tour instead of a login dead end', () => {

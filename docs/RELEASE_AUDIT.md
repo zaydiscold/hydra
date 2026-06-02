@@ -1,6 +1,6 @@
 # Hydra Release Audit
 
-Last updated: 2026-06-01
+Last updated: 2026-06-02
 Scope: source-verifiable release readiness for the Electron desktop app, plus explicit blockers for work that still requires packaged app, live account, Docker daemon, or screenshot evidence.
 
 ## Prompt-to-Artifact Checklist
@@ -16,6 +16,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Cross-platform Windows test hardening | PR #5 merged: `test:ci`, `cross-platform-contract`, POSIX mode guard, path normalization, and Windows smoke fixes. | Verified by CI/Electron smoke |
 | Multi-arch macOS updater metadata | Release workflow includes `mac-update-metadata` and `scripts/merge-mac-update-yml.mjs`; workflow contract requires merged `latest-mac.yml` with arm64 and x64 files. v1.0.17 release artifact inspection verified `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` were published with macOS arm64/x64 and Windows artifacts. | Verified by release |
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
+| Account Generator signup form drift | `1.5.2` fills required OpenRouter signup password/legal fields, detects hidden Turnstile state as `manual_verification`, keeps waits abort-aware, and documents the current selector evidence. | Source verified; final OTP remains operator-owned |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
 | Release artifacts | GitHub release v1.4.7 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26782121839` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; v1.4.7 released |
 | macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-local public `v1.4.7` macOS arm64 app verifies with `codesign --verify --deep --strict`; release-matrix package smoke passed on macOS arm64 and macOS Intel. | Verified by release artifact dogfood |
@@ -2917,7 +2918,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   for upstream human verification, reports `manual_verification` instead of
   hanging silently, sanitizes OTP input to six digits, supports Enter-submit,
   and explicitly clicks Clerk's visible OTP submit control before falling back
-  to Enter. No real signup was started from the supplied `admin@preheat.cc`
+  to Enter. No real signup was started from the supplied redacted test-email
   credentials during this verification because the upstream OTP/human
   verification step belongs to the operator. The final source patch also
   hardened the splash-to-main handoff after LaunchServices exposed an
@@ -3027,3 +3028,36 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   text. The screenshot path is native packaged Electron, not browser, Vite, or
   localhost capture. Native quit after capture returned to zero Hydra-owned
   processes and zero stale Playwright profiles.
+- 2026-06-02 `1.5.2` Account Generator signup-form follow-up: live upstream
+  reproduction against `https://openrouter.ai/sign-up` found that OpenRouter's
+  current Clerk form no longer advances from email alone. The visible form
+  included `input[name="emailAddress"]`, `input[name="password"]`, and
+  `input[name="legalAccepted"]`; after password and terms were satisfied, the
+  page exposed an empty `input[name="cf-turnstile-response"]`, which is a
+  manual security-check boundary rather than a ready OTP form. Hydra now fills
+  password and legal consent when those fields are actually blocking the
+  current step, preserves compatibility with email-first variants, reports
+  hidden Turnstile state as `manual_verification`, and uses abort-aware manual
+  waits so cleanup/cancel does not create false launch-failure logs. Generator
+  OTP row styling was tightened for the compact renderer layout, and
+  Hydra-owned Playwright profile cleanup now retries briefly through Chromium
+  flush timing before relying on the later doctor sweep. Redacted recon lives in
+  `docs/recon/GENERATOR_OTP_TIMEOUT_AND_MANUAL_VERIFICATION.md`; release notes
+  live in `docs/releases/1.5.2.md`. Current verification passed syntax checks
+  for `server/services/account-generator.js` and `server/lib/playwright-browser.js`,
+  `npm run test:background-failure-visibility`, `npm run test:ui-static`,
+  `npm run test:browser-isolation`, `npm run test:openrouter-request-cancellation`,
+  `npm run test:clerk-signup-boundary`, `npm run test:api-integration`, and
+  `git diff --check`. The full `npm test` chain, lint, renderer build, gate,
+  and OpenAPI generation also passed under `1.5.2`. Local ARM packaging passed
+  `npm run electron:build:mac-arm64`, package smoke, strict deep codesign, plist
+  version `1.5.2`, and embedded-source inspection for the new signup-form and
+  cleanup guards. The local ARM zip SHA-256 is
+  `97e45caa5eccc3110e28592b64f2ee7eaa6f75a9cc8864f222bd8f9715a71a15`.
+  The local release directory now contains only `Hydra-1.5.2-mac-arm64.zip`,
+  its blockmap, `latest-mac.yml`, and the unpacked `release/mac-arm64/Hydra.app`.
+  A LaunchServices settle sample at 90 seconds reported four Hydra-owned
+  processes, `0.0%` CPU, `591.64 MB` RSS, and zero stale Playwright profiles;
+  native quit returned to zero processes and zero profiles. The live service
+  smoke reached `manual_verification` with `mode=browser_signup`; final OTP
+  entry and upstream human verification remain operator-owned.

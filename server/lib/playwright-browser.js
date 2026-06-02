@@ -91,7 +91,12 @@ export function cleanupEphemeralProfileDir(dirPath) {
   if (!rel || rel.startsWith('..') || rel.includes('..') || rel === dirPath) return;
   if (!basename(dirPath).startsWith(PROFILE_DIR_PREFIX)) return;
   try {
-    rmSync(dirPath, { recursive: true, force: true, maxRetries: 2 });
+    rmSync(dirPath, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   } catch (e) {
     // Best-effort. Common failure: EBUSY because Chromium is still flushing
     // its sqlite databases. Sweep will retry on next boot.
@@ -142,7 +147,12 @@ export function sweepStaleEphemeralProfiles(minAgeMs = 60_000) {
       continue;
     }
     try {
-      rmSync(full, { recursive: true, force: true, maxRetries: 1 });
+      rmSync(full, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      });
       stats.removed += 1;
     } catch (e) {
       stats.failed += 1;

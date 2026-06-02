@@ -253,8 +253,8 @@ npm run openapi:hydra       # Regenerate tracked OpenAPI map
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, the current public desktop release is `v1.5.0`, the active
-review candidate is `1.5.1` for the Account Generator OTP rescue, and remaining
+first as `v1.1.0`, the current public desktop release is `v1.5.1`, the active
+review candidate is `1.5.2` for the OpenRouter signup-form follow-up, and remaining
 manual dogfood evidence stays explicit in the audit.
 
 ## Docs Index
@@ -262,7 +262,9 @@ manual dogfood evidence stays explicit in the audit.
 Start with these when you need more than the quick README tour:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
-  checkpoints, the active `1.5.1` patch candidate, and completed release history.
+  checkpoints, the active `1.5.2` patch candidate, and completed release history.
+- [1.5.2 Patch Release](docs/releases/1.5.2.md): OpenRouter signup password,
+  terms, hidden Turnstile detection, and Generator cleanup hardening.
 - [1.5.1 Patch Release](docs/releases/1.5.1.md): Account Generator OTP timeout,
   manual-verification state, and packaged verification notes.
 - [1.5.0 Release](docs/releases/1.5.0.md): detailed implementation

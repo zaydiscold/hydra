@@ -16,6 +16,15 @@ rendered a single six-digit code field or renamed the code input, Hydra could
 miss the field, fail late, or leave the renderer feeling blocked while the
 isolated browser was doing the real work.
 
+Follow-up live reproduction on 2026-06-02 found a second upstream change:
+OpenRouter's current signup form no longer advances from email alone. The page
+renders a required password field and a required legal acceptance checkbox
+before Clerk will move toward the email-code step. After those fields are
+filled, OpenRouter may still expose an empty `cf-turnstile-response` field,
+which means the form is waiting on Cloudflare/Turnstile verification even when
+there is no large visible CAPTCHA panel. The generator now treats that as
+`manual_verification`, not as an OTP wait.
+
 ## How It Was Found
 
 - The reported error matched Playwright's 30-second wait shape:
@@ -28,10 +37,23 @@ isolated browser was doing the real work.
     manual-verification check only after the OTP wait failed.
   - `finalizeOtpSubmissionPlaywright()` used a narrow OTP input selector before
     clicking a submit control.
+- Live upstream trace with Hydra's isolated Playwright path:
+  - Opened `https://openrouter.ai/sign-up`.
+  - Filled the email field only, matching the old generator behavior.
+  - OpenRouter stayed on the sign-up form and reported password validation.
+  - The active inputs were `input[name="emailAddress"]`,
+    `input[name="password"]`, and `input[name="legalAccepted"]`.
+  - After filling password and terms, the page exposed
+    `input[name="cf-turnstile-response"]` with an empty value, indicating an
+    upstream security gate rather than a ready OTP form.
 - Focused verification after the patch:
   - `node --check server/services/account-generator.js`
   - `npm run test:background-failure-visibility`
   - `npm run test:ui-static`
+  - `npm run test:openrouter-request-cancellation`
+  - Direct service smoke through `startSignupJob()` reached
+    `manual_verification` with `mode=browser_signup` and cleaned up without a
+    false launch failure after cancellation.
 
 ## Why It Matters
 
@@ -53,8 +75,16 @@ Redacted source evidence after the fix:
 ```text
 server/services/account-generator.js
 - OTP_CHECK_INTERVAL_MS = 350
+- SIGNUP_FORM_BLOCKED_GRACE_MS = 3 * 1000
 - readSignupCheckpoint(page)
+- signupBlocked / passwordBlocked / legalBlocked
+- input[name="cf-turnstile-response"]
+- turnstilePending
+- fillVisibleSignupPassword(page, ...)
+- acceptVisibleSignupTerms(page, ...)
 - Manual upstream verification visible ...
+- GENERATOR_SIGNUP_FORM_BLOCKED
+- GENERATOR_MANUAL_VERIFICATION_TIMEOUT
 - GENERATOR_OTP_SCREEN_TIMEOUT
 - fillVisibleOtpInput(page, otpCode, task.taskId)
 - input[name*="code" i]
@@ -65,24 +95,29 @@ src/api.js
 
 src/pages/Generator.jsx
 - waiting_for_otp_screen: Watching the isolated browser for email-code or human-verification state.
-- manual_verification: Finish the verification in the account browser...
+- entering_signup_details: Entering the signup password and required OpenRouter consent.
+- manual_verification: Finish any OpenRouter security check in the account browser...
 - Submit code
 ```
 
-No supplied signup password was used to create a live upstream account during
-this verification. The remaining upstream OTP or human-verification completion
-is operator-owned.
+No supplied signup password is recorded in this document. The verification
+stopped at the upstream security-check boundary; OTP receipt and final account
+creation remain operator-owned.
 
 ## Reproducibility
 
 1. Open Hydra's Account Generator.
 2. Start a browser-signup task with an email that Clerk treats as a new account.
-3. If OpenRouter shows human verification, Hydra should move to
+3. Hydra should fill the signup email and, when OpenRouter renders them on the
+   current step, the required password and legal checkbox before clicking
+   Continue.
+4. If OpenRouter keeps the password or legal checkbox required, Hydra should
+   fail with `GENERATOR_SIGNUP_FORM_BLOCKED` instead of hanging.
+5. If OpenRouter shows or hides a Turnstile/security gate, Hydra should move to
    `manual_verification` within the short poll window instead of waiting the full
    30 seconds.
-4. Complete the browser verification. Once the OTP form appears, Hydra should
+6. Complete the browser verification. Once the OTP form appears, Hydra should
    move to `awaiting_otp`.
-5. Enter the six-digit code in Hydra and press Enter or **Submit code**. The app
+7. Enter the six-digit code in Hydra and press Enter or **Submit code**. The app
    should stay responsive while the browser task submits the code and finishes
    session capture/provisioning.
-
