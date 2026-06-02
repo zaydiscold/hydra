@@ -185,7 +185,7 @@ export function registerIpcHandlers() {
       const biometricOn = await getPref('biometricEnabled');
       if (biometricOn) {
         try {
-          await promptBiometric('Unlock Hydra');
+          await promptBiometric('Unlock Hydra vault with Touch ID');
         } catch (promptErr) {
           console.warn(
             '[ipc] biometric auth-token gate denied release:',

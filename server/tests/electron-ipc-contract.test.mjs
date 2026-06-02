@@ -134,7 +134,7 @@ test('enabled biometric auth-token gate fails closed when prompting is unavailab
   );
   assert.match(handler.body, /const biometricOn = await getPref\('biometricEnabled'\)/);
   assert.match(handler.body, /if \(biometricOn\) \{/);
-  assert.match(handler.body, /await promptBiometric\('Unlock Hydra'\)/);
+  assert.match(handler.body, /await promptBiometric\('Unlock Hydra vault with Touch ID'\)/);
   assert.match(handler.body, /catch \(promptErr\) \{/);
   assert.match(handler.body, /biometric auth-token gate denied release/);
   assert.match(handler.body, /promptErr\?\.code \|\| 'BIOMETRIC_DENIED'/);

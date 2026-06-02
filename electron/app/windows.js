@@ -327,15 +327,17 @@ export function createSplashWindow() {
     +   'rgba(0,0,0,.10) 35%,'
     +   'transparent 60%);'
     + 'pointer-events:none;z-index:3}'
-    + '.vines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:.95;filter:drop-shadow(0 0 5px rgba(168,85,247,.22))}'
+    + '.vines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:1;filter:drop-shadow(0 0 8px rgba(168,85,247,.25)) drop-shadow(0 0 14px rgba(34,211,238,.12))}'
     + '.vines .stem,.vines .twig{fill:none;stroke-linecap:round;stroke-linejoin:round;'
-    + 'stroke-dasharray:0 1400;stroke-dashoffset:0;animation:grow 13s cubic-bezier(.18,.86,.2,1) forwards}'
-    + '.vines .twig{stroke-dasharray:0 360;opacity:.72;animation-name:growTwig}'
+    + 'stroke-dasharray:0 1500;stroke-dashoffset:0;animation:grow 10.2s cubic-bezier(.14,.92,.18,1) forwards}'
+    + '.vines .twig{stroke-dasharray:0 430;opacity:.80;animation-name:growTwig}'
     + '.vines .bud{fill:rgba(190,242,255,.70);opacity:0;transform-box:fill-box;transform-origin:center;'
-    + 'animation:bud 13s cubic-bezier(.16,1,.3,1) forwards;filter:drop-shadow(0 0 5px rgba(96,165,250,.35))}'
-    + '@keyframes grow{0%{stroke-dasharray:0 1400;opacity:.02}12%{opacity:.55}100%{stroke-dasharray:1400 0;opacity:.86}}'
-    + '@keyframes growTwig{0%,18%{stroke-dasharray:0 360;opacity:0}100%{stroke-dasharray:360 0;opacity:.68}}'
-    + '@keyframes bud{0%,42%{opacity:0;transform:scale(.25)}70%{opacity:.75;transform:scale(1.08)}100%{opacity:.58;transform:scale(1)}}'
+    + 'animation:bud 10.2s cubic-bezier(.16,1,.3,1) forwards;filter:drop-shadow(0 0 6px rgba(96,165,250,.42))}'
+    + '.vines .node{fill:rgba(255,255,255,.54);opacity:0;filter:drop-shadow(0 0 7px rgba(103,232,249,.38));animation:nodePulse 10.2s ease-out forwards}'
+    + '@keyframes grow{0%{stroke-dasharray:0 1500;opacity:.02}8%{opacity:.70}100%{stroke-dasharray:1500 0;opacity:.94}}'
+    + '@keyframes growTwig{0%,12%{stroke-dasharray:0 430;opacity:0}100%{stroke-dasharray:430 0;opacity:.76}}'
+    + '@keyframes bud{0%,34%{opacity:0;transform:scale(.25)}64%{opacity:.82;transform:scale(1.10)}100%{opacity:.62;transform:scale(1)}}'
+    + '@keyframes nodePulse{0%,24%{opacity:0;transform:scale(.45)}56%{opacity:.72;transform:scale(1.08)}100%{opacity:.48;transform:scale(1)}}'
     // Canvas pinned to the viewport, NOT to .outer. matter.js owns the
     // physics world; its walls are placed at viewport edges to match
     // exactly what the user sees. z-index sits above background chrome
@@ -429,10 +431,10 @@ export function createSplashWindow() {
     + 'background:linear-gradient(90deg,#a855f7,#ec4899,#60a5fa);'
     + 'box-shadow:0 0 14px rgba(168,85,247,.6);'
     + 'transform-origin:left center;transform:scaleX(0);'
-    // 16s — must match SPLASH_MIN_VISIBLE_MS in main.js. Bar fills from 0
+    // 15s — must match SPLASH_MIN_VISIBLE_MS in main.js. Bar fills from 0
     // to 1 over the full visible duration so it reaches 100% as the splash
     // dismisses. Pure CSS, runs even if JS physics fails to start.
-    + 'animation:fillbar 16s cubic-bezier(.22,.61,.36,1) forwards}'
+    + 'animation:fillbar 15s cubic-bezier(.22,.61,.36,1) forwards}'
     + '@keyframes fillbar{0%{transform:scaleX(0)}68%{transform:scaleX(.78)}100%{transform:scaleX(1)}}'
     + '.update-strip{width:220px;height:2px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:9px;opacity:0;transform:translateY(-2px);transition:opacity 180ms ease,transform 180ms ease}'
     + '.update-strip.is-active{opacity:1;transform:translateY(0)}'
@@ -502,7 +504,7 @@ export function createSplashWindow() {
     // Vendored matter-js drives the world. Words enter as compound bodies
     // at the top edge, shatter into per-letter bodies on first contact
     // with anything (walls, floor, or another body), then keep colliding
-    // like SpaghettiOs until the accelerating portal orbit starts at t=13s and
+    // like SpaghettiOs until the accelerating portal orbit starts at t=9.8s and
     // the pile swirls into a tightening circle behind the greeting card. Hard
     // static walls extend 400 px outside the
     // viewport so even fast-moving bodies cannot tunnel through.
@@ -524,16 +526,16 @@ export function createSplashWindow() {
     +   'if(!svg)return;'
     // Center point in the SVG viewBox coords (1280×860).
     +   'const cx=640,cy=430;'
-    // 9 primary stems radiating outward at randomized angles. Slight angle
+    // 11 primary stems radiating outward at randomized angles. Slight angle
     // jitter from a regular ring so the result feels organic, not
     // mechanically symmetric.
-    +   'const stems=9;'
+    +   'const stems=11;'
     +   'for(let i=0;i<stems;i++){'
     +     'const baseAngle=(i/stems)*Math.PI*2+Math.PI*0.5;'
-    +     'const angle=baseAngle+(Math.random()-0.5)*0.45;'
-    +     'const length=320+Math.random()*220;'
+    +     'const angle=baseAngle+(Math.random()-0.5)*0.56;'
+    +     'const length=350+Math.random()*250;'
     +     'const grad=i%2===0?"url(#vineA)":"url(#vineB)";'
-    +     'growBranch(svg,cx,cy,angle,length,0,3,grad,i*0.08);'
+    +     'growBranch(svg,cx,cy,angle,length,0,3,grad,i*0.055);'
     +   '}'
     + '}'
     + 'function growBranch(svg,x,y,angle,length,depth,maxDepth,stroke,baseDelay){'
@@ -546,7 +548,7 @@ export function createSplashWindow() {
     // result reading as a perfect spline. The visual is closer to branching
     // neurons or winter twigs and costs one SVG path per branch.
     +   'const perpX=-Math.sin(angle),perpY=Math.cos(angle);'
-    +   'const bend=(Math.random()-0.5)*length*0.26,segments=Math.max(3,7-depth);'
+    +   'const bend=(Math.random()-0.5)*length*0.34,segments=Math.max(4,8-depth);'
     +   'let d="M"+x.toFixed(1)+" "+y.toFixed(1);'
     +   'for(let s=1;s<=segments;s++){const t=s/segments;'
     +     'const localJitter=s===segments?0:(Math.random()-0.5)*length*(0.045+depth*0.008);'
@@ -556,7 +558,7 @@ export function createSplashWindow() {
     +     'd+=" L"+px.toFixed(1)+" "+py.toFixed(1);'
     +   '}'
     // Stroke width tapers per depth — trunk thick, leaf branches hairline.
-    +   'const sw=Math.max(0.5,1.8-depth*0.55);'
+    +   'const sw=Math.max(0.58,2.25-depth*0.50);'
     // Stroke: primary stems use the vineA/vineB gradients; deeper twigs
     // fade into a paler bud-colored stroke so the eye reads the hierarchy
     // (trunk → twig → leaf).
@@ -566,23 +568,24 @@ export function createSplashWindow() {
     +   'path.setAttribute("stroke",useStroke);'
     +   'path.setAttribute("stroke-width",sw.toFixed(2));'
     +   'path.setAttribute("class",depth===0?"stem":"twig");'
-    +   'path.style.animationDelay=(baseDelay+depth*0.45).toFixed(2)+"s";'
+    +   'path.style.animationDelay=(baseDelay+depth*0.28).toFixed(2)+"s";'
     +   'svg.appendChild(path);'
     // Children: 1-3 child branches per node, at random positions along
     // the parent. More children at shallow depths, taper down.
     +   'if(depth<maxDepth){'
-    +     'const numChildren=Math.max(1,Math.floor(2.1-depth*0.45+Math.random()*0.9));'
+    +     'const numChildren=Math.max(1,Math.floor(2.35-depth*0.34+Math.random()*1.0));'
     +     'for(let j=0;j<numChildren;j++){'
     +       'const t=0.45+Math.random()*0.42;'
     +       'const childBend=Math.sin(t*Math.PI)*bend;'
     +       'const childX=x+(ex-x)*t+perpX*childBend;'
     +       'const childY=y+(ey-y)*t+perpY*childBend;'
+    +       'if(depth<2){const node=document.createElementNS(NS,"circle");node.setAttribute("cx",childX.toFixed(1));node.setAttribute("cy",childY.toFixed(1));node.setAttribute("r",(1.1+Math.random()*0.9).toFixed(2));node.setAttribute("class","node");node.style.animationDelay=(baseDelay+depth*0.28+0.45).toFixed(2)+"s";svg.appendChild(node);}'
     // Children fork at ±25-60° from the parent direction, alternating
     // sides so the ivy doesn't all bend the same way.
     +       'const sign=j%2===0?1:-1;'
     +       'const fork=(0.38+Math.random()*0.48)*sign;'
-    +       'const childLength=length*(0.44+Math.random()*0.22);'
-    +       'growBranch(svg,childX,childY,angle+fork,childLength,depth+1,maxDepth,stroke,baseDelay+0.35);'
+    +       'const childLength=length*(0.47+Math.random()*0.24);'
+    +       'growBranch(svg,childX,childY,angle+fork,childLength,depth+1,maxDepth,stroke,baseDelay+0.24);'
     +     '}'
     +   '}'
     // Bud at every terminal leaf — small circle that fades in after the
@@ -594,7 +597,7 @@ export function createSplashWindow() {
     +     'bud.setAttribute("cy",ey.toFixed(1));'
     +     'bud.setAttribute("r",(1.4+Math.random()*0.8).toFixed(2));'
     +     'bud.setAttribute("class","bud");'
-    +     'bud.style.animationDelay=(baseDelay+depth*0.45+1.2).toFixed(2)+"s";'
+    +     'bud.style.animationDelay=(baseDelay+depth*0.28+0.72).toFixed(2)+"s";'
     +     'svg.appendChild(bud);'
     +   '}'
     + '}'
@@ -604,7 +607,7 @@ export function createSplashWindow() {
     + 'const updateStrip=document.getElementById("update-strip");'
     + 'const updateFill=document.getElementById("update-strip-fill");'
     + 'let phaseIndex=0,updateActive=false;'
-    + 'const HYDRA_SPLASH_DURATION_MS=16000,HYDRA_SPLASH_EXIT_MS=11750,HYDRA_SPLASH_PORTAL_MS=4250,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=3825,HYDRA_SPLASH_DISPOSE_MS=18500,HYDRA_SPLASH_TARGET=72;'
+    + 'const HYDRA_SPLASH_DURATION_MS=15000,HYDRA_SPLASH_EXIT_MS=9800,HYDRA_SPLASH_PORTAL_MS=5200,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=4550,HYDRA_SPLASH_DISPOSE_MS=17500,HYDRA_SPLASH_TARGET=72;'
     + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0,hydraSplashExitStartedAt=0;'
     + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,portalMs:HYDRA_SPLASH_PORTAL_MS,target:HYDRA_SPLASH_TARGET,queueLength:0,shatteredWordCount:0,duplicateShatterSkips:0,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,peakDynamicBodyCount:0,portalCollisionDisabled:false,portalLiftApplied:false,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
     + 'window.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics;'
@@ -642,9 +645,10 @@ export function createSplashWindow() {
     // ─── matter.js handles + engine ──────────────────────────────────────
     + 'const M=Matter,Eng=M.Engine,Wld=M.World,Bod=M.Bodies,Body=M.Body,Comp=M.Composite,Evt=M.Events;'
     + 'const engine=Eng.create({enableSleeping:true,positionIterations:8,velocityIterations:6});'
-    // intro gravity. matter.js gravity is dimensionless × scale. scale=0.0012
-    // gives ~1.0 g a fall feel comparable to Pica\'s introGravity.
-    + 'engine.world.gravity.x=0;engine.world.gravity.y=1.0;engine.world.gravity.scale=0.0012;'
+    // intro gravity. Matter.js gravity is dimensionless × scale; this keeps the
+    // Pica-style real-gravity feel but drops faster so the light-wave phase can
+    // breathe without making the full splash longer.
+    + 'engine.world.gravity.x=0;engine.world.gravity.y=1.18;engine.world.gravity.scale=0.00128;'
     + 'const hydraSplashFallbackLean=(Math.random()<0.5?-1:1)*0.035;let hydraSplashTiltGravityX=hydraSplashFallbackLean,hydraSplashLeanX=hydraSplashFallbackLean;let hydraSplashTiltSensor=null;'
     + 'hydraSplashDiagnostics.tilt.gravityX=hydraSplashTiltGravityX;'
     + 'function setHydraSplashTiltGravity(x,source){if(hydraSplashDisposed)return;const n=Number(x);if(!Number.isFinite(n))return;hydraSplashTiltGravityX=Math.max(-0.65,Math.min(0.65,n));hydraSplashDiagnostics.tilt.supported=source!=="fallback";hydraSplashDiagnostics.tilt.source=source;hydraSplashDiagnostics.tilt.gravityX=hydraSplashTiltGravityX;}'
@@ -701,7 +705,7 @@ export function createSplashWindow() {
     +     'plugin:{hydra:{kind:"word",text:text,color:color,fontSize:fontSize,weight:weight}}'
     +   '});'
     +   'Body.setAngularVelocity(body,(Math.random()-0.5)*0.08);'
-    +   'Body.setVelocity(body,{x:(Math.random()-0.5)*3.4+hydraSplashTiltGravityX*2.2,y:Math.random()*0.45});'
+    +   'Body.setVelocity(body,{x:(Math.random()-0.5)*3.4+hydraSplashTiltGravityX*2.2,y:0.55+Math.random()*0.55});'
     +   'Wld.add(engine.world,body);'
     + '}'
     // ─── shatter — replace the word body with one rectangle body per glyph.
@@ -765,11 +769,11 @@ export function createSplashWindow() {
     +   'const weight=isBrand?"800":"600";'
     +   'const color=it.color||PALETTE[hashStr(it.text)%PALETTE.length];'
     +   'spawnWord(it.text,color,fontSize,weight);'
-    +   'const delay=30+Math.random()*104+(Math.random()<0.16?Math.random()*138:0);'
+    +   'const delay=24+Math.random()*86+(Math.random()<0.14?Math.random()*110:0);'
     +   'hydraSplashSetTimeout(scheduleNextWord,delay);'
     + '}'
     + 'scheduleNextWord();'
-    // ─── Accelerating portal orbit — begin at t=11.75s. The settled pile keeps
+    // ─── Accelerating portal orbit — begin at t=9.8s. The settled pile keeps
     // its individual glyph bodies, but each frame bends their velocities into
     // a tightening clockwise orbit around the screen center. Collision masks
     // are cleared once orbit starts: the glyphs stay independently animated

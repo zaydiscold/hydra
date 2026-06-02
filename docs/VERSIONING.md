@@ -15,12 +15,14 @@ attempt telemetry, bounded proxy failover, real Command Grid/List/Map modes,
 desktop density, stronger proximity navigation, Pool Manager ergonomics, Bulk
 Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 
-Tracked `package.json` and `package-lock.json` now target `1.5.7`, a focused
-patch on top of the public `v1.5.6` baseline. It keeps the Account Generator
-rescue lane narrow while retaining the OpenRouter signup-shell and OTP-screen
-repairs, then fixes the local OTP-submit handoff so Enter/Submit moves
-immediately into `submitting_otp`, avoids the high-cost local route limiter, and
-keeps duplicate submits idempotent during background finalization.
+Tracked `package.json` and `package-lock.json` now target `1.5.8`, a focused
+patch on top of the public `v1.5.7` baseline. It keeps the Account Generator
+rescue lane narrow while retaining the OpenRouter signup-shell, OTP-screen, and
+OTP-submit repairs, then fixes the hidden Turnstile/loading-submit handoff so
+Hydra can retry signup after the gate clears and let the operator submit an
+email code if the isolated browser reaches that screen before detection catches
+up. It also makes saved-token Touch ID release auto-start on the unlock screen
+and tightens the packaged splash to a shorter, faster-gravity `15s` sequence.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -109,10 +111,12 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`1.5.7` is the current patch lane for the Account Generator OTP-submit
-responsiveness repair. The prior `1.5.6` lane remains the packaged
-signup-shell, abort-aware cleanup, isolated-browser handoff, and self-capture
-evidence baseline.
+`1.5.8` is the current patch lane for the Account Generator hidden security
+handoff, browser-backed OTP recovery repair, automatic saved-token Touch ID
+prompting, and the tightened Pica-gravity splash. The prior `1.5.7` lane remains
+the OTP-submit responsiveness and local rate-limit baseline; `1.5.6` remains
+the packaged signup-shell, abort-aware cleanup, isolated-browser handoff, and
+self-capture evidence baseline.
 Continue using `[skip-bump]` for audit, dogfood, and isolated
 documentation checkpoints after a release ships unless a real source fix must
 go to users. Do not produce a second minor bump merely to record manual
@@ -200,14 +204,16 @@ the bump marker in the final commit message.
 The user-visible splash changes belong in the minor release notes because they
 are not just a patch:
 
-- The visible splash duration is 16 seconds, 33% longer than the prior 12-second
-  sequence.
+- The visible splash duration is now 15 seconds. It keeps the longer polished
+  launch feel from the 16-second lane while trimming the slowest part of the
+  first fall.
 - The falling-word target is a bounded 72-word unique irregular shower. It
   supersedes the denser 120-word pass after packaged profiling showed the
   tighter queue preserves the visual effect with less physics and compositor
   pressure.
-- The exit begins at 13 seconds and ramps upward for three seconds with a
-  delayed fade, replacing the earlier abrupt two-second gravity flip.
+- The exit now begins at 9.8 seconds and owns a 5.2-second collision-free portal
+  finish. The faster intro gravity and downward spawn velocity make the pile
+  form sooner without adding more bodies.
 - Matter.js physics still runs through one owned `requestAnimationFrame` loop,
   with physics stepped at 45 Hz and painting throttled to 30 fps.
 - The splash self-disposes after its visual window and reports diagnostics, so

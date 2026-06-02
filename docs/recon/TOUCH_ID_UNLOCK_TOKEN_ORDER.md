@@ -23,7 +23,8 @@ missing, expired, malformed, or later rejected by the local API.
 ## Change
 
 `electron/app/ipc.js` now reads and validates
-`renderer-auth-token.json` before calling `promptBiometric('Unlock Hydra')`.
+`renderer-auth-token.json` before calling
+`promptBiometric('Unlock Hydra vault with Touch ID')`.
 Only a present, non-empty, unexpired token can trigger Touch ID. Expired tokens
 are removed without prompting. If Touch ID is enabled and the token is usable,
 Hydra still prompts once per relaunch before releasing that token; cancel,
@@ -119,9 +120,10 @@ after app readiness:
   24-hour token before prompting, preserving the no-token password fallback.
 
 The password fallback surface was also tightened for the native-prompt handoff:
-the lock card now uses a static layered background instead of backdrop blur,
-and a concise `DESKTOP UNLOCK` strip explains that Touch ID checks the saved
-24-hour unlock first while password remains ready. This keeps the screen behind
+the lock card now uses a static layered background instead of backdrop blur, a
+CSS-only orbit sits behind the card during the bounded startup-motion window,
+and a concise `DESKTOP UNLOCK` strip explains that Touch ID auto-starts for a
+saved 24-hour unlock while password remains ready. This keeps the screen behind
 the native prompt deliberate without adding another persistent animation.
 
 Regression coverage:

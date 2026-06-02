@@ -32,6 +32,10 @@ const BROWSER_BACKED_STATUSES = new Set([
   'submitting_otp',
   'waiting_for_completion',
 ]);
+const BROWSER_OTP_OVERRIDE_STATUSES = new Set([
+  'waiting_for_otp_screen',
+  'manual_verification',
+]);
 const STATUS_COPY = {
   detecting_account: 'Checking whether this email already exists.',
   falling_back_to_browser: 'Opening the isolated account browser for signup.',
@@ -71,6 +75,8 @@ function checkpointLabel(checkpoint) {
     case 'otp':
       return 'OTP screen detected';
     case 'manual_verification':
+      if (checkpoint.turnstilePending) return 'Security check pending';
+      if (checkpoint.submitPending) return 'Signup handoff pending';
       return 'Security check visible';
     case 'signup_blocked': {
       const fields = [
@@ -92,6 +98,12 @@ function checkpointLabel(checkpoint) {
 function isOtpReady(status, checkpoint) {
   if (OTP_FINALIZATION_STATUSES.has(status) || isTerminalStatus(status)) return false;
   return status === 'awaiting_otp' || checkpoint?.state === 'otp';
+}
+
+function canUseBrowserOtpOverride(status, checkpoint, browserBacked) {
+  if (isOtpReady(status, checkpoint)) return false;
+  if (!browserBacked || OTP_FINALIZATION_STATUSES.has(status) || isTerminalStatus(status)) return false;
+  return BROWSER_OTP_OVERRIDE_STATUSES.has(status);
 }
 
 export default function Generator({ addToast }) {
@@ -351,6 +363,8 @@ export default function Generator({ addToast }) {
   const checkpointText = checkpointLabel(checkpoint);
   const otpReady = isOtpReady(status, checkpoint);
   const browserBacked = jobMode === 'browser_signup' || BROWSER_BACKED_STATUSES.has(status) || Boolean(checkpoint?.state);
+  const browserOtpOverride = canUseBrowserOtpOverride(status, checkpoint, browserBacked);
+  const canSubmitOtp = otpReady || browserOtpOverride;
   const canFocusBrowser = browserBacked && !isTerminalStatus(status) && Boolean(taskId);
 
   return (
@@ -456,10 +470,18 @@ export default function Generator({ addToast }) {
           )}
 
           <div className="status-indicator generator-status-shell">
-            {otpReady ? (
-              <div className="otp-box generator-otp-panel">
+            {canSubmitOtp ? (
+              <div className={`otp-box generator-otp-panel${browserOtpOverride ? ' generator-otp-panel--manual' : ''}`}>
                 <p className="generator-status-copy">
-                  <strong>{generatorModeLabel(jobMode)}</strong> is ready for the email code sent to {emailTemplate}.
+                  {otpReady ? (
+                    <>
+                      <strong>{generatorModeLabel(jobMode)}</strong> is ready for the email code sent to {emailTemplate}.
+                    </>
+                  ) : (
+                    <>
+                      Finish the browser check. If the code field is already visible there, enter the email code here.
+                    </>
+                  )}
                 </p>
                 <form
                   className="generator-otp-row"
@@ -479,10 +501,15 @@ export default function Generator({ addToast }) {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                   />
-                  <button type="submit" className="btn btn-primary generator-otp-submit" disabled={otp.length !== 6 || verifying || !otpReady}>
+                  <button type="submit" className="btn btn-primary generator-otp-submit" disabled={otp.length !== 6 || verifying || !canSubmitOtp}>
                     {verifying ? 'Submitting...' : 'Submit code'}
                   </button>
                 </form>
+                {browserOtpOverride && checkpointText && (
+                  <p className="generator-checkpoint-line" aria-live="polite">
+                    Browser state: {checkpointText}
+                  </p>
+                )}
               </div>
             ) : (
               <>

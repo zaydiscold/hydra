@@ -354,11 +354,12 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
 
     assert.match(windows, /let hydraSplashDisposed=false/);
     assert.match(windows, /function disposeHydraSplash\(reason="manual"\)/);
-    assert.match(windows, /HYDRA_SPLASH_DURATION_MS=16000/);
-    assert.match(windows, /HYDRA_SPLASH_EXIT_MS=11750/);
-    assert.match(windows, /HYDRA_SPLASH_PORTAL_MS=4250/);
-    assert.match(windows, /HYDRA_SPLASH_DISPOSE_MS=18500/);
+    assert.match(windows, /HYDRA_SPLASH_DURATION_MS=15000/);
+    assert.match(windows, /HYDRA_SPLASH_EXIT_MS=9800/);
+    assert.match(windows, /HYDRA_SPLASH_PORTAL_MS=5200/);
+    assert.match(windows, /HYDRA_SPLASH_DISPOSE_MS=17500/);
     assert.match(windows, /HYDRA_SPLASH_TARGET=72/);
+    assert.match(windows, /engine\.world\.gravity\.y=1\.18;engine\.world\.gravity\.scale=0\.00128/);
     assert.doesNotMatch(windows, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
     assert.match(windows, /m\.kind="shattered";hydraSplashDiagnostics\.shatteredWordCount\+\+/);
     assert.match(windows, /shuffle\(items\)\.slice\(0,Math\.min\(n,items\.length\)\)/);
@@ -366,7 +367,7 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /\.aperture::before/);
     assert.doesNotMatch(windows, /dial-cell/);
     assert.match(windows, /baseFontSize\*\(0\.903\+Math\.random\(\)\*1\.092\)/);
-    assert.match(windows, /const delay=30\+Math\.random\(\)\*104\+\(Math\.random\(\)<0\.16\?Math\.random\(\)\*138:0\)/);
+    assert.match(windows, /const delay=24\+Math\.random\(\)\*86\+\(Math\.random\(\)<0\.14\?Math\.random\(\)\*110:0\)/);
     assert.match(windows, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
     assert.match(windows, /Welcome, /);
     assert.match(windows, /portalRadius=Math\.min\(W\(\),H\(\)\)\*\(0\.46-0\.27\*easedExit\)/);
@@ -377,7 +378,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /b\.collisionFilter\.mask=0;b\.isSensor=true/);
     assert.match(windows, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
     assert.match(windows, /hydraSplashDiagnostics\.portalLiftApplied=true/);
-    assert.match(windows, /const stems=9/);
+    assert.match(windows, /const stems=11/);
+    assert.match(windows, /\.vines \.node/);
     assert.match(windows, /const wave=\.5\+\.5\*Math\.sin/);
     assert.match(windows, /if\(i%5===0\)\{ctx\.shadowColor=m\.color;ctx\.shadowBlur=4\+portalRatio\*8\+wave\*3;\}/);
     assert.match(windows, /function drawHydraPortal\(now,ratio\)/);
@@ -391,7 +393,7 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
     assert.match(windows, /const physicsStep=hydraSplashExitStartedAt\?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS/);
     assert.match(windows, /Eng\.update\(engine,physicsStep\)/);
-    assert.match(windows, /segments=Math\.max\(3,7-depth\)/);
+    assert.match(windows, /segments=Math\.max\(4,8-depth\)/);
     assert.doesNotMatch(windows, /Run\.create/);
     assert.doesNotMatch(windows, /Run\.run/);
     assert.match(windows, /Eng\.clear\(engine\)/);

@@ -166,8 +166,13 @@ test('desktop unlock fallback stays polished without an idle backdrop-filter rep
   const css = readRepoFile('src/index.css');
 
   assert.match(app, /className="desktop-unlock-note" role="note"/);
-  assert.match(app, /Touch ID checks your saved 24-hour unlock first when available/);
+  assert.match(app, /Touch ID opens automatically for a saved 24-hour unlock/);
+  assert.match(app, /className="lock-backdrop-orbit" aria-hidden="true"/);
+  assert.match(app, /desktop-unlock-note__status/);
   assert.match(css, /\.desktop-unlock-note\s*\{[\s\S]*?border-left:\s*4px solid var\(--accent-secondary\);/);
+  assert.match(css, /\.desktop-unlock-note__status\s*\{/);
+  assert.match(css, /\.lock-backdrop-orbit\s*\{/);
+  assert.match(css, /@keyframes unlockOrbit/);
   assert.doesNotMatch(cssRuleBlock(css, '.lock-card {'), /backdrop-filter:/);
   assert.doesNotMatch(cssRuleBlock(css, '.vault-indicator {'), /backdrop-filter:/);
 });
@@ -208,12 +213,14 @@ test('splash owns one throttled physics and render loop', () => {
   const splashLabels = [...windowsJs.matchAll(/\{ text: '([^']+)',\s+tag: '(?:brand|model)'/g)]
     .map(([, label]) => label);
 
-  assert.match(windowsJs, /HYDRA_SPLASH_DURATION_MS=16000/);
-  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=11750/);
-  assert.match(windowsJs, /HYDRA_SPLASH_PORTAL_MS=4250/);
-  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FADE_DELAY_MS=3825/);
-  assert.match(windowsJs, /HYDRA_SPLASH_DISPOSE_MS=18500/);
+  assert.match(windowsJs, /HYDRA_SPLASH_DURATION_MS=15000/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_MS=9800/);
+  assert.match(windowsJs, /HYDRA_SPLASH_PORTAL_MS=5200/);
+  assert.match(windowsJs, /HYDRA_SPLASH_EXIT_FADE_DELAY_MS=4550/);
+  assert.match(windowsJs, /HYDRA_SPLASH_DISPOSE_MS=17500/);
   assert.match(windowsJs, /HYDRA_SPLASH_TARGET=72/);
+  assert.match(windowsJs, /engine\.world\.gravity\.y=1\.18;engine\.world\.gravity\.scale=0\.00128/);
+  assert.match(windowsJs, /y:0\.55\+Math\.random\(\)\*0\.55/);
   assert.ok(splashLabels.length >= 72, 'splash corpus must cover the bounded queue without refill');
   assert.equal(new Set(splashLabels).size, splashLabels.length, 'splash corpus labels must stay unique');
   assert.doesNotMatch(windowsJs, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
@@ -244,15 +251,17 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /b\.collisionFilter\.mask=0;b\.isSensor=true/);
   assert.match(windowsJs, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
   assert.match(windowsJs, /hydraSplashDiagnostics\.portalLiftApplied=true/);
-  assert.match(windowsJs, /const stems=9/);
+  assert.match(windowsJs, /const stems=11/);
   assert.match(windowsJs, /baseFontSize\*\(0\.903\+Math\.random\(\)\*1\.092\)/);
   assert.match(windowsJs, /const wave=\.5\+\.5\*Math\.sin/);
   assert.match(windowsJs, /ctx\.shadowBlur=4\+portalRatio\*8\+wave\*3/);
-  assert.match(windowsJs, /const delay=30\+Math\.random\(\)\*104\+\(Math\.random\(\)<0\.16\?Math\.random\(\)\*138:0\)/);
+  assert.match(windowsJs, /const delay=24\+Math\.random\(\)\*86\+\(Math\.random\(\)<0\.14\?Math\.random\(\)\*110:0\)/);
   assert.match(windowsJs, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
   assert.match(windowsJs, /Welcome, /);
   assert.match(windowsJs, /function drawHydraPortal\(now,ratio\)/);
-  assert.match(windowsJs, /const bend=\(Math\.random\(\)-0\.5\)\*length\*0\.26,segments=Math\.max\(3,7-depth\)/);
+  assert.match(windowsJs, /const bend=\(Math\.random\(\)-0\.5\)\*length\*0\.34,segments=Math\.max\(4,8-depth\)/);
+  assert.match(windowsJs, /\.vines \.node/);
+  assert.match(windowsJs, /node\.setAttribute\("class","node"\)/);
   assert.match(windowsJs, /d\+=" L"\+px\.toFixed\(1\)\+" "\+py\.toFixed\(1\)/);
   assert.doesNotMatch(windowsJs, /path\.setAttribute\("d","M"\+x\.toFixed\(1\)\+" "\+y\.toFixed\(1\)\+" C"/);
   assert.match(windowsJs, /ctx\.globalCompositeOperation="lighter"/);
@@ -683,9 +692,16 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(generator, /generatorModeLabel\(jobMode\)/);
   assert.match(generator, /checkpointLabel\(checkpoint\)/);
   assert.match(generator, /function isOtpReady\(status, checkpoint\)/);
+  assert.match(generator, /const BROWSER_OTP_OVERRIDE_STATUSES = new Set/);
+  assert.match(generator, /function canUseBrowserOtpOverride\(status, checkpoint, browserBacked\)/);
   assert.match(generator, /const OTP_FINALIZATION_STATUSES = new Set/);
   assert.match(generator, /if \(OTP_FINALIZATION_STATUSES\.has\(status\) \|\| isTerminalStatus\(status\)\) return false/);
   assert.match(generator, /const otpReady = isOtpReady\(status, checkpoint\)/);
+  assert.match(generator, /const browserOtpOverride = canUseBrowserOtpOverride\(status, checkpoint, browserBacked\)/);
+  assert.match(generator, /const canSubmitOtp = otpReady \|\| browserOtpOverride/);
+  assert.match(generator, /If the code field is already visible there, enter the email code here/);
+  assert.match(generator, /checkpoint\.turnstilePending/);
+  assert.match(generator, /checkpoint\.submitPending/);
   assert.match(generator, /Browser state: \{checkpointText\}/);
   assert.match(generator, /api\.focusGeneratorBrowserQuiet\(taskId\)/);
   assert.match(generator, /Show browser/);
@@ -701,6 +717,7 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(css, /\.generator-start-btn:disabled\s*\{[\s\S]*?filter:\s*saturate\(0\.55\) brightness\(0\.85\);/);
   assert.match(generator, /className="status-indicator generator-status-shell"/);
   assert.match(css, /\.generator-status-shell\s*\{[\s\S]*?margin-top:\s*var\(--space-md\);/);
+  assert.match(css, /\.generator-otp-panel--manual\s*\{[\s\S]*?border:\s*1px solid rgba\(255,\s*184,\s*77,\s*0\.28\);/);
   assert.match(css, /\.generator-otp-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(184px,\s*260px\)\s+minmax\(148px,\s*max-content\);/);
   assert.match(css, /\.generator-otp-row \.otp-input\s*\{[\s\S]*?letter-spacing:\s*0\.14em;/);
   assert.match(css, /\.generator-otp-row \.otp-input\s*\{[\s\S]*?border-width:\s*2px;/);
@@ -733,6 +750,7 @@ test('first-run setup is a guided password key tour instead of a login dead end'
 
 test('desktop auth bootstrap renders password fallback while Touch ID release is pending', () => {
   const app = readRepoFile('src/App.jsx');
+  const api = readRepoFile('src/api.js');
   const checkAuthStart = app.indexOf('const checkAuth = useCallback(async () => {');
   const checkAuthEnd = app.indexOf('\n  useEffect(() => {\n    checkAuth();', checkAuthStart);
   const checkAuth = app.slice(checkAuthStart, checkAuthEnd);
@@ -748,7 +766,12 @@ test('desktop auth bootstrap renders password fallback while Touch ID release is
   assert.match(checkAuth, /authStateRef\.current !== 'login'/);
   assert.match(checkAuth, /Persisted desktop unlock unavailable/);
   assert.match(app, /authBootstrapRef\.current \+= 1/);
+  assert.match(app, /touchIdAutoPromptedRef/);
+  assert.match(app, /setTrackedTimeout\('AuthScreen\.autoTouchIdUnlock'/);
+  assert.match(app, /handleTouchIdUnlock\(\{ automatic: true \}\)/);
   assert.match(app, /Unlock with Touch ID/);
+  assert.match(api, /let hydrateTokenInFlight = null/);
+  assert.match(api, /hydrateTokenInFlight = hydrateTokenInFlight \|\| nativeAuthToken\('getAuthToken'\)/);
   assert.match(app, /await api\.lockToken\(\)/);
   assert.match(app, /Device unlock retention failed during local lock:/);
 });

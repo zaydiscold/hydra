@@ -127,7 +127,9 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
   const [loading, setLoading] = useState(false);
   const [touchIdAvailable, setTouchIdAvailable] = useState(false);
   const [touchIdLoading, setTouchIdLoading] = useState(false);
+  const [touchIdAutoStatus, setTouchIdAutoStatus] = useState('');
   const [setupAccount, setSetupAccount] = useState(null);
+  const touchIdAutoPromptedRef = useRef(false);
 
   // ── Nuclear Reset Logic ──
   const [nukeProgress, setNukeProgress] = useState(0); // 0 to 100
@@ -252,28 +254,51 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
     setLoading(false);
   }
 
-  async function handleTouchIdUnlock() {
+  const handleTouchIdUnlock = useCallback(async ({ automatic = false } = {}) => {
     setError('');
+    if (!automatic) setTouchIdAutoStatus('');
+    if (automatic) setTouchIdAutoStatus('Checking Touch ID...');
     setTouchIdLoading(true);
     try {
       const token = await api.hydrateToken();
       if (!token) {
+        if (automatic) {
+          setTouchIdAutoStatus('Touch ID skipped. Password stays ready.');
+          return;
+        }
         throw new Error('Touch ID unlock needs a saved device session. Unlock once with your password to refresh it.');
       }
       const res = await api.getAuthStatus();
       const payload = res?.data ?? res ?? {};
       if (!payload.authenticated) {
         await api.clearToken();
+        if (automatic) {
+          setTouchIdAutoStatus('Saved unlock expired. Password stays ready.');
+          return;
+        }
         throw new Error('The saved device session expired. Unlock once with your password to refresh it.');
       }
       onSuccess();
     } catch (err) {
-      logger.warn('Touch ID unlock failed:', err.message);
-      setError(err.message);
+      logger.warn(`${automatic ? 'Automatic Touch ID unlock' : 'Touch ID unlock'} failed:`, err.message);
+      if (automatic) {
+        setTouchIdAutoStatus('Touch ID was cancelled. Password stays ready.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setTouchIdLoading(false);
     }
-  }
+  }, [onSuccess]);
+
+  useEffect(() => {
+    if (isSetup || !touchIdAvailable || touchIdAutoPromptedRef.current) return undefined;
+    touchIdAutoPromptedRef.current = true;
+    const timerId = setTrackedTimeout('AuthScreen.autoTouchIdUnlock', () => {
+      handleTouchIdUnlock({ automatic: true });
+    }, 320);
+    return () => clearTrackedTimeout(timerId);
+  }, [handleTouchIdUnlock, isSetup, touchIdAvailable]);
 
   async function handleManagementKeySubmit(e) {
     e.preventDefault();
@@ -400,6 +425,13 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
 
   return (
     <div className="lock-screen">
+      {!isSetup && (
+        <div className="lock-backdrop-orbit" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      )}
       <div className="lock-card animate-spring" style={{ maxWidth: '600px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-xs)' }}>
           <div className="lock-card-icon" style={{ margin: 0 }}>HYDRA</div>
@@ -424,7 +456,8 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
         {!isSetup && (
           <div className="desktop-unlock-note" role="note">
             <span className="desktop-unlock-note__tag">DESKTOP UNLOCK</span>
-            <span>Touch ID checks your saved 24-hour unlock first when available. Password stays ready as the secure fallback.</span>
+            <span>Touch ID opens automatically for a saved 24-hour unlock. Password stays ready as the fallback.</span>
+            {touchIdAutoStatus && <span className="desktop-unlock-note__status">{touchIdAutoStatus}</span>}
           </div>
         )}
         {renderSetupStepper()}
@@ -495,7 +528,7 @@ function AuthScreen({ mode, onSuccess, onRestartRequired, onRefreshAuth }) {
                 type="button"
                 className="btn btn-secondary btn-full desktop-touch-id-btn"
                 disabled={loading || touchIdLoading}
-                onClick={handleTouchIdUnlock}
+                onClick={() => handleTouchIdUnlock()}
               >
                 {touchIdLoading
                   ? <><div className="spinner-sm" /> Checking Touch ID...</>

@@ -3156,6 +3156,81 @@ select:-webkit-autofill {
     radial-gradient(circle at 50% 58%, rgba(255, 0, 255, 0.07), transparent 48%);
 }
 
+.lock-backdrop-orbit {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  width: min(680px, 86vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.82;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(5, 11, 24, 0.26), transparent 18%),
+    conic-gradient(from 20deg, transparent 0 11%, rgba(0, 229, 255, 0.12) 13%, transparent 18% 35%, rgba(236, 72, 153, 0.12) 39%, transparent 45% 100%);
+  filter: drop-shadow(0 0 24px rgba(0, 229, 255, 0.10));
+}
+
+.lock-backdrop-orbit::before,
+.lock-backdrop-orbit::after,
+.lock-backdrop-orbit span {
+  content: '';
+  position: absolute;
+  inset: 13%;
+  border: 1px solid rgba(103, 232, 249, 0.18);
+  border-radius: 42% 58% 53% 47%;
+  transform: rotate(var(--orbit-rotate, 0deg));
+}
+
+.lock-backdrop-orbit::after {
+  inset: 23%;
+  --orbit-rotate: 33deg;
+  border-color: rgba(236, 72, 153, 0.16);
+  border-radius: 58% 42% 48% 52%;
+}
+
+.lock-backdrop-orbit span {
+  inset: 33%;
+  --orbit-rotate: -21deg;
+  border-color: rgba(251, 191, 36, 0.14);
+}
+
+.lock-backdrop-orbit span:nth-child(2) {
+  inset: 10%;
+  --orbit-rotate: 71deg;
+  border-color: rgba(168, 85, 247, 0.10);
+}
+
+.lock-backdrop-orbit span:nth-child(3) {
+  inset: 41%;
+  border: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 14% 50%, rgba(103, 232, 249, 0.38) 0 2px, transparent 3px),
+    radial-gradient(circle at 82% 34%, rgba(236, 72, 153, 0.32) 0 2px, transparent 3px),
+    radial-gradient(circle at 52% 88%, rgba(251, 191, 36, 0.30) 0 2px, transparent 3px);
+}
+
+.app-shell--ambient-motion .lock-backdrop-orbit::before,
+.app-shell--ambient-motion .lock-backdrop-orbit::after,
+.app-shell--ambient-motion .lock-backdrop-orbit span {
+  animation: unlockOrbit 24s linear infinite;
+}
+
+.app-shell--ambient-motion .lock-backdrop-orbit::after {
+  animation-duration: 31s;
+  animation-direction: reverse;
+}
+
+.app-shell--ambient-motion .lock-backdrop-orbit span {
+  animation-duration: 19s;
+}
+
+@keyframes unlockOrbit {
+  to { transform: rotate(calc(var(--orbit-rotate, 0deg) + 360deg)); }
+}
+
 /* Vault Indicator */
 .vault-indicator {
   display: inline-flex;
@@ -3211,6 +3286,8 @@ select:-webkit-autofill {
   max-width: 440px;
   box-shadow: 12px 12px 0 var(--text-primary);
   animation: slide-up 0.4s var(--ease-out-expo);
+  position: relative;
+  z-index: 1;
 }
 
 .desktop-unlock-note {
@@ -3235,6 +3312,13 @@ select:-webkit-autofill {
   font-weight: 900;
   letter-spacing: 0.08em;
   white-space: nowrap;
+}
+
+.desktop-unlock-note__status {
+  grid-column: 2;
+  color: var(--text-tertiary);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .desktop-unlock-divider {
@@ -3389,6 +3473,10 @@ select:-webkit-autofill {
   .desktop-unlock-note {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .desktop-unlock-note__status {
+    grid-column: auto;
   }
 
   .setup-stepper {
@@ -4578,6 +4666,15 @@ select:-webkit-autofill {
 
 .generator-otp-panel {
   max-width: 620px;
+}
+
+.generator-otp-panel--manual {
+  padding: var(--space-md);
+  border: 1px solid rgba(255, 184, 77, 0.28);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, rgba(255, 184, 77, 0.09), rgba(0, 229, 255, 0.05)),
+    rgba(8, 10, 14, 0.64);
 }
 
 .generator-otp-row {

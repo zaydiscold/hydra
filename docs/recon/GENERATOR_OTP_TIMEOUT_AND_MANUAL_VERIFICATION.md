@@ -65,6 +65,17 @@ from OTP submit, validates six-digit codes at the controller boundary, flips the
 UI into `submitting_otp` immediately, hides stale OTP controls during
 finalization, records `otpAcceptedAt`, and makes duplicate submits idempotent.
 
+Follow-up live probe on 2026-06-02 found a seventh post-security-check edge:
+OpenRouter can leave the filled signup modal on `/sign-up` with all fields
+disabled, a disabled/loading Continue button, and a hidden empty
+`cf-turnstile-response`. Hydra already identified that as an upstream
+manual/security handoff, but after the hidden check cleared it only waited for
+an OTP page and did not retry the now-unblocked signup form. Hydra `1.5.8`
+records `turnstilePending` and loading-button `submitPending`, retries the
+signup form after manual verification clears, and exposes a deliberate
+browser-backed OTP override so the operator can submit the email code if the
+isolated browser is visibly on a code screen before the detector catches up.
+
 ## How It Was Found
 
 - The reported error matched Playwright's 30-second wait shape:
@@ -132,6 +143,19 @@ finalization, records `otpAcceptedAt`, and makes duplicate submits idempotent.
   - `npm run test:background-failure-visibility`
   - `npm run test:ui-static`
   - `npm run build`
+- `v1.5.8` focused verification:
+  - `node --check server/services/account-generator.js`
+  - `npm run test:background-failure-visibility`
+  - `npm run test:ui-static`
+  - `npm run build`
+  - `git diff --check`
+  - Bounded source-level live probe with a throwaway `preheat.cc` alias reached
+    `manual_verification` after filling first name, last name, email, password,
+    and legal acceptance. The sanitized checkpoint recorded
+    `submitPending=true`; the browser DOM showed `url=https://openrouter.ai/sign-up`,
+    a hidden empty `cf-turnstile-response`, and a disabled/loading Continue
+    button. The task was cancelled through `cleanupJob()` without OTP submit or
+    account persistence.
 - `v1.5.3` focused verification:
   - `node --check server/services/account-generator.js`
   - `node --check server/controllers/GeneratorController.js`
@@ -209,6 +233,10 @@ server/services/account-generator.js
 - OTP_FINALIZATION_STATUSES
 - GENERATOR_OTP_INVALID
 - otpAcceptedAt
+- turnstilePending
+- submitPending
+- postManualAdvanceAttempts
+- browserOtpOverrideReady
 
 server/controllers/GeneratorController.js
 - otp: z.string().regex(/^\d{6}$/, 'OTP must be a 6-digit code')
@@ -219,6 +247,9 @@ server/routes/generator.js
 
 src/pages/Generator.jsx
 - OTP_FINALIZATION_STATUSES
+- BROWSER_OTP_OVERRIDE_STATUSES
+- canUseBrowserOtpOverride(status, checkpoint, browserBacked)
+- Finish the browser check. If the code field is already visible there, enter the email code here.
 - setStatus('submitting_otp')
 - isOtpReady blocks finalization and terminal statuses
 ```

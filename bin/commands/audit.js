@@ -557,15 +557,17 @@ function buildAudit() {
         && !electronWindows.includes('Run.create')
         && !electronWindows.includes('Run.run')
         && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
-        && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=16000')
-        && electronWindows.includes('HYDRA_SPLASH_EXIT_MS=11750')
-        && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=4250')
+        && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=15000')
+        && electronWindows.includes('HYDRA_SPLASH_EXIT_MS=9800')
+        && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=5200')
+        && electronWindows.includes('engine.world.gravity.y=1.18;engine.world.gravity.scale=0.00128')
         && electronWindows.includes('baseFontSize*(0.903+Math.random()*1.092)')
         && electronWindows.includes('const wave=.5+.5*Math.sin')
         && electronWindows.includes('function drawHydraPortal')
         && electronWindows.includes('ctx.globalCompositeOperation="lighter"')
-        && electronWindows.includes('segments=Math.max(3,7-depth)')
-        && electronWindows.includes('const stems=9')
+        && electronWindows.includes('segments=Math.max(4,8-depth)')
+        && electronWindows.includes('const stems=11')
+        && electronWindows.includes('.vines .node')
         && electronWindows.includes('HYDRA_SPLASH_TARGET=72')
         && !electronWindows.includes('Bod.rectangle(w/2,-WT/2,lx,WT')
         && electronWindows.includes('m.kind="shattered";hydraSplashDiagnostics.shatteredWordCount++')
@@ -695,7 +697,7 @@ function buildAudit() {
         && generatorPage.includes('inputMode="numeric"')
         && generatorPage.includes('function isOtpReady(status, checkpoint)')
         && generatorPage.includes('const otpReady = isOtpReady(status, checkpoint)')
-        && generatorPage.includes('disabled={otp.length !== 6 || verifying || !otpReady}')
+        && generatorPage.includes('disabled={otp.length !== 6 || verifying || !canSubmitOtp}')
         && accountGenerator.includes('const SIGNUP_SHELL_CHECK_INTERVAL_MS = 500')
         && accountGenerator.includes('waitForSignupShell(task, page)')
         && accountGenerator.includes('page.setDefaultTimeout(Math.max(STARTUP_TIMEOUT_MS, OTP_WAIT_TIMEOUT_MS))')
@@ -755,7 +757,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation remains 16s with a unique 72-word shower, approximately 5% larger glyph sizing, one-shot parent shattering, no top-edge ceiling overlap, and a staged 4.25s collision-free portal orbit with a canvas-owned light wave; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit, duplicate start/OTP submissions are gated, browser signup surfaces manual verification, and OTP-page submission is explicit; ordinary proxy fetches abort and stop retrying when their clients disconnect; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is tightened to 15s with a unique 72-word shower, approximately 5% larger glyph sizing, faster Pica-style intro gravity, denser neuron branches, one-shot parent shattering, no top-edge ceiling overlap, and a staged 5.2s collision-free portal orbit with a canvas-owned light wave; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit, duplicate start/OTP submissions are gated, browser signup surfaces manual verification, and OTP-page submission is explicit; ordinary proxy fetches abort and stop retrying when their clients disconnect; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',
@@ -1064,7 +1066,7 @@ function buildAudit() {
       electronIpc.includes('const parsed = await readAuthTokenRecord()')
         && electronIpc.indexOf('const parsed = await readAuthTokenRecord()') < electronIpc.indexOf("const biometricOn = await getPref('biometricEnabled')")
         && electronIpc.includes("if (biometricOn) {")
-        && electronIpc.includes("await promptBiometric('Unlock Hydra')")
+        && electronIpc.includes("await promptBiometric('Unlock Hydra vault with Touch ID')")
         && electronIpc.includes('biometric auth-token gate denied release')
         && electronBiometric.includes('Touch ID availability check failed')
         && electronBiometric.includes('Touch ID prompt failed (${e.code})')
@@ -1075,8 +1077,10 @@ function buildAudit() {
         && electronIpc.includes('if (biometricOn && token && expiresAt > Date.now())')
         && electronIpc.includes('retainedForBiometric: true')
         && rendererApi.includes("nativeAuthToken('lockAuthToken')")
+        && rendererApi.includes('let hydrateTokenInFlight = null')
         && rendererApp.includes('await api.lockToken()')
         && rendererApp.includes('Unlock with Touch ID')
+        && rendererApp.includes('AuthScreen.autoTouchIdUnlock')
         && electronIpcContractTest.includes('manual vault lock only retains a usable auth token behind the biometric gate')
         && electronMainProcessTest.includes('keeps biometric auth-token fallback failures visible while failing closed'),
       'native auth-token release validates token presence/expiry before prompting, requires biometric approval when enabled, logs prompt/availability failures, and lets manual Lock retain a usable device credential only behind that same gate so Touch ID and password remain available',

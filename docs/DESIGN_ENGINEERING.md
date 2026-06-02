@@ -8,10 +8,10 @@ surface.
 
 The packaged splash uses Matter.js bodies and one owned canvas render loop.
 Words fall as bodies on an irregular recursive timeout cadence, shatter into
-individually simulated glyphs, then spend the final `4.25s` tightening into an
-accelerating center orbit. The shower enters that portal phase at `11.75s`,
-leaving more time for the canvas-owned light wave without extending the full
-`16s` splash. The welcome rectangle stays hidden during the shower and enters
+individually simulated glyphs, then spend the final `5.2s` tightening into an
+accelerating center orbit. The shower enters that portal phase at `9.8s`, using
+faster Pica-style intro gravity so the full launch can read as a tighter `15s`
+sequence. The welcome rectangle stays hidden during the shower and enters
 shortly after the portal starts, giving the transition a stable visual anchor
 without interrupting the letter rain.
 
@@ -167,8 +167,8 @@ second timing system.
 
 The splash uses that same constraint for its portal light wave. Falling glyphs
 are approximately `5%` larger and the randomized shower cadence is slightly
-tighter so the pile forms during the first `11.75s`; portal entry then owns the
-remaining `4.25s` of the unchanged `16s` splash. The existing canvas paint loop
+tighter so the pile forms during the first `9.8s`; portal entry then owns the
+remaining `5.2s` of the tightened `15s` splash. The existing canvas paint loop
 computes one traveling sinusoidal highlight across independent glyph bodies
 after collisions are disabled. No Anime.js instance, extra RAF, interval, or
 additional physics body is introduced for the wave.

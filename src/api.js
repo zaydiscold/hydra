@@ -82,6 +82,8 @@ async function nativeAuthToken(method, token) {
   }
 }
 
+let hydrateTokenInFlight = null;
+
 export async function hydrateToken() {
   // Prefer the native (main-process) token over localStorage. Why:
   // packaged Electron picks a RANDOM port per launch, so the renderer's
@@ -90,7 +92,11 @@ export async function hydrateToken() {
   // `userData/renderer-auth-token.json` (mode 0600), tied to the user
   // not the origin, so it survives port changes for the intended 24-hour
   // unlock window. localStorage is used as a faster in-session cache only.
-  const nativeToken = await nativeAuthToken('getAuthToken');
+  hydrateTokenInFlight = hydrateTokenInFlight || nativeAuthToken('getAuthToken')
+    .finally(() => {
+      hydrateTokenInFlight = null;
+    });
+  const nativeToken = await hydrateTokenInFlight;
   if (nativeToken) {
     if (getToken() !== nativeToken) localStorage.setItem('hydra_token', nativeToken);
     return nativeToken;

@@ -14,16 +14,16 @@ The exact MacBook screen hinge angle is a different signal. It is exposed throug
 
 ## Current Splash Version Behavior
 
-The current source splash is intentionally denser and longer than the first
-Matter.js pass:
+The current source splash is intentionally denser than the first Matter.js pass
+while being slightly shorter than the 16-second polish lane:
 
-- `SPLASH_MIN_VISIBLE_MS = 16000` in `electron/main.js`.
-- `HYDRA_SPLASH_DURATION_MS=16000` in `electron/app/windows.js`.
-- `HYDRA_SPLASH_EXIT_MS=13000`, so the pile gets about 13 seconds to fall and
-  pack before the staged portal exit starts.
-- `HYDRA_SPLASH_PORTAL_MS=3000`, so settled glyph bodies tighten into an
-  accelerating center orbit over three seconds while the greeting stays
-  layered above the canvas and the field fades only near the end.
+- `SPLASH_MIN_VISIBLE_MS = 15000` in `electron/main.js`.
+- `HYDRA_SPLASH_DURATION_MS=15000` in `electron/app/windows.js`.
+- `HYDRA_SPLASH_EXIT_MS=9800`, so the faster-gravity pile gets about 9.8 seconds
+  to fall and pack before the staged portal exit starts.
+- `HYDRA_SPLASH_PORTAL_MS=5200`, so settled glyph bodies tighten into an
+  accelerating center orbit over 5.2 seconds while the greeting stays layered
+  above the canvas and the field fades only near the end.
 - `HYDRA_SPLASH_TARGET=72`, reducing the final glyph-body budget after
   packaged frame review while preserving a unique irregular shower.
 - `shatter()` marks each parent before adding glyphs. Matter may report one
@@ -35,7 +35,7 @@ Matter.js pass:
 - Portal entry clears each dynamic body's collision mask and marks it as a
   sensor. Individual glyphs still orbit, but Matter skips dense collision-pair
   response during the spin.
-- `HYDRA_SPLASH_DISPOSE_MS=18500`, so the splash has a bounded cleanup window
+- `HYDRA_SPLASH_DISPOSE_MS=17500`, so the splash has a bounded cleanup window
   after the main transition and cannot leave Matter/RAF/timer work alive.
 
 The original density work shipped with the minor `1.1.0` performance/UX
@@ -70,8 +70,8 @@ Current constants and their intent:
 
 | Value | Current setting | Why |
 | --- | --- | --- |
-| Visible splash | `16000ms` | Extends the prior 12-second sequence by 33% without letting graphics run forever. |
-| Exit flight | `13000ms` start, `3000ms` ramp | Lets the pile settle, then stages the upward whoosh instead of applying a hard final flip. |
+| Visible splash | `15000ms` | Keeps the polished launch window while trimming the slowest part of the previous 16-second pass. |
+| Exit flight | `9800ms` start, `5200ms` ramp | Uses faster intro gravity, then gives the portal/light wave a longer readable finish. |
 | Word target | `72` unique entries | Keeps the varied shower while reducing glyph-body and collision-pair pressure. |
 | Sensor clamp | `+/-0.65` | Prevents a noisy sensor or extreme reading from pinning every word into a wall. |
 | Fallback lean | `+/-0.035` | Adds a visible but subtle side bias when no real sensor is exposed. |

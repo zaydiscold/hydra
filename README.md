@@ -141,8 +141,8 @@ supported Macs, stays off on unsupported devices, and keeps an explicit
 Settings opt-out durable across future launches. Settings also exposes the
 availability status, enable toggle, and test-prompt button. A successful
 password unlock persists for up to 24 hours on the device; when Touch ID is
-enabled and a valid saved token exists, Hydra prompts once per relaunch before
-releasing that token. If the token is missing, expired, cancelled, or
+enabled and a valid saved token exists, Hydra starts the Touch ID prompt once
+per relaunch before releasing that token. If the token is missing, expired, cancelled, or
 unavailable, Hydra keeps the polished password fallback visible immediately
 instead of blanking the window while native token release is pending. Manual
 **Lock** ends the visible session immediately but keeps a still-valid device
@@ -251,10 +251,15 @@ npm run docker:smoke        # Docker runtime contract check
 npm run openapi:hydra       # Regenerate tracked OpenAPI map
 ```
 
+Docker is optional. Hydra does not need Docker Desktop to run as a desktop app
+or local `/v1` router; the Docker workflow only validates the containerized
+runtime lane.
+
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, and the current release lane is `1.5.7` for the OpenRouter
-Generator OTP-submit responsiveness and local rate-limit repair.
+first as `v1.1.0`, and the current release lane is `1.5.8` for the OpenRouter
+Generator security-check handoff, browser-backed OTP recovery, automatic Touch
+ID unlock prompt, and tightened Pica-gravity splash.
 Remaining manual dogfood evidence stays explicit in the audit.
 
 ## Docs Index
@@ -262,7 +267,11 @@ Remaining manual dogfood evidence stays explicit in the audit.
 Start with these when you need more than the quick README tour:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
-  checkpoints, the `1.5.7` patch lane, and completed release history.
+  checkpoints, the `1.5.8` patch lane, and completed release history.
+- [1.5.8 Patch Release](docs/releases/1.5.8.md): Generator now records hidden
+  Turnstile/loading-submit handoffs, retries signup after the gate clears,
+  exposes a deliberate browser-backed email-code escape hatch, auto-starts
+  saved-token Touch ID unlock, and tightens the launch splash.
 - [1.5.7 Patch Release](docs/releases/1.5.7.md): Generator OTP submit now
   flips local UI state immediately, avoids high-cost local rate limiting, and
   keeps duplicate submits idempotent while background finalization runs.

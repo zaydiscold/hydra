@@ -572,12 +572,15 @@ app.whenReady().then(async () => {
     //             instead of disappearing behind a hard gravity flip.
     //             A 2026-06-02 refinement starts that phase at 11.75s, giving
     //             the bounded glyph light wave 4.25s without extending launch.
+    //  15000 ms — Pica-gravity tightening pass (2026-06-02). Faster intro
+    //             gravity starts the portal at 9.8s and still leaves 5.2s for
+    //             the light wave, so startup is shorter without feeling clipped.
     //
     // PROGRESS-BAR LOCKSTEP: the splash canvas physics is self-contained,
     // but the `fillbar` keyframe in windows.js still measures perceived
     // progress for the user. Keep that keyframe duration in lockstep with
     // this constant so the bar reaches 100% as the splash dismisses.
-    const SPLASH_MIN_VISIBLE_MS = 16000;
+    const SPLASH_MIN_VISIBLE_MS = 15000;
     const splashElapsed = Date.now() - splashStartedAt;
     if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
       await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));

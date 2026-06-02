@@ -181,6 +181,16 @@ async function readSignupCheckpoint(page) {
     const turnstileProbe = document.querySelector('input[name="cf-turnstile-response"], input[name*="turnstile" i], [id*="cf-chl-widget"], [class*="turnstile" i]');
     const turnstilePending = Boolean(turnstileProbe)
       && (!('value' in turnstileProbe) || !String(turnstileProbe.value || '').trim());
+    const submitPending = Array.from(document.querySelectorAll('button')).some((button) => {
+      const buttonText = `${button.innerText || button.textContent || ''} ${button.className || ''} ${button.getAttribute('aria-label') || ''}`;
+      const visible = Boolean(button.offsetWidth || button.offsetHeight || button.getClientRects().length);
+      const loading = /loading|spinner|busy|progress|cl-loading/i.test(buttonText)
+        || button.getAttribute('aria-busy') === 'true';
+      return visible
+        && button.disabled
+        && loading
+        && /continue|sign up|next|submit|verify|loading|spinner/i.test(buttonText);
+    });
     const otpVisible = otpTextVisible
       || segmentedOtpVisible
       || otpInputs.length > 0
@@ -192,6 +202,7 @@ async function readSignupCheckpoint(page) {
       || text.includes('checking if the site connection is secure')
       || text.includes('review the security of your connection')
       || turnstilePending
+      || submitPending
       || Boolean(document.querySelector('iframe[src*="captcha" i], iframe[src*="turnstile" i], iframe[src*="hcaptcha" i], iframe[src*="recaptcha" i], iframe[src*="challenges.cloudflare.com" i], .cf-turnstile, [data-sitekey], [class*="captcha" i], [id*="captcha" i]'));
     return {
       otpVisible,
@@ -205,6 +216,8 @@ async function readSignupCheckpoint(page) {
       legalBlocked,
       url: document.location.href,
       title: document.title || '',
+      turnstilePending,
+      submitPending,
     };
   }, OTP_INPUT_SELECTOR).catch((err) => ({
     otpVisible: false,
@@ -216,6 +229,8 @@ async function readSignupCheckpoint(page) {
     lastNameBlocked: false,
     passwordBlocked: false,
     legalBlocked: false,
+    turnstilePending: false,
+    submitPending: false,
     url: page.url?.() ?? 'unknown',
     title: '',
     error: err.message,
@@ -238,6 +253,8 @@ function summarizeSignupCheckpoint(checkpoint) {
     lastNameBlocked: Boolean(checkpoint.lastNameBlocked),
     passwordBlocked: Boolean(checkpoint.passwordBlocked),
     legalBlocked: Boolean(checkpoint.legalBlocked),
+    turnstilePending: Boolean(checkpoint.turnstilePending),
+    submitPending: Boolean(checkpoint.submitPending),
     error: checkpoint.error || null,
   };
 }
@@ -315,6 +332,7 @@ async function waitForOtpChallenge(task, page) {
 
   if (manualReported) {
     const manualStartedAt = Date.now();
+    let postManualAdvanceAttempts = 0;
     while (Date.now() - manualStartedAt < MANUAL_VERIFICATION_TIMEOUT_MS) {
       throwIfAborted(signal);
       const checkpoint = await readSignupCheckpoint(page);
@@ -323,6 +341,16 @@ async function waitForOtpChallenge(task, page) {
         lastCheckpointReportAt = Date.now();
       }
       if (checkpoint.otpVisible) return;
+      if (!checkpoint.manualVisible && checkpoint.signupFormVisible && postManualAdvanceAttempts < 4) {
+        const advanced = await fillAndAdvanceVisibleSignupForm(task, page, {
+          reason: checkpoint.signupBlocked ? 'post-manual-blocked-form' : 'post-manual-visible-form',
+        });
+        if (advanced) {
+          postManualAdvanceAttempts += 1;
+          await sleepWithSignal(1200, signal);
+          continue;
+        }
+      }
       await sleepWithSignal(OTP_CHECK_INTERVAL_MS, signal);
     }
     const err = new Error(`Timed out waiting for OpenRouter's OTP screen after manual verification window; current page ${page.url?.() ?? 'unknown'}`);
@@ -1146,12 +1174,15 @@ export async function submitOtpForJob(taskId, ownerUserId, otpCode) {
     return { success: true, message: 'OTP is already being processed.' };
   }
   const checkpointOtpReady = task.metadata?.checkpoint?.state === 'otp';
-  if (task.status !== 'awaiting_otp' && !checkpointOtpReady) {
+  const browserOtpOverrideReady = Boolean(task.resources?.page)
+    && task.metadata?.mode === 'browser_signup'
+    && ['waiting_for_otp_screen', 'manual_verification'].includes(task.status);
+  if (task.status !== 'awaiting_otp' && !checkpointOtpReady && !browserOtpOverrideReady) {
     const error = new Error(`Cannot submit OTP in status: ${task.status}`);
     error.status = 409;
     throw error;
   }
-  if (checkpointOtpReady && task.status !== 'awaiting_otp') {
+  if ((checkpointOtpReady || browserOtpOverrideReady) && task.status !== 'awaiting_otp') {
     taskSupervisor.updateTask(task.taskId, { status: 'awaiting_otp' });
   }
   taskSupervisor.updateTask(task.taskId, {

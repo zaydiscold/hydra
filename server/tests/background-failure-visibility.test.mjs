@@ -57,7 +57,8 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /disabled=\{!emailTemplate\.trim\(\) \|\| starting\}/);
   assert.match(source, /function isOtpReady\(status, checkpoint\)/);
   assert.match(source, /const otpReady = isOtpReady\(status, checkpoint\)/);
-  assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying \|\| !otpReady\}/);
+  assert.match(source, /const canSubmitOtp = otpReady \|\| browserOtpOverride/);
+  assert.match(source, /disabled=\{otp\.length !== 6 \|\| verifying \|\| !canSubmitOtp\}/);
   assert.match(source, /inputMode="numeric"/);
   assert.match(source, /generatorModeLabel\(jobMode\)/);
   assert.doesNotMatch(source, /Playwright paused/);
@@ -729,6 +730,7 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /input\[data-testid\*="verification" i\]/);
   assert.match(source, /input\[name="cf-turnstile-response"\]/);
   assert.match(source, /turnstilePending/);
+  assert.match(source, /submitPending/);
   assert.match(source, /checkpoint: summarizeSignupCheckpoint\(checkpoint\)/);
   assert.match(source, /Manual upstream verification visible/);
   assert.match(source, /GENERATOR_SIGNUP_FORM_BLOCKED/);
@@ -745,6 +747,10 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.doesNotMatch(source, /waitForFunction\(\(\) => \{[\s\S]{0,600}?\}, \{ timeout:/);
   assert.doesNotMatch(source, /page\.waitForFunction\(otpChallengeVisiblePredicate/);
   assert.match(source, /waitForOtpChallenge\(task, page\)/);
+  assert.match(source, /postManualAdvanceAttempts < 4/);
+  assert.match(source, /post-manual-visible-form/);
+  assert.match(source, /browserOtpOverrideReady/);
+  assert.match(source, /\['waiting_for_otp_screen', 'manual_verification'\]\.includes\(task\.status\)/);
   assert.match(source, /focusSignupBrowser\(taskId, ownerUserId\)/);
   assert.match(routes, /router\.post\('\/:taskId\/focus'/);
   assert.match(routes, /router\.post\('\/verify\/:taskId', requireUnlocked, BaseController\.catchAsync/);

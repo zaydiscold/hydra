@@ -93,7 +93,9 @@ test('Electron exposes 24-hour renderer auth-token persistence', () => {
   assert.match(apiSrc, /await\s+nativeAuthToken\(['"]setAuthToken['"],\s*token\)/);
   assert.match(apiSrc, /await\s+clearToken\(\)/);
   assert.match(apiSrc, /await\s+nativeAuthToken\(['"]lockAuthToken['"]\)/);
-  assert.match(apiSrc, /const nativeToken\s*=\s*await\s+nativeAuthToken\(['"]getAuthToken['"]\)/);
+  assert.match(apiSrc, /let hydrateTokenInFlight = null/);
+  assert.match(apiSrc, /hydrateTokenInFlight = hydrateTokenInFlight \|\| nativeAuthToken\(['"]getAuthToken['"]\)/);
+  assert.match(apiSrc, /const nativeToken\s*=\s*await\s+hydrateTokenInFlight/);
   assert.doesNotMatch(apiSrc, /window\??\.hydraNative|globalThis\.window\??\.hydraNative/);
   assert.match(authMiddlewareSrc, /AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS\s*=\s*24\s*\*\s*60\s*\*\s*60/);
   assert.match(authMiddlewareSrc, /httpOnly:\s*true/);

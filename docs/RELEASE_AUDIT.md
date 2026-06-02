@@ -22,6 +22,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Account Generator OTP readiness repair | `1.5.5` expands Clerk/OpenRouter OTP detection to renamed and segmented code fields, extends the screen wait beyond Playwright's default 30 seconds, opens the isolated browser at a stable desktop viewport, and makes the active job controls render evenly while the browser task continues. | Source, package, codesign, and clean LaunchServices settle verified; final OTP remains operator-owned |
 | Account Generator signup-shell hardening | `1.5.6` replaces the remaining signup-shell wait with 500ms sanitized checkpoint polling, records manual-verification state before OTP, uses abort-aware Generator browser sleeps/form helpers, and keeps packaged cancellation logs tied to the supervisor reason instead of page-close noise. | Source, package, codesign, and bounded live packaged handoff verified; final OTP/human verification remains operator-owned |
 | Account Generator OTP-submit responsiveness | `1.5.7` removes the high-cost local limiter from OTP verification, validates six-digit codes, flips the renderer into `submitting_otp` before the quiet request returns, hides stale OTP controls during finalization, and makes duplicate submits idempotent while the browser finishes. | Source, production build, and bounded dev Generator smoke verified; final upstream OTP/human verification remains operator-owned |
+| Account Generator security-handoff, Touch ID, and splash recovery | `1.5.8` records hidden Turnstile/loading-submit handoffs, retries signup after manual verification clears, exposes a browser-backed OTP override when the isolated browser is already on code entry, auto-starts saved-token Touch ID release on the unlock screen, and tightens the splash to a 15s faster-gravity launch. | Source, production build, and bounded live Generator probe verified; final upstream OTP/human verification remains operator-owned |
 | Docker runtime documentation | `docs/DOCKER.md` documents bounded smoke timeouts, `HYDRA_DOCKER_BUILD_TIMEOUT_MS`, and `docker compose down --remove-orphans`. | Verified by audit |
 | Release artifacts | GitHub release v1.4.7 is public and contains macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`, and Linux `latest-linux.yml`. Release workflow run `26782121839` passed shared gates, package smoke on every target, the hosted Windows unpacked and NSIS-installed executable lifecycle gate, artifact uploads, and macOS updater-metadata merge. Live GitHub asset inspection verified all ten expected public assets and SHA-256 digests. Real Intel GUI and user-driven Windows UX remain target-runner or user-run evidence only. | Asset presence verified; v1.4.7 released |
 | macOS package library validation | PR #21 added `com.apple.security.cs.disable-library-validation` to `desktop/entitlements.mac.plist` and package-smoke coverage. The exact-local public `v1.4.7` macOS arm64 app verifies with `codesign --verify --deep --strict`; release-matrix package smoke passed on macOS arm64 and macOS Intel. | Verified by release artifact dogfood |
@@ -32,7 +33,7 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Session probe log privacy | Runtime log inspection on 2026-05-20 showed historical `[SESSION_PROBE]` lines with account aliases and full Clerk session IDs. `server/services/session-refresher.js` now redacts probe aliases and session IDs while preserving account-id failure evidence, `server/tests/background-failure-visibility.test.mjs` locks the contract, and `hydra audit` tracks `session-probe-redaction`. | Source verified |
 | Final dogfood evidence capture | `npm run dogfood:final -- --write-evidence` now writes a redacted `hydra.final-dogfood-evidence.v1` JSON artifact with explicit `--manual=<id>` confirmations. `server/tests/final-dogfood-evidence.test.mjs` locks that it records checklist status only and does not read local DB/cookies/secrets. | Source verified |
 | Idle backend performance pass | PR #18 merged as master f74c195 and v1.0.9 includes delayed session/request-log startup sweeps, opt-in session-lifetime probe, relaxed task-supervisor sweep interval, and removed eager renderer live-probe fan-out from dashboard/vault/account-detail page load. CI, Electron package smoke, Docker, and release automation passed after merge. | Verified by CI/release |
-| Splash/browser/router/renderer performance and efficiency pass | Current local performance pass makes splash graphics finite and throttled, keeps the front splash at 16s with a bounded 72-word unique irregular shower and a staged 3s accelerating portal orbit, one-shot guards parent shattering, removes the ceiling collider that overlapped fresh top-edge spawns, disables collision response only after portal entry, strengthens real/fallback tilt lean through gravity plus spawn/velocity bias, stops Matter/RAF/timers/listeners on unload or after the visual window, removes Hydra-owned Playwright temp profile dirs after browser automation, stops request-log flush wakeups when the queue is empty, converts renderer health/dashboard/vault/traffic/generator polling to non-overlapping one-shot timers, collapses bulk magic-link polling to one shared guarded poller, exposes `window.__HYDRA_RENDERER_DIAGNOSTICS__` for Hydra-owned timers/intervals/RAFs/Anime.js effects, and adds `hydra doctor` performance diagnostics for stale Hydra Playwright profiles plus Hydra-owned process CPU/RAM snapshots where the OS permits `ps`. `hydra doctor --clean-stale-profiles` moves stale Hydra-owned profile dirs to a timestamped temp backup and reports `deleted: 0`; `hydra doctor` now separates unrelated browser tooling into `otherBrowserToolProcesses` for fan-pressure context. | Source verified; local macOS arm64 runtime sampled; full GUI/live dogfood still deferred |
+| Splash/browser/router/renderer performance and efficiency pass | Current local performance pass makes splash graphics finite and throttled, keeps the front splash at 15s with a bounded 72-word unique irregular shower, faster Pica-style intro gravity, denser branching neural ivy, and a staged 5.2s accelerating portal orbit, one-shot guards parent shattering, removes the ceiling collider that overlapped fresh top-edge spawns, disables collision response only after portal entry, strengthens real/fallback tilt lean through gravity plus spawn/velocity bias, stops Matter/RAF/timers/listeners on unload or after the visual window, removes Hydra-owned Playwright temp profile dirs after browser automation, stops request-log flush wakeups when the queue is empty, converts renderer health/dashboard/vault/traffic/generator polling to non-overlapping one-shot timers, collapses bulk magic-link polling to one shared guarded poller, exposes `window.__HYDRA_RENDERER_DIAGNOSTICS__` for Hydra-owned timers/intervals/RAFs/Anime.js effects, and adds `hydra doctor` performance diagnostics for stale Hydra Playwright profiles plus Hydra-owned process CPU/RAM snapshots where the OS permits `ps`. `hydra doctor --clean-stale-profiles` moves stale Hydra-owned profile dirs to a timestamped temp backup and reports `deleted: 0`; `hydra doctor` now separates unrelated browser tooling into `otherBrowserToolProcesses` for fan-pressure context. | Source verified; local macOS arm64 runtime sampled; full GUI/live dogfood still deferred |
 | Auto-version release dispatch | PR #19 merged as master 0b49f5a with `[skip-bump]`; Auto-version run 26238251024 skipped as intended, CI run 26238251136 passed, Docker run 26238251146 passed, and the workflow now dispatches `release.yml` after auto-version tags so future versions do not require manual rescue. The workflow now also supports deliberate `[bump:minor]` and `[bump:major]` release markers instead of forcing every shipped tranche through patch-only `1.0.x` bumps. | Source verified |
 
 ## Current Continuous Profile Pass - 2026-06-02, `v1.5.5` / `v1.5.6`
@@ -133,9 +134,9 @@ Latest packaged splash diagnostics from the same relaunch:
 
 ```json
 {
-  "durationMs": 16000,
-  "exitMs": 11750,
-  "portalMs": 4250,
+  "durationMs": 15000,
+  "exitMs": 9800,
+  "portalMs": 5200,
   "target": 72,
   "queueLength": 72,
   "duplicateShatterSkips": 0,
@@ -3416,3 +3417,42 @@ items by itself.
   with macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows
   NSIS/blockmap, Linux AppImage, `latest-mac.yml`, `latest.yml`, and
   `latest-linux.yml`.
+- 2026-06-02 `1.5.8` Account Generator security-handoff repair: a fresh
+  source-level live probe against the current OpenRouter signup page showed the
+  real stalled state behind the user's report. Hydra filled first name, last
+  name, email, password, and legal acceptance, clicked Continue, then remained
+  on `https://openrouter.ai/sign-up` with a hidden empty
+  `cf-turnstile-response` and a disabled/loading Continue button. The
+  sanitized task checkpoint reached `manual_verification` with
+  `submitPending=true`. Hydra now records `turnstilePending` and
+  loading-button `submitPending`, treats only actually loading/busy disabled
+  submit controls as handoff-pending, retries the signup form after manual
+  verification clears, and allows browser-backed OTP submission from
+  `waiting_for_otp_screen` / `manual_verification` when the isolated browser
+  page still exists. The Generator renderer now shows that manual-code fallback
+  as an intentional panel rather than a dead-looking waiting state. Focused
+  verification passed `node --check server/services/account-generator.js`,
+  `npm run test:background-failure-visibility` (`34/34`),
+  `npm run test:ui-static` (`48/48`), `npm run build`, and `git diff --check`.
+  The bounded live probe cancelled through `cleanupJob()` before OTP submission
+  or account persistence. Upstream human verification and final OTP ownership
+  remain operator-owned.
+- 2026-06-02 `1.5.8` Touch ID and splash tightening addendum: the renderer now
+  auto-starts saved-token Touch ID release from the unlock screen once native
+  support is known, keeps password entry visible and usable, debounces concurrent
+  `hydrateToken()` calls through one in-flight native request, and updates the
+  native prompt reason to `Unlock Hydra vault with Touch ID`. The unlock surface
+  adds a CSS-only bounded startup orbit behind the card. The packaged splash now
+  runs `15000ms`, starts the portal at `9800ms`, uses `HYDRA_SPLASH_PORTAL_MS=5200`,
+  disposes at `17500ms`, increases intro gravity to `1.18` with scale `0.00128`,
+  adds initial downward word velocity, tightens spawn cadence, and renders denser
+  neural ivy with `11` stems, fork nodes, and faster branch growth. Focused
+  regression coverage anchors these changes in UI static, Electron main-process,
+  Electron IPC, and audit contracts. Final local package verification passed
+  `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  `codesign --verify --deep --strict`, plist version `1.5.8`, and packaged
+  source inspection for the `15000ms` splash duration, `9800ms` portal start,
+  `5200ms` portal window, and native Touch ID prompt reason. The local ARM zip
+  SHA-256 is
+  `6ab8cb3941a092c6d823322b725ed6e937221f3071d56984a4a8705d5e304e75`.
