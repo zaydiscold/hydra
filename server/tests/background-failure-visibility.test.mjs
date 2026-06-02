@@ -523,6 +523,7 @@ test('proxy request body encoding is cached across retries', () => {
   assert.match(buildBody, /encodedBodyCache\.set\(cacheKey, encoded\)/);
   assert.match(buildBody, /const body = Array\.isArray\(baseBody\) \? \[\.\.\.baseBody\] : \{ \.\.\.baseBody \}/);
   assert.doesNotMatch(buildBody, /JSON\.parse\(JSON\.stringify/);
+  assert.doesNotMatch(proxyHandler, /stream_options|include_usage/, 'OpenRouter usage is automatic; retries must not inject deprecated stream flags');
 });
 
 test('proxy aborts ordinary upstream work when its client disconnects', () => {
@@ -553,7 +554,7 @@ test('traffic backend runs independent request-log reads in parallel', () => {
     source.indexOf('/** GET /pool/models'),
   );
 
-  assert.match(handler, /const \[logs, metrics\] = await Promise\.all\(\[/);
+  assert.match(handler, /const \[rawLogs, metrics, modelPrices, routing\] = await Promise\.all\(\[/);
   assert.match(handler, /prisma\.requestLog\.findMany\(/);
   assert.match(handler, /prisma\.requestLog\.groupBy\(/);
   assert.doesNotMatch(handler, /const logs = await[\s\S]*const metrics = await/);

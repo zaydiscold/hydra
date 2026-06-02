@@ -68,12 +68,15 @@ model Discovery {
 }
 
 model CachedModel {
-  id        String   @id
-  name      String
-  ctx       Int?
-  category  String?
-  ownedBy   String?
-  updatedAt DateTime @updatedAt
+  id              String   @id
+  name            String
+  ctx             Int?
+  category        String?
+  ownedBy         String?
+  promptPrice     Float?
+  completionPrice Float?
+  requestPrice    Float?
+  updatedAt       DateTime @updatedAt
 }
 
 model RequestLog {
@@ -86,6 +89,10 @@ model RequestLog {
   promptTokens     Int?
   completionTokens Int?
   clientHint       String?
+  attempt          Int      @default(1)
+  outcome          String?
+  totalCost        Float?
+  costSource       String?
   createdAt        DateTime @default(now())
 
   @@index([createdAt])

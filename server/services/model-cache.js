@@ -1,6 +1,7 @@
 import { OR_BASE, config } from '../config.js';
 import { prisma } from './db.js';
 import { combineAbortSignals } from '../lib/abort.js';
+import { normalizeCatalogPricing } from './proxy-telemetry.js';
 
 const MODELS_PATH = '/api/v1/models';
 const MODEL_LIST_TIMEOUT_MS = 30000;
@@ -47,6 +48,7 @@ export function normalizeUpstreamModel(m) {
     ctx: m.context_length ?? null,
     category: null,
     ownedBy: m.architecture?.instructor ? 'instructor' : null,
+    ...normalizeCatalogPricing(m.pricing),
   };
 }
 
@@ -129,7 +131,14 @@ export async function getCachedPoolModels() {
   }
 
   const models = await prisma.cachedModel.findMany({
-    select: { id: true, name: true, ctx: true },
+    select: {
+      id: true,
+      name: true,
+      ctx: true,
+      promptPrice: true,
+      completionPrice: true,
+      requestPrice: true,
+    },
     orderBy: { name: 'asc' },
   });
   poolModelCache = {
