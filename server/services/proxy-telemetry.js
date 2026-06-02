@@ -6,7 +6,6 @@ function optionalNonNegativeNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
-
 export function getProxyMaxKeyAttempts(value = process.env.HYDRA_PROXY_MAX_KEY_ATTEMPTS) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_MAX_KEY_ATTEMPTS;
@@ -59,4 +58,3 @@ export function enrichRequestLogPricing(log, pricing = {}) {
     },
   };
 }
-

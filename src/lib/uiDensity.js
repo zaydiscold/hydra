@@ -7,7 +7,6 @@ export function getStoredUiDensity() {
   const value = window.localStorage?.getItem(STORAGE_KEY);
   return VALID_DENSITIES.has(value) ? value : 'comfortable';
 }
-
 export function setStoredUiDensity(density) {
   const value = VALID_DENSITIES.has(density) ? density : 'comfortable';
   window.localStorage?.setItem(STORAGE_KEY, value);
@@ -27,4 +26,3 @@ export function subscribeUiDensity(listener) {
     window.removeEventListener('storage', onStorage);
   };
 }
-

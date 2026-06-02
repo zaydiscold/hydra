@@ -8,7 +8,6 @@ function readSessionValue(key, fallback) {
     return fallback;
   }
 }
-
 export function useSessionStorageState(key, fallback) {
   const [value, setValue] = useState(() => readSessionValue(key, fallback));
 
@@ -23,4 +22,3 @@ export function useSessionStorageState(key, fallback) {
 
   return [value, setValue];
 }
-
