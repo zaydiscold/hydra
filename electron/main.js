@@ -61,6 +61,68 @@ function logLifecycle(event, extra = {}) {
   }
 }
 
+const RENDERER_DIAGNOSTICS_SCRIPT = `
+(() => {
+  const fn = window.__HYDRA_RENDERER_DIAGNOSTICS__;
+  return typeof fn === 'function' ? fn() : null;
+})()
+`;
+
+function summarizeRendererBucket(bucket) {
+  const active = Number.isFinite(Number(bucket?.active)) ? Number(bucket.active) : 0;
+  const byOwner = {};
+  const owners = bucket?.byOwner && typeof bucket.byOwner === 'object' ? bucket.byOwner : {};
+  for (const [owner, count] of Object.entries(owners)) {
+    const safeOwner = String(owner || 'unknown').slice(0, 120);
+    byOwner[safeOwner] = Number.isFinite(Number(count)) ? Number(count) : 0;
+  }
+  return { active, byOwner };
+}
+
+function summarizeRendererDiagnostics(diagnostics) {
+  if (!diagnostics || typeof diagnostics !== 'object') {
+    return { available: false };
+  }
+
+  const timeouts = summarizeRendererBucket(diagnostics.timeouts);
+  const intervals = summarizeRendererBucket(diagnostics.intervals);
+  const animationFrames = summarizeRendererBucket(diagnostics.animationFrames);
+  const animations = summarizeRendererBucket(diagnostics.animations);
+  const activeTotal = Number.isFinite(Number(diagnostics.activeTotal))
+    ? Number(diagnostics.activeTotal)
+    : timeouts.active + intervals.active + animationFrames.active + animations.active;
+
+  return {
+    available: true,
+    generatedAt: Number.isFinite(Number(diagnostics.generatedAt)) ? Number(diagnostics.generatedAt) : null,
+    activeTotal,
+    timeouts,
+    intervals,
+    animationFrames,
+    animations,
+  };
+}
+
+async function logRendererDiagnostics(window, label) {
+  if (!window || window.isDestroyed() || window.webContents?.isDestroyed?.()) return;
+  try {
+    const diagnostics = await window.webContents.executeJavaScript(RENDERER_DIAGNOSTICS_SCRIPT, true);
+    console.warn('[hydra-renderer] diagnostics', JSON.stringify({
+      label,
+      ...summarizeRendererDiagnostics(diagnostics),
+    }));
+  } catch (err) {
+    console.warn('[hydra-renderer] diagnostics failed:', err?.message || err);
+  }
+}
+
+function scheduleRendererDiagnostics(window, label, delayMs) {
+  const timer = setTimeout(() => {
+    void logRendererDiagnostics(window, label);
+  }, delayMs);
+  timer.unref?.();
+}
+
 function armLifecycleKeepAlive() {
   // Electron native objects should be enough to keep a packaged app alive, but
   // LaunchServices dogfood exposed a voluntary zero-code exit without any app
@@ -533,6 +595,8 @@ app.whenReady().then(async () => {
       verifyVisible(reason);
       setTimeout(() => verifyVisible(`${reason}+300ms`), 300).unref?.();
       setTimeout(() => verifyVisible(`${reason}+1200ms`), 1200).unref?.();
+      scheduleRendererDiagnostics(mainWindow, `${reason}+2s`, 2000);
+      scheduleRendererDiagnostics(mainWindow, `${reason}+10s`, 10000);
       // Boot complete — release the gate so activate / second-instance /
       // tray-click handlers can spawn windows again from this point on.
       setBootingSplash(false);

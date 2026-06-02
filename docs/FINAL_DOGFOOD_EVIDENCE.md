@@ -7,6 +7,33 @@ to create a redacted evidence artifact after you run the real app.
 Current pre-dogfood performance evidence from 2026-05-26 and 2026-05-27 is in
 `docs/RELEASE_AUDIT.md`. Source and local runtime measurements currently show:
 
+- 2026-06-02 post-release `v1.5.1` packaged renderer diagnostics were rebuilt
+  and profiled under
+  `/private/tmp/hydra-v151-renderer-diag-20260602T111704Z`. The exact local ARM
+  package passed `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`,
+  strict deep codesign, plist version `1.5.1`, and embedded-source inspection
+  for `[hydra-renderer] diagnostics`; zip SHA-256:
+  `ac554a004d9d4fd38fd06b38a44d3c31802b8380bd71a0df712d6e2997e60583`.
+  LaunchServices startup logged finite splash teardown with `timers=0`,
+  `rafActive=false`, `bodyCount=0`, and `matterCleared=true`.
+- The new packaged renderer diagnostics logged `intervals.active=0`,
+  `animationFrames.active=0`, and `animations.active=0` at both `+2s` and
+  `+10s` after main reveal. The only active renderer timers were three expected
+  top-level owned one-shots: `App.ambientMotion`, `App.upstreamHealth`, and
+  `useMetrics.autoRefresh`.
+- The same rebuilt package stayed stable for an untouched five-minute idle
+  profile: 11 samples from `2026-06-02T11:17:40Z` to
+  `2026-06-02T11:22:43Z`, one four-process Hydra tree, zero stale Playwright
+  profiles, CPU `0.0-0.4%`, average `0.045%`, ending `0.0%`, and RSS down
+  `104,906,752` bytes. Native quit returned to zero Hydra-owned processes and
+  zero profiles.
+- Raw process grep artifacts for that run are preserved in the temp evidence
+  directory as `ps-before-launch.txt`, `ps-after-splash-teardown.txt`,
+  `ps-after-profile.txt`, and `ps-after-native-quit.txt`.
+- Refreshed screenshot capture is not complete in this environment:
+  `screencapture` produced a black image and Computer Use timed out twice
+  against the running packaged app, so no new screenshot is counted as dogfood
+  evidence from this pass.
 - Dashboard metadata/status shaping is down 61.1% in the local DB microbench.
 - Proxy retry body encoding is down 86.9% in the request-body benchmark.
 - Vault status-total rendering is down 96.0% in the synthetic 5000-account

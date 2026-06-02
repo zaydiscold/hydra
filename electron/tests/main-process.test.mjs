@@ -398,6 +398,13 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(surface, /ipcMain\.on\(SPLASH_DIAGNOSTICS_CHANNEL/);
     assert.match(surface, /console\.warn\('\[hydra-splash\] diagnostics'/);
     assert.match(surface, /summarizeSplashDiagnostics/);
+    assert.match(surface, /RENDERER_DIAGNOSTICS_SCRIPT/);
+    assert.match(surface, /window\.__HYDRA_RENDERER_DIAGNOSTICS__/);
+    assert.match(surface, /function summarizeRendererDiagnostics\(diagnostics\)/);
+    assert.match(surface, /console\.warn\('\[hydra-renderer\] diagnostics'/);
+    assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+2s`, 2000\)/);
+    assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+10s`, 10000\)/);
+    assert.match(surface, /timer\.unref\?\.\(\)/);
     assert.doesNotMatch(windows, /setInterval\(\(\)=>\{if\(updateActive\)return;/);
   });
 

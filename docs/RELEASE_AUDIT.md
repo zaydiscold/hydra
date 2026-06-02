@@ -2969,3 +2969,42 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   and merged macOS updater metadata. Public asset inspection verified macOS
   arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap, Linux
   x64 AppImage, `latest-mac.yml`, `latest.yml`, and `latest-linux.yml`.
+- 2026-06-02 post-release `1.5.1` renderer diagnostics bridge: the packaged
+  GUI now asks the renderer for `window.__HYDRA_RENDERER_DIAGNOSTICS__()` after
+  the main window reveal and writes a redacted `[hydra-renderer] diagnostics`
+  snapshot to the Electron log at `+2s` and `+10s`. The log includes only
+  counts and owner buckets for tracked timeouts, intervals, RAFs, and Anime.js
+  effects; it does not include account, token, cookie, or renderer-state
+  payloads. Static Electron contracts now lock the bridge, scheduled snapshots,
+  and unref'd diagnostic timers. Focused verification passed
+  `npm run test:electron-main-process` (`31/31`). The broad source chain passed
+  `npm run lint`, full `npm test`, `npm run gate`, and `npm run openapi:hydra`
+  (`84` operations). The first combined Docker smoke attempt stopped because
+  Docker Desktop was closed; after launching Docker Desktop, `npm run
+  docker:smoke` passed compose config, daemon detection, image build, and a real
+  Playwright Chromium launch inside `ghcr.io/zaydiscold/hydra:latest`. The
+  rebuilt local ARM package passed `HYDRA_BUILD_TARGET=darwin-arm64 npm run
+  electron:smoke`, strict deep codesign, plist version `1.5.1`, embedded-source
+  inspection for `hydra-renderer`, and produced ARM zip SHA-256
+  `ac554a004d9d4fd38fd06b38a44d3c31802b8380bd71a0df712d6e2997e60583`.
+  LaunchServices evidence under
+  `/private/tmp/hydra-v151-renderer-diag-20260602T111704Z` recorded a clean
+  closed baseline (`doctor-before-launch.json`: zero Hydra processes, zero
+  profiles), finite splash teardown in `main.log.after-launch-copy`
+  (`timers=0`, `rafActive=false`, `bodyCount=0`, `matterCleared=true`,
+  `queueLength=72`, `shatteredWordCount=72`, `duplicateShatterSkips=0`), and
+  renderer diagnostics at `2026-06-02T11:17:26Z` and `2026-06-02T11:17:34Z`
+  with `intervals.active=0`, `animationFrames.active=0`,
+  `animations.active=0`, and three expected top-level owned one-shot timeouts
+  (`App.ambientMotion`, `App.upstreamHealth`, `useMetrics.autoRefresh`).
+  Five-minute idle sampling from `2026-06-02T11:17:40Z` through
+  `2026-06-02T11:22:43Z` stayed on one four-process Hydra tree with zero stale
+  profiles; CPU was `0.0-0.4%`, averaged `0.045%`, ended at `0.0%`, and RSS
+  dropped `104,906,752` bytes. Native quit then returned to zero Hydra-owned
+  processes and zero profiles. Raw broad process grep files are preserved as
+  `ps-before-launch.txt` (`265` lines), `ps-after-splash-teardown.txt`
+  (`273`), `ps-after-profile.txt` (`273`), and `ps-after-native-quit.txt`
+  (`270`). Packaged screenshot evidence is still explicitly not promoted:
+  `screencapture` produced a black image and Computer Use timed out twice
+  against both `Hydra` and the explicit app bundle path, so this environment did
+  not produce a trustworthy refreshed packaged screenshot.
