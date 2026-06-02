@@ -2805,3 +2805,37 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
   this is runtime-baseline evidence, not evidence that the unbuilt candidate
   executed inside the packaged app. The durable note is
   `docs/recon/OPENROUTER_KEY_ENDPOINTS_AND_PROVISION_FALLBACKS.md`.
+- 2026-06-02 post-`v1.4.8` request-first bootstrap package verification:
+  checkpoint `c5284c9` removed speculative management-key write probes while
+  retaining one confirmed HTTPS Server Action write and one isolated UI
+  learner fallback. Native quit evidence under
+  `/private/tmp/hydra-http-bootstrap-rebuild-shutdown-20260602T020908Z`
+  records `4 -> 0` packaged processes in the first sample with zero stale
+  Hydra Playwright profiles. The rebuilt ARM package passed resource smoke,
+  strict deep codesign, bundle-version inspection (`1.4.8`), and embedded
+  source inspection. Its local archive SHA-256 before reversible cleanup was
+  `d3edcafa129b25bc1ae42e8978de76a58c44e696cb78e355fa22973f35f9a87c`.
+  Generated archive metadata and the prior public ARM bundle moved
+  reversibly to `~/.Trash/`; `release/` again contains only the canonical
+  unpacked app and Spotlight resolves only that bundle. LaunchServices
+  evidence under
+  `/private/tmp/hydra-v148-http-bootstrap-current-source-launch-20260602T021059Z`
+  records four owned processes and zero profiles throughout, with CPU decay
+  from `247.0%` at `+5s` to `2.5%` at `+20s` and `0.0%` at `+35s`, `+60s`,
+  and `+90s`. Splash diagnostics remained finite: `72/72` shuffled words,
+  zero duplicate shatter skips, collision-free lifted portal entry, timers
+  `0`, inactive RAF, and cleared Matter state. The untouched five-minute
+  profile under
+  `/private/tmp/hydra-v148-http-bootstrap-post-rebuild-idle-profile-20260602T021306Z`
+  retained exactly four processes and zero profiles across all `11` samples;
+  CPU ranged `0.0-0.2%`, averaged `0.027%`, and ended at `0.0%`; RSS moved
+  `508329984 -> 487489536` bytes (`-20840448`). This proves the bounded
+  candidate is packaged and idle-clean. A future active no-key account is
+  still required to prove the learned direct replay live without minting a
+  redundant upstream key. The final documented-tree chain passed lint, full
+  `npm test`, gate `12/12`, OpenAPI regeneration (`84` operations), diff
+  hygiene, and audit `30 ok / 5 deferred / 1 missing / 0 blockers`. Docker
+  smoke passed after Docker Desktop reached a stable daemon state: compose
+  validation, rebuilt production image, real containerized Playwright
+  Chromium launch, and cleanup all completed. Teardown left no Hydra compose
+  service or `hydra_default` network and stopped Docker Desktop again.

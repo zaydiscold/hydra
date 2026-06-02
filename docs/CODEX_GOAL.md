@@ -1642,6 +1642,31 @@ closed-app CLI commands, tests, and repo-local documentation.
   outputs after successful Desktop Release run `26792860931`; its Windows
   runner passed package smoke plus unpacked and NSIS-installed executable
   launch-and-cleanup proof.
+- Post-`v1.4.8` request-first management-key bootstrap checkpoint
+  `c5284c9` removes speculative write probes while preserving one confirmed
+  HTTPS Server Action write and one isolated UI learner fallback. Native quit
+  evidence under
+  `/private/tmp/hydra-http-bootstrap-rebuild-shutdown-20260602T020908Z`
+  records `4 -> 0` packaged processes with zero stale profiles before the
+  prior public ARM bundle moved reversibly to `~/.Trash/`. The current-source
+  ARM rebuild passed package smoke, strict deep codesign, bundle version
+  (`1.4.8`), and embedded-source inspection. Its local archive SHA-256 before
+  reversible metadata cleanup was
+  `d3edcafa129b25bc1ae42e8978de76a58c44e696cb78e355fa22973f35f9a87c`.
+  LaunchServices evidence under
+  `/private/tmp/hydra-v148-http-bootstrap-current-source-launch-20260602T021059Z`
+  records finite `72/72` splash teardown, four owned processes, zero stale
+  profiles, and CPU decay `247.0% -> 2.5% -> 0.0%` at `+5s`, `+20s`, and
+  `+35s`. The untouched five-minute profile under
+  `/private/tmp/hydra-v148-http-bootstrap-post-rebuild-idle-profile-20260602T021306Z`
+  retained four processes and zero profiles across all `11` samples at
+  `0.0-0.2%` CPU (`0.027%` average, ending `0.0%`) with RSS
+  `508329984 -> 487489536` bytes. No redundant upstream management key was
+  minted to fabricate a live replay fixture. The final documented-tree chain
+  passed lint, full `npm test`, gate `12/12`, OpenAPI generation (`84`
+  operations), diff hygiene, audit, and Docker smoke with a rebuilt image and
+  a real containerized Playwright Chromium launch. Cleanup left no Hydra
+  compose service or `hydra_default` network and stopped Docker Desktop.
 
 ---
 

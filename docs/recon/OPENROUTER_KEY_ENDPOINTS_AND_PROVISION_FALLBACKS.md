@@ -120,6 +120,39 @@ Packaged runtime after edit: 4 Hydra-owned processes, 0 stale Playwright profile
 The full one-time management key, Clerk cookies, JWTs, and request secrets are
 intentionally excluded.
 
+## Current-Source Package Verification
+
+Checkpoint `c5284c9` was rebuilt into the canonical local ARM package after a
+native `4 -> 0` quit. Resource smoke, strict deep codesign, bundle version
+`1.4.8`, and embedded-source inspection passed. The local archive SHA-256
+before reversible cleanup was:
+
+```text
+d3edcafa129b25bc1ae42e8978de76a58c44e696cb78e355fa22973f35f9a87c
+```
+
+LaunchServices evidence is under:
+
+```text
+/private/tmp/hydra-v148-http-bootstrap-current-source-launch-20260602T021059Z
+/private/tmp/hydra-v148-http-bootstrap-post-rebuild-idle-profile-20260602T021306Z
+```
+
+The bounded splash settled from `247.0%` aggregate Hydra CPU at `+5s` to
+`2.5%` at `+20s` and `0.0%` at `+35s`. The following untouched five-minute
+profile retained exactly four Hydra-owned processes and zero stale Playwright
+profiles across all `11` samples. CPU ranged `0.0-0.2%`, averaged `0.027%`,
+and ended at `0.0%`; RSS moved `508329984 -> 487489536` bytes.
+
+This proves the thinner bootstrap source is packaged and idle-clean. It does
+not claim a new live direct replay: the local database still has no active
+no-key account, and Hydra intentionally did not mint a redundant upstream key
+to fabricate one. The final documented-tree chain passed lint, full
+`npm test`, gate `12/12`, OpenAPI generation (`84` operations), diff hygiene,
+audit, and Docker smoke with a rebuilt production image plus a real
+containerized Playwright Chromium launch. Cleanup left no Hydra compose
+service or `hydra_default` network and stopped Docker Desktop.
+
 ## Reproduction
 
 1. Choose an account with a live Clerk session and no stored management key.
