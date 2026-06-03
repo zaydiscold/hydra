@@ -16,9 +16,9 @@ Scope: source-verifiable release readiness for the Electron desktop app, plus ex
 | Cross-platform Windows test hardening | PR #5 merged: `test:ci`, `cross-platform-contract`, POSIX mode guard, path normalization, and Windows smoke fixes. | Verified by CI/Electron smoke |
 | Multi-arch macOS updater metadata | Release workflow includes `mac-update-metadata` and `scripts/merge-mac-update-yml.mjs`; workflow contract requires merged `latest-mac.yml` with arm64 and x64 files. v1.0.17 release artifact inspection verified `latest-mac.yml`, `latest.yml`, and `latest-linux.yml` were published with macOS arm64/x64 and Windows artifacts. | Verified by release |
 | CLI/API closed-app commands | `hydra status`, `doctor`, `api-map`, `proxy`, `audit`, `mcp`, code redemption, import/export, scan, keys, and lifecycle commands are covered by CLI tests and docs. | Source verified |
-| Account Generator signup form drift | `1.5.2` fills required OpenRouter signup password/legal fields, detects hidden Turnstile state as `manual_verification`, keeps waits abort-aware, and documents the current selector evidence. | Source verified; final OTP remains operator-owned |
+| Account Generator signup form drift | `1.5.2` fills required OpenRouter signup password/checkbox fields, detects hidden security-check state as `manual_verification`, keeps waits abort-aware, and documents the current selector evidence. | Source verified; final OTP remains operator-owned |
 | Account Generator browser-state rescue | `1.5.3` passes Playwright wait timeouts in the correct options slot, reports sanitized signup/security/OTP checkpoints to the renderer, and adds a `POST /api/generator/:taskId/focus` browser-focus path. | Source and bounded live smoke verified; final OTP remains operator-owned |
-| Account Generator modal-form repair | `1.5.4` fills OpenRouter's current duplicate Clerk modal fields, handles first/last/email/password/terms, force-accepts terms through portal overlays, and unlocks OTP entry from checkpoint truth. | Source, visual, and bounded live service smoke verified; final OTP remains operator-owned |
+| Account Generator modal-form repair | `1.5.4` fills OpenRouter's current duplicate Clerk modal fields, handles first/last/email/password/checkbox fields, handles checkbox portals, and unlocks OTP entry from checkpoint truth. | Source, visual, and bounded live service smoke verified; final OTP remains operator-owned |
 | Account Generator OTP readiness repair | `1.5.5` expands Clerk/OpenRouter OTP detection to renamed and segmented code fields, extends the screen wait beyond Playwright's default 30 seconds, opens the isolated browser at a stable desktop viewport, and makes the active job controls render evenly while the browser task continues. | Source, package, codesign, and clean LaunchServices settle verified; final OTP remains operator-owned |
 | Account Generator signup-shell hardening | `1.5.6` replaces the remaining signup-shell wait with 500ms sanitized checkpoint polling, records manual-verification state before OTP, uses abort-aware Generator browser sleeps/form helpers, and keeps packaged cancellation logs tied to the supervisor reason instead of page-close noise. | Source, package, codesign, and bounded live packaged handoff verified; final OTP/human verification remains operator-owned |
 | Account Generator OTP-submit responsiveness | `1.5.7` removes the high-cost local limiter from OTP verification, validates six-digit codes, flips the renderer into `submitting_otp` before the quiet request returns, hides stale OTP controls during finalization, and makes duplicate submits idempotent while the browser finishes. | Source, production build, and bounded dev Generator smoke verified; final upstream OTP/human verification remains operator-owned |
@@ -3182,10 +3182,10 @@ items by itself.
   reproduction against `https://openrouter.ai/sign-up` found that OpenRouter's
   current Clerk form no longer advances from email alone. The visible form
   included `input[name="emailAddress"]`, `input[name="password"]`, and
-  `input[name="legalAccepted"]`; after password and terms were satisfied, the
+  `input[name="legalAccepted"]`; after password and the required checkbox were satisfied, the
   page exposed an empty `input[name="cf-turnstile-response"]`, which is a
   manual security-check boundary rather than a ready OTP form. Hydra now fills
-  password and legal consent when those fields are actually blocking the
+  password and required checkbox when those fields are actually blocking the
   current step, preserves compatibility with email-first variants, reports
   hidden Turnstile state as `manual_verification`, and uses abort-aware manual
   waits so cleanup/cancel does not create false launch-failure logs. Generator
@@ -3234,7 +3234,7 @@ items by itself.
   `detecting_account -> falling_back_to_browser -> launching_browser ->
   navigating_signup -> waiting_for_page_hydrate -> entering_email ->
   entering_signup_details -> manual_verification`, logged password fill,
-  terms acceptance, Continue click, sanitized `manual_verification` checkpoint,
+  required-checkbox handling, Continue click, sanitized `manual_verification` checkpoint,
   and clean cancellation. No supplied operator password or target account email
   was written into tracked files. Final source verification then passed the full
   `npm test` chain, `npm run lint`, `npm run build`, `npm run gate`,
@@ -3260,13 +3260,13 @@ items by itself.
   OTP entry remain operator-owned.
 - 2026-06-02 `1.5.4` Account Generator modal-form repair: live reproduction
   against `https://openrouter.ai/sign-up` showed OpenRouter now renders a
-  modal with first name, last name, email, password, legal acceptance, multiple
+  modal with first name, last name, email, password, a required checkbox, multiple
   visible Clerk submit controls, and a floating portal that can intercept the
-  legal checkbox click. The old generator could fill/click the wrong visible
+  checkbox click. The old generator could fill/click the wrong visible
   form tree, then wait for OTP while the real modal still needed form fields.
   Hydra now fills every visible matching signup field, derives first/last names
-  from the email, handles email/password/name/terms blockers in sanitized
-  checkpoints, uses force plus DOM fallback for legal acceptance, clicks the
+  from the email, handles email/password/name/checkbox blockers in sanitized
+  checkpoints, uses force plus DOM fallback for checkbox handling, clicks the
   current modal Continue control, retries form advancement before declaring an
   OTP wait, and lets the renderer/backend accept OTP submission when the
   checkpoint is already `otp` even if status polling has not caught up. Focused
@@ -3420,7 +3420,7 @@ items by itself.
 - 2026-06-02 `1.5.8` Account Generator security-handoff repair: a fresh
   source-level live probe against the current OpenRouter signup page showed the
   real stalled state behind the user's report. Hydra filled first name, last
-  name, email, password, and legal acceptance, clicked Continue, then remained
+  name, email, password, and the required checkbox, clicked Continue, then remained
   on `https://openrouter.ai/sign-up` with a hidden empty
   `cf-turnstile-response` and a disabled/loading Continue button. The
   sanitized task checkpoint reached `manual_verification` with
@@ -3508,7 +3508,20 @@ items by itself.
   Release Desktop Apps run `26843763247` completed successfully across shared
   `lint, test, gate`, Linux x64 AppImage, Windows x64 NSIS, macOS ARM zip,
   macOS Intel x64 zip, and merged macOS updater metadata. Public release
-  `https://github.com/zaydiscold/hydra/releases/tag/v1.5.9` has `52` lines,
-  `12` bullets, and all ten expected assets: Linux AppImage, macOS ARM
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.5.9` originally had
+  `52` lines, `12` bullets, and all ten expected assets: Linux AppImage, macOS ARM
   zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap,
   `latest-linux.yml`, `latest-mac.yml`, and `latest.yml`.
+- 2026-06-02 `1.5.10` release-page and ambient-motion cleanup: the public
+  GitHub releases from `v1.5.0` through `v1.5.9` were rewritten through
+  `gh release edit --notes-file docs/releases/<version>.md` to concise change
+  notes. Local release docs now range from `23` to `37` lines instead of the
+  prior audit-style bodies that reached `206` lines. The Generator user-facing
+  status copy now says `required checkbox` instead of consent/legal wording,
+  while internal selectors still recognize the upstream `legalAccepted` field.
+  Ambient CSS now keeps shooting stars alive after the startup window settles,
+  changes star twinkle to opacity-only so the full star layer no longer jumps,
+  and adds faint transform-only orbit guides to the planet moons. Verification
+  passed: `npm run test:background-failure-visibility`, `npm run test:ui-static`,
+  `npm run lint`, `npm run build`, `npm run test:workflow-contract`, full
+  `npm test`, and `git diff --check`.

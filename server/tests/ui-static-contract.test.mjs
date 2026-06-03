@@ -149,14 +149,15 @@ test('ambient app chrome animations settle after launch instead of running forev
   assert.doesNotMatch(cssRuleBlock(css, '.nebula-glow {'), /animation:/);
   assert.doesNotMatch(cssRuleBlock(css, '.starfield::before {'), /animation:/);
   assert.doesNotMatch(cssRuleBlock(css, '.starfield::after {'), /animation:/);
-  assert.doesNotMatch(cssRuleBlock(css, '.meteor {'), /animation:/);
+  assert.match(cssRuleBlock(css, '.meteor {'), /animation:\s*meteorFall linear infinite;/);
   assert.doesNotMatch(cssRuleBlock(css, '.sidebar-logo-icon {'), /animation:/);
 
   assert.match(css, /\.app-shell--ambient-motion \.nebula-glow\s*\{[\s\S]*?animation:\s*nebulaFlow 20s ease-in-out infinite alternate;/);
   assert.match(css, /\.app-shell--ambient-motion \.starfield::before\s*\{[\s\S]*?animation:\s*twinkle 4s ease-in-out infinite alternate;/);
-  assert.match(css, /\.app-shell--ambient-motion \.meteor\s*\{[\s\S]*?animation:\s*meteorFall linear infinite;/);
   assert.match(css, /\.app-shell--ambient-motion \.sidebar-logo-icon\s*\{[\s\S]*?animation:\s*logo-breathing 4s ease-in-out infinite;/);
-  assert.match(css, /\.app-shell--motion-settled \.meteor-container\s*\{[\s\S]*?display:\s*none;/);
+  assert.doesNotMatch(css, /\.app-shell--motion-settled \.meteor-container\s*\{[\s\S]*?display:\s*none;/);
+  assert.match(css, /\.app-shell--motion-settled \.meteor\s*\{[\s\S]*?animation-duration:\s*calc\(var\(--meteor-duration, 8s\) \* 1\.28\);/);
+  assert.doesNotMatch(cssRuleBlock(css, '@keyframes twinkle {'), /transform|translateY/);
   assert.doesNotMatch(css, /\.edm-bar\s*\{/);
   assert.doesNotMatch(css, /@keyframes edm-flow/);
 });
@@ -687,7 +688,7 @@ test('generator keeps instructions compact instead of a second desktop-sized pan
   assert.match(generator, /1\. Email alias/);
   assert.match(generator, /<label>Email alias<\/label>/);
   assert.doesNotMatch(generator, /Gmail Alias/);
-  assert.match(generator, /entering_signup_details: 'Entering the signup password and required OpenRouter consent\.'/);
+  assert.match(generator, /entering_signup_details: 'Entering the signup password and required checkbox\.'/);
   assert.match(generator, /manual_verification: 'Finish any OpenRouter security check in the account browser\./);
   assert.match(generator, /generatorModeLabel\(jobMode\)/);
   assert.match(generator, /checkpointLabel\(checkpoint\)/);
@@ -830,6 +831,8 @@ test('1.5 desktop operator polish stays wired to real controls', () => {
   assert.doesNotMatch(css, /\.app-shell--ambient-motion \.planet-moon-orbit\s*\{/);
   assert.match(css, /\.app-shell--motion-settled \.planet-moon-orbit\s*\{[\s\S]*?animation-play-state:\s*running;/);
   assert.match(css, /animation:\s*moonOrbit var\(--moon-orbit-duration\) linear infinite/);
+  assert.match(css, /\.planet-moon-orbit::before\s*\{[\s\S]*?border:\s*1px solid color-mix/);
+  assert.match(css, /@keyframes moonOrbit\s*\{[\s\S]*?translate3d\(0, 0, 0\)/);
   assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*16s;[\s\S]*?--moon-orbit-squash:\s*0\.72;/);
   assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*13\.75s;[\s\S]*?--moon-orbit-squash:\s*0\.58;/);
   assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*26s;[\s\S]*?--moon-orbit-squash:\s*0\.64;/);

@@ -72,10 +72,11 @@ stem.
 
 The Jupiter-like sidebar planet is intentionally decorative, so its orbiting
 bodies stay CSS-only. The three moons use transform-only elliptical tracks with
-different tilt, duration, delay, distance, and size so they feel less like a
-mechanical loading spinner. Unlike the meteor field and nebula, these orbits
-continue after the startup ambient window settles; they are small enough to keep
-running and `prefers-reduced-motion` still freezes them.
+different tilt, duration, delay, distance, and size, plus faint orbit guides so
+they read as real bodies circling the planet instead of loose dots. The meteor
+field also stays CSS-only and continues after the startup ambient window settles,
+but its settled cadence slows down and `prefers-reduced-motion` freezes the
+decoration. Star twinkle is opacity-only; the star layer itself no longer shifts.
 
 ## Proximity Fields
 

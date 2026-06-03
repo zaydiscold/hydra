@@ -43,7 +43,7 @@ const STATUS_COPY = {
   navigating_signup: 'Opening OpenRouter signup.',
   waiting_for_page_hydrate: 'Waiting for Clerk to render the signup form.',
   entering_email: 'Entering the signup email.',
-  entering_signup_details: 'Entering the signup password and required OpenRouter consent.',
+  entering_signup_details: 'Entering the signup password and required checkbox.',
   waiting_for_otp_screen: 'Watching the isolated browser for email-code or human-verification state.',
   manual_verification: 'Finish any OpenRouter security check in the account browser. Hydra will enable the code field when the OTP screen appears.',
   sending_otp: 'Sending the email code through direct HTTPS.',
@@ -84,7 +84,7 @@ function checkpointLabel(checkpoint) {
         checkpoint.firstNameBlocked ? 'first name' : null,
         checkpoint.lastNameBlocked ? 'last name' : null,
         checkpoint.passwordBlocked ? 'password' : null,
-        checkpoint.legalBlocked ? 'terms' : null,
+        checkpoint.legalBlocked ? 'required checkbox' : null,
       ].filter(Boolean).join(' + ');
       return fields ? `Signup fields blocked: ${fields}` : 'Signup fields blocked';
     }

@@ -18,7 +18,7 @@ isolated browser was doing the real work.
 
 Follow-up live reproduction on 2026-06-02 found a second upstream change:
 OpenRouter's current signup form no longer advances from email alone. The page
-renders a required password field and a required legal acceptance checkbox
+renders a required password field and a required checkbox
 before Clerk will move toward the email-code step. After those fields are
 filled, OpenRouter may still expose an empty `cf-turnstile-response` field,
 which means the form is waiting on Cloudflare/Turnstile verification even when
@@ -37,9 +37,9 @@ forward during security checks.
 
 Follow-up live form walk on 2026-06-02 found a fourth upstream drift:
 OpenRouter now opens a Clerk modal with first name, last name, email, password,
-terms, duplicate visible submit controls, and a floating portal that can
+a required checkbox, duplicate visible submit controls, and a floating portal that can
 intercept checkbox clicks. Hydra `1.5.4` fills the visible duplicate form fields,
-derives safe first/last names from the email, accepts the legal checkbox with a
+derives safe first/last names from the email, accepts the required checkbox with a
 force path plus DOM fallback, clicks the current modal Continue control, and
 uses checkpoint truth to unlock OTP entry if the browser has already reached the
 code screen before the status poll updates.
@@ -94,7 +94,7 @@ isolated browser is visibly on a code screen before the detector catches up.
   - OpenRouter stayed on the sign-up form and reported password validation.
   - The active inputs were `input[name="emailAddress"]`,
     `input[name="password"]`, and `input[name="legalAccepted"]`.
-  - After filling password and terms, the page exposed
+  - After filling password and the required checkbox, the page exposed
     `input[name="cf-turnstile-response"]` with an empty value, indicating an
     upstream security gate rather than a ready OTP form.
 - Focused verification after the patch:
@@ -107,7 +107,7 @@ isolated browser is visibly on a code screen before the detector catches up.
   false launch failure after cancellation.
 - `v1.5.4` direct service smoke through `startSignupJob()` reached
   `manual_verification` in seven seconds after filling first name, last name,
-  email, password, and terms. The sanitized checkpoint reported all field
+  email, password, and the required checkbox. The sanitized checkpoint reported all field
   blockers false before clean cancellation.
 - `v1.5.4` source dev visual smoke for `/generator` saved a screenshot and
   measured zero overflow after replacing the inner Start button `btn-icon`
@@ -151,7 +151,7 @@ isolated browser is visibly on a code screen before the detector catches up.
   - `git diff --check`
   - Bounded source-level live probe with a throwaway `preheat.cc` alias reached
     `manual_verification` after filling first name, last name, email, password,
-    and legal acceptance. The sanitized checkpoint recorded
+    and the required checkbox. The sanitized checkpoint recorded
     `submitPending=true`; the browser DOM showed `url=https://openrouter.ai/sign-up`,
     a hidden empty `cf-turnstile-response`, and a disabled/loading Continue
     button. The task was cancelled through `cleanupJob()` without OTP submit or
@@ -166,7 +166,7 @@ isolated browser is visibly on a code screen before the detector catches up.
   - `npm run build`
   - `git diff --check`
   - Source-level live Generator smoke with a throwaway address reached
-    `manual_verification` after password fill, terms acceptance, Continue
+    `manual_verification` after password fill, required-checkbox handling, Continue
     click, checkpoint reporting, and clean cancellation.
 
 ## Why It Matters
@@ -216,7 +216,7 @@ src/api.js
 src/pages/Generator.jsx
 - isOtpReady(status, checkpoint)
 - waiting_for_otp_screen: Watching the isolated browser for email-code or human-verification state.
-- entering_signup_details: Entering the signup password and required OpenRouter consent.
+- entering_signup_details: Entering the signup password and required checkbox.
 - manual_verification: Finish any OpenRouter security check in the account browser...
 - Submit code
 - Browser state: {checkpointText}
@@ -263,9 +263,9 @@ creation remain operator-owned.
 1. Open Hydra's Account Generator.
 2. Start a browser-signup task with an email that Clerk treats as a new account.
 3. Hydra should fill the signup email and, when OpenRouter renders them on the
-   current step, the required password and legal checkbox before clicking
+   current step, the required password and checkbox before clicking
    Continue.
-4. If OpenRouter keeps the password or legal checkbox required, Hydra should
+4. If OpenRouter keeps the password or checkbox required, Hydra should
    fail with `GENERATOR_SIGNUP_FORM_BLOCKED` instead of hanging.
 5. If OpenRouter shows or hides a Turnstile/security gate, Hydra should move to
    `manual_verification` within the short poll window instead of waiting the full

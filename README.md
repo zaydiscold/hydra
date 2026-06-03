@@ -257,9 +257,9 @@ runtime lane.
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, and the current release lane is `1.5.8` for the OpenRouter
-Generator security-check handoff, browser-backed OTP recovery, automatic Touch
-ID unlock prompt, and tightened Pica-gravity splash.
+first as `v1.1.0`, and the current release lane is `1.5.10` for concise release
+notes, Generator checkbox wording, persistent shooting stars, smoother
+starfield motion, and clearer planet-moon orbits.
 Remaining manual dogfood evidence stays explicit in the audit.
 
 ## Docs Index
@@ -267,9 +267,14 @@ Remaining manual dogfood evidence stays explicit in the audit.
 Start with these when you need more than the quick README tour:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
-  checkpoints, the `1.5.8` patch lane, and completed release history.
+  checkpoints, the `1.5.10` patch lane, and completed release history.
+- [1.5.10 Patch Release](docs/releases/1.5.10.md): concise GitHub release
+  notes, Generator checkbox wording, persistent shooting stars, opacity-only
+  star twinkle, and clearer moon orbit styling.
+- [1.5.9 Patch Release](docs/releases/1.5.9.md): release-note automation and
+  continuous ambient planet moon motion.
 - [1.5.8 Patch Release](docs/releases/1.5.8.md): Generator now records hidden
-  Turnstile/loading-submit handoffs, retries signup after the gate clears,
+  security/loading-submit handoffs, retries signup after the gate clears,
   exposes a deliberate browser-backed email-code escape hatch, auto-starts
   saved-token Touch ID unlock, and tightens the launch splash.
 - [1.5.7 Patch Release](docs/releases/1.5.7.md): Generator OTP submit now
@@ -287,11 +292,11 @@ Start with these when you need more than the quick README tour:
 - [1.5.3 Patch Release](docs/releases/1.5.3.md): Generator browser-state
   checkpointing, explicit Playwright wait timeouts, and account-browser focus.
 - [1.5.2 Patch Release](docs/releases/1.5.2.md): OpenRouter signup password,
-  terms, hidden Turnstile detection, and Generator cleanup hardening.
+  required checkbox, security-handoff detection, and Generator cleanup hardening.
 - [1.5.1 Patch Release](docs/releases/1.5.1.md): Account Generator OTP timeout,
   manual-verification state, and packaged verification notes.
-- [1.5.0 Release](docs/releases/1.5.0.md): detailed implementation
-  inventory, verification plan, and PR checklist.
+- [1.5.0 Release](docs/releases/1.5.0.md): Traffic Console pricing, real
+  Command modes, density controls, Touch ID defaults, and desktop polish.
 - [Traffic Routing And Pricing](docs/recon/TRAFFIC_ROUTING_AND_PRICING.md):
   bounded multi-key failover, status interpretation, and OpenRouter price
   provenance.

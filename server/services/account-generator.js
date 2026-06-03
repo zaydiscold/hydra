@@ -317,7 +317,7 @@ async function waitForOtpChallenge(task, page) {
           checkpoint.firstNameBlocked ? 'first name' : null,
           checkpoint.lastNameBlocked ? 'last name' : null,
           checkpoint.passwordBlocked ? 'password' : null,
-          checkpoint.legalBlocked ? 'terms acceptance' : null,
+          checkpoint.legalBlocked ? 'required checkbox' : null,
         ].filter(Boolean).join(' and ') || 'required signup fields';
         const err = new Error(`OpenRouter signup form did not advance because ${fields} is still required; current page ${checkpoint.url}`);
         err.code = 'GENERATOR_SIGNUP_FORM_BLOCKED';
@@ -469,15 +469,15 @@ async function acceptVisibleSignupTerms(page, taskId, signal = null) {
       if (await checkbox.count() === 0) continue;
       if (!await checkbox.isVisible({ timeout: 1000 })) continue;
       if (await checkbox.isChecked().catch(() => false)) {
-        logger.info(`[Account Generator] Signup terms already accepted for ${taskId}`);
+        logger.info(`[Account Generator] Required signup checkbox already accepted for ${taskId}`);
         return true;
       }
       await checkbox.check({ timeout: 3000, force: true });
-      logger.info(`[Account Generator] Accepted signup terms for ${taskId}`);
+      logger.info(`[Account Generator] Accepted required signup checkbox for ${taskId}`);
       return true;
     } catch (err) {
       if (signal?.aborted) return false;
-      logger.warn(`[Account Generator] Signup terms checkbox candidate failed for ${taskId}: ${err.message}`);
+      logger.warn(`[Account Generator] Required signup checkbox candidate failed for ${taskId}: ${err.message}`);
     }
   }
 
@@ -493,11 +493,11 @@ async function acceptVisibleSignupTerms(page, taskId, signal = null) {
       if (await candidate.count() === 0) continue;
       if (!await candidate.isVisible({ timeout: 1000 })) continue;
       await candidate.click({ timeout: 3000 });
-      logger.info(`[Account Generator] Accepted signup terms via label for ${taskId}`);
+      logger.info(`[Account Generator] Accepted required signup checkbox via label for ${taskId}`);
       return true;
     } catch (err) {
       if (signal?.aborted) return false;
-      logger.warn(`[Account Generator] Signup terms label candidate failed for ${taskId}: ${err.message}`);
+      logger.warn(`[Account Generator] Required signup checkbox label candidate failed for ${taskId}: ${err.message}`);
     }
   }
 
@@ -520,11 +520,11 @@ async function acceptVisibleSignupTerms(page, taskId, signal = null) {
     return changedCount;
   }).catch((err) => {
     if (signal?.aborted) return 0;
-    logger.warn(`[Account Generator] Signup terms DOM fallback failed for ${taskId}: ${err.message}`);
+    logger.warn(`[Account Generator] Required signup checkbox DOM fallback failed for ${taskId}: ${err.message}`);
     return 0;
   });
   if (changed > 0) {
-    logger.info(`[Account Generator] Accepted signup terms via DOM fallback for ${taskId} (${changed} checkbox${changed === 1 ? '' : 'es'})`);
+    logger.info(`[Account Generator] Accepted required signup checkbox via DOM fallback for ${taskId} (${changed} checkbox${changed === 1 ? '' : 'es'})`);
     return true;
   }
 
@@ -597,7 +597,7 @@ async function fillAndAdvanceVisibleSignupForm(task, page, { reason = 'form' } =
     throw err;
   }
   if (!termsAccepted && checkpoint.legalBlocked) {
-    const err = new Error('Could not accept OpenRouter signup terms - page may have changed');
+    const err = new Error('Could not accept OpenRouter signup checkbox - page may have changed');
     err.code = 'GENERATOR_SIGNUP_TERMS_FIELD_MISSING';
     throw err;
   }

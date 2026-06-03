@@ -3879,6 +3879,8 @@ select:-webkit-autofill {
     radial-gradient(1px 1px at 140px 140px, rgba(255,255,255,0.6), transparent);
   background-size: 300px 300px;
   opacity: 0.62;
+  transform: translateZ(0);
+  will-change: opacity;
 }
 
 .app-shell--ambient-motion .starfield::before {
@@ -3896,6 +3898,8 @@ select:-webkit-autofill {
     radial-gradient(2px 2px at 185px 45px, rgba(255,255,255,1), transparent);
   background-size: 250px 250px;
   opacity: 0.56;
+  transform: translateZ(0);
+  will-change: opacity;
 }
 
 .app-shell--ambient-motion .starfield::after {
@@ -3903,8 +3907,8 @@ select:-webkit-autofill {
 }
 
 @keyframes twinkle {
-  0% { opacity: 0.3; transform: translateY(0); }
-  100% { opacity: 1; transform: translateY(-10px); }
+  0% { opacity: 0.42; }
+  100% { opacity: 0.76; }
 }
 
 /* ========= ASTEROIDS (Grok Style) ========= */
@@ -3925,26 +3929,27 @@ select:-webkit-autofill {
   box-shadow: 0 0 15px var(--accent-secondary);
   opacity: 0;
   border-radius: 50%;
-}
-
-.app-shell--ambient-motion .meteor {
   animation: meteorFall linear infinite;
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0) rotate(45deg);
 }
 
-.meteor:nth-child(1) { left: 80%; animation-duration: 5.5s; animation-delay: 0s; }
-.meteor:nth-child(2) { left: 40%; animation-duration: 9.9s; animation-delay: 2s; background: linear-gradient(to top, var(--accent-primary), transparent); box-shadow: 0 0 15px var(--accent-primary); }
-.meteor:nth-child(3) { left: 90%; animation-duration: 6.6s; animation-delay: 4s; }
-.meteor:nth-child(4) { left: 60%; animation-duration: 8.8s; animation-delay: 1s; background: linear-gradient(to top, var(--accent-primary), transparent); box-shadow: 0 0 15px var(--accent-primary); }
+.meteor:nth-child(1) { left: 80%; --meteor-duration: 5.5s; animation-duration: var(--meteor-duration); animation-delay: -0.8s; }
+.meteor:nth-child(2) { left: 40%; --meteor-duration: 9.9s; animation-duration: var(--meteor-duration); animation-delay: -4.1s; background: linear-gradient(to top, var(--accent-primary), transparent); box-shadow: 0 0 15px var(--accent-primary); }
+.meteor:nth-child(3) { left: 90%; --meteor-duration: 6.6s; animation-duration: var(--meteor-duration); animation-delay: -2.4s; }
+.meteor:nth-child(4) { left: 60%; --meteor-duration: 8.8s; animation-duration: var(--meteor-duration); animation-delay: -6.2s; background: linear-gradient(to top, var(--accent-primary), transparent); box-shadow: 0 0 15px var(--accent-primary); }
 
-.app-shell--motion-settled .meteor-container {
-  display: none;
+.app-shell--motion-settled .meteor {
+  animation-duration: calc(var(--meteor-duration, 8s) * 1.28);
+  filter: saturate(0.78) brightness(0.9);
 }
 
 @keyframes meteorFall {
-  0% { transform: rotate(45deg) translateY(0); opacity: 0; }
+  0% { transform: translate3d(0, 0, 0) rotate(45deg); opacity: 0; }
   2% { opacity: 1; }
-  15% { transform: rotate(45deg) translateY(280vh); opacity: 0; }
-  100% { transform: rotate(45deg) translateY(280vh); opacity: 0; }
+  14% { opacity: 0.72; }
+  20% { transform: translate3d(-28vw, 280vh, 0) rotate(45deg); opacity: 0; }
+  100% { transform: translate3d(-28vw, 280vh, 0) rotate(45deg); opacity: 0; }
 }
 
 .planet {
@@ -3989,10 +3994,22 @@ select:-webkit-autofill {
   animation-delay: var(--moon-orbit-delay);
   transform-origin: 50% 50%;
   will-change: transform;
+  backface-visibility: hidden;
+  pointer-events: none;
 }
 
 .app-shell--motion-settled .planet-moon-orbit {
   animation-play-state: running;
+}
+
+.planet-moon-orbit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--accent-secondary), transparent 72%);
+  border-radius: 50%;
+  opacity: 0.22;
+  transform: scaleY(var(--moon-orbit-squash));
 }
 
 .planet-moon-orbit--inner {
@@ -4026,7 +4043,8 @@ select:-webkit-autofill {
   border-radius: 50%;
   background: rgba(0, 229, 255, 0.52);
   box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.36), 0 0 16px rgba(0, 229, 255, 0.42);
-  transform: translateX(-50%);
+  transform: translate3d(-50%, 0, 0);
+  backface-visibility: hidden;
 }
 
 .planet-moon--ember {
@@ -4048,14 +4066,19 @@ select:-webkit-autofill {
 }
 
 @keyframes moonOrbit {
-  from { transform: rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-start)); }
-  to { transform: rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-end)); }
+  from { transform: translate3d(0, 0, 0) rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-start)); }
+  to { transform: translate3d(0, 0, 0) rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-end)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .meteor {
+    animation: none;
+    opacity: 0;
+  }
+
   .planet-moon-orbit {
     animation: none;
-    transform: rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-start));
+    transform: translate3d(0, 0, 0) rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-orbit-start));
   }
 }
 

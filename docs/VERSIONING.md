@@ -15,14 +15,11 @@ attempt telemetry, bounded proxy failover, real Command Grid/List/Map modes,
 desktop density, stronger proximity navigation, Pool Manager ergonomics, Bulk
 Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 
-Tracked `package.json` and `package-lock.json` now target `1.5.8`, a focused
-patch on top of the public `v1.5.7` baseline. It keeps the Account Generator
-rescue lane narrow while retaining the OpenRouter signup-shell, OTP-screen, and
-OTP-submit repairs, then fixes the hidden Turnstile/loading-submit handoff so
-Hydra can retry signup after the gate clears and let the operator submit an
-email code if the isolated browser reaches that screen before detection catches
-up. It also makes saved-token Touch ID release auto-start on the unlock screen
-and tightens the packaged splash to a shorter, faster-gravity `15s` sequence.
+Tracked `package.json` and `package-lock.json` now target the `1.5.x` lane. The
+current patch target is `1.5.10`, which keeps the Generator, Touch ID, routing,
+and splash fixes intact while cleaning up release-note copy and smoothing the
+ambient space graphics: persistent shooting stars, opacity-only star twinkle,
+and clearer planet-moon orbit styling.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -111,12 +108,12 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`1.5.8` is the current patch lane for the Account Generator hidden security
-handoff, browser-backed OTP recovery repair, automatic saved-token Touch ID
-prompting, and the tightened Pica-gravity splash. The prior `1.5.7` lane remains
-the OTP-submit responsiveness and local rate-limit baseline; `1.5.6` remains
-the packaged signup-shell, abort-aware cleanup, isolated-browser handoff, and
-self-capture evidence baseline.
+`1.5.10` is the current patch lane for concise release pages and ambient-motion
+repair. `1.5.8` remains the Account Generator security-handoff, browser-backed
+OTP recovery, automatic saved-token Touch ID prompt, and tightened splash
+baseline. `1.5.7` remains the OTP-submit responsiveness and local rate-limit
+baseline; `1.5.6` remains the packaged signup-shell, abort-aware cleanup,
+isolated-browser handoff, and self-capture evidence baseline.
 Continue using `[skip-bump]` for audit, dogfood, and isolated
 documentation checkpoints after a release ships unless a real source fix must
 go to users. Do not produce a second minor bump merely to record manual
@@ -145,11 +142,12 @@ requested key names, and tightens request-first OpenRouter fallback behavior.
 `v1.4.9` restores pending OTP-stub visibility on Command and reuses saved
 sign-in-needed accounts in the Bulk Import queue.
 
-The `1.5.0` candidate adds priced proxy telemetry, explicit attempt outcomes,
+The `1.5.0` release adds priced proxy telemetry, explicit attempt outcomes,
 an eight-key bounded failover default, real Command Grid/List/Map views,
 sidebar labels and stronger proximity motion, forgiving Pool Manager controls,
 persisted Bulk Import activity, compact density controls, and a launch-bounded
-moon orbit.
+moon orbit. Later `1.5.x` patches refined Generator handoffs, Touch ID unlock,
+release-note publication, and ambient graphics.
 
 The first `v1.4.1` tag exposed a pre-publication gate cycle before any desktop
 artifact uploaded: `hydra audit` correctly reported that current-version Intel

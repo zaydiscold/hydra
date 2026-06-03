@@ -777,7 +777,7 @@ test('account generator browser signup uses the encrypted proxy pool when presen
   assert.match(source, /if \(signal\?\.aborted\) return false/);
   assert.match(source, /input\[name="legalAccepted"\]/);
   assert.match(source, /checkbox\.check\(\{ timeout: 3000, force: true \}\)/);
-  assert.match(source, /Accepted signup terms via DOM fallback/);
+  assert.match(source, /Accepted required signup checkbox via DOM fallback/);
   assert.match(source, /checkpointOtpReady = task\.metadata\?\.checkpoint\?\.state === 'otp'/);
   assert.match(source, /fillVisibleOtpInput\(page, otpCode, task\.taskId\)/);
   assert.match(source, /input\[name\*="code" i\]/);
