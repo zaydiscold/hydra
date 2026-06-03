@@ -728,6 +728,8 @@ app.whenReady().then(async () => {
       setTimeout(() => verifyVisible(`${reason}+1200ms`), 1200).unref?.();
       scheduleRendererDiagnostics(mainWindow, `${reason}+2s`, 2000);
       scheduleRendererDiagnostics(mainWindow, `${reason}+10s`, 10000);
+      scheduleRendererDiagnostics(mainWindow, `${reason}+35s`, 35000);
+      scheduleRendererDiagnostics(mainWindow, `${reason}+95s`, 95000);
       scheduleSelfCapture(mainWindow, reason);
       // Boot complete — release the gate so activate / second-instance /
       // tray-click handlers can spawn windows again from this point on.

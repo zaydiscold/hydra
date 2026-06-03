@@ -2468,3 +2468,12 @@ This evidence file is not release-complete by itself. The release remains not co
   evidence; CPU averaged `11.245%` with three brief `~21%` visual-pulse samples,
   and RSS fell by `31850496` bytes. GitHub release `v1.5.12` is public with all
   ten expected updater/package assets.
+- `1.5.12` renderer-loop instrumentation checkpoint: a rebuilt local packaged
+  app now logs renderer diagnostics at `+2s`, `+10s`, `+35s`, and `+95s` after
+  main reveal. The LaunchServices run at
+  `/private/tmp/hydra-renderer-diagnostics-20260603T052950Z` confirmed splash
+  teardown with `timers=0`, `rafActive=false`, and `matterCleared=true`; the
+  late renderer samples showed zero intervals, zero animation frames, zero
+  Anime effects, and only the two expected low-duty timeouts
+  `App.meteorPulse` and `App.planetOrbitTick`. Native quit returned the
+  process/profile counts to zero.

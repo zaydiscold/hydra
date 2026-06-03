@@ -427,6 +427,8 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(surface, /console\.warn\('\[hydra-renderer\] diagnostics'/);
     assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+2s`, 2000\)/);
     assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+10s`, 10000\)/);
+    assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+35s`, 35000\)/);
+    assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+95s`, 95000\)/);
     assert.match(surface, /timer\.unref\?\.\(\)/);
     assert.doesNotMatch(windows, /setInterval\(\(\)=>\{if\(updateActive\)return;/);
   });

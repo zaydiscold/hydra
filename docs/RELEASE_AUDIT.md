@@ -3680,3 +3680,32 @@ items by itself.
   Hosted release v1.5.12 is public with ten assets: Linux AppImage, macOS ARM
   zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap,
   `latest-linux.yml`, `latest-mac.yml`, and `latest.yml`.
+- 2026-06-03 post-`1.5.12` runtime-loop instrumentation checkpoint: item 3
+  needed current packaged evidence beyond static source assertions, so
+  Electron main now schedules renderer diagnostics at `+2s`, `+10s`, `+35s`,
+  and `+95s` after the main window reveal. Focused verification passed
+  `node --test electron/tests/main-process.test.mjs` (`32/32`),
+  `npm run test:ui-static` (`48/48`), `git diff --check`,
+  `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  `codesign --verify --deep --strict`, bundle version `1.5.12`, and packaged
+  source inspection confirming the `+35s/+95s` hooks shipped inside
+  `release/mac-arm64/Hydra.app`.
+  LaunchServices evidence under
+  `/private/tmp/hydra-renderer-diagnostics-20260603T052950Z` started from zero
+  Hydra processes and zero stale profiles, reached four Hydra-owned processes,
+  `13.3%` sampled CPU, `575.61 MB` RSS, and zero profiles at `+112s`, then
+  returned to zero Hydra processes and zero profiles after native quit. The
+  splash diagnostics in `main-log-new.txt` report `timers=0`,
+  `rafActive=false`, `bodyCount=0`, `dynamicBodyCount=0`,
+  `matterCleared=true`, `queueLength=72`, and `duplicateShatterSkips=0`.
+  Renderer diagnostics at `+2s` and `+10s` showed two active tracked timeouts
+  owned by `App.ambientMotion` and `App.planetOrbitTick`; `intervals`,
+  `animationFrames`, and `animations` were all `0`. Renderer diagnostics at
+  `+35s` and `+95s` showed two active tracked timeouts owned by
+  `App.meteorPulse` and `App.planetOrbitTick`; `intervals`,
+  `animationFrames`, and `animations` were still all `0`. This establishes
+  the current accepted invariant: after the splash/main handoff there is no
+  persistent RAF, interval, Anime.js, or Matter.js loop, and the only remaining
+  renderer work is the named low-duty app-shell timeout pair while the app
+  shell is mounted.
