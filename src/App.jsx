@@ -678,7 +678,7 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const appShellRef = useRef(null);
-  const spaceMotionPhaseRef = useRef({ primary: -18, inner: 42, outer: -132 });
+  const planetOrbitPhaseRef = useRef({ primary: -18, inner: 42, outer: -132 });
   const [upstreamHealth, setUpstreamHealth] = useState(null);
   const recentToastsRef = useRef(new Map());
   const authStateRef = useRef(authState);
@@ -841,9 +841,8 @@ export default function App() {
   }, [authState]);
 
   useEffect(() => {
-    if (ambientMotion || !appShellRef.current) return undefined;
+    if (ambientMotion) return undefined;
 
-    let phaseTimer = null;
     let meteorStartTimer = null;
     let meteorStopTimer = null;
     let cancelled = false;
@@ -855,35 +854,12 @@ export default function App() {
       }
     };
 
-    const schedulePhaseStep = () => {
-      phaseTimer = setTrackedTimeout('App.planetMoonStep', () => {
-        phaseTimer = null;
-        if (cancelled) return;
-        if (!document.hidden) {
-          const phase = spaceMotionPhaseRef.current;
-          const nextPhase = {
-            primary: (phase.primary + 20) % 360,
-            inner: (phase.inner - 25) % 360,
-            outer: (phase.outer + 14) % 360,
-          };
-          spaceMotionPhaseRef.current = nextPhase;
-          const shell = appShellRef.current;
-          if (shell) {
-            shell.style.setProperty('--moon-phase-primary', `${nextPhase.primary}deg`);
-            shell.style.setProperty('--moon-phase-inner', `${nextPhase.inner}deg`);
-            shell.style.setProperty('--moon-phase-outer', `${nextPhase.outer}deg`);
-          }
-        }
-        schedulePhaseStep();
-      }, 1600);
-    };
-
-    const scheduleMeteorPulse = (delayMs = 4200) => {
+    const scheduleMeteorPulse = (delayMs = 2600) => {
       meteorStartTimer = setTrackedTimeout('App.meteorPulse', () => {
         meteorStartTimer = null;
         if (cancelled) return;
         if (document.hidden) {
-          scheduleMeteorPulse(6000);
+          scheduleMeteorPulse(10_000);
           return;
         }
         setMeteorPulse(true);
@@ -892,22 +868,58 @@ export default function App() {
           meteorStopTimer = null;
           if (cancelled) return;
           setMeteorPulse(false);
-          scheduleMeteorPulse(14_000 + Math.floor(Math.random() * 10_000));
-        }, 1550);
+          scheduleMeteorPulse(7_500 + Math.floor(Math.random() * 5_000));
+        }, 2600);
       }, delayMs);
     };
 
-    schedulePhaseStep();
     scheduleMeteorPulse();
 
     return () => {
       cancelled = true;
-      if (phaseTimer) clearTrackedTimeout(phaseTimer);
       if (meteorStartTimer) clearTrackedTimeout(meteorStartTimer);
       clearMeteorStop();
       setMeteorPulse(false);
     };
   }, [ambientMotion]);
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (reducedMotion?.matches) return undefined;
+
+    let orbitTimer = null;
+    let cancelled = false;
+
+    const scheduleOrbitTick = () => {
+      orbitTimer = setTrackedTimeout('App.planetOrbitTick', () => {
+        orbitTimer = null;
+        if (cancelled) return;
+        if (!document.hidden) {
+          const phase = planetOrbitPhaseRef.current;
+          const nextPhase = {
+            primary: (phase.primary + 18) % 360,
+            inner: (phase.inner - 24) % 360,
+            outer: (phase.outer + 13) % 360,
+          };
+          planetOrbitPhaseRef.current = nextPhase;
+          const shell = appShellRef.current;
+          if (shell) {
+            shell.style.setProperty('--moon-phase-primary', `${nextPhase.primary}deg`);
+            shell.style.setProperty('--moon-phase-inner', `${nextPhase.inner}deg`);
+            shell.style.setProperty('--moon-phase-outer', `${nextPhase.outer}deg`);
+          }
+        }
+        scheduleOrbitTick();
+      }, 1200);
+    };
+
+    scheduleOrbitTick();
+
+    return () => {
+      cancelled = true;
+      if (orbitTimer) clearTrackedTimeout(orbitTimer);
+    };
+  }, [authState]);
 
   useEffect(() => {
     authStateRef.current = authState;
@@ -1131,6 +1143,8 @@ export default function App() {
         <div className="starfield" />
         <div className="nebula-glow" />
         <div className="meteor-container">
+          <div className="meteor" />
+          <div className="meteor" />
           <div className="meteor" />
           <div className="meteor" />
           <div className="meteor" />
