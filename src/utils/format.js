@@ -4,6 +4,15 @@ export function formatCurrency(amount) {
   return `$${Number(amount).toFixed(2)}`;
 }
 
+/** Formats remaining balances without rounding up and overstating credits. */
+export function formatRemainingCurrency(amount) {
+  if (amount === undefined || amount === null || amount === '') return '—';
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return '—';
+  const cents = Math.floor(Math.max(0, value) * 100) / 100;
+  return `$${cents.toFixed(2)}`;
+}
+
 /** Determines if balance is ok, low, or depleted */
 export function getBalanceStatus(credits) {
   if (!credits) return 'ok';

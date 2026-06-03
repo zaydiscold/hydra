@@ -3646,10 +3646,14 @@ items by itself.
   and registry image push.
 - 2026-06-03 `1.5.12` idle-safe space accent repair: the user's report that
   the settled asteroids and the Jupiter-like planet moons were broken exposed a
-  real visual regression. The repaired source keeps the startup art continuous,
-  then switches the settled shell to an owned `App.planetOrbitTick` timeout
-  that writes CSS-variable moon phases every `1200ms` and a sparse
-  `meteorPulse` timeout that renders finite diagonal shooting-star bursts.
+  real visual regression. This checkpoint repaired the missing visuals with a
+  low-duty scheduler, but the later post-`1.5.12` user review below supersedes
+  that approach because the scheduler path still made the moons feel frozen and
+  the meteor transform order read as mostly straight down. At this checkpoint,
+  the source kept the startup art continuous, then switched the settled shell
+  to an owned `App.planetOrbitTick` timeout that wrote CSS-variable moon phases
+  every `1200ms` and a sparse `meteorPulse` timeout that rendered finite
+  shooting-star bursts.
   The old `spaceMotionPhaseRef`, `App.planetMoonStep`, `@keyframes moonOrbit`,
   hot moon transition, and continuous settled meteor loop are absent from both
   source and the packaged bundle. The visual self-capture
@@ -3704,23 +3708,57 @@ items by itself.
   `animationFrames`, and `animations` were all `0`. Renderer diagnostics at
   `+35s` and `+95s` showed two active tracked timeouts owned by
   `App.meteorPulse` and `App.planetOrbitTick`; `intervals`,
-  `animationFrames`, and `animations` were still all `0`. This establishes
-  the current accepted invariant: after the splash/main handoff there is no
-  persistent RAF, interval, Anime.js, or Matter.js loop, and the only remaining
-  renderer work is the named low-duty app-shell timeout pair while the app
-  shell is mounted.
-- 2026-06-03 post-`1.5.12` meteor-geometry correction: user review caught that
-  the finite meteor pulse was visible but no longer looked like the older
-  shooting stars; the pulse had become a mostly horizontal bar moving
-  right-to-left. The source now restores the earlier long-tail geometry: each
-  meteor is a `2px` wide vertical streak, uses a `linear-gradient(to top, ...)`
-  tail, rotates with `rotate(var(--meteor-angle, 45deg))`, and travels through
-  `translate3d(var(--meteor-dx, -28vw), var(--meteor-dy, 280vh), 0)` so the
-  perceived motion is a diagonal shooting star rather than a lateral slide.
-  The post-settle scheduler still stays finite and owned by `App.meteorPulse`.
-  Verification passed `npm run test:ui-static` (`48/48`),
+  `animationFrames`, and `animations` were still all `0`. This established the
+  no-RAF/no-interval/no-Anime/no-Matter invariant for that scheduler candidate,
+  but the candidate itself is superseded by the source correction below; the
+  current accepted source keeps finite `App.meteorPulse` bursts and no longer
+  contains the slower `App.planetOrbitTick` path.
+- 2026-06-03 post-`1.5.12` ambient-motion correction: user review caught that
+  the prior correction still used the wrong transform order. It restored a
+  long vertical tail but animated it as `translate3d(...) rotate(...)`, which
+  makes the motion read as mostly straight down. The accepted older visual path
+  is now restored in source: each meteor is a `2px` vertical
+  `linear-gradient(to top, ...)` tail, and `@keyframes meteorFall` applies
+  `rotate(var(--meteor-angle, 45deg)) translate3d(0, var(--meteor-distance,
+  280vh), 0)`, so translation happens through the rotated local axis and shoots
+  diagonally across the screen. A first always-on meteor loop rebuild
+  reproduced a persistent packaged GPU burn (`42.6%` at the first settled
+  sample, `45.4%` after another `45s`), so settled meteors remain owned finite
+  `App.meteorPulse` bursts with the corrected local-axis trajectory instead of
+  a permanent loop. Moving the lower-right planet moons to continuous CSS
+  `moonOrbit` on small bodies still stayed hot (`45.1%` at `+70s`), and a
+  `900ms` body-step stream still measured hot in the rebuilt package. The
+  current source uses static orbit guide rings plus a lower-duty body-only
+  `App.planetOrbitStep` phase update every `2200ms`. The old whole-ring
+  `@keyframes moonOrbit` path and the slower `App.planetOrbitTick` path are
+  absent from source. The same patch fixes Command list/grid remaining-balance
+  displays to avoid rounding `19.999...` upward to `$20.00`, and exposes
+  per-account balance labels in map mode. Focused verification passed
+  `npm run test:ui-static` (`49/49`); package verification is refreshed in the
+  next evidence entry after the rebuild.
+- 2026-06-03 post-`1.5.12` corrected package verification: rebuilt
+  `release/mac-arm64/Hydra.app` from the source above. Verification passed
+  `git diff --check`, `npm run test:ui-static` (`49/49`),
   `npm run electron:build:mac-arm64`,
   `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
-  `codesign --verify --deep --strict`, bundle version `1.5.12`, packaged CSS
-  inspection for the `45deg`/`280vh` meteor rules, and local ARM zip SHA-256
-  `89c2b18dfecd4553906a34638b29b66c83f5ee1bf4a512f7cd020e2a112826ff`.
+  `codesign --verify --deep --strict --verbose=2`, bundle
+  `CFBundleShortVersionString=1.5.12`, and packaged CSS inspection. The bundled
+  `dist/assets/index-Bp8nSeft.css` contains
+  `.app-shell--ambient-motion .meteor { animation: meteorFall
+  var(--meteor-duration,8s) linear infinite }`, finite
+  `.app-shell--motion-settled.app-shell--meteor-pulse` meteor bursts,
+  `rotate(var(--meteor-angle,45deg)) translate3d(0,
+  var(--meteor-distance,280vh), 0)`, static `.planet-moon-orbit` guide rings,
+  `.planet-moon` body transforms driven by `--moon-phase-*`, a `360ms` moon
+  body transition, and no `@keyframes moonOrbit`; it does not contain
+  `translate3d(var(--meteor-dx...)` or `App.planetOrbitTick`. The packaged
+  Dashboard bundle also contains `dashboard-account-map__balance`, proving the
+  map balance label shipped.
+  Local ARM zip SHA-256:
+  `12d6f7c32027aa37251e50e03246d8cef48f5d15bab3186afe9918d4b1352d58`.
+  A fresh LaunchServices run from a zero-process baseline settled to four
+  Hydra-owned processes at `5.5%` aggregate CPU and `646272 KB` RSS after the
+  main window had been up for roughly two minutes. Splash diagnostics reported
+  `queueLength=72`, `duplicateShatterSkips=0`, `timers=0`, `rafActive=false`,
+  `matterCleared=true`, and renderer diagnostics at `+95s` showed zero
+  intervals, zero animation frames, and zero active CSS/Anime animations.

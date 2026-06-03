@@ -74,6 +74,25 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
   assert.doesNotMatch(authUtils, /Too many OTP requests send from this IP/);
 });
 
+test('remaining account balances do not round upward in command views', async () => {
+  const { formatRemainingCurrency } = await import('../../src/utils/format.js');
+  const dashboard = readRepoFile('src/pages/Dashboard.jsx');
+  const accountCard = readRepoFile('src/components/AccountCard.jsx');
+  const css = readRepoFile('src/index.css');
+
+  assert.equal(formatRemainingCurrency(19.99989245), '$19.99');
+  assert.equal(formatRemainingCurrency(20), '$20.00');
+  assert.equal(formatRemainingCurrency(undefined), '—');
+  assert.match(dashboard, /import \{ formatCurrency, formatRemainingCurrency, getBalanceStatus \} from '\.\.\/utils\/format'/);
+  assert.match(dashboard, /function getDashboardBalanceLabel\(account\)/);
+  assert.match(dashboard, /return formatRemainingCurrency\(account\.credits\?\.remaining\)/);
+  assert.match(dashboard, /const balanceLabel = getDashboardBalanceLabel\(account\)/);
+  assert.match(dashboard, /className=\{`dashboard-account-map__balance dashboard-account-map__balance--\$\{balanceStatus\}`\}/);
+  assert.match(accountCard, /import \{ formatCurrency, formatRemainingCurrency, getBalanceStatus \} from '\.\.\/utils\/format'/);
+  assert.match(accountCard, /formatRemainingCurrency\(account\.credits\?\.remaining\)/);
+  assert.match(css, /\.dashboard-account-map__balance\s*\{[\s\S]*?font-family:\s*var\(--font-mono\);/);
+});
+
 test('Electron app chrome draws its own drag strip on macOS with traffic-light clearance', () => {
   const app = readRepoFile('src/App.jsx');
   const css = readRepoFile('src/index.css');
@@ -146,17 +165,16 @@ test('heavy ambient chrome settles while lightweight space accents keep moving',
   assert.match(app, /setTrackedTimeout\('App\.ambientMotion', \(\) => setAmbientMotion\(false\), 12_000\)/);
   assert.doesNotMatch(app, /spaceMotionPhaseRef/);
   assert.doesNotMatch(app, /setTrackedTimeout\('App\.planetMoonStep'/);
-  assert.match(app, /setTrackedTimeout\('App\.planetOrbitTick'/);
-  assert.match(app, /if \(reducedMotion\?\.matches\) return undefined;/);
-  assert.match(app, /primary:\s*\(phase\.primary \+ 18\) % 360/);
-  assert.match(app, /inner:\s*\(phase\.inner - 24\) % 360/);
-  assert.match(app, /outer:\s*\(phase\.outer \+ 13\) % 360/);
+  assert.doesNotMatch(app, /setTrackedTimeout\('App\.planetOrbitTick'/);
+  assert.match(app, /setTrackedTimeout\('App\.planetOrbitStep'/);
+  assert.match(app, /primary:\s*\(phase\.primary \+ 74\) % 360/);
+  assert.match(app, /inner:\s*\(phase\.inner - 96\) % 360/);
+  assert.match(app, /outer:\s*\(phase\.outer \+ 51\) % 360/);
   assert.match(app, /shell\.style\.setProperty\('--moon-phase-primary', `\$\{nextPhase\.primary\}deg`\)/);
   assert.match(app, /shell\.style\.setProperty\('--moon-phase-inner', `\$\{nextPhase\.inner\}deg`\)/);
   assert.match(app, /shell\.style\.setProperty\('--moon-phase-outer', `\$\{nextPhase\.outer\}deg`\)/);
-  assert.match(app, /}, 1200\)/);
   assert.match(app, /setTrackedTimeout\('App\.meteorPulse'/);
-  assert.match(app, /scheduleMeteorPulse\(7_500 \+ Math\.floor\(Math\.random\(\) \* 5_000\)\)/);
+  assert.match(app, /scheduleMeteorPulse\(28_000 \+ Math\.floor\(Math\.random\(\) \* 17_000\)\)/);
   assert.match(app, /app-shell--meteor-pulse/);
   assert.match(app, /<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>/);
   assert.match(app, /clearTrackedTimeout\(timer\)/);
@@ -172,18 +190,19 @@ test('heavy ambient chrome settles while lightweight space accents keep moving',
 
   assert.match(css, /\.app-shell--ambient-motion \.nebula-glow\s*\{[\s\S]*?animation:\s*nebulaFlow 20s ease-in-out infinite alternate;/);
   assert.match(css, /\.app-shell--ambient-motion \.starfield::before\s*\{[\s\S]*?animation:\s*twinkle 4s ease-in-out infinite alternate;/);
-  assert.match(css, /\.app-shell--ambient-motion \.meteor\s*\{[\s\S]*?animation:\s*meteorFall var\(--meteor-duration, 12s\) linear infinite;/);
+  assert.match(css, /\.app-shell--ambient-motion \.meteor\s*\{[\s\S]*?animation:\s*meteorFall var\(--meteor-duration, 8s\) linear infinite;/);
   assert.match(css, /\.app-shell--ambient-motion \.sidebar-logo-icon\s*\{[\s\S]*?animation:\s*logo-breathing 4s ease-in-out infinite;/);
   assert.doesNotMatch(css, /\.app-shell--motion-settled \.meteor-container\s*\{[\s\S]*?display:\s*none;/);
   assert.match(cssRuleBlock(css, '.app-shell--motion-settled .meteor {'), /animation:\s*none;/);
   assert.match(cssRuleBlock(css, '.app-shell--motion-settled .meteor {'), /opacity:\s*0;/);
-  assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-pulse \.meteor:nth-child\(-n\+5\)\s*\{[\s\S]*?animation:\s*meteorPulseFall var\(--meteor-pulse-duration, 2\.25s\) linear 1;/);
-  assert.match(css, /@keyframes meteorPulseFall\s*\{[\s\S]*?translate3d\(var\(--meteor-dx, -28vw\), var\(--meteor-dy, 280vh\), 0\)/);
+  assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-pulse \.meteor:nth-child\(-n\+5\)\s*\{[\s\S]*?animation:\s*meteorPulseFall var\(--meteor-pulse-duration, 2\.15s\) linear 1;/);
+  assert.match(cssRuleBlock(css, '@keyframes meteorPulseFall {'), /rotate\(var\(--meteor-angle, 45deg\)\) translate3d\(0, var\(--meteor-distance, 280vh\), 0\)/);
   assert.match(cssRuleBlock(css, '.meteor {'), /width:\s*2px/);
   assert.match(cssRuleBlock(css, '.meteor {'), /height:\s*var\(--meteor-length, 156px\)/);
   assert.match(cssRuleBlock(css, '.meteor {'), /linear-gradient\(to top/);
   assert.match(cssRuleBlock(css, '.meteor {'), /rotate\(var\(--meteor-angle, 45deg\)\)/);
-  assert.match(cssRuleBlock(css, '@keyframes meteorFall {'), /translate3d\(var\(--meteor-dx, -28vw\), var\(--meteor-dy, 280vh\), 0\)/);
+  assert.match(cssRuleBlock(css, '@keyframes meteorFall {'), /rotate\(var\(--meteor-angle, 45deg\)\) translate3d\(0, var\(--meteor-distance, 280vh\), 0\)/);
+  assert.doesNotMatch(cssRuleBlock(css, '@keyframes meteorFall {'), /translate3d\(var\(--meteor-dx/);
   assert.doesNotMatch(cssRuleBlock(css, '@keyframes twinkle {'), /transform|translateY/);
   assert.doesNotMatch(css, /\.edm-bar\s*\{/);
   assert.doesNotMatch(css, /@keyframes edm-flow/);
@@ -859,13 +878,17 @@ test('1.5 desktop operator polish stays wired to real controls', () => {
   assert.doesNotMatch(css, /@keyframes moonOrbit/);
   assert.doesNotMatch(css, /\.app-shell--ambient-motion \.planet-moon-orbit\s*\{/);
   assert.doesNotMatch(css, /\.app-shell--motion-settled \.planet-moon-orbit\s*\{/);
-  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-start:\s*-18deg;[\s\S]*?--moon-phase:\s*var\(--moon-phase-primary, var\(--moon-orbit-start\)\);/);
-  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?transform:\s*translate3d\(0, 0, 0\) rotate\(var\(--moon-orbit-tilt\)\) scaleY\(var\(--moon-orbit-squash\)\) rotate\(var\(--moon-phase\)\);/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-start:\s*-18deg;[\s\S]*?--moon-orbit-end:\s*342deg;/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?transform:\s*translate3d\(0, 0, 0\) rotate\(var\(--moon-orbit-tilt\)\) scaleY\(var\(--moon-orbit-squash\)\) rotate\(var\(--moon-orbit-start\)\);/);
   assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?transition:\s*none;/);
   assert.match(css, /\.planet-moon-orbit::before\s*\{[\s\S]*?border:\s*1px solid color-mix/);
   assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?contain:\s*layout paint;/);
-  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-phase:\s*var\(--moon-phase-inner, var\(--moon-orbit-start\)\);/);
-  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-phase:\s*var\(--moon-phase-outer, var\(--moon-orbit-start\)\);/);
+  assert.match(css, /\.planet-moon\s*\{[\s\S]*?--moon-phase:\s*var\(--moon-phase-primary, var\(--moon-orbit-start\)\);/);
+  assert.match(css, /\.planet-moon\s*\{[\s\S]*?transition:\s*transform 360ms linear;/);
+  assert.match(css, /\.planet-moon--ember\s*\{[\s\S]*?--moon-phase:\s*var\(--moon-phase-inner, var\(--moon-orbit-start\)\);/);
+  assert.match(css, /\.planet-moon--ice\s*\{[\s\S]*?--moon-phase:\s*var\(--moon-phase-outer, var\(--moon-orbit-start\)\);/);
+  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-end:\s*-318deg;/);
+  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-end:\s*228deg;/);
   assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*16s;[\s\S]*?--moon-orbit-squash:\s*0\.72;/);
   assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*13\.75s;[\s\S]*?--moon-orbit-squash:\s*0\.58;/);
   assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*26s;[\s\S]*?--moon-orbit-squash:\s*0\.64;/);

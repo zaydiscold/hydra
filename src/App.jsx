@@ -854,12 +854,12 @@ export default function App() {
       }
     };
 
-    const scheduleMeteorPulse = (delayMs = 2600) => {
+    const scheduleMeteorPulse = (delayMs = 6000) => {
       meteorStartTimer = setTrackedTimeout('App.meteorPulse', () => {
         meteorStartTimer = null;
         if (cancelled) return;
         if (document.hidden) {
-          scheduleMeteorPulse(10_000);
+          scheduleMeteorPulse(20_000);
           return;
         }
         setMeteorPulse(true);
@@ -868,8 +868,8 @@ export default function App() {
           meteorStopTimer = null;
           if (cancelled) return;
           setMeteorPulse(false);
-          scheduleMeteorPulse(7_500 + Math.floor(Math.random() * 5_000));
-        }, 2600);
+          scheduleMeteorPulse(28_000 + Math.floor(Math.random() * 17_000));
+        }, 2200);
       }, delayMs);
     };
 
@@ -890,16 +890,16 @@ export default function App() {
     let orbitTimer = null;
     let cancelled = false;
 
-    const scheduleOrbitTick = () => {
-      orbitTimer = setTrackedTimeout('App.planetOrbitTick', () => {
+    const scheduleOrbitStep = (delayMs = 2200) => {
+      orbitTimer = setTrackedTimeout('App.planetOrbitStep', () => {
         orbitTimer = null;
         if (cancelled) return;
         if (!document.hidden) {
           const phase = planetOrbitPhaseRef.current;
           const nextPhase = {
-            primary: (phase.primary + 18) % 360,
-            inner: (phase.inner - 24) % 360,
-            outer: (phase.outer + 13) % 360,
+            primary: (phase.primary + 74) % 360,
+            inner: (phase.inner - 96) % 360,
+            outer: (phase.outer + 51) % 360,
           };
           planetOrbitPhaseRef.current = nextPhase;
           const shell = appShellRef.current;
@@ -908,12 +908,14 @@ export default function App() {
             shell.style.setProperty('--moon-phase-inner', `${nextPhase.inner}deg`);
             shell.style.setProperty('--moon-phase-outer', `${nextPhase.outer}deg`);
           }
+          scheduleOrbitStep(2200);
+          return;
         }
-        scheduleOrbitTick();
-      }, 1200);
+        scheduleOrbitStep(4000);
+      }, delayMs);
     };
 
-    scheduleOrbitTick();
+    scheduleOrbitStep();
 
     return () => {
       cancelled = true;

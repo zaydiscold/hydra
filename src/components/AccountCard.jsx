@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import AuthBadge from './AuthBadge';
 import { timeAgo } from '../utils/time';
-import { formatCurrency, getBalanceStatus } from '../utils/format';
+import { formatCurrency, formatRemainingCurrency, getBalanceStatus } from '../utils/format';
 import { getCardHealth, CARD_HEALTH_COLORS } from '../utils/cardHealth';
 import { canProvisionWithSession, isSessionProbePending } from '../utils/accountSession';
 
@@ -135,7 +135,7 @@ const AccountCard = memo(function AccountCard({
       <div className="account-card-balance">
         <div className="account-card-balance-label">Remaining Balance</div>
         <div className={`account-card-balance-value mono ${balStatus === 'low' ? 'low' : ''} ${balStatus === 'depleted' ? 'depleted' : ''}`}>
-          {account.status === 'error' || pendingVerification ? '—' : formatCurrency(account.credits?.remaining)}
+          {account.status === 'error' || pendingVerification ? '—' : formatRemainingCurrency(account.credits?.remaining)}
         </div>
       </div>
 

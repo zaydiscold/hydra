@@ -71,24 +71,24 @@ stem.
 ## Ambient Planet
 
 The Jupiter-like sidebar planet is intentionally decorative, but it still has to
-feel alive. Startup uses continuous CSS for the first ambient window; once the
-app settles, the planet switches to a low-duty app scheduler. The three moon
-bodies keep their varied tilt, distance, size, and orbit guides, then advance by
-CSS variable phase steps instead of an always-running transform animation. The
-settled path updates every `1600ms`, which makes the orbit legible without
-returning to the packaged Electron GPU tail we saw from continuous compositor
-work. A tested `1200ms` eased-transition candidate looked smoother, but it
-raised the five-minute average to `14.918%` with `28.1%` finite-motion spikes,
-so it was rejected.
+feel alive. The orbit guides stay static while the three small moon bodies move
+through a fast owned `App.planetOrbitStep` phase update. The important rule is
+to move only the small bodies, not the large guide rings; animating the whole
+ring reproduced a persistent packaged GPU burn. The old `1200ms` phase step was
+too slow and read as frozen, while a `220ms` stream stayed too hot in the
+packaged app. The current body-only step is `2200ms` with a short transform
+transition, so the moons visibly move without acting like a permanent animation
+loop.
 
-The meteor layer follows the same rule. Startup can use continuous diagonal
-shooting-star motion. Settled app chrome keeps the starfield in the DOM, but
-meteors only run as finite diagonal paired bursts with explicit zeroed pulse
-delays so they do not accidentally start halfway through a short animation. The
-visual shape is the earlier shooting-star treatment: a thin vertical tail,
-rotated `45deg`, that travels far down the viewport with only a smaller left
-drift. Avoid replacing it with a horizontal bar that slides right-to-left. Star
-twinkle is opacity-only; the star layer itself no longer shifts.
+The meteor layer uses the earlier shooting-star geometry. Each meteor is a thin
+vertical tail, but the keyframe applies `rotate(...) translateY(...)` in that
+order, so the travel happens through the rotated local axis and crosses the
+screen diagonally. Avoid changing it to `translate3d(...) rotate(...)`; that
+makes the movement fall mostly straight down. Startup can run the continuous
+meteor loop briefly, but the settled shell uses sparse finite
+`App.meteorPulse` bursts so the visual keeps recurring without the packaged GPU
+process staying hot. Star twinkle is opacity-only; the star layer itself no
+longer shifts.
 
 ## Proximity Fields
 
@@ -157,7 +157,10 @@ Command keeps its account fleet inside one bounded viewport. Grid and List use
 so the page header and command rail remain stable as the vault grows. Map stays
 contained in the same work area. List is a true aligned operator table with
 account, balance, control, API, session, and usage columns; it is not a
-one-column stack of grid cards.
+one-column stack of grid cards. Remaining balances deliberately use
+`formatRemainingCurrency()` so fractional values like `19.999...` do not round
+up to `$20.00` and overstate available credits. Map mode also shows the
+per-account balance on each node instead of hiding it behind API count only.
 
 Compact density is scoped under `.app-shell--density-compact .main-content`.
 It tightens route padding, headers, metric cards, forms, tables, command

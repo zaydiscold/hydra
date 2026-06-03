@@ -5,7 +5,7 @@ import AccountCard from '../components/AccountCard';
 import AddAccountModal from '../components/AddAccountModal';
 import AnimeText from '../components/AnimeText';
 import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
-import { formatCurrency, getBalanceStatus } from '../utils/format';
+import { formatCurrency, formatRemainingCurrency, getBalanceStatus } from '../utils/format';
 import { getCardHealth } from '../utils/cardHealth';
 import { timeAgo } from '../utils/time';
 import { PlusIcon } from '../components/Icons';
@@ -287,6 +287,7 @@ function DashboardAccountListRow({ account, liveStatuses, onSelectAccount, onRes
     ? 'partial'
     : getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
   const balanceStatus = getBalanceStatus(account.credits);
+  const balanceLabel = getDashboardBalanceLabel(account);
   const sessionLabel = pendingVerification
     ? 'OTP pending'
     : sessionStatus === 'active' || sessionStatus === 'expiring'
@@ -309,7 +310,7 @@ function DashboardAccountListRow({ account, liveStatuses, onSelectAccount, onRes
         </span>
       </span>
       <strong className={`dashboard-account-list__balance dashboard-account-list__balance--${balanceStatus}`}>
-        {account.status === 'error' || pendingVerification ? '—' : formatCurrency(account.credits?.remaining)}
+        {balanceLabel}
       </strong>
       <span className={account.hasManagementKey ? 'dashboard-account-list__ready' : 'dashboard-account-list__missing'}>
         {account.hasManagementKey ? 'READY' : 'MISSING'}
@@ -336,6 +337,8 @@ function AccountTopologyMap({ accounts, liveStatuses, onSelectAccount, onResumeA
         const health = account.pendingVerification
           ? 'partial'
           : getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
+        const balanceStatus = getBalanceStatus(account.credits);
+        const balanceLabel = getDashboardBalanceLabel(account);
         const angle = (360 / Math.max(accounts.length, 1)) * index - 90;
         const radius = index % 2 === 0 ? 166 : 220;
         return (
@@ -345,16 +348,22 @@ function AccountTopologyMap({ accounts, liveStatuses, onSelectAccount, onResumeA
             key={account.id}
             className={`dashboard-account-map__node dashboard-account-map__node--${health}`}
             style={{ '--map-angle': `${angle}deg`, '--map-radius': `${radius}px` }}
-            title={`${account.alias}: ${health}`}
+            title={`${account.alias}: ${health} · ${balanceLabel}`}
             onClick={() => account.pendingVerification ? onResumeAuth() : onSelectAccount(account.id)}
           >
             <strong>{account.alias}</strong>
             <span>{account.keys?.active || 0} API</span>
+            <em className={`dashboard-account-map__balance dashboard-account-map__balance--${balanceStatus}`}>{balanceLabel}</em>
           </button>
         );
       })}
     </div>
   );
+}
+
+function getDashboardBalanceLabel(account) {
+  if (account.status === 'error' || account.pendingVerification) return '—';
+  return formatRemainingCurrency(account.credits?.remaining);
 }
 
 function FleetHealthPanel({ fleetHealth, accountsCount, totals }) {
