@@ -3882,3 +3882,41 @@ items by itself.
   Local Apple Silicon LaunchServices proof above remains the runtime evidence
   for the app we can run here; macOS Intel and Windows interactive desktop UX
   still stay in the explicit target-host/manual evidence buckets.
+- 2026-06-03 `1.5.15` settled ambient-motion package proof: after the public
+  `v1.5.14` tag, one additional source fix removed the automatic settled
+  `App.settledMeteorLoop`/`App.settledMeteorWindow` path because a rebuilt
+  `1.5.15` package still showed a hot five-minute idle GPU tail with automatic
+  settled meteor bursts enabled. Startup ambient meteors remain, hidden Easter
+  mode still arms after five clicks on the lower-right planet or Hydra logo,
+  and the `P` hotkey still fires alternating `meteorVolleyA` / `meteorVolleyB`
+  strikes while text-entry surfaces are ignored. The lower-right planet moons
+  now use visibility-aware `App.planetMoonStep` phase updates every `2800ms`
+  after startup, with the continuous `moonOrbitLinear` CSS animation limited
+  to the short startup ambient window.
+
+  Verification passed `npm run test:ui-static` (`49/49`), `npm run gate`
+  (`12/12`), `npm run lint -- --max-warnings=0`, `git diff --check`, `npm run
+  build`, `npm run electron:build:mac-arm64`, `npm run electron:smoke -- --app
+  release/mac-arm64/Hydra.app`, strict deep `codesign --verify --deep --strict
+  --verbose=2`, bundle version `1.5.15`, and bundled asset inspection. The
+  packaged assets contain `App.planetMoonStep`, `2800`,
+  `App.easterMeteorVolley`, `meteorVolleyA`, `meteorVolleyB`,
+  `moonOrbitLinear`, `--moon-phase-primary`, and the `850ms`/`.85s` moon
+  transform transition. They do not contain `App.settledMeteorLoop`,
+  `App.settledMeteorWindow`, `meteorBurstFall`, `app-shell--meteor-burst`,
+  `--moon-orbit-steps`, `App.meteorPulse`, `App.planetOrbitStep`, or
+  `planetOrbitPhaseRef`. The rebuilt local ARM zip SHA-256 is
+  `1bae4b04208d6d54ec24f02bdb072bc5d4a0c94cbe587b1c13a0a8e168976cb3`; the
+  blockmap SHA-256 is
+  `9deea1992bd5d192d8dd07040c26b484c74c9b9c5ff37fcd09272c5aa5b456ae`.
+
+  Evidence is under
+  `/private/tmp/hydra-v1515-phase-idle-check-20260603T084029Z`. LaunchServices
+  opened the rebuilt package from a native-quit baseline. At `t+300s`,
+  `hydra doctor --json` reported three Hydra-owned processes, `0.0%`
+  aggregate CPU, `383.08 MB` RSS, zero stale Hydra Playwright profiles, and
+  kept unrelated Chrome/CDP/browser-tool processes separated at `94.7%` CPU /
+  `19.63 GB` RSS for fan-pressure context only. A raw
+  `ps -ax -o pid,ppid,stat,%cpu,%mem,rss,etime,command` snapshot was preserved
+  as `ps-t300.txt`. Native quit then reduced Hydra-owned processes and stale
+  profiles to zero.

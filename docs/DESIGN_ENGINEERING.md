@@ -71,15 +71,15 @@ stem.
 ## Ambient Planet
 
 The Jupiter-like sidebar planet is intentionally decorative, but it still has to
-feel alive. The current accepted treatment is CSS-only and indefinite: each
-small moon runs an indefinite `moonOrbitLinear` transform around a larger
-outside radius, while the guide ring stays decorative and static. The orbit
-uses coarse uniform `steps(...)` cadence rather than full-rate linear
-interpolation; the moons keep moving at a predictable speed, but the browser
-does not have to repaint the decorative planet at 60fps forever. Paint containment is
-intentionally not used on the orbit ring because it clips moons at the track
-edge. There is no
-React timeout, interval, RAF, or CSS-variable phase writer for the moons. The
+feel alive. The current accepted treatment is hybrid and low-duty: each small
+moon runs `moonOrbitLinear` around a larger outside radius during the short
+startup ambient window, while the guide ring stays decorative and static. Once
+the shell settles, the moons switch to a
+visibility-aware `App.planetMoonStep` phase update every few seconds with a
+short transform transition. That keeps the planet visibly alive without a
+permanent GPU animation. Paint containment is intentionally not used on the
+orbit ring because it clips moons at the track edge. There is no timeout,
+interval, RAF, or full-rate CSS animation running forever for the moons. The
 paths are deliberately larger than the planet body so the moons read as
 orbiting around the planet instead of twitching inside it.
 
@@ -88,10 +88,9 @@ vertical tail, but the keyframe applies `rotate(...) translateY(...)` in that
 order, so the travel happens through the rotated local axis and crosses the
 screen diagonally. Avoid changing it to `translate3d(...) rotate(...)`; that
 makes the movement fall mostly straight down. Startup can run continuous
-ambient meteors, but the settled shell keeps the diagonal shower alive with a
-visibility-aware `App.settledMeteorLoop`. That loop fires one short
-`meteorBurstFall` window, then idles for a few seconds before the next strike. This keeps
-the shower recurring indefinitely without six permanent compositor layers. The
+ambient meteors, but the settled shell does not run automatic meteor strikes
+because the packaged GPU profile showed a hot idle tail. Easter mode keeps the
+richer volley effect because it is user-triggered and temporary. The
 old `App.meteorPulse` scheduler must stay absent. Star twinkle is opacity-only;
 the star layer itself no longer shifts.
 

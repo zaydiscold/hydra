@@ -673,7 +673,7 @@ export default function App() {
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
   const [ambientMotion, setAmbientMotion] = useState(true);
-  const [settledMeteorBurst, setSettledMeteorBurst] = useState({ active: false, slot: 1 });
+  const [planetMoonStep, setPlanetMoonStep] = useState(0);
   const [easterMode, setEasterMode] = useState(false);
   const [meteorVolley, setMeteorVolley] = useState({ active: false, variant: 'a', count: 0 });
   const [uiDensity, setUiDensity] = useState(getStoredUiDensity);
@@ -685,7 +685,6 @@ export default function App() {
   const authStateRef = useRef(authState);
   const authBootstrapRef = useRef(0);
   const upstreamHealthInFlightRef = useRef(false);
-  const settledMeteorSlotRef = useRef(0);
   const easterClickCountRef = useRef(0);
   const meteorVolleyTimerRef = useRef(null);
   const { setOwnedTimeout } = useOwnedTimeouts('App.toasts');
@@ -868,7 +867,6 @@ export default function App() {
 
   useEffect(() => {
     setAmbientMotion(true);
-    setSettledMeteorBurst((prev) => ({ ...prev, active: false }));
     const timer = setTrackedTimeout('App.ambientMotion', () => setAmbientMotion(false), 12_000);
     const handleVisibility = () => {
       if (document.hidden) setAmbientMotion(false);
@@ -880,27 +878,9 @@ export default function App() {
     };
   }, [authState]);
 
-  const runSettledMeteorBurst = useCallback((signal) => new Promise((resolve) => {
-    settledMeteorSlotRef.current = (settledMeteorSlotRef.current % 3) + 1;
-    setSettledMeteorBurst({ active: true, slot: settledMeteorSlotRef.current });
-
-    let finished = false;
-    const timer = setTrackedTimeout('App.settledMeteorWindow', () => {
-      finished = true;
-      resolve();
-    }, 1400);
-
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      clearTrackedTimeout(timer);
-      resolve();
-    };
-
-    signal?.addEventListener('abort', finish, { once: true });
-  }).finally(() => {
-    setSettledMeteorBurst((prev) => ({ ...prev, active: false }));
-  }), []);
+  const advancePlanetMoons = useCallback(() => {
+    setPlanetMoonStep((step) => (step + 1) % 120);
+  }, []);
 
   useEffect(() => {
     authStateRef.current = authState;
@@ -963,7 +943,7 @@ export default function App() {
   }, [authState, refreshUpstreamHealth]);
 
   useVisibleRecurringTask('App.upstreamHealth', refreshUpstreamHealth, 30_000, { enabled: authState === 'app' });
-  useVisibleRecurringTask('App.settledMeteorLoop', runSettledMeteorBurst, 4800, { enabled: !ambientMotion });
+  useVisibleRecurringTask('App.planetMoonStep', advancePlanetMoons, 2800, { enabled: !ambientMotion });
 
   // ── Listen for main-process navigation (e.g. Cmd+, → Preferences) ──
   // onNavigate returns an unsubscribe — without calling it on cleanup, every
@@ -1073,6 +1053,13 @@ export default function App() {
 
   const navigateBack = useCallback(() => navigate('/dashboard'), [navigate]);
 
+  const planetMoonPhase = planetMoonStep % 120;
+  const planetMoonStyle = {
+    '--moon-phase-primary': `${(planetMoonPhase * 18) % 360}deg`,
+    '--moon-phase-inner': `${(planetMoonPhase * -24) % 360}deg`,
+    '--moon-phase-outer': `${(planetMoonPhase * 12) % 360}deg`,
+  };
+
   // Initial auth-status check (~50–200 ms after React mount).
   //
   // Render NULL here — not a HydraLoadFrame — because the Electron splash
@@ -1144,7 +1131,7 @@ export default function App() {
     <ErrorBoundary>
       <div
         ref={appShellRef}
-        className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}${settledMeteorBurst.active ? ` app-shell--meteor-burst app-shell--meteor-slot-${settledMeteorBurst.slot}` : ''}${easterMode ? ' app-shell--easter-mode' : ''}${meteorVolley.active ? ` app-shell--meteor-volley app-shell--meteor-volley-${meteorVolley.variant}` : ''}`}
+        className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}${easterMode ? ' app-shell--easter-mode' : ''}${meteorVolley.active ? ` app-shell--meteor-volley app-shell--meteor-volley-${meteorVolley.variant}` : ''}`}
       >
         <AppChrome />
         <AppVersionStamp />
@@ -1160,7 +1147,7 @@ export default function App() {
           <div className="meteor" />
           <div className="meteor" />
         </div>
-        <button type="button" className="planet planet-1" onClick={handleEasterTriggerClick} aria-label="Decorative planet">
+        <button type="button" className="planet planet-1" style={planetMoonStyle} onClick={handleEasterTriggerClick} aria-label="Decorative planet">
           <span className="planet-moon-orbit planet-moon-orbit--primary" aria-hidden="true"><span className="planet-moon planet-moon--primary" /></span>
           <span className="planet-moon-orbit planet-moon-orbit--inner" aria-hidden="true"><span className="planet-moon planet-moon--ember" /></span>
           <span className="planet-moon-orbit planet-moon-orbit--outer" aria-hidden="true"><span className="planet-moon planet-moon--ice" /></span>

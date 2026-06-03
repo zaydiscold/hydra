@@ -2540,3 +2540,22 @@ This evidence file is not release-complete by itself. The release remains not co
   (`0.0-0.8%` range), held zero stale Hydra Playwright profiles throughout,
   and moved RSS from `395.47 MB` to `276.23 MB`; native quit reduced
   Hydra-owned processes and stale profiles to zero.
+- `1.5.15` settled ambient-motion follow-up: automatic settled meteor bursts
+  were removed after a rebuilt package still showed a hot GPU tail with the
+  recurring settled strike loop enabled. Startup meteors remain, the hidden
+  five-click Easter mode remains, and `P` still triggers user-requested
+  `meteorVolleyA` / `meteorVolleyB` strikes after arming. The lower-right
+  planet moons now switch from continuous startup `moonOrbitLinear` animation
+  to low-frequency `App.planetMoonStep` phase updates every `2800ms` after the
+  shell settles. Verification passed UI/static contracts, integration gate,
+  lint, diff hygiene, production build, macOS ARM package build, package smoke,
+  strict deep codesign, bundle version `1.5.15`, and bundled asset inspection.
+  The local ARM zip SHA-256 is
+  `1bae4b04208d6d54ec24f02bdb072bc5d4a0c94cbe587b1c13a0a8e168976cb3`; the
+  blockmap SHA-256 is
+  `9deea1992bd5d192d8dd07040c26b484c74c9b9c5ff37fcd09272c5aa5b456ae`.
+  Evidence is under
+  `/private/tmp/hydra-v1515-phase-idle-check-20260603T084029Z`. The t+300
+  LaunchServices doctor sample reported three Hydra-owned processes, `0.0%`
+  aggregate CPU, `383.08 MB` RSS, and zero stale Hydra Playwright profiles;
+  native quit returned Hydra-owned processes and stale profiles to zero.
