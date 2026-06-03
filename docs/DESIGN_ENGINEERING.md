@@ -74,15 +74,18 @@ The Jupiter-like sidebar planet is intentionally decorative, but it still has to
 feel alive. Startup uses continuous CSS for the first ambient window; once the
 app settles, the planet switches to a low-duty app scheduler. The three moon
 bodies keep their varied tilt, distance, size, and orbit guides, then advance by
-CSS variable phase steps instead of an always-running transform animation. That
-keeps the moons visibly rotating without reintroducing the packaged Electron GPU
-tail we saw from continuous compositor work.
+CSS variable phase steps instead of an always-running transform animation. The
+settled path updates every `1600ms`, which makes the orbit legible without
+returning to the packaged Electron GPU tail we saw from continuous compositor
+work. A tested `1200ms` eased-transition candidate looked smoother, but it
+raised the five-minute average to `14.918%` with `28.1%` finite-motion spikes,
+so it was rejected.
 
 The meteor layer follows the same rule. Startup can use continuous diagonal
 shooting-star motion. Settled app chrome keeps the starfield in the DOM, but
-meteors only run as finite diagonal bursts with explicit zeroed pulse delays so
-they do not accidentally start halfway through a short animation. Star twinkle is
-opacity-only; the star layer itself no longer shifts.
+meteors only run as finite diagonal paired bursts with explicit zeroed pulse
+delays so they do not accidentally start halfway through a short animation. Star
+twinkle is opacity-only; the star layer itself no longer shifts.
 
 ## Proximity Fields
 

@@ -862,9 +862,9 @@ export default function App() {
         if (!document.hidden) {
           const phase = spaceMotionPhaseRef.current;
           const nextPhase = {
-            primary: (phase.primary + 28) % 360,
-            inner: (phase.inner - 34) % 360,
-            outer: (phase.outer + 18) % 360,
+            primary: (phase.primary + 20) % 360,
+            inner: (phase.inner - 25) % 360,
+            outer: (phase.outer + 14) % 360,
           };
           spaceMotionPhaseRef.current = nextPhase;
           const shell = appShellRef.current;
@@ -875,15 +875,15 @@ export default function App() {
           }
         }
         schedulePhaseStep();
-      }, 2400);
+      }, 1600);
     };
 
-    const scheduleMeteorPulse = (delayMs = 9000) => {
+    const scheduleMeteorPulse = (delayMs = 4200) => {
       meteorStartTimer = setTrackedTimeout('App.meteorPulse', () => {
         meteorStartTimer = null;
         if (cancelled) return;
         if (document.hidden) {
-          scheduleMeteorPulse(7600);
+          scheduleMeteorPulse(6000);
           return;
         }
         setMeteorPulse(true);
@@ -892,7 +892,7 @@ export default function App() {
           meteorStopTimer = null;
           if (cancelled) return;
           setMeteorPulse(false);
-          scheduleMeteorPulse(24_000 + Math.floor(Math.random() * 18_000));
+          scheduleMeteorPulse(14_000 + Math.floor(Math.random() * 10_000));
         }, 1550);
       }, delayMs);
     };

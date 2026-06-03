@@ -146,12 +146,12 @@ test('ambient app chrome animations settle after launch instead of running forev
   assert.match(app, /setTrackedTimeout\('App\.ambientMotion', \(\) => setAmbientMotion\(false\), 12_000\)/);
   assert.match(app, /if \(ambientMotion \|\| !appShellRef\.current\) return undefined;/);
   assert.match(app, /setTrackedTimeout\('App\.planetMoonStep'/);
-  assert.match(app, /primary:\s*\(phase\.primary \+ 28\) % 360/);
-  assert.match(app, /inner:\s*\(phase\.inner - 34\) % 360/);
-  assert.match(app, /outer:\s*\(phase\.outer \+ 18\) % 360/);
-  assert.match(app, /}, 2400\)/);
+  assert.match(app, /primary:\s*\(phase\.primary \+ 20\) % 360/);
+  assert.match(app, /inner:\s*\(phase\.inner - 25\) % 360/);
+  assert.match(app, /outer:\s*\(phase\.outer \+ 14\) % 360/);
+  assert.match(app, /}, 1600\)/);
   assert.match(app, /setTrackedTimeout\('App\.meteorPulse'/);
-  assert.match(app, /scheduleMeteorPulse\(24_000 \+ Math\.floor\(Math\.random\(\) \* 18_000\)\)/);
+  assert.match(app, /scheduleMeteorPulse\(14_000 \+ Math\.floor\(Math\.random\(\) \* 10_000\)\)/);
   assert.match(app, /clearTrackedTimeout\(phaseTimer\)/);
   assert.match(app, /clearTrackedTimeout\(meteorStartTimer\)/);
   assert.match(app, /clearMeteorStop\(\)/);
@@ -180,6 +180,7 @@ test('ambient app chrome animations settle after launch instead of running forev
   assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-pulse \.meteor:nth-child\(-n\+2\)\s*\{[\s\S]*?animation:\s*meteorPulseFall 1\.55s linear 1;/);
   assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-pulse \.meteor:nth-child\(-n\+2\)\s*\{[\s\S]*?animation-delay:\s*0s;/);
   assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-pulse \.meteor:nth-child\(2\)\s*\{[\s\S]*?animation-delay:\s*0\.18s;/);
+  assert.doesNotMatch(css, /\.app-shell--motion-settled\.app-shell--meteor-pulse \.meteor:nth-child\(3\)\s*\{[\s\S]*?animation:\s*meteorPulseFall/);
   assert.match(cssRuleBlock(css, '.meteor {'), /width:\s*var\(--meteor-length, 150px\)/);
   assert.match(cssRuleBlock(css, '.meteor {'), /height:\s*2px/);
   assert.match(cssRuleBlock(css, '.meteor {'), /rotate\(var\(--meteor-angle, -28deg\)\)/);
@@ -857,7 +858,7 @@ test('1.5 desktop operator polish stays wired to real controls', () => {
   assert.match(app, /planet-moon-orbit--inner/);
   assert.match(app, /planet-moon-orbit--outer/);
   assert.match(css, /\.app-shell--ambient-motion \.planet-moon-orbit\s*\{[\s\S]*?animation:\s*moonOrbit var\(--moon-orbit-duration\) linear infinite;/);
-  assert.doesNotMatch(css, /\.app-shell--motion-settled \.planet-moon-orbit\s*\{[\s\S]*?animation:/);
+  assert.doesNotMatch(css, /\.app-shell--motion-settled \.planet-moon-orbit\s*\{/);
   assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-start:\s*-18deg;[\s\S]*?--moon-phase:\s*var\(--moon-phase-primary, var\(--moon-orbit-start\)\);/);
   assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-start:\s*-18deg;[\s\S]*?transition:\s*none;/);
   assert.match(css, /\.planet-moon-orbit::before\s*\{[\s\S]*?border:\s*1px solid color-mix/);

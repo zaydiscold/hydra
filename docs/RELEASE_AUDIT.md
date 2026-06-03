@@ -3555,3 +3555,47 @@ items by itself.
   Playwright profiles, `7.309%` average aggregate CPU, and `9.3%` max. That is
   the accepted compromise for this patch: the moons and shooting stars work
   again without the old 35-40% persistent compositor burn.
+- 2026-06-03 `1.5.10` ambient cadence follow-up: the source contract above
+  restored the missing bottom-right planet motion and diagonal shooting-star
+  layer, but the first current-running package recheck showed why this surface
+  needs measured tuning instead of guesswork. Evidence at
+  `/private/tmp/hydra-v1510-current-running-idle-profile-20260603T033001Z`
+  retained four Hydra-owned processes and zero Hydra Playwright profiles across
+  11 no-interaction samples. CPU samples were
+  `5.5,5.4,7.4,6.3,11.5,5.8,6.5,7.7,6.7,6.4,7.3`
+  (`6.955%` average, `11.5%` max, `7.3%` end), RSS moved
+  `622673920 -> 623443968` bytes, and broad `ps -ax -o
+  pid,ppid,stat,%cpu,%mem,rss,etime,command | grep -iE
+  'chrome|chromium|playwright|electron|hydra'` inventories are preserved before,
+  during, and after the sample window. Compared with the earlier hot local
+  package baseline at
+  `/private/tmp/hydra-v1510-local-post-release-idle-profile-20260603T022638Z`
+  (`~49.3%` average), this stayed `85.9%` lower while keeping visible motion.
+  A more aggressive visual candidate was intentionally rejected: it used
+  `1200ms` moon steps, a short transform transition, and four settled meteor
+  streaks. The rebuilt package passed ARM smoke and strict codesign, but
+  profiling at
+  `/private/tmp/hydra-v1510-cadence-final-profile-20260603T033907Z` produced
+  `20.9,14.8,11,9.2,7.8,26.9,17.5,28.1,11.4,8.4,8.1`
+  (`14.918%` average, `28.1%` max). That proved the extra smoothness was too
+  expensive for a decorative shell layer.
+  The accepted middle-ground candidate uses direct `1600ms` moon phase steps
+  (`+20/-25/+14` degrees), no settled moon CSS animation or transform
+  transition, and paired finite diagonal meteor bursts that start sooner after
+  settle and repeat every `14-24s`. Verification passed `npm run
+  test:ui-static` (`48/48`), `npm run lint`, `npm run build`, `git diff
+  --check`, `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  `codesign --verify --deep --strict`, and bundle version `1.5.10`.
+  The final local ARM zip SHA-256 is
+  `8cb8c044eabe98e0df8c35271f7440fe7a33e76da93dd85f1bc9672cb1bd2df8`.
+  LaunchServices profiling of that exact rebuilt package at
+  `/private/tmp/hydra-v1510-middle-cadence-final-profile-20260603T034810Z`
+  decayed from `161.8%` at `+5s` to `84.4%` at `+20s` and `11.1%` at `+35s`,
+  then retained four owned processes and zero stale profiles for all 11 idle
+  samples:
+  `9,6.5,7.6,7.6,7,7.9,7,11.1,7,6.2,6.7`
+  (`7.6%` average, `11.1%` max, `6.7%` end). RSS moved
+  `662339584 -> 626147328` bytes. This is `84.6%` below the hot baseline and
+  `49.1%` below the rejected high-cadence candidate while still making the
+  moons and meteors visibly active.
