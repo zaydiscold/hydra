@@ -5,6 +5,7 @@
  * OpenRouter request, and no proxy/API key required.
  */
 import { c, json, table } from '../lib/output.js';
+import { resolveLocalRuntimeEndpoint } from '../lib/runtime-port.js';
 import { loadServices, shutdown } from '../lib/services.js';
 import {
   extractAssistantText,
@@ -79,8 +80,15 @@ function numericFlag(raw, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER, na
 }
 
 function normalizeBaseUrl(raw) {
-  const value = (raw || process.env.HYDRA_BASE_URL || `http://localhost:${process.env.HYDRA_PORT || process.env.PORT || 3001}/v1`).trim();
+  const value = raw.trim();
   return value.replace(/\/+$/, '');
+}
+
+async function resolveHydraProxyBaseUrl(raw) {
+  const explicit = (raw || process.env.HYDRA_BASE_URL || '').trim();
+  if (explicit) return normalizeBaseUrl(explicit);
+  const endpoint = await resolveLocalRuntimeEndpoint();
+  return endpoint.baseUrl.replace(/\/+$/, '');
 }
 
 async function resolveProxyKey(argv) {
@@ -172,7 +180,7 @@ async function runChat(argv) {
     return;
   }
 
-  const baseUrl = normalizeBaseUrl(valueFor(argv, '--base-url'));
+  const baseUrl = await resolveHydraProxyBaseUrl(valueFor(argv, '--base-url'));
   const model = (valueFor(argv, '--model') || process.env.HYDRA_MODEL || 'openai/gpt-4o-mini').trim();
   const directArgv = openRouterArgv(argv);
   const directKeyInfo = resolveOpenRouterKey(directArgv);

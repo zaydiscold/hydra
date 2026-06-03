@@ -649,6 +649,40 @@ test('hydra doctor --json reports concrete checks', () => {
   assert.ok(report.performance.cleanup == null);
 });
 
+test('hydra doctor reads the packaged runtime port instead of assuming 3001', async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'hydra-cli-doctor-runtime-'));
+  const runtimePath = join(dataDir, 'hydra-runtime.json');
+  const { server, port } = await listenOnFreePort();
+  writeFileSync(runtimePath, JSON.stringify({
+    schema: 'hydra.runtime-state.v1',
+    source: 'electron-packaged',
+    mode: 'embedded',
+    pid: process.pid,
+    port,
+    url: `http://localhost:${port}`,
+    proxyUrl: `http://localhost:${port}/v1`,
+    writtenAt: new Date().toISOString(),
+  }), 'utf-8');
+
+  try {
+    const report = JSON.parse(runHydra(['doctor', '--json'], {
+      HYDRA_DATA_DIR: dataDir,
+      HYDRA_RUNTIME_STATE_PATH: runtimePath,
+      HYDRA_PORT: '',
+      PORT: '',
+    }));
+
+    assert.equal(report.checks.port.ok, true);
+    assert.equal(report.checks.port.port, port);
+    assert.equal(report.checks.port.source, 'electron-packaged');
+    assert.equal(report.checks.port.runtimeState.path, runtimePath);
+    assert.equal(report.checks.port.runtimeState.pid, process.pid);
+    assert.equal(report.checks.port.url, `http://127.0.0.1:${port}/v1`);
+  } finally {
+    await closeServer(server);
+  }
+});
+
 test('hydra top-level system commands default to the same repo data dir as service commands', () => {
   const doctor = JSON.parse(runHydra(['doctor', '--json'], { HYDRA_DATA_DIR: undefined }));
   const dataDir = runHydra(['data-dir'], { HYDRA_DATA_DIR: undefined }).trim();
@@ -739,6 +773,44 @@ test('hydra status --json includes explicit warning channel for degraded proxy m
   assert.match(source, /proxy gate status failed:/);
   assert.doesNotMatch(source, /catch \{ \/\* keys not derivable yet \*\/ \}/);
   assert.doesNotMatch(source, /catch \{ \/\* gate not loaded \*\/ \}/);
+});
+
+test('hydra status and proxy status use packaged runtime port metadata', async () => {
+  const env = prepareAuthDb('status-runtime-pass');
+  const runtimePath = join(env.HYDRA_DATA_DIR, 'hydra-runtime.json');
+  const { server, port } = await listenOnFreePort();
+  writeFileSync(runtimePath, JSON.stringify({
+    schema: 'hydra.runtime-state.v1',
+    source: 'electron-packaged',
+    mode: 'embedded',
+    pid: process.pid,
+    port,
+    url: `http://localhost:${port}`,
+    proxyUrl: `http://localhost:${port}/v1`,
+    writtenAt: new Date().toISOString(),
+  }), 'utf-8');
+  const runtimeEnv = {
+    ...env,
+    HYDRA_RUNTIME_STATE_PATH: runtimePath,
+    HYDRA_PORT: '',
+    PORT: '',
+  };
+
+  try {
+    const statusReport = JSON.parse(runHydra(['status', '--json'], runtimeEnv));
+    assert.equal(statusReport.proxy.running, true);
+    assert.equal(statusReport.proxy.port, port);
+    assert.equal(statusReport.proxy.source, 'electron-packaged');
+    assert.equal(statusReport.proxy.url, `http://localhost:${port}/v1`);
+
+    const proxyReport = JSON.parse(runHydra(['proxy', 'status', '--json'], runtimeEnv));
+    assert.equal(proxyReport.running, true);
+    assert.equal(proxyReport.port, port);
+    assert.equal(proxyReport.source, 'electron-packaged');
+    assert.equal(proxyReport.url, `http://localhost:${port}/v1`);
+  } finally {
+    await closeServer(server);
+  }
 });
 
 test('hydra logs --json tails without returning the entire file', () => {
@@ -898,6 +970,76 @@ test('hydra ai chat calls a running OpenAI-compatible Hydra proxy', async () => 
     assert.equal(captured.body.max_tokens, 32);
     assert.equal(captured.body.temperature, 0);
     assert.equal(captured.body.stream, false);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test('hydra ai chat defaults to the packaged runtime proxy URL', async () => {
+  let captured = null;
+  const dataDir = mkdtempSync(join(tmpdir(), 'hydra-cli-ai-runtime-'));
+  const runtimePath = join(dataDir, 'hydra-runtime.json');
+  const { server, port } = await listenOnFreeHttpServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk.toString('utf-8');
+    });
+    req.on('end', () => {
+      captured = {
+        method: req.method,
+        url: req.url,
+        authorization: req.headers.authorization,
+        body: JSON.parse(body),
+      };
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({
+        id: 'chatcmpl-runtime-test',
+        model: captured.body.model,
+        choices: [{ message: { role: 'assistant', content: 'runtime proxy ok' } }],
+      }));
+    });
+  });
+  writeFileSync(runtimePath, JSON.stringify({
+    schema: 'hydra.runtime-state.v1',
+    source: 'electron-packaged',
+    mode: 'embedded',
+    pid: process.pid,
+    port,
+    url: `http://localhost:${port}`,
+    proxyUrl: `http://localhost:${port}/v1`,
+    writtenAt: new Date().toISOString(),
+  }), 'utf-8');
+
+  try {
+    const result = await runHydraAsync([
+      'ai',
+      'chat',
+      'runtime hello',
+      '--route',
+      'proxy',
+      '--key',
+      'sk-hydra-runtime',
+      '--model',
+      'test/runtime',
+      '--timeout-ms',
+      '2000',
+      '--json',
+    ], {
+      HYDRA_DATA_DIR: dataDir,
+      HYDRA_RUNTIME_STATE_PATH: runtimePath,
+      HYDRA_BASE_URL: '',
+      HYDRA_PORT: '',
+      PORT: '',
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, true);
+    assert.equal(report.source, 'hydra-v1');
+    assert.equal(report.baseUrl, `http://localhost:${port}/v1`);
+    assert.equal(report.text, 'runtime proxy ok');
+    assert.equal(captured.method, 'POST');
+    assert.equal(captured.url, '/v1/chat/completions');
+    assert.equal(captured.authorization, 'Bearer sk-hydra-runtime');
   } finally {
     await closeServer(server);
   }

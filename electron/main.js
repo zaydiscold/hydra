@@ -5,7 +5,7 @@
  * All shared runtime state lives in app/state.js.
  */
 import { app, Menu, Tray, nativeImage, shell } from 'electron';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,7 @@ import { killKnownHydraAuxiliaryProcesses } from './utils/cleanupAuxProcesses.js
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
 const LIFECYCLE_KEEPALIVE_RENEW_MS = 24 * 60 * 60 * 1000;
+const RUNTIME_STATE_FILENAME = 'hydra-runtime.json';
 
 let lifecycleKeepAliveTimer = null;
 
@@ -60,6 +61,49 @@ function logLifecycle(event, extra = {}) {
     console.warn(`[electron] lifecycle:${event} ${JSON.stringify(lifecycleSnapshot(extra))}`);
   } catch (err) {
     console.warn(`[electron] lifecycle:${event} log failed: ${err?.message || err}`);
+  }
+}
+
+async function writeRuntimeState({ expressPort, url }) {
+  if (!Number.isInteger(expressPort) || expressPort < 1 || expressPort > 65535) return;
+  const userData = app.getPath('userData');
+  const runtimePath = path.join(userData, RUNTIME_STATE_FILENAME);
+  const payload = {
+    schema: 'hydra.runtime-state.v1',
+    source: isDev ? 'electron-dev' : 'electron-packaged',
+    mode: isDev ? 'dev' : 'embedded',
+    appVersion: app.getVersion(),
+    pid: process.pid,
+    port: expressPort,
+    url,
+    proxyUrl: `${url}/v1`,
+    dataDir: userData,
+    writtenAt: new Date().toISOString(),
+  };
+
+  try {
+    await mkdir(userData, { recursive: true, mode: 0o700 });
+    await writeFile(runtimePath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
+    if (process.platform !== 'win32') await chmod(runtimePath, 0o600);
+    process.env.HYDRA_RUNTIME_STATE_PATH = runtimePath;
+    console.warn('[electron] runtime state wrote', JSON.stringify({
+      path: runtimePath,
+      pid: payload.pid,
+      port: payload.port,
+      source: payload.source,
+    }));
+  } catch (err) {
+    console.warn('[electron] runtime state write failed:', err?.message || err);
+  }
+}
+
+async function clearRuntimeState(reason) {
+  try {
+    const runtimePath = path.join(app.getPath('userData'), RUNTIME_STATE_FILENAME);
+    await rm(runtimePath, { force: true });
+    console.warn('[electron] runtime state cleared', JSON.stringify({ reason, path: runtimePath }));
+  } catch (err) {
+    console.warn('[electron] runtime state clear failed:', err?.message || err);
   }
 }
 
@@ -508,6 +552,7 @@ app.whenReady().then(async () => {
     const staticUrl = `http://localhost:${expressPort}`;
     const url = isDev ? resolveDevServerUrl(process.env.VITE_DEV_SERVER_URL, staticUrl) : staticUrl;
     setWindowURL(url);
+    await writeRuntimeState({ expressPort, url: staticUrl });
     console.log(`[electron] Hydra UI listening at ${url}`);
 
     registerIpcHandlers();
@@ -824,11 +869,13 @@ app.on('before-quit', (event) => {
   }
   setShuttingDown(true);
   stopLifecycleKeepAlive();
-  shutdownEverything({
-    reason: 'before-quit',
-    trackedChildren,
-    gracefulShutdown: getGracefulShutdown(),
-  }).finally(() => app.exit(0));
+  clearRuntimeState('before-quit').finally(() => {
+    shutdownEverything({
+      reason: 'before-quit',
+      trackedChildren,
+      gracefulShutdown: getGracefulShutdown(),
+    }).finally(() => app.exit(0));
+  });
 });
 
 app.on('will-quit', (_event) => {
@@ -848,6 +895,7 @@ process.on('uncaughtException', async (err) => {
     console.warn('[electron] uncaughtException telemetry capture failed:', captureErr?.message ?? captureErr);
   }
   setShuttingDown(true);
+  await clearRuntimeState('uncaughtException');
   await shutdownEverything({
     reason: 'uncaughtException',
     trackedChildren,

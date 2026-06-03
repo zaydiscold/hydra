@@ -3599,3 +3599,41 @@ items by itself.
   `662339584 -> 626147328` bytes. This is `84.6%` below the hot baseline and
   `49.1%` below the rejected high-cadence candidate while still making the
   moons and meteors visibly active.
+- 2026-06-03 `1.5.11` packaged runtime-port bridge: a final diagnostic pass
+  found a real CLI/API mismatch after the accepted ambient cadence patch. The
+  running packaged app was healthy on an OS-assigned embedded port, but
+  `hydra doctor --json` still assumed `3001` and reported the listener closed.
+  Electron now writes a non-secret `hydra-runtime.json` file under the app
+  user-data directory with schema `hydra.runtime-state.v1`, source
+  `electron-packaged`, owner PID, embedded server port, UI URL, `/v1` proxy URL,
+  app version, and write time. CLI runtime resolution now honors explicit
+  `HYDRA_PORT`, `PORT`, `HYDRA_BASE_URL`, `--port`, and `--base-url` overrides
+  first, then reads live runtime-state files only when the owner PID is alive.
+  The same resolver feeds `hydra doctor`, `hydra status`, `hydra proxy status`,
+  `hydra ai chat`, and `hydra stop`, so packaged Hydra no longer looks closed
+  when it is listening on a dynamic port.
+  Verification passed `node --check` on the touched CLI/Electron files,
+  `npm run test:cli` (`49/49`), `npm run test:ui-static` (`48/48`), `npm run
+  lint`, `npm run build`, `git diff --check`, `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  `codesign --verify --deep --strict`, and bundle version `1.5.11`. The final
+  local ARM zip SHA-256 is
+  `d33ac13e060b423ee46155d628f8561890ad6d76cd80be4a699e82e65d0dd3f1`.
+  The full local chain also passed `npm test`, `npm run gate` (`12/12`), and
+  final audit with `30 ok / 5 deferred / 1 missing / 0 blockers`; the remaining
+  missing item is the expected pre-release macOS Intel-current artifact, which
+  is produced by the hosted release matrix after the tag is pushed.
+  LaunchServices proof on the rebuilt package wrote
+  `/Users/zaydk/Library/Application Support/Hydra/hydra-runtime.json` after
+  `4s` with version `1.5.11`, PID `27560`, and port `64675`. Live CLI snapshots
+  are preserved at `/private/tmp/hydra-v1511-runtime-doctor.json`,
+  `/private/tmp/hydra-v1511-runtime-status.json`, and
+  `/private/tmp/hydra-v1511-runtime-proxy.json`; all three reported
+  `source=electron-packaged`, port `64675`, and a running listener. The short
+  no-interaction profile under
+  `/private/tmp/hydra-v1511-runtime-port-idle-profile-20260603T040959Z`
+  retained four Hydra-owned processes and zero stale profiles across nine
+  samples. CPU samples were `8.5,6.3,10.3,8.3,12.7,7.1,16.2,5.4,7.6`
+  (`9.156%` average, `16.2%` max, `7.6%` end), and RSS moved
+  `569.81 MB -> 500.88 MB`. The app-shell visual cadence is unchanged from the
+  accepted `1.5.10` middle-ground profile.

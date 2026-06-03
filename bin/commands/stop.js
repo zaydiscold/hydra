@@ -1,10 +1,9 @@
 /**
  * `hydra stop` — authenticated shutdown for a running standalone server.
  */
-import net from 'node:net';
 import { json, status } from '../lib/output.js';
+import { probePort, resolveLocalRuntimeEndpoint } from '../lib/runtime-port.js';
 
-const DEFAULT_PORT = Number(process.env.HYDRA_PORT || process.env.PORT || 3001);
 const SHUTDOWN_TIMEOUT_MS = 5000;
 
 function valueAfter(argv, flag) {
@@ -18,30 +17,13 @@ function hasFlag(argv, flag) {
 }
 
 function parsePort(argv) {
-  const raw = valueAfter(argv, '--port') || String(DEFAULT_PORT);
+  const raw = valueAfter(argv, '--port');
+  if (!raw) return null;
   const port = Number(raw);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(`invalid --port value: ${raw}`);
   }
   return port;
-}
-
-function probePort(port, host = '127.0.0.1') {
-  return new Promise((resolve) => {
-    const sock = new net.Socket();
-    let done = false;
-    const finish = (value) => {
-      if (done) return;
-      done = true;
-      sock.destroy();
-      resolve(value);
-    };
-    sock.setTimeout(250);
-    sock.once('connect', () => finish(true));
-    sock.once('timeout', () => finish(false));
-    sock.once('error', () => finish(false));
-    sock.connect(port, host);
-  });
 }
 
 function usage() {
@@ -102,9 +84,11 @@ export async function run(argv) {
   }
 
   const wantJson = hasFlag(argv, '--json');
-  const port = parsePort(argv);
+  const explicitPort = parsePort(argv);
+  const endpoint = explicitPort ? null : await resolveLocalRuntimeEndpoint();
+  const port = explicitPort ?? endpoint.port;
   const token = valueAfter(argv, '--token') || process.env.HYDRA_TOKEN || null;
-  const running = await probePort(port);
+  const running = explicitPort ? await probePort(port) : endpoint.running;
 
   if (!running) {
     const report = { running: false, stopped: false, port, error: null };

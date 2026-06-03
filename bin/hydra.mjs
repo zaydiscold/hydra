@@ -17,6 +17,7 @@ import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, re
 import { basename, dirname, join, resolve } from 'node:path';
 import { platform, arch, hostname, totalmem, cpus, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { resolveRuntimePortCandidateSync } from './lib/runtime-port.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
@@ -51,6 +52,18 @@ function getLogPath() {
     return join(resolve(process.env.HYDRA_DATA_DIR), 'hydra.log');
   }
   return join(getDataDir(), 'hydra.log');
+}
+
+function compactRuntimeState(state) {
+  if (!state) return null;
+  return {
+    path: state.path,
+    pid: state.pid,
+    port: state.port,
+    source: state.source,
+    mode: state.mode,
+    writtenAt: state.writtenAt,
+  };
 }
 
 function printJson(value) {
@@ -560,7 +573,8 @@ if (sub === 'start') {
   const dbPath = join(dataDir, 'hydra.db');
   const secretsPath = join(dataDir, 'local-secrets.json');
   const chromiumPath = findBundledChromium(root);
-  const port = Number(process.env.HYDRA_PORT || process.env.PORT || 3001);
+  const runtimeCandidate = resolveRuntimePortCandidateSync({ root, dataDir });
+  const port = runtimeCandidate.port;
   const portOpen = probePortSync(port);
   const cleanStaleProfiles = cliArgs.includes('--clean-stale-profiles');
   let dataDirSize = 'N/A';
@@ -631,7 +645,14 @@ if (sub === 'start') {
       db: { ok: pathExists(dbPath), path: dbPath },
       secrets: { ok: pathExists(secretsPath), path: secretsPath },
       chromium: { ok: Boolean(chromiumPath), path: chromiumPath },
-      port: { ok: portOpen, port, url: portOpen ? `http://127.0.0.1:${port}/v1` : null },
+      port: {
+        ok: portOpen,
+        port,
+        source: runtimeCandidate.source,
+        url: portOpen ? `http://127.0.0.1:${port}/v1` : null,
+        runtimeState: compactRuntimeState(runtimeCandidate.state),
+        ignoredRuntimeStates: runtimeCandidate.ignored || [],
+      },
     },
     performance: {
       hydraPlaywrightProfiles: refreshedProfileReport,
@@ -661,7 +682,7 @@ Checks
   DB:           ${report.checks.db.ok ? 'ok' : 'missing'} (${dbPath})
   Secrets:      ${report.checks.secrets.ok ? 'ok' : 'missing'} (${secretsPath})
   Chromium:     ${report.checks.chromium.ok ? 'ok' : 'missing'}
-  Port ${port}:     ${portOpen ? 'listening' : 'closed'}
+  Port ${port}:     ${portOpen ? 'listening' : 'closed'} (${runtimeCandidate.source})
 
 Performance
   Playwright profiles: ${report.performance.hydraPlaywrightProfiles.count} stale Hydra dir(s), ${report.performance.hydraPlaywrightProfiles.totalSize}

@@ -52,6 +52,16 @@ The operating model is private and local:
 
 The map currently covers auth, accounts, keys, dashboard, promo codes, generator tasks, pool/proxy management, system health, debug probes, Clerk webhooks, shutdown, and the primary OpenAI-compatible `/v1` proxy surface. The running `/v1` proxy is a catch-all router; the map names the operator-facing proxy routes instead of generating a noisy endpoint mirror for every possible OpenAI-compatible path.
 
+Packaged Electron uses an OS-assigned embedded-server port, not a fixed
+`3001`. The app writes a non-secret `hydra-runtime.json` file under its
+user-data directory with the live port, owner PID, UI URL, and `/v1` proxy URL.
+Closed-app commands that need the running listener (`doctor`, `status`, `proxy
+status`, `ai chat`, and `stop`) read that file when no explicit port or base URL
+is supplied, verify the owner PID/port, and still honor `HYDRA_PORT`, `PORT`,
+`HYDRA_BASE_URL`, `--port`, and `--base-url` overrides. This keeps CLI evidence
+aligned with the real packaged app instead of reporting `localhost:3001` as
+closed while Hydra is alive on a dynamic port.
+
 ## Why This Exists
 
 The goal is an operator CLI that still works when the Electron window is closed. That means:
@@ -203,5 +213,9 @@ undocumented POST routes because management-key creation is not idempotent.
 `hydra ai models --filter claude --json` reads `CachedModel` rows directly from SQLite in an isolated test database. This gives agents a model catalog while Electron is closed without needing OpenRouter credentials or a running `/v1` server.
 
 `hydra ai chat "say hi" --base-url <local-v1> --key <proxy-key> --model test/model --json` is test-covered against a fake OpenAI-compatible local `/v1` server. The command sends `POST /v1/chat/completions` with a bearer Hydra proxy key, non-stream body, requested model, prompt, max token, and temperature settings, then returns assistant text and usage. Closed-proxy failure is explicit: `SERVER_UNAVAILABLE` with a `hydra serve` hint.
+
+`hydra ai chat "say hi" --key <proxy-key> --json` is also test-covered against a
+fake packaged runtime state file. Without `--base-url`, it follows the live
+packaged `/v1` URL from `hydra-runtime.json` rather than assuming port `3001`.
 
 `hydra accounts purge --dead --dry-run` and `hydra accounts purge --dead --yes` are test-covered against an isolated Prisma database with one inert placeholder account and one OTP account that can still be reauthenticated. The dry-run path reports `CONFIRMATION_REQUIRED` without `--dry-run` or `--yes`; the confirmed path deletes only the placeholder and keeps the OTP account.

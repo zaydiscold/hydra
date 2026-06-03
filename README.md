@@ -189,6 +189,13 @@ Common commands are grouped by operator workflow:
 
 The CLI defaults to redacted human output and supports `--json` on the commands meant for automation. Secret-bearing flows require explicit flags such as `--yes`, `--stdin`, or an environment token so shell scripts do not accidentally burn codes, rotate proxy keys, or expose credentials.
 
+Packaged Hydra listens on an OS-assigned embedded port. When the app is running,
+Electron publishes that non-secret runtime URL to the app data directory, and
+`hydra doctor`, `hydra status`, `hydra proxy status`, `hydra ai chat`, and
+`hydra stop` follow it automatically. Explicit `--base-url`, `--port`,
+`HYDRA_BASE_URL`, `HYDRA_PORT`, and `PORT` values still win when you need a
+fixed source or test server.
+
 `hydra mcp` starts a private local stdio MCP server for Claude Code, Cursor, and other agent clients. It exposes curated fleet tools over the existing CLI contracts: status, proxy status, API map, release audit, and doctor diagnostics. It does not publish Hydra, register public endpoint tools, or bypass confirmation-gated live writes.
 
 ## Local API Router
@@ -257,8 +264,8 @@ runtime lane.
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, and the current release lane is `1.5.10` for concise release
-notes, Generator checkbox wording, persistent shooting stars, smoother
+first as `v1.1.0`, and the current release lane is `1.5.11` for packaged
+runtime-port truth, concise release notes, persistent shooting stars, smoother
 starfield motion, and clearer planet-moon orbits.
 Remaining manual dogfood evidence stays explicit in the audit.
 
@@ -267,7 +274,9 @@ Remaining manual dogfood evidence stays explicit in the audit.
 Start with these when you need more than the quick README tour:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
-  checkpoints, the `1.5.10` patch lane, and completed release history.
+  checkpoints, the `1.5.11` patch lane, and completed release history.
+- [1.5.11 Patch Release](docs/releases/1.5.11.md): packaged runtime-port bridge
+  for `doctor`, `status`, `proxy status`, `ai chat`, and `stop`.
 - [1.5.10 Patch Release](docs/releases/1.5.10.md): concise GitHub release
   notes, Generator checkbox wording, persistent shooting stars, opacity-only
   star twinkle, and clearer moon orbit styling.

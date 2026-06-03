@@ -11,25 +11,9 @@
  * Flags:
  *   --json    Machine-readable output.
  */
-import net from 'node:net';
 import { c, json, status as statusLine, fmtBalance } from '../lib/output.js';
+import { resolveLocalRuntimeEndpoint } from '../lib/runtime-port.js';
 import { loadServices, resolveUser, shutdown } from '../lib/services.js';
-
-const DEFAULT_PROXY_PORT = Number(process.env.HYDRA_PORT) || 3001;
-
-/** Best-effort: is anything listening on a localhost port? 250 ms timeout. */
-function probePort(port, host = '127.0.0.1') {
-  return new Promise((resolve) => {
-    const sock = new net.Socket();
-    let done = false;
-    const finish = (val) => { if (done) return; done = true; sock.destroy(); resolve(val); };
-    sock.setTimeout(250);
-    sock.once('connect', () => finish(true));
-    sock.once('timeout', () => finish(false));
-    sock.once('error', () => finish(false));
-    sock.connect(port, host);
-  });
-}
 
 /** Mask a key like `sk-hydra-aBc...XyZ` so we don't leak it in logs. */
 function maskKey(key) {
@@ -66,8 +50,9 @@ export async function run(argv) {
       warnings.push(`proxy gate status failed: ${err?.message || err}`);
     }
 
-    const portOpen = await probePort(DEFAULT_PROXY_PORT);
-    const proxyUrl = portOpen ? `http://localhost:${DEFAULT_PROXY_PORT}/v1` : null;
+    const endpoint = await resolveLocalRuntimeEndpoint();
+    const portOpen = endpoint.running;
+    const proxyUrl = endpoint.url;
 
     const healthyCount = accounts.filter(a =>
       a.sessionStatus === 'active' && a.hasManagementKey
@@ -86,7 +71,9 @@ export async function run(argv) {
       proxy: {
         running: portOpen,
         url: proxyUrl,
-        port: DEFAULT_PROXY_PORT,
+        port: endpoint.port,
+        source: endpoint.source,
+        runtimeStatePath: endpoint.state?.path || null,
         gateEnabled,
         masterKey: maskKey(masterKey),
         genericKey: maskKey(genericKey),
@@ -113,10 +100,10 @@ export async function run(argv) {
     // Proxy block
     process.stdout.write(`\n${c.bold('  Proxy')}\n`);
     if (portOpen) {
-      process.stdout.write(`    ${c.dim('Status:')}       ${c.ok('● running')} ${c.dim('on port ' + DEFAULT_PROXY_PORT)}\n`);
+      process.stdout.write(`    ${c.dim('Status:')}       ${c.ok('● running')} ${c.dim('on port ' + endpoint.port)}\n`);
       process.stdout.write(`    ${c.dim('URL:')}          ${c.cyan(proxyUrl)}\n`);
     } else {
-      process.stdout.write(`    ${c.dim('Status:')}       ${c.dim('○ not running')} ${c.dim('(no listener on :' + DEFAULT_PROXY_PORT + ')')}\n`);
+      process.stdout.write(`    ${c.dim('Status:')}       ${c.dim('○ not running')} ${c.dim('(no listener on :' + endpoint.port + ')')}\n`);
       process.stdout.write(`    ${c.dim('Hint:')}         ${c.dim('start with `hydra` (production) or `hydra dev`')}\n`);
     }
     if (gateEnabled === false) {

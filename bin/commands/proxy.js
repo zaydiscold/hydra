@@ -1,11 +1,9 @@
 /**
  * `hydra proxy status` — focused local proxy status for scripts/operators.
  */
-import net from 'node:net';
 import { c, json, status } from '../lib/output.js';
+import { resolveLocalRuntimeEndpoint } from '../lib/runtime-port.js';
 import { loadServices, shutdown } from '../lib/services.js';
-
-const DEFAULT_PROXY_PORT = Number(process.env.HYDRA_PORT || process.env.PORT || 3001);
 
 function hasFlag(argv, flag) {
   return argv.includes(flag);
@@ -15,24 +13,6 @@ function maskKey(key) {
   if (!key || typeof key !== 'string') return null;
   if (key.length <= 12) return key;
   return `${key.slice(0, 8)}...${key.slice(-4)}`;
-}
-
-function probePort(port, host = '127.0.0.1') {
-  return new Promise((resolve) => {
-    const sock = new net.Socket();
-    let done = false;
-    const finish = (value) => {
-      if (done) return;
-      done = true;
-      sock.destroy();
-      resolve(value);
-    };
-    sock.setTimeout(250);
-    sock.once('connect', () => finish(true));
-    sock.once('timeout', () => finish(false));
-    sock.once('error', () => finish(false));
-    sock.connect(port, host);
-  });
 }
 
 function usage() {
@@ -70,14 +50,17 @@ export async function run(argv) {
   const wantJson = hasFlag(argv, '--json');
   try {
     const { store } = await loadServices();
-    const [{ proxyGate }, running] = await Promise.all([
+    const [{ proxyGate }, endpoint] = await Promise.all([
       import('../../server/services/proxy-gate.js'),
-      probePort(DEFAULT_PROXY_PORT),
+      resolveLocalRuntimeEndpoint(),
     ]);
+    const running = endpoint.running;
     const report = {
       running,
-      port: DEFAULT_PROXY_PORT,
-      url: running ? `http://localhost:${DEFAULT_PROXY_PORT}/v1` : null,
+      port: endpoint.port,
+      source: endpoint.source,
+      runtimeStatePath: endpoint.state?.path || null,
+      url: endpoint.url,
       gateEnabled: proxyGate.enabled,
       hydraKey: maskKey(store.getMasterProxyKey()),
       genericKey: maskKey(store.getGenericProxyKey()),
@@ -89,7 +72,7 @@ export async function run(argv) {
     }
 
     process.stdout.write(`${c.bold('Hydra proxy')}\n\n`);
-    process.stdout.write(`  ${c.dim('Listener:')} ${running ? c.ok('running') : c.dim('closed')} ${c.dim(`:${DEFAULT_PROXY_PORT}`)}\n`);
+    process.stdout.write(`  ${c.dim('Listener:')} ${running ? c.ok('running') : c.dim('closed')} ${c.dim(`:${endpoint.port}`)}\n`);
     process.stdout.write(`  ${c.dim('Gate:')}     ${report.gateEnabled ? c.ok('enabled') : c.warn('disabled')}\n`);
     if (report.url) process.stdout.write(`  ${c.dim('URL:')}      ${c.cyan(report.url)}\n`);
     process.stdout.write(`  ${c.dim('Hydra key:')} ${report.hydraKey || 'unavailable'}\n`);
