@@ -3709,3 +3709,18 @@ items by itself.
   persistent RAF, interval, Anime.js, or Matter.js loop, and the only remaining
   renderer work is the named low-duty app-shell timeout pair while the app
   shell is mounted.
+- 2026-06-03 post-`1.5.12` meteor-geometry correction: user review caught that
+  the finite meteor pulse was visible but no longer looked like the older
+  shooting stars; the pulse had become a mostly horizontal bar moving
+  right-to-left. The source now restores the earlier long-tail geometry: each
+  meteor is a `2px` wide vertical streak, uses a `linear-gradient(to top, ...)`
+  tail, rotates with `rotate(var(--meteor-angle, 45deg))`, and travels through
+  `translate3d(var(--meteor-dx, -28vw), var(--meteor-dy, 280vh), 0)` so the
+  perceived motion is a diagonal shooting star rather than a lateral slide.
+  The post-settle scheduler still stays finite and owned by `App.meteorPulse`.
+  Verification passed `npm run test:ui-static` (`48/48`),
+  `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  `codesign --verify --deep --strict`, bundle version `1.5.12`, packaged CSS
+  inspection for the `45deg`/`280vh` meteor rules, and local ARM zip SHA-256
+  `89c2b18dfecd4553906a34638b29b66c83f5ee1bf4a512f7cd020e2a112826ff`.

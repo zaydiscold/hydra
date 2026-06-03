@@ -84,7 +84,10 @@ so it was rejected.
 The meteor layer follows the same rule. Startup can use continuous diagonal
 shooting-star motion. Settled app chrome keeps the starfield in the DOM, but
 meteors only run as finite diagonal paired bursts with explicit zeroed pulse
-delays so they do not accidentally start halfway through a short animation. Star
+delays so they do not accidentally start halfway through a short animation. The
+visual shape is the earlier shooting-star treatment: a thin vertical tail,
+rotated `45deg`, that travels far down the viewport with only a smaller left
+drift. Avoid replacing it with a horizontal bar that slides right-to-left. Star
 twinkle is opacity-only; the star layer itself no longer shifts.
 
 ## Proximity Fields
