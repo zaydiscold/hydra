@@ -2559,3 +2559,9 @@ This evidence file is not release-complete by itself. The release remains not co
   LaunchServices doctor sample reported three Hydra-owned processes, `0.0%`
   aggregate CPU, `383.08 MB` RSS, and zero stale Hydra Playwright profiles;
   native quit returned Hydra-owned processes and stale profiles to zero.
+- `1.5.15` public release follow-up: release
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.5.15` is live from
+  commit `7e5dad493324cea6b8a15177df5199d441e9286b`. Release Desktop Apps run
+  `26874086281` passed shared lint/test/gate, macOS ARM, macOS Intel, Windows
+  NSIS, Linux AppImage, and merged macOS updater metadata. Latest master CI and
+  Docker also passed on the same commit.

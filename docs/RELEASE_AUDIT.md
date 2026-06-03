@@ -3920,3 +3920,34 @@ items by itself.
   `ps -ax -o pid,ppid,stat,%cpu,%mem,rss,etime,command` snapshot was preserved
   as `ps-t300.txt`. Native quit then reduced Hydra-owned processes and stale
   profiles to zero.
+- 2026-06-03 public `v1.5.15` release-matrix verification: GitHub release
+  v1.5.15 is public at
+  `https://github.com/zaydiscold/hydra/releases/tag/v1.5.15`. Release Desktop
+  Apps run `26874086281` on tag commit
+  `7e5dad493324cea6b8a15177df5199d441e9286b` completed shared
+  lint/test/gate, macOS ARM zip, macOS Intel zip, Windows NSIS, Linux AppImage,
+  and merged macOS updater metadata jobs. Windows hosted smoke included both
+  the packaged smoke and the unpacked/NSIS executable launch step. Live
+  `gh release view v1.5.15` asset inspection on 2026-06-03 verified these
+  public assets and SHA-256 digests: `Hydra-1.5.15-linux-x86_64.AppImage`
+  `210d6014bacb1add846cb0dad96f3cabc6d1a2fa6ad8457a7f3c4aa9f43f6c83`,
+  `Hydra-1.5.15-mac-arm64.zip`
+  `a934bdaa6f224d77e0c34213164582f8c1d995074fe873ac6ae5844895119acd`,
+  `Hydra-1.5.15-mac-arm64.zip.blockmap`
+  `5f4d7f2d8b60e2dd5556490bbf2f9d0a972effcbb3379780523cdba01fa7f4d1`,
+  `Hydra-1.5.15-mac-x64.zip`
+  `a97d940c0f7587890802186ad5ea60b6e00f1440d171085c858080c9c0b53cbe`,
+  `Hydra-1.5.15-mac-x64.zip.blockmap`
+  `e3e9c81f3ca8f369c450971c148ba2bd2c286512836802a7fbcbcb81b425bfa4`,
+  `Hydra-1.5.15-win-x64.exe`
+  `2d504e8fa265da3bd170046bb20c5d3ff271bba6081b5ebc5a612777828998c0`,
+  `Hydra-1.5.15-win-x64.exe.blockmap`
+  `4e02752ce61e371926657f27ae6f59ced678084b590691b9e8d1ec308409e501`,
+  `latest-linux.yml`
+  `503b8b6c72ae175191daf54183d4457730d3c0a9fc954dbe786fc2de04cf9144`,
+  `latest-mac.yml`
+  `90c957a918ade6f2356149a5dfd4df7d703d3f55153b059a49617c38998fed76`,
+  and `latest.yml`
+  `0b3cdf84c5cbb096cb56e0c82ebd65f3d1dff807fbcd66e5b8614caef3117991`.
+  Latest master CI and Docker workflows for the same commit also completed
+  successfully.
