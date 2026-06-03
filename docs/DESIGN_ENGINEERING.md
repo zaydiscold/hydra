@@ -70,13 +70,19 @@ stem.
 
 ## Ambient Planet
 
-The Jupiter-like sidebar planet is intentionally decorative, so its orbiting
-bodies stay CSS-only. The three moons use transform-only elliptical tracks with
-different tilt, duration, delay, distance, and size, plus faint orbit guides so
-they read as real bodies circling the planet instead of loose dots. The meteor
-field also stays CSS-only and continues after the startup ambient window settles,
-but its settled cadence slows down and `prefers-reduced-motion` freezes the
-decoration. Star twinkle is opacity-only; the star layer itself no longer shifts.
+The Jupiter-like sidebar planet is intentionally decorative, but it still has to
+feel alive. Startup uses continuous CSS for the first ambient window; once the
+app settles, the planet switches to a low-duty app scheduler. The three moon
+bodies keep their varied tilt, distance, size, and orbit guides, then advance by
+CSS variable phase steps instead of an always-running transform animation. That
+keeps the moons visibly rotating without reintroducing the packaged Electron GPU
+tail we saw from continuous compositor work.
+
+The meteor layer follows the same rule. Startup can use continuous diagonal
+shooting-star motion. Settled app chrome keeps the starfield in the DOM, but
+meteors only run as finite diagonal bursts with explicit zeroed pulse delays so
+they do not accidentally start halfway through a short animation. Star twinkle is
+opacity-only; the star layer itself no longer shifts.
 
 ## Proximity Fields
 

@@ -3922,34 +3922,55 @@ select:-webkit-autofill {
 
 .meteor {
   position: absolute;
-  top: -150px;
-  width: 2px;
-  height: 150px;
-  background: linear-gradient(to top, var(--accent-secondary), transparent);
-  box-shadow: 0 0 15px var(--accent-secondary);
+  top: var(--meteor-top, 8vh);
+  left: var(--meteor-left, 96vw);
+  width: var(--meteor-length, 150px);
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.94) 0%, var(--meteor-color, var(--accent-secondary)) 22%, transparent 100%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--meteor-color, var(--accent-secondary)), transparent 34%);
   opacity: 0;
   border-radius: 50%;
-  animation: meteorFall linear infinite;
-  will-change: transform, opacity;
-  transform: translate3d(0, 0, 0) rotate(45deg);
+  transform: translate3d(0, 0, 0) rotate(var(--meteor-angle, -28deg));
+  contain: layout paint;
 }
 
-.meteor:nth-child(1) { left: 80%; --meteor-duration: 5.5s; animation-duration: var(--meteor-duration); animation-delay: -0.8s; }
-.meteor:nth-child(2) { left: 40%; --meteor-duration: 9.9s; animation-duration: var(--meteor-duration); animation-delay: -4.1s; background: linear-gradient(to top, var(--accent-primary), transparent); box-shadow: 0 0 15px var(--accent-primary); }
-.meteor:nth-child(3) { left: 90%; --meteor-duration: 6.6s; animation-duration: var(--meteor-duration); animation-delay: -2.4s; }
-.meteor:nth-child(4) { left: 60%; --meteor-duration: 8.8s; animation-duration: var(--meteor-duration); animation-delay: -6.2s; background: linear-gradient(to top, var(--accent-primary), transparent); box-shadow: 0 0 15px var(--accent-primary); }
+.app-shell--ambient-motion .meteor {
+  animation: meteorFall var(--meteor-duration, 12s) linear infinite;
+  will-change: transform, opacity;
+}
 
 .app-shell--motion-settled .meteor {
-  animation-duration: calc(var(--meteor-duration, 8s) * 1.28);
-  filter: saturate(0.78) brightness(0.9);
+  animation: none;
+  opacity: 0;
 }
 
+.app-shell--motion-settled.app-shell--meteor-pulse .meteor:nth-child(-n+2) {
+  animation: meteorPulseFall 1.55s linear 1;
+  animation-delay: 0s;
+  will-change: transform, opacity;
+}
+
+.app-shell--motion-settled.app-shell--meteor-pulse .meteor:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.meteor:nth-child(1) { --meteor-top: 7vh; --meteor-left: 108vw; --meteor-duration: 13.5s; --meteor-length: 180px; --meteor-angle: -27deg; --meteor-dx: -118vw; --meteor-dy: 44vh; animation-delay: -1.4s; }
+.meteor:nth-child(2) { --meteor-top: 23vh; --meteor-left: 94vw; --meteor-duration: 18.5s; --meteor-length: 138px; --meteor-angle: -18deg; --meteor-dx: -104vw; --meteor-dy: 62vh; --meteor-color: var(--accent-primary); animation-delay: -8.1s; }
+.meteor:nth-child(3) { --meteor-top: 2vh; --meteor-left: 116vw; --meteor-duration: 15.25s; --meteor-length: 122px; --meteor-angle: -34deg; --meteor-dx: -128vw; --meteor-dy: 38vh; animation-delay: -5.6s; }
+.meteor:nth-child(4) { --meteor-top: 38vh; --meteor-left: 102vw; --meteor-duration: 21s; --meteor-length: 156px; --meteor-angle: -22deg; --meteor-dx: -112vw; --meteor-dy: 56vh; --meteor-color: var(--accent-primary); animation-delay: -13.2s; }
+
 @keyframes meteorFall {
-  0% { transform: translate3d(0, 0, 0) rotate(45deg); opacity: 0; }
-  2% { opacity: 1; }
-  14% { opacity: 0.72; }
-  20% { transform: translate3d(-28vw, 280vh, 0) rotate(45deg); opacity: 0; }
-  100% { transform: translate3d(-28vw, 280vh, 0) rotate(45deg); opacity: 0; }
+  0%, 58% { transform: translate3d(0, 0, 0) rotate(var(--meteor-angle, -28deg)); opacity: 0; }
+  61% { opacity: 0.92; }
+  66% { opacity: 0.74; }
+  72%, 100% { transform: translate3d(var(--meteor-dx, -112vw), var(--meteor-dy, 46vh), 0) rotate(var(--meteor-angle, -28deg)); opacity: 0; }
+}
+
+@keyframes meteorPulseFall {
+  0% { transform: translate3d(0, 0, 0) rotate(var(--meteor-angle, -28deg)); opacity: 0; }
+  12% { opacity: 0.92; }
+  52% { opacity: 0.74; }
+  86%, 100% { transform: translate3d(var(--meteor-dx, -112vw), var(--meteor-dy, 46vh), 0) rotate(var(--meteor-angle, -28deg)); opacity: 0; }
 }
 
 .planet {
@@ -3990,16 +4011,21 @@ select:-webkit-autofill {
   --moon-orbit-tilt: -18deg;
   --moon-orbit-squash: 0.72;
   --moon-orbit-delay: -2.5s;
-  animation: moonOrbit var(--moon-orbit-duration) linear infinite;
-  animation-delay: var(--moon-orbit-delay);
+  --moon-orbit-steps: 132;
+  --moon-phase: var(--moon-phase-primary, var(--moon-orbit-start));
+  transform: rotate(var(--moon-orbit-tilt)) scaleY(var(--moon-orbit-squash)) rotate(var(--moon-phase));
   transform-origin: 50% 50%;
-  will-change: transform;
+  transition: none;
   backface-visibility: hidden;
+  contain: layout paint;
   pointer-events: none;
 }
 
-.app-shell--motion-settled .planet-moon-orbit {
-  animation-play-state: running;
+.app-shell--ambient-motion .planet-moon-orbit {
+  animation: moonOrbit var(--moon-orbit-duration) linear infinite;
+  animation-delay: var(--moon-orbit-delay);
+  transition: none;
+  will-change: transform;
 }
 
 .planet-moon-orbit::before {
@@ -4020,6 +4046,8 @@ select:-webkit-autofill {
   --moon-orbit-tilt: 24deg;
   --moon-orbit-squash: 0.58;
   --moon-orbit-delay: -6s;
+  --moon-orbit-steps: 132;
+  --moon-phase: var(--moon-phase-inner, var(--moon-orbit-start));
 }
 
 .planet-moon-orbit--outer {
@@ -4030,6 +4058,8 @@ select:-webkit-autofill {
   --moon-orbit-tilt: -34deg;
   --moon-orbit-squash: 0.64;
   --moon-orbit-delay: -11s;
+  --moon-orbit-steps: 156;
+  --moon-phase: var(--moon-phase-outer, var(--moon-orbit-start));
 }
 
 .planet-moon {

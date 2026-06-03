@@ -3525,3 +3525,33 @@ items by itself.
   passed: `npm run test:background-failure-visibility`, `npm run test:ui-static`,
   `npm run lint`, `npm run build`, `npm run test:workflow-contract`, full
   `npm test`, and `git diff --check`.
+- 2026-06-02 `1.5.10` ambient planet regression repair: the user's follow-up
+  exposed two visual/performance regressions in the global app shell. The
+  settled meteor pulse inherited the ambient loop's negative `animation-delay`,
+  which meant a short shooting-star burst could begin halfway through or already
+  finished. The Jupiter-like planet moons were also tied to continuous CSS
+  transform work, which looked alive but kept the packaged Electron renderer/GPU
+  hot. Candidate profiles are preserved for the tradeoff: the visual-freeze
+  package at `/private/tmp/hydra-v1510-settled-motion-fix-idle-profile-20260603T023445Z`
+  averaged near zero CPU but removed the desired motion; the continuous/near
+  continuous candidates at
+  `/private/tmp/hydra-v1510-low-duty-space-motion-profile-20260603T025939Z`
+  and `/private/tmp/hydra-v1510-stepped-space-motion-profile-20260603T030513Z`
+  stayed hot. The final package keeps startup continuous, then switches the
+  settled planet to direct CSS-variable moon phase steps every `2400ms` and
+  sparse finite diagonal meteor bursts every `24-42s`. Final package checks
+  passed `npm run test:ui-static`, `git diff --check`,
+  `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, and strict deep
+  `codesign --verify --deep --strict`. The final macOS ARM zip SHA-256 is
+  `ed1597dc3bf1d93f46f8e75c2a24ee9e29d276b2ec8249a2a93c63d1af65aac6`.
+  A final no-shell guard was added after the long profile so the scheduler does
+  not run on offline/restart screens that have no app shell; the guarded package
+  was rebuilt, smoke-tested, and strict-codesigned.
+  LaunchServices evidence at
+  `/private/tmp/hydra-v1510-final-space-motion-profile-20260603T031640Z`
+  captured the unchanged app-shell path across 11 settled samples with four
+  Hydra-owned processes, zero stale
+  Playwright profiles, `7.309%` average aggregate CPU, and `9.3%` max. That is
+  the accepted compromise for this patch: the moons and shooting stars work
+  again without the old 35-40% persistent compositor burn.

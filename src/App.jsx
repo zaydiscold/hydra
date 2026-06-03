@@ -673,9 +673,12 @@ export default function App() {
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
   const [ambientMotion, setAmbientMotion] = useState(true);
+  const [meteorPulse, setMeteorPulse] = useState(false);
   const [uiDensity, setUiDensity] = useState(getStoredUiDensity);
   const [toasts, setToasts] = useState([]);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
+  const appShellRef = useRef(null);
+  const spaceMotionPhaseRef = useRef({ primary: -18, inner: 42, outer: -132 });
   const [upstreamHealth, setUpstreamHealth] = useState(null);
   const recentToastsRef = useRef(new Map());
   const authStateRef = useRef(authState);
@@ -825,6 +828,7 @@ export default function App() {
 
   useEffect(() => {
     setAmbientMotion(true);
+    setMeteorPulse(false);
     const timer = setTrackedTimeout('App.ambientMotion', () => setAmbientMotion(false), 12_000);
     const handleVisibility = () => {
       if (document.hidden) setAmbientMotion(false);
@@ -835,6 +839,75 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [authState]);
+
+  useEffect(() => {
+    if (ambientMotion || !appShellRef.current) return undefined;
+
+    let phaseTimer = null;
+    let meteorStartTimer = null;
+    let meteorStopTimer = null;
+    let cancelled = false;
+
+    const clearMeteorStop = () => {
+      if (meteorStopTimer) {
+        clearTrackedTimeout(meteorStopTimer);
+        meteorStopTimer = null;
+      }
+    };
+
+    const schedulePhaseStep = () => {
+      phaseTimer = setTrackedTimeout('App.planetMoonStep', () => {
+        phaseTimer = null;
+        if (cancelled) return;
+        if (!document.hidden) {
+          const phase = spaceMotionPhaseRef.current;
+          const nextPhase = {
+            primary: (phase.primary + 28) % 360,
+            inner: (phase.inner - 34) % 360,
+            outer: (phase.outer + 18) % 360,
+          };
+          spaceMotionPhaseRef.current = nextPhase;
+          const shell = appShellRef.current;
+          if (shell) {
+            shell.style.setProperty('--moon-phase-primary', `${nextPhase.primary}deg`);
+            shell.style.setProperty('--moon-phase-inner', `${nextPhase.inner}deg`);
+            shell.style.setProperty('--moon-phase-outer', `${nextPhase.outer}deg`);
+          }
+        }
+        schedulePhaseStep();
+      }, 2400);
+    };
+
+    const scheduleMeteorPulse = (delayMs = 9000) => {
+      meteorStartTimer = setTrackedTimeout('App.meteorPulse', () => {
+        meteorStartTimer = null;
+        if (cancelled) return;
+        if (document.hidden) {
+          scheduleMeteorPulse(7600);
+          return;
+        }
+        setMeteorPulse(true);
+        clearMeteorStop();
+        meteorStopTimer = setTrackedTimeout('App.meteorPulse', () => {
+          meteorStopTimer = null;
+          if (cancelled) return;
+          setMeteorPulse(false);
+          scheduleMeteorPulse(24_000 + Math.floor(Math.random() * 18_000));
+        }, 1550);
+      }, delayMs);
+    };
+
+    schedulePhaseStep();
+    scheduleMeteorPulse();
+
+    return () => {
+      cancelled = true;
+      if (phaseTimer) clearTrackedTimeout(phaseTimer);
+      if (meteorStartTimer) clearTrackedTimeout(meteorStartTimer);
+      clearMeteorStop();
+      setMeteorPulse(false);
+    };
+  }, [ambientMotion]);
 
   useEffect(() => {
     authStateRef.current = authState;
@@ -1047,7 +1120,10 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}`}>
+      <div
+        ref={appShellRef}
+        className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}${meteorPulse ? ' app-shell--meteor-pulse' : ''}`}
+      >
         <AppChrome />
         <AppVersionStamp />
         <GlobalLoadingBar />
