@@ -3677,8 +3677,8 @@ items by itself.
   are intentionally not used because the helper passed multiple PIDs in a form
   this macOS `top` rejected; the release evidence relies on `hydra doctor
   --json` plus raw broad `ps` inventories preserved in the same directory.
-  Hosted release v1.5.12 is public with ten assets: Linux AppImage, macOS ARM
-  zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap,
+  GitHub release v1.5.12 is public with ten assets: Linux AppImage, macOS
+  arm64 zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap,
   `latest-linux.yml`, `latest-mac.yml`, and `latest.yml`.
 - 2026-06-03 post-`1.5.12` runtime-loop instrumentation checkpoint: item 3
   needed current packaged evidence beyond static source assertions, so
