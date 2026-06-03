@@ -3637,3 +3637,10 @@ items by itself.
   (`9.156%` average, `16.2%` max, `7.6%` end), and RSS moved
   `569.81 MB -> 500.88 MB`. The app-shell visual cadence is unchanged from the
   accepted `1.5.10` middle-ground profile.
+  Hosted release verification completed after the tag push: GitHub release v1.5.11 is public and includes the macOS arm64 zip/blockmap, macOS Intel
+  zip/blockmap, Windows NSIS/blockmap, Linux AppImage, `latest-mac.yml`,
+  `latest.yml`, and `latest-linux.yml`. Release Desktop Apps run `26863337469`
+  passed lint/test/gate, macOS ARM smoke, macOS Intel smoke, Windows NSIS smoke
+  with installed-executable launch proof, Linux AppImage smoke, and merged
+  updater metadata. Docker workflow run `26863328193` passed both runtime smoke
+  and registry image push.
