@@ -3644,3 +3644,39 @@ items by itself.
   with installed-executable launch proof, Linux AppImage smoke, and merged
   updater metadata. Docker workflow run `26863328193` passed both runtime smoke
   and registry image push.
+- 2026-06-03 `1.5.12` idle-safe space accent repair: the user's report that
+  the settled asteroids and the Jupiter-like planet moons were broken exposed a
+  real visual regression. The repaired source keeps the startup art continuous,
+  then switches the settled shell to an owned `App.planetOrbitTick` timeout
+  that writes CSS-variable moon phases every `1200ms` and a sparse
+  `meteorPulse` timeout that renders finite diagonal shooting-star bursts.
+  The old `spaceMotionPhaseRef`, `App.planetMoonStep`, `@keyframes moonOrbit`,
+  hot moon transition, and continuous settled meteor loop are absent from both
+  source and the packaged bundle. The visual self-capture
+  `/private/tmp/hydra-space-final-self.png` shows the lower-right planet accent
+  present with orbiting bodies visible; native `screencapture` could not be
+  used because this shell lacks System Events assistive access, and no Browser
+  Harness evidence was used.
+  Verification passed `npm run test:ui-static`, `git diff --check`,
+  `npm run electron:build:mac-arm64`,
+  `HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:smoke`, strict deep
+  `codesign --verify --deep --strict`, bundle version `1.5.12`, and package
+  source inspection for the new orbit/meteor guards. The local macOS ARM zip
+  SHA-256 is
+  `202a0f1712a34dd4c1c3a1d41b3637b43505ed0cead090d5e7e3123a3055719d`.
+  LaunchServices profiling of the exact rebuilt package at
+  `/private/tmp/hydra-v1512-goal-profile-20260603T050929Z` started from zero
+  Hydra processes and zero stale profiles, retained four Hydra-owned processes
+  and zero profiles across all 11 idle samples, and returned to zero processes
+  and zero profiles after native quit. CPU samples were
+  `7.5,5.6,6.4,9.4,8.5,21.2,5.2,21.5,7.7,21.2,9.5`
+  (`11.245%` average, `21.5%` max, `9.5%` end), and RSS moved
+  `654098432 -> 622247936` bytes (`-31850496`). The three higher samples line
+  up with the new low-duty visual pulses; they are not the earlier continuous
+  35-40% compositor burn. The auxiliary `top` files in that evidence directory
+  are intentionally not used because the helper passed multiple PIDs in a form
+  this macOS `top` rejected; the release evidence relies on `hydra doctor
+  --json` plus raw broad `ps` inventories preserved in the same directory.
+  Hosted release v1.5.12 is public with ten assets: Linux AppImage, macOS ARM
+  zip/blockmap, macOS Intel zip/blockmap, Windows NSIS/blockmap,
+  `latest-linux.yml`, `latest-mac.yml`, and `latest.yml`.

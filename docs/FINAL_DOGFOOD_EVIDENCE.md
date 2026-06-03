@@ -2456,3 +2456,15 @@ This evidence file is not release-complete by itself. The release remains not co
   public with macOS arm64 zip/blockmap, macOS Intel zip/blockmap, Windows
   NSIS/blockmap, Linux AppImage, `latest-mac.yml`, `latest.yml`, and
   `latest-linux.yml`.
+- `1.5.12` packaged space-accent repair: the lower-right Jupiter-like planet
+  moons and the settled shooting-star layer were fixed after the user reported
+  both had frozen or disappeared. The source now uses owned low-duty timers for
+  moon phase updates and finite diagonal meteor pulses rather than continuous
+  CSS orbit work. The local package passed macOS ARM build, package smoke,
+  strict deep codesign, bundle version `1.5.12`, and static bundle inspection
+  for the removed hot orbit paths. The LaunchServices five-minute profile at
+  `/private/tmp/hydra-v1512-goal-profile-20260603T050929Z` retained four Hydra
+  processes, zero stale Hydra Playwright profiles, and clean native quit
+  evidence; CPU averaged `11.245%` with three brief `~21%` visual-pulse samples,
+  and RSS fell by `31850496` bytes. GitHub release `v1.5.12` is public with all
+  ten expected updater/package assets.
