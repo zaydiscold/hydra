@@ -264,9 +264,10 @@ runtime lane.
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, and the current release lane is `1.5.12` for idle-safe
-space accents, packaged renderer-loop diagnostics, persistent shooting stars,
-smoother starfield motion, and clearer planet-moon orbits.
+first as `v1.1.0`, and the current release lane is `1.5.14` for reduced-duty
+ambient motion, hidden meteor Easter mode, Command balance truth, packaged
+renderer-loop diagnostics, persistent shooting stars, smoother starfield
+motion, and clearer planet-moon orbits.
 Remaining manual dogfood evidence stays explicit in the audit.
 
 ## Docs Index
@@ -274,7 +275,12 @@ Remaining manual dogfood evidence stays explicit in the audit.
 Start with these when you need more than the quick README tour:
 
 - [Versioning](docs/VERSIONING.md): patch/minor/major rules, `[skip-bump]`
-  checkpoints, the `1.5.12` patch lane, and completed release history.
+  checkpoints, the `1.5.14` patch lane, and completed release history.
+- [1.5.14 Patch Release](docs/releases/1.5.14.md): reduced-duty settled
+  meteor strikes, lower-cadence planet moon orbits, and `1.5.14` package idle
+  proof.
+- [1.5.13 Patch Release](docs/releases/1.5.13.md): hidden meteor Easter mode,
+  Command balance truth, and persistent ambient-space package evidence.
 - [1.5.12 Patch Release](docs/releases/1.5.12.md): idle-safe settled-space
   repair for the lower-right planet moons, diagonal shooting-star pulses, and
   packaged LaunchServices evidence.

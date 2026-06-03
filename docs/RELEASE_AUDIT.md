@@ -1,6 +1,6 @@
 # Hydra Release Audit
 
-Last updated: 2026-06-02
+Last updated: 2026-06-03
 Scope: source-verifiable release readiness for the Electron desktop app, plus explicit blockers for work that still requires packaged app, live account, Docker daemon, or screenshot evidence.
 
 ## Prompt-to-Artifact Checklist
@@ -3850,3 +3850,35 @@ items by itself.
   'chrome|chromium|playwright|electron|hydra'` inventories were captured
   before native quit, after native quit, after launch, at `+45s`, for every
   idle sample, post-idle, and after final quit.
+- 2026-06-03 public `v1.5.14` release-matrix verification: GitHub release v1.5.14 is public.
+  Release Desktop Apps run `26871344437` on tag commit
+  `ed2f02ce2abde40bc4a9a3a01ff335753b61cb35` completed shared gates
+  and published macOS arm64 zip/blockmap, macOS Intel zip/blockmap, and
+  Windows NSIS/blockmap as the current cross-platform release contract. It also
+  published Linux x64 AppImage, merged `latest-mac.yml`, Windows `latest.yml`,
+  and Linux `latest-linux.yml`. The matrix details below are the full asset
+  inventory.
+  Live `gh release view v1.5.14` asset inspection on 2026-06-03 verified these
+  public assets and SHA-256 digests: `Hydra-1.5.14-linux-x86_64.AppImage`
+  `66fe53b1b794d253080c1408c9b9989889670018cda460f63fc73a4c53eaae40`,
+  `Hydra-1.5.14-mac-arm64.zip`
+  `f93907df776e8635ad531cca64cbc33251ae4bc6d9908e75e4728853b9202296`,
+  `Hydra-1.5.14-mac-arm64.zip.blockmap`
+  `c81da12c84633a47ff09b5578cef3e371193ecc170ba31d1b236b7a002af547a`,
+  `Hydra-1.5.14-mac-x64.zip`
+  `5b977d966bd2241330f1a72f3523bcb5594ea0029ad8f7a5045b8e64fb500ea6`,
+  `Hydra-1.5.14-mac-x64.zip.blockmap`
+  `ddd17331bc1eb3e5ae1a6dce8248ee1ed748a5c1cf2a6b800f52e6963fdda19e`,
+  `Hydra-1.5.14-win-x64.exe`
+  `3ea7c77bb868a80abfc5b88ddbeeb352af61991813ea12a1f106cad0a4d42b64`,
+  `Hydra-1.5.14-win-x64.exe.blockmap`
+  `9ebc3646a77a8e50811457ab535f4dbf31339d6d3e3c89b7e42fd214fa6404cf`,
+  `latest-linux.yml`
+  `7c099fd813b9c45be7b9847e45fb395926069ce0d19871f3781f3e05de57cdc3`,
+  `latest-mac.yml`
+  `43602395abe3caf31f0b2f107f5378cbe1c129901a20be9d94f7c8cf1fa605fe`,
+  and `latest.yml`
+  `1c016d4fe95b00a264ca902258b35187edd954756f174c604e56d3304e4e2545`.
+  Local Apple Silicon LaunchServices proof above remains the runtime evidence
+  for the app we can run here; macOS Intel and Windows interactive desktop UX
+  still stay in the explicit target-host/manual evidence buckets.
