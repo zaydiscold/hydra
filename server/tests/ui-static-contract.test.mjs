@@ -76,21 +76,66 @@ test('bulk import copy points OpenRouter users at OTP instead of an unverified c
 
 test('remaining account balances do not round upward in command views', async () => {
   const { formatRemainingCurrency } = await import('../../src/utils/format.js');
+  const { getAccountBalanceDisplay } = await import('../../src/utils/accountBalance.js');
   const dashboard = readRepoFile('src/pages/Dashboard.jsx');
   const accountCard = readRepoFile('src/components/AccountCard.jsx');
+  const controller = readRepoFile('server/controllers/DashboardController.js');
+  const openrouter = readRepoFile('server/services/openrouter.js');
   const css = readRepoFile('src/index.css');
 
   assert.equal(formatRemainingCurrency(19.99989245), '$19.99');
   assert.equal(formatRemainingCurrency(20), '$20.00');
   assert.equal(formatRemainingCurrency(undefined), '—');
-  assert.match(dashboard, /import \{ formatCurrency, formatRemainingCurrency, getBalanceStatus \} from '\.\.\/utils\/format'/);
+  assert.deepEqual(
+    getAccountBalanceDisplay({ credits: { total: 121, used: 33.582641654, remaining: 87.417358346 } }),
+    {
+      label: '$87.41',
+      detail: 'of $121.00',
+      hasValue: true,
+      credits: { total: 121, used: 33.582641654, remaining: 87.417358346 },
+      statusSource: 'live',
+      stale: false,
+      fetchedAt: null,
+    },
+  );
+  assert.equal(
+    getAccountBalanceDisplay({
+      status: 'error',
+      hasManagementKey: true,
+      balanceSource: 'stored',
+      balanceStale: true,
+      credits: { total: 20, used: 0.83378198, remaining: 19.16621802 },
+    }).label,
+    '$19.16',
+  );
+  assert.match(
+    getAccountBalanceDisplay({
+      status: 'error',
+      hasManagementKey: true,
+      balanceSource: 'stored',
+      balanceStale: true,
+      credits: { total: 20, used: 0.83378198, remaining: 19.16621802 },
+    }).detail,
+    /stored/,
+  );
+  assert.equal(getAccountBalanceDisplay({ status: 'error', hasManagementKey: false }).label, '—');
+  assert.match(dashboard, /import \{ formatCurrency, getBalanceStatus \} from '\.\.\/utils\/format'/);
+  assert.match(dashboard, /import \{ getAccountBalanceDisplay \} from '\.\.\/utils\/accountBalance'/);
   assert.match(dashboard, /function getDashboardBalanceLabel\(account\)/);
-  assert.match(dashboard, /return formatRemainingCurrency\(account\.credits\?\.remaining\)/);
-  assert.match(dashboard, /const balanceLabel = getDashboardBalanceLabel\(account\)/);
+  assert.match(dashboard, /function getDashboardBalanceDisplay\(account\)/);
+  assert.match(dashboard, /return getDashboardBalanceDisplay\(account\)\.label/);
+  assert.match(dashboard, /const balanceDisplay = getDashboardBalanceDisplay\(account\)/);
+  assert.match(dashboard, /balanceDisplay\.detail && <em>\{balanceDisplay\.detail\}<\/em>/);
   assert.match(dashboard, /className=\{`dashboard-account-map__balance dashboard-account-map__balance--\$\{balanceStatus\}`\}/);
-  assert.match(accountCard, /import \{ formatCurrency, formatRemainingCurrency, getBalanceStatus \} from '\.\.\/utils\/format'/);
-  assert.match(accountCard, /formatRemainingCurrency\(account\.credits\?\.remaining\)/);
+  assert.match(accountCard, /import \{ getAccountBalanceDisplay \} from '\.\.\/utils\/accountBalance'/);
+  assert.match(accountCard, /const balanceDisplay = getAccountBalanceDisplay\(account\)/);
+  assert.match(accountCard, /\{balanceDisplay\.label\}/);
+  assert.match(controller, /function getStoredCreditsSnapshot\(account\)/);
+  assert.match(controller, /balanceSource: 'live'/);
+  assert.match(controller, /balanceSource: 'stored'/);
+  assert.match(openrouter, /const total = Number\(d\.total_credits \?\? d\.total \?\? 0\)/);
   assert.match(css, /\.dashboard-account-map__balance\s*\{[\s\S]*?font-family:\s*var\(--font-mono\);/);
+  assert.match(css, /\.dashboard-account-list__balance em\s*\{[\s\S]*?font-size:\s*0\.57rem;/);
 });
 
 test('Electron app chrome draws its own drag strip on macOS with traffic-light clearance', () => {
@@ -159,28 +204,32 @@ test('heavy ambient chrome settles while lightweight space accents keep moving',
   const css = readRepoFile('src/index.css');
 
   assert.match(app, /const \[ambientMotion, setAmbientMotion\] = useState\(true\)/);
-  assert.match(app, /const \[meteorPulse, setMeteorPulse\] = useState\(false\)/);
   assert.match(app, /const appShellRef = useRef\(null\)/);
-  assert.match(app, /const planetOrbitPhaseRef = useRef\(\{ primary: -18, inner: 42, outer: -132 \}\)/);
   assert.match(app, /setTrackedTimeout\('App\.ambientMotion', \(\) => setAmbientMotion\(false\), 12_000\)/);
+  assert.doesNotMatch(app, /const \[meteorPulse, setMeteorPulse\]/);
+  assert.doesNotMatch(app, /METEOR_PULSE_/);
+  assert.doesNotMatch(app, /planetOrbitPhaseRef/);
   assert.doesNotMatch(app, /spaceMotionPhaseRef/);
   assert.doesNotMatch(app, /setTrackedTimeout\('App\.planetMoonStep'/);
   assert.doesNotMatch(app, /setTrackedTimeout\('App\.planetOrbitTick'/);
-  assert.match(app, /setTrackedTimeout\('App\.planetOrbitStep'/);
-  assert.match(app, /primary:\s*\(phase\.primary \+ 74\) % 360/);
-  assert.match(app, /inner:\s*\(phase\.inner - 96\) % 360/);
-  assert.match(app, /outer:\s*\(phase\.outer \+ 51\) % 360/);
-  assert.match(app, /shell\.style\.setProperty\('--moon-phase-primary', `\$\{nextPhase\.primary\}deg`\)/);
-  assert.match(app, /shell\.style\.setProperty\('--moon-phase-inner', `\$\{nextPhase\.inner\}deg`\)/);
-  assert.match(app, /shell\.style\.setProperty\('--moon-phase-outer', `\$\{nextPhase\.outer\}deg`\)/);
-  assert.match(app, /setTrackedTimeout\('App\.meteorPulse'/);
-  assert.match(app, /scheduleMeteorPulse\(28_000 \+ Math\.floor\(Math\.random\(\) \* 17_000\)\)/);
-  assert.match(app, /app-shell--meteor-pulse/);
+  assert.doesNotMatch(app, /setTrackedTimeout\('App\.planetOrbitStep'/);
+  assert.doesNotMatch(app, /setTrackedTimeout\('App\.meteorPulse'/);
+  assert.doesNotMatch(app, /scheduleMeteorPulse/);
+  assert.doesNotMatch(app, /app-shell--meteor-pulse/);
+  assert.match(app, /useVisibleRecurringTask\('App\.settledMeteorLoop', runSettledMeteorBurst, 1800, \{ enabled: !ambientMotion \}\)/);
+  assert.match(app, /setTrackedTimeout\('App\.settledMeteorWindow'/);
+  assert.match(app, /setTrackedTimeout\('App\.easterMeteorVolley'/);
+  assert.match(app, /event\.key\?\.toLowerCase\(\) !== 'p'/);
+  assert.match(app, /target\?\.isContentEditable \|\| \['input', 'textarea', 'select'\]\.includes\(tagName\)/);
+  assert.match(app, /Easter egg mode armed\. Press P for meteor volleys\./);
   assert.match(app, /<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>[\s\S]*?<div className="meteor" \/>/);
   assert.match(app, /clearTrackedTimeout\(timer\)/);
   assert.match(app, /document\.hidden/);
   assert.match(app, /app-shell--ambient-motion/);
   assert.match(app, /app-shell--motion-settled/);
+  assert.match(app, /app-shell--easter-mode/);
+  assert.match(app, /app-shell--meteor-volley-\$\{meteorVolley\.variant\}/);
+  assert.match(app, /<button type="button" className="planet planet-1" onClick=\{handleEasterTriggerClick\}/);
 
   assert.doesNotMatch(cssRuleBlock(css, '.nebula-glow {'), /animation:/);
   assert.doesNotMatch(cssRuleBlock(css, '.starfield::before {'), /animation:/);
@@ -195,8 +244,17 @@ test('heavy ambient chrome settles while lightweight space accents keep moving',
   assert.doesNotMatch(css, /\.app-shell--motion-settled \.meteor-container\s*\{[\s\S]*?display:\s*none;/);
   assert.match(cssRuleBlock(css, '.app-shell--motion-settled .meteor {'), /animation:\s*none;/);
   assert.match(cssRuleBlock(css, '.app-shell--motion-settled .meteor {'), /opacity:\s*0;/);
-  assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-pulse \.meteor:nth-child\(-n\+5\)\s*\{[\s\S]*?animation:\s*meteorPulseFall var\(--meteor-pulse-duration, 2\.15s\) linear 1;/);
-  assert.match(cssRuleBlock(css, '@keyframes meteorPulseFall {'), /rotate\(var\(--meteor-angle, 45deg\)\) translate3d\(0, var\(--meteor-distance, 280vh\), 0\)/);
+  assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-burst\.app-shell--meteor-slot-1 \.meteor:nth-child\(1\),[\s\S]*?\.app-shell--motion-settled\.app-shell--meteor-burst\.app-shell--meteor-slot-2 \.meteor:nth-child\(3\),[\s\S]*?\.app-shell--motion-settled\.app-shell--meteor-burst\.app-shell--meteor-slot-3 \.meteor:nth-child\(5\)\s*\{[\s\S]*?animation:\s*meteorBurstFall var\(--meteor-burst-duration, 1\.35s\)/);
+  assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-volley\.app-shell--meteor-volley-a \.meteor\s*\{[\s\S]*?animation:\s*meteorVolleyA var\(--meteor-volley-duration, 1\.55s\)/);
+  assert.match(css, /\.app-shell--motion-settled\.app-shell--meteor-volley\.app-shell--meteor-volley-b \.meteor\s*\{[\s\S]*?animation:\s*meteorVolleyB var\(--meteor-volley-duration, 1\.55s\)/);
+  assert.match(css, /\.meteor:nth-child\(1\)\s*\{[\s\S]*?--meteor-burst-duration:\s*1\.35s;[\s\S]*?--meteor-volley-delay:\s*0ms;/);
+  assert.match(css, /\.meteor:nth-child\(3\)\s*\{[\s\S]*?--meteor-burst-duration:\s*1\.42s;[\s\S]*?--meteor-volley-delay:\s*160ms;/);
+  assert.match(css, /\.meteor:nth-child\(5\)\s*\{[\s\S]*?--meteor-burst-duration:\s*1\.28s;[\s\S]*?--meteor-volley-delay:\s*320ms;/);
+  assert.doesNotMatch(css, /meteorPulseFall/);
+  assert.doesNotMatch(css, /app-shell--meteor-pulse/);
+  assert.match(cssRuleBlock(css, '@keyframes meteorBurstFall {'), /rotate\(var\(--meteor-angle, 45deg\)\) translate3d\(0, var\(--meteor-distance, 280vh\), 0\)/);
+  assert.match(cssRuleBlock(css, '@keyframes meteorVolleyA {'), /rotate\(var\(--meteor-angle, 45deg\)\) translate3d\(0, var\(--meteor-distance, 280vh\), 0\)/);
+  assert.match(cssRuleBlock(css, '@keyframes meteorVolleyB {'), /rotate\(var\(--meteor-angle, 45deg\)\) translate3d\(0, var\(--meteor-distance, 280vh\), 0\)/);
   assert.match(cssRuleBlock(css, '.meteor {'), /width:\s*2px/);
   assert.match(cssRuleBlock(css, '.meteor {'), /height:\s*var\(--meteor-length, 156px\)/);
   assert.match(cssRuleBlock(css, '.meteor {'), /linear-gradient\(to top/);
@@ -874,25 +932,31 @@ test('1.5 desktop operator polish stays wired to real controls', () => {
   assert.match(app, /planet-moon-orbit--primary/);
   assert.match(app, /planet-moon-orbit--inner/);
   assert.match(app, /planet-moon-orbit--outer/);
-  assert.doesNotMatch(css, /animation:\s*moonOrbit/);
-  assert.doesNotMatch(css, /@keyframes moonOrbit/);
+  assert.doesNotMatch(app, /planetOrbitPhaseRef/);
+  assert.doesNotMatch(app, /setTrackedTimeout\('App\.planetOrbitStep'/);
   assert.doesNotMatch(css, /\.app-shell--ambient-motion \.planet-moon-orbit\s*\{/);
   assert.doesNotMatch(css, /\.app-shell--motion-settled \.planet-moon-orbit\s*\{/);
   assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-start:\s*-18deg;[\s\S]*?--moon-orbit-end:\s*342deg;/);
-  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?transform:\s*translate3d\(0, 0, 0\) rotate\(var\(--moon-orbit-tilt\)\) scaleY\(var\(--moon-orbit-squash\)\) rotate\(var\(--moon-orbit-start\)\);/);
+  assert.match(css, /\.planet\s*\{[\s\S]*?overflow:\s*visible;/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-radius:\s*146px;/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-size:\s*292px;/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?width:\s*var\(--moon-orbit-size\);/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?transform:\s*translate3d\(-50%, -50%, 0\) rotate\(var\(--moon-orbit-tilt\)\) scaleY\(var\(--moon-orbit-squash\)\);/);
   assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?transition:\s*none;/);
   assert.match(css, /\.planet-moon-orbit::before\s*\{[\s\S]*?border:\s*1px solid color-mix/);
-  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?contain:\s*layout paint;/);
-  assert.match(css, /\.planet-moon\s*\{[\s\S]*?--moon-phase:\s*var\(--moon-phase-primary, var\(--moon-orbit-start\)\);/);
-  assert.match(css, /\.planet-moon\s*\{[\s\S]*?transition:\s*transform 360ms linear;/);
-  assert.match(css, /\.planet-moon--ember\s*\{[\s\S]*?--moon-phase:\s*var\(--moon-phase-inner, var\(--moon-orbit-start\)\);/);
-  assert.match(css, /\.planet-moon--ice\s*\{[\s\S]*?--moon-phase:\s*var\(--moon-phase-outer, var\(--moon-orbit-start\)\);/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?contain:\s*layout style;/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?overflow:\s*visible;/);
+  assert.match(css, /\.planet-moon\s*\{[\s\S]*?animation:\s*moonOrbitLinear var\(--moon-orbit-duration\) steps\(var\(--moon-orbit-steps\), end\) infinite;/);
+  assert.match(css, /\.planet-moon\s*\{[\s\S]*?will-change:\s*auto;/);
+  assert.doesNotMatch(css, /--moon-phase:/);
+  assert.doesNotMatch(css, /transition:\s*transform 360ms linear/);
   assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-end:\s*-318deg;/);
   assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-end:\s*228deg;/);
-  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*16s;[\s\S]*?--moon-orbit-squash:\s*0\.72;/);
-  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*13\.75s;[\s\S]*?--moon-orbit-squash:\s*0\.58;/);
-  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*26s;[\s\S]*?--moon-orbit-squash:\s*0\.64;/);
-  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.planet-moon-orbit\s*\{[\s\S]*?animation:\s*none;/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*18\.4s;[\s\S]*?--moon-orbit-steps:\s*184;[\s\S]*?--moon-orbit-squash:\s*0\.82;/);
+  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*13\.2s;[\s\S]*?--moon-orbit-steps:\s*132;[\s\S]*?--moon-radius:\s*112px;/);
+  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*30\.5s;[\s\S]*?--moon-orbit-steps:\s*244;[\s\S]*?--moon-radius:\s*186px;/);
+  assert.match(cssRuleBlock(css, '@keyframes moonOrbitLinear {'), /translateX\(var\(--moon-radius\)\)/);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.planet-moon\s*\{[\s\S]*?animation:\s*none;/);
 
   assert.match(traffic, /formatUsd\(log\.inputCost\)/);
   assert.match(traffic, /formatUsd\(log\.outputCost\)/);

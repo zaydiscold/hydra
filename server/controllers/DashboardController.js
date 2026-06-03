@@ -15,6 +15,31 @@ import pLimit from 'p-limit';
 const snapshotCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+function finiteNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function getStoredCreditsSnapshot(account) {
+  const remaining = finiteNumber(account.lastKnownBalance);
+  if (remaining === null) return null;
+  const total = finiteNumber(account.totalCredits) ?? remaining;
+  return {
+    credits: {
+      total,
+      used: Math.max(0, total - remaining),
+      remaining,
+    },
+    balanceSource: 'stored',
+    balanceStale: true,
+    balanceFetchedAt: account.lastKnownBalanceAt || null,
+    lastKnownBalance: remaining,
+    totalCredits: total,
+    lastKnownBalanceAt: account.lastKnownBalanceAt || null,
+  };
+}
+
 function getCachedSnapshot(accountId) {
   const cached = snapshotCache.get(accountId);
   if (!cached) return null;
@@ -148,6 +173,9 @@ class DashboardController extends BaseController {
                 hasCredentials: meta.hasCredentials,
                 pendingVerification: true,
                 credits: { total: 0, used: 0, remaining: 0 },
+                balanceSource: 'pending',
+                balanceStale: false,
+                balanceFetchedAt: null,
                 keys: { total: 0, active: 0, disabled: 0, list: [] },
               };
             }
@@ -168,6 +196,9 @@ class DashboardController extends BaseController {
                 hasManagementKey: meta.hasManagementKey,
                 hasCredentials: meta.hasCredentials,
                 pendingVerification: meta.pendingVerification,
+                balanceSource: cached.balanceSource || 'recent-live',
+                balanceStale: Boolean(cached.balanceStale),
+                balanceFetchedAt: cached.balanceFetchedAt || null,
                 _cached: true, // Flag for debugging
               };
             }
@@ -192,6 +223,9 @@ class DashboardController extends BaseController {
                 hasManagementKey: meta.hasManagementKey,
                 hasCredentials: meta.hasCredentials,
                 pendingVerification: meta.pendingVerification,
+                balanceSource: 'live',
+                balanceStale: false,
+                balanceFetchedAt: new Date().toISOString(),
                 ...snapshot,
               };
               
@@ -208,6 +242,7 @@ class DashboardController extends BaseController {
               
             } catch (err) {
               throwIfAborted(requestAbort.signal);
+              const storedBalance = getStoredCreditsSnapshot(account);
               const errorResult = {
                 id: account.id,
                 alias: account.alias,
@@ -221,7 +256,12 @@ class DashboardController extends BaseController {
                 hasManagementKey: meta.hasManagementKey,
                 hasCredentials: meta.hasCredentials,
                 pendingVerification: meta.pendingVerification,
-                credits: { total: 0, used: 0, remaining: 0 },
+                ...(storedBalance || {
+                  credits: { total: 0, used: 0, remaining: 0 },
+                  balanceSource: 'unavailable',
+                  balanceStale: false,
+                  balanceFetchedAt: null,
+                }),
                 keys: { total: 0, active: 0, disabled: 0, list: [] },
               };
               // Don't cache errors - let them retry next time

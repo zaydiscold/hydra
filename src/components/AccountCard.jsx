@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import AuthBadge from './AuthBadge';
 import { timeAgo } from '../utils/time';
-import { formatCurrency, formatRemainingCurrency, getBalanceStatus } from '../utils/format';
+import { formatCurrency, getBalanceStatus } from '../utils/format';
+import { getAccountBalanceDisplay } from '../utils/accountBalance';
 import { getCardHealth, CARD_HEALTH_COLORS } from '../utils/cardHealth';
 import { canProvisionWithSession, isSessionProbePending } from '../utils/accountSession';
 
@@ -68,9 +69,13 @@ const AccountCard = memo(function AccountCard({
   const provisionTruthStatus = (actionSessionTruth && actionSessionTruth[account.id]) || 'unknown';
   const pendingVerification = !!account.pendingVerification;
 
-  const balStatus = account.status === 'error' ? 'error' : getBalanceStatus(account.credits);
-  const pct = account.credits?.total > 0
-    ? Math.max(0, (account.credits.remaining / account.credits.total) * 100)
+  const balanceDisplay = getAccountBalanceDisplay(account);
+  const displayCredits = balanceDisplay.credits || account.credits;
+  const balStatus = account.status === 'error' && !balanceDisplay.hasValue
+    ? 'error'
+    : getBalanceStatus(displayCredits);
+  const pct = displayCredits?.total > 0
+    ? Math.max(0, (displayCredits.remaining / displayCredits.total) * 100)
     : 0;
 
   const provisioning = provisioningIds.has(account.id);
@@ -135,8 +140,11 @@ const AccountCard = memo(function AccountCard({
       <div className="account-card-balance">
         <div className="account-card-balance-label">Remaining Balance</div>
         <div className={`account-card-balance-value mono ${balStatus === 'low' ? 'low' : ''} ${balStatus === 'depleted' ? 'depleted' : ''}`}>
-          {account.status === 'error' || pendingVerification ? '—' : formatRemainingCurrency(account.credits?.remaining)}
+          {balanceDisplay.label}
         </div>
+        {balanceDisplay.detail && (
+          <div className="account-card-balance-detail mono">{balanceDisplay.detail}</div>
+        )}
       </div>
 
       <div className="balance-bar">

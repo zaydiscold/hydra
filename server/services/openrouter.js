@@ -93,12 +93,14 @@ async function apiRequest(path, managementKey, options = {}) {
 export async function getCredits(managementKey, options = {}) {
   const result = await apiRequest('/credits', managementKey, options);
   const d = result.data ?? {};
-  const total = d.total_credits ?? d.total ?? 0;
-  const used = d.total_usage ?? d.used ?? 0;
+  const total = Number(d.total_credits ?? d.total ?? 0);
+  const used = Number(d.total_usage ?? d.used ?? 0);
+  const safeTotal = Number.isFinite(total) ? total : 0;
+  const safeUsed = Number.isFinite(used) ? used : 0;
   return {
-    total,
-    used,
-    remaining: total - used,
+    total: safeTotal,
+    used: safeUsed,
+    remaining: safeTotal - safeUsed,
   };
 }
 

@@ -673,17 +673,21 @@ export default function App() {
   const [authState, setAuthState] = useState('loading'); // 'loading' | 'setup' | 'login' | 'app' | 'offline' | 'restart'
   const [authError, setAuthError] = useState(null);
   const [ambientMotion, setAmbientMotion] = useState(true);
-  const [meteorPulse, setMeteorPulse] = useState(false);
+  const [settledMeteorBurst, setSettledMeteorBurst] = useState({ active: false, slot: 1 });
+  const [easterMode, setEasterMode] = useState(false);
+  const [meteorVolley, setMeteorVolley] = useState({ active: false, variant: 'a', count: 0 });
   const [uiDensity, setUiDensity] = useState(getStoredUiDensity);
   const [toasts, setToasts] = useState([]);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const appShellRef = useRef(null);
-  const planetOrbitPhaseRef = useRef({ primary: -18, inner: 42, outer: -132 });
   const [upstreamHealth, setUpstreamHealth] = useState(null);
   const recentToastsRef = useRef(new Map());
   const authStateRef = useRef(authState);
   const authBootstrapRef = useRef(0);
   const upstreamHealthInFlightRef = useRef(false);
+  const settledMeteorSlotRef = useRef(0);
+  const easterClickCountRef = useRef(0);
+  const meteorVolleyTimerRef = useRef(null);
   const { setOwnedTimeout } = useOwnedTimeouts('App.toasts');
   const navigate = useNavigate();
   const location = useLocation();
@@ -747,6 +751,42 @@ export default function App() {
   const dismissToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const triggerMeteorVolley = useCallback(() => {
+    if (meteorVolleyTimerRef.current) {
+      clearTrackedTimeout(meteorVolleyTimerRef.current);
+      meteorVolleyTimerRef.current = null;
+    }
+
+    setMeteorVolley((prev) => ({
+      active: true,
+      variant: prev.variant === 'a' ? 'b' : 'a',
+      count: prev.count + 1,
+    }));
+
+    meteorVolleyTimerRef.current = setTrackedTimeout('App.easterMeteorVolley', () => {
+      meteorVolleyTimerRef.current = null;
+      setMeteorVolley((prev) => ({ ...prev, active: false }));
+    }, 1750);
+  }, []);
+
+  const handleEasterTriggerClick = useCallback(() => {
+    if (easterMode) {
+      triggerMeteorVolley();
+      return;
+    }
+
+    easterClickCountRef.current += 1;
+    const remaining = 5 - easterClickCountRef.current;
+
+    if (remaining <= 0) {
+      setEasterMode(true);
+      addToast('Easter egg mode armed. Press P for meteor volleys.', 'success', { durationMs: 6000 });
+      triggerMeteorVolley();
+    } else if (remaining <= 2) {
+      addToast(`${remaining} more planet tap${remaining === 1 ? '' : 's'}.`, 'info', { durationMs: 1500 });
+    }
+  }, [addToast, easterMode, triggerMeteorVolley]);
 
   const checkAuth = useCallback(async () => {
     const bootstrapId = ++authBootstrapRef.current;
@@ -828,7 +868,7 @@ export default function App() {
 
   useEffect(() => {
     setAmbientMotion(true);
-    setMeteorPulse(false);
+    setSettledMeteorBurst((prev) => ({ ...prev, active: false }));
     const timer = setTrackedTimeout('App.ambientMotion', () => setAmbientMotion(false), 12_000);
     const handleVisibility = () => {
       if (document.hidden) setAmbientMotion(false);
@@ -840,92 +880,59 @@ export default function App() {
     };
   }, [authState]);
 
-  useEffect(() => {
-    if (ambientMotion) return undefined;
+  const runSettledMeteorBurst = useCallback((signal) => new Promise((resolve) => {
+    settledMeteorSlotRef.current = (settledMeteorSlotRef.current % 3) + 1;
+    setSettledMeteorBurst({ active: true, slot: settledMeteorSlotRef.current });
 
-    let meteorStartTimer = null;
-    let meteorStopTimer = null;
-    let cancelled = false;
+    let finished = false;
+    const timer = setTrackedTimeout('App.settledMeteorWindow', () => {
+      finished = true;
+      resolve();
+    }, 1400);
 
-    const clearMeteorStop = () => {
-      if (meteorStopTimer) {
-        clearTrackedTimeout(meteorStopTimer);
-        meteorStopTimer = null;
-      }
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTrackedTimeout(timer);
+      resolve();
     };
 
-    const scheduleMeteorPulse = (delayMs = 6000) => {
-      meteorStartTimer = setTrackedTimeout('App.meteorPulse', () => {
-        meteorStartTimer = null;
-        if (cancelled) return;
-        if (document.hidden) {
-          scheduleMeteorPulse(20_000);
-          return;
-        }
-        setMeteorPulse(true);
-        clearMeteorStop();
-        meteorStopTimer = setTrackedTimeout('App.meteorPulse', () => {
-          meteorStopTimer = null;
-          if (cancelled) return;
-          setMeteorPulse(false);
-          scheduleMeteorPulse(28_000 + Math.floor(Math.random() * 17_000));
-        }, 2200);
-      }, delayMs);
-    };
-
-    scheduleMeteorPulse();
-
-    return () => {
-      cancelled = true;
-      if (meteorStartTimer) clearTrackedTimeout(meteorStartTimer);
-      clearMeteorStop();
-      setMeteorPulse(false);
-    };
-  }, [ambientMotion]);
-
-  useEffect(() => {
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    if (reducedMotion?.matches) return undefined;
-
-    let orbitTimer = null;
-    let cancelled = false;
-
-    const scheduleOrbitStep = (delayMs = 2200) => {
-      orbitTimer = setTrackedTimeout('App.planetOrbitStep', () => {
-        orbitTimer = null;
-        if (cancelled) return;
-        if (!document.hidden) {
-          const phase = planetOrbitPhaseRef.current;
-          const nextPhase = {
-            primary: (phase.primary + 74) % 360,
-            inner: (phase.inner - 96) % 360,
-            outer: (phase.outer + 51) % 360,
-          };
-          planetOrbitPhaseRef.current = nextPhase;
-          const shell = appShellRef.current;
-          if (shell) {
-            shell.style.setProperty('--moon-phase-primary', `${nextPhase.primary}deg`);
-            shell.style.setProperty('--moon-phase-inner', `${nextPhase.inner}deg`);
-            shell.style.setProperty('--moon-phase-outer', `${nextPhase.outer}deg`);
-          }
-          scheduleOrbitStep(2200);
-          return;
-        }
-        scheduleOrbitStep(4000);
-      }, delayMs);
-    };
-
-    scheduleOrbitStep();
-
-    return () => {
-      cancelled = true;
-      if (orbitTimer) clearTrackedTimeout(orbitTimer);
-    };
-  }, [authState]);
+    signal?.addEventListener('abort', finish, { once: true });
+  }).finally(() => {
+    setSettledMeteorBurst((prev) => ({ ...prev, active: false }));
+  }), []);
 
   useEffect(() => {
     authStateRef.current = authState;
   }, [authState]);
+
+  useEffect(() => {
+    return () => {
+      if (meteorVolleyTimerRef.current) {
+        clearTrackedTimeout(meteorVolleyTimerRef.current);
+        meteorVolleyTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!easterMode) return undefined;
+
+    const handleMeteorHotkey = (event) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key?.toLowerCase() !== 'p') return;
+
+      const target = event.target;
+      const tagName = target?.tagName?.toLowerCase?.() || '';
+      if (target?.isContentEditable || ['input', 'textarea', 'select'].includes(tagName)) return;
+
+      event.preventDefault();
+      triggerMeteorVolley();
+    };
+
+    window.addEventListener('keydown', handleMeteorHotkey);
+    return () => window.removeEventListener('keydown', handleMeteorHotkey);
+  }, [easterMode, triggerMeteorVolley]);
 
   const refreshUpstreamHealth = useCallback(async (signal) => {
     if (authState !== 'app' || authStateRef.current !== 'app' || upstreamHealthInFlightRef.current) return;
@@ -956,6 +963,7 @@ export default function App() {
   }, [authState, refreshUpstreamHealth]);
 
   useVisibleRecurringTask('App.upstreamHealth', refreshUpstreamHealth, 30_000, { enabled: authState === 'app' });
+  useVisibleRecurringTask('App.settledMeteorLoop', runSettledMeteorBurst, 1800, { enabled: !ambientMotion });
 
   // ── Listen for main-process navigation (e.g. Cmd+, → Preferences) ──
   // onNavigate returns an unsubscribe — without calling it on cleanup, every
@@ -1136,7 +1144,7 @@ export default function App() {
     <ErrorBoundary>
       <div
         ref={appShellRef}
-        className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}${meteorPulse ? ' app-shell--meteor-pulse' : ''}`}
+        className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}${settledMeteorBurst.active ? ` app-shell--meteor-burst app-shell--meteor-slot-${settledMeteorBurst.slot}` : ''}${easterMode ? ' app-shell--easter-mode' : ''}${meteorVolley.active ? ` app-shell--meteor-volley app-shell--meteor-volley-${meteorVolley.variant}` : ''}`}
       >
         <AppChrome />
         <AppVersionStamp />
@@ -1152,11 +1160,11 @@ export default function App() {
           <div className="meteor" />
           <div className="meteor" />
         </div>
-        <div className="planet planet-1">
+        <button type="button" className="planet planet-1" onClick={handleEasterTriggerClick} aria-label="Decorative planet">
           <span className="planet-moon-orbit planet-moon-orbit--primary" aria-hidden="true"><span className="planet-moon planet-moon--primary" /></span>
           <span className="planet-moon-orbit planet-moon-orbit--inner" aria-hidden="true"><span className="planet-moon planet-moon--ember" /></span>
           <span className="planet-moon-orbit planet-moon-orbit--outer" aria-hidden="true"><span className="planet-moon planet-moon--ice" /></span>
-        </div>
+        </button>
         <div className="planet planet-2" />
 
         {authState === 'setup' || authState === 'login' ? (
@@ -1184,7 +1192,10 @@ export default function App() {
             {...sidebarProximity}
           >
             <button type="button" className="sidebar-logo"
-              onClick={() => navigate('/')}
+              onClick={() => {
+                handleEasterTriggerClick();
+                navigate('/');
+              }}
               title="Go to Dashboard"
               style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', padding: 0 }}
             >

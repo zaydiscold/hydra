@@ -2477,3 +2477,48 @@ This evidence file is not release-complete by itself. The release remains not co
   Anime effects, and only the two expected low-duty timeouts
   `App.meteorPulse` and `App.planetOrbitTick`. Native quit returned the
   process/profile counts to zero.
+- `1.5.13` Command balance correction checkpoint: user review caught that List
+  mode made every account look like `$20.00`. A packaged `/api/dashboard` probe
+  showed the live data was varied, including `87.417358346`,
+  `19.743802`, and `19.16621802` remaining balances, so the defect was in the
+  view/display contract rather than the account data. List, Grid, and Map now
+  all use `getAccountBalanceDisplay()`, with explicit live/recent/stored/no
+  control-key states and `of $total` detail. Focused verification passed UI
+  static contracts, lint, production build, background visibility contracts,
+  CLI contracts, proxy telemetry contracts, package smoke, strict deep
+  codesign, bundle version `1.5.13`, and embedded-source inspection. The local
+  ARM zip SHA-256 is
+  `a11efeb414366ef866792ce71a8773e3a1cb7a58b97a3bbd2ebe314bc5b7240e`.
+  LaunchServices reopened the rebuilt package; its `/api/dashboard` returned
+  `13` accounts with `7` distinct remaining-balance values and live
+  `balanceSource` metadata. Native app review then confirmed List and Map no
+  longer flatten balances: `zaydkhan3-gmail.com` showed `$87.41 of $121.00`,
+  `zayd-zayd.wtf` showed `$19.74 of $20.00`, and `dev-zayd.wtf` showed
+  `$19.16 of $20.00`, while truly full accounts still showed `$20.00`.
+- `1.5.13` ambient motion and Easter egg package checkpoint: follow-up review
+  clarified that the accepted shooting stars and the lower-right planet moons
+  should move indefinitely, not freeze after a brief settled pulse. Source now
+  removes the React-owned `App.meteorPulse` and `App.planetOrbitStep` timeout
+  schedulers. Settled meteors recur through the visibility-aware
+  `App.settledMeteorLoop`, which fires one diagonal `meteorBurstFall` strike
+  and idles before the next strike, while `P` can trigger extra
+  `meteorVolleyA` / `meteorVolleyB` strikes after the hidden five-click Easter
+  egg is armed from the lower-right planet or Hydra sidebar logo. The planet
+  moons use larger outside `moonOrbitLinear` paths with stepped cadence instead
+  of full-rate linear interpolation. Verification passed `npm run
+  test:ui-static` (`49/49`), `git diff --check`, `npm run lint --
+  --max-warnings=0`, `npm run electron:build:mac-arm64`, `npm run
+  electron:smoke -- --app release/mac-arm64/Hydra.app`, strict deep `codesign
+  --verify --deep --strict --verbose=2`, bundle version `1.5.13`, and bundled
+  asset inspection proving `App.settledMeteorLoop`, `App.easterMeteorVolley`,
+  `meteorVolleyA`, `meteorVolleyB`, `moonOrbitLinear`, and
+  `app-shell--easter-mode` shipped while `App.meteorPulse`,
+  `App.planetOrbitStep`, `planetOrbitPhaseRef`, `meteorPulseFall`, and
+  `app-shell--meteor-pulse` stayed absent. The rebuilt local ARM zip SHA-256 is
+  `ac8c7ec58adadded5b3ad6b27a094056d41b6705f42df5c9d18732d75cf3ff7f`.
+  LaunchServices reopened the rebuilt package from a zero-process baseline;
+  at `+45s` it reported four Hydra-owned processes, zero stale Hydra
+  Playwright profiles, `17.6%` aggregate CPU, and `548.91 MB` RSS. A later
+  `+90s` sample stayed at four processes and zero profiles, with `14.1%`
+  aggregate CPU and `507.91 MB` RSS. This supersedes the rejected hot full-rate
+  moon/meteor candidates that sampled around `40%` CPU.

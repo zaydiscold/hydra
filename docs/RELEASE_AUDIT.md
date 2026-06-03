@@ -3762,3 +3762,57 @@ items by itself.
   `queueLength=72`, `duplicateShatterSkips=0`, `timers=0`, `rafActive=false`,
   `matterCleared=true`, and renderer diagnostics at `+95s` showed zero
   intervals, zero animation frames, and zero active CSS/Anime animations.
+- 2026-06-03 Command balance correction follow-up for the local `1.5.13`
+  package: user review reported that Command List appeared to show every
+  account as `$20.00`. A live packaged `/api/dashboard` probe before the patch
+  showed the backend data was actually varied, including `87.417358346`,
+  `19.743802`, and `19.16621802` remaining balances. Source now routes List,
+  Grid, and Map through `src/utils/accountBalance.js`, floors remaining
+  balances with `formatRemainingCurrency()`, shows `of $total` detail, and
+  separates live, recent, stored, pending, unavailable, and no-control states.
+  Dashboard responses also tag `balanceSource`, `balanceStale`, and
+  `balanceFetchedAt`, while OpenRouter credit totals/usages are normalized to
+  finite numbers before subtraction. Verification passed `npm run lint --
+  --max-warnings=0`, `npm run test:ui-static` (`49/49`),
+  `npm run test:background-failure-visibility` (`34/34`),
+  `npm run test:proxy-telemetry` (`5/5`), `npm run test:cli` (`49/49`), and
+  `npm run build`. The local mac ARM app was rebuilt with
+  `npm run electron:build:mac-arm64`; `npm run electron:smoke -- --app
+  release/mac-arm64/Hydra.app` and strict deep `codesign --verify --deep
+  --strict --verbose=2` both passed. Bundle version stayed `1.5.13`; local ARM
+  zip SHA-256 is
+  `a11efeb414366ef866792ce71a8773e3a1cb7a58b97a3bbd2ebe314bc5b7240e`.
+  After LaunchServices relaunch, the rebuilt packaged app's own
+  `/api/dashboard` returned `13` accounts, `7` distinct remaining-balance
+  values, and live `balanceSource` metadata.
+- 2026-06-03 ambient space-motion and Easter egg package proof: user review
+  clarified that the accepted shooting-star aesthetic should continue
+  indefinitely, not stop after one brief settled pulse, and that the
+  lower-right planet moons should orbit constantly on larger paths outside the
+  planet. Source now removes the React-owned `App.meteorPulse` scheduler and
+  the stepped `App.planetOrbitStep` CSS-variable phase writer. Settled meteors
+  recur through the visibility-aware `App.settledMeteorLoop`, which fires one
+  diagonal `meteorBurstFall` strike and idles before the next strike instead
+  of keeping six meteor layers hot forever. The hidden space-mode Easter egg
+  arms after five clicks on the lower-right planet or Hydra sidebar logo; once
+  armed, `P` triggers alternating `meteorVolleyA` / `meteorVolleyB` strikes and
+  the key handler ignores text-entry surfaces. Planet moons now use larger
+  outside `moonOrbitLinear` paths with `steps(var(--moon-orbit-steps), end)`
+  cadence rather than full-rate linear interpolation. Verification passed
+  `npm run test:ui-static` (`49/49`), `git diff --check`, `npm run lint --
+  --max-warnings=0`, `npm run electron:build:mac-arm64`, `npm run
+  electron:smoke -- --app release/mac-arm64/Hydra.app`, strict deep
+  `codesign --verify --deep --strict --verbose=2`, bundle version `1.5.13`,
+  and bundled asset inspection. The packaged assets contain
+  `App.settledMeteorLoop`, `App.easterMeteorVolley`, `meteorVolleyA`,
+  `meteorVolleyB`, `moonOrbitLinear`, and `app-shell--easter-mode`; they do
+  not contain `App.meteorPulse`, `App.planetOrbitStep`, `planetOrbitPhaseRef`,
+  `meteorPulseFall`, or `app-shell--meteor-pulse`. The rebuilt local ARM zip
+  SHA-256 is
+  `ac8c7ec58adadded5b3ad6b27a094056d41b6705f42df5c9d18732d75cf3ff7f`.
+  LaunchServices reopened the rebuilt package from a zero-process baseline;
+  at `+45s` it reported four Hydra-owned processes, zero stale Hydra
+  Playwright profiles, `17.6%` aggregate CPU, and `548.91 MB` RSS. At `+90s`
+  it stayed at four processes and zero profiles, with `14.1%` aggregate CPU
+  and `507.91 MB` RSS. This supersedes the rejected hot full-rate moon/meteor
+  candidates that sampled around `40%` CPU.

@@ -71,24 +71,36 @@ stem.
 ## Ambient Planet
 
 The Jupiter-like sidebar planet is intentionally decorative, but it still has to
-feel alive. The orbit guides stay static while the three small moon bodies move
-through a fast owned `App.planetOrbitStep` phase update. The important rule is
-to move only the small bodies, not the large guide rings; animating the whole
-ring reproduced a persistent packaged GPU burn. The old `1200ms` phase step was
-too slow and read as frozen, while a `220ms` stream stayed too hot in the
-packaged app. The current body-only step is `2200ms` with a short transform
-transition, so the moons visibly move without acting like a permanent animation
-loop.
+feel alive. The current accepted treatment is CSS-only and indefinite: each
+small moon runs an indefinite `moonOrbitLinear` transform around a larger
+outside radius, while the guide ring stays decorative and static. The orbit
+uses uniform `steps(...)` cadence rather than full-rate linear interpolation;
+the moons keep moving at a predictable speed, but the browser does not have to
+repaint the decorative planet at 60fps forever. Paint containment is
+intentionally not used on the orbit ring because it clips moons at the track
+edge. There is no
+React timeout, interval, RAF, or CSS-variable phase writer for the moons. The
+paths are deliberately larger than the planet body so the moons read as
+orbiting around the planet instead of twitching inside it.
 
 The meteor layer uses the earlier shooting-star geometry. Each meteor is a thin
 vertical tail, but the keyframe applies `rotate(...) translateY(...)` in that
 order, so the travel happens through the rotated local axis and crosses the
 screen diagonally. Avoid changing it to `translate3d(...) rotate(...)`; that
-makes the movement fall mostly straight down. Startup can run the continuous
-meteor loop briefly, but the settled shell uses sparse finite
-`App.meteorPulse` bursts so the visual keeps recurring without the packaged GPU
-process staying hot. Star twinkle is opacity-only; the star layer itself no
-longer shifts.
+makes the movement fall mostly straight down. Startup can run continuous
+ambient meteors, but the settled shell keeps the diagonal shower alive with a
+visibility-aware `App.settledMeteorLoop`. That loop fires one short
+`meteorBurstFall` window, then idles briefly before the next strike. This keeps
+the shower recurring indefinitely without six permanent compositor layers. The
+old `App.meteorPulse` scheduler must stay absent. Star twinkle is opacity-only;
+the star layer itself no longer shifts.
+
+There is a small hidden space-mode Easter egg, but it shares the same rendering
+budget. Five clicks on the lower-right planet, or five clicks on the Hydra
+sidebar logo, arms Easter egg mode. Once armed, pressing `P` triggers a short
+meteor volley using alternating `meteorVolleyA` / `meteorVolleyB` keyframes so
+repeated presses restart cleanly. The key handler ignores text inputs,
+textareas, selects, contenteditable regions, and modifier chords.
 
 ## Proximity Fields
 
@@ -161,6 +173,11 @@ one-column stack of grid cards. Remaining balances deliberately use
 `formatRemainingCurrency()` so fractional values like `19.999...` do not round
 up to `$20.00` and overstate available credits. Map mode also shows the
 per-account balance on each node instead of hiding it behind API count only.
+List, Grid, and Map all route through `getAccountBalanceDisplay()`, which
+separates live OpenRouter credits, recent in-memory snapshots, stored fallback
+credits, and unavailable/no-control states. If a live credit lookup fails, the
+UI may show a clearly marked stored balance; it must not invent or share a
+default `$20.00` value across accounts.
 
 Compact density is scoped under `.app-shell--density-compact .main-content`.
 It tightens route padding, headers, metric cards, forms, tables, command

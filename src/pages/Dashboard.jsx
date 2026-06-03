@@ -5,7 +5,8 @@ import AccountCard from '../components/AccountCard';
 import AddAccountModal from '../components/AddAccountModal';
 import AnimeText from '../components/AnimeText';
 import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
-import { formatCurrency, formatRemainingCurrency, getBalanceStatus } from '../utils/format';
+import { formatCurrency, getBalanceStatus } from '../utils/format';
+import { getAccountBalanceDisplay } from '../utils/accountBalance';
 import { getCardHealth } from '../utils/cardHealth';
 import { timeAgo } from '../utils/time';
 import { PlusIcon } from '../components/Icons';
@@ -286,8 +287,9 @@ function DashboardAccountListRow({ account, liveStatuses, onSelectAccount, onRes
   const health = pendingVerification
     ? 'partial'
     : getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
-  const balanceStatus = getBalanceStatus(account.credits);
+  const balanceDisplay = getDashboardBalanceDisplay(account);
   const balanceLabel = getDashboardBalanceLabel(account);
+  const balanceStatus = getBalanceStatus(balanceDisplay.credits || account.credits);
   const sessionLabel = pendingVerification
     ? 'OTP pending'
     : sessionStatus === 'active' || sessionStatus === 'expiring'
@@ -309,9 +311,10 @@ function DashboardAccountListRow({ account, liveStatuses, onSelectAccount, onRes
           <em>{account.email || 'No email saved'}</em>
         </span>
       </span>
-      <strong className={`dashboard-account-list__balance dashboard-account-list__balance--${balanceStatus}`}>
-        {balanceLabel}
-      </strong>
+      <span className={`dashboard-account-list__balance dashboard-account-list__balance--${balanceStatus}`}>
+        <strong>{balanceLabel}</strong>
+        {balanceDisplay.detail && <em>{balanceDisplay.detail}</em>}
+      </span>
       <span className={account.hasManagementKey ? 'dashboard-account-list__ready' : 'dashboard-account-list__missing'}>
         {account.hasManagementKey ? 'READY' : 'MISSING'}
       </span>
@@ -337,8 +340,12 @@ function AccountTopologyMap({ accounts, liveStatuses, onSelectAccount, onResumeA
         const health = account.pendingVerification
           ? 'partial'
           : getCardHealth(sessionStatus, !!account.hasManagementKey, hasErrorState);
-        const balanceStatus = getBalanceStatus(account.credits);
-        const balanceLabel = getDashboardBalanceLabel(account);
+        const balanceDisplay = getDashboardBalanceDisplay(account);
+        const balanceStatus = getBalanceStatus(balanceDisplay.credits || account.credits);
+        const dashboardBalanceLabel = getDashboardBalanceLabel(account);
+        const balanceLabel = balanceDisplay.detail
+          ? `${dashboardBalanceLabel} ${balanceDisplay.detail}`
+          : dashboardBalanceLabel;
         const angle = (360 / Math.max(accounts.length, 1)) * index - 90;
         const radius = index % 2 === 0 ? 166 : 220;
         return (
@@ -353,7 +360,10 @@ function AccountTopologyMap({ accounts, liveStatuses, onSelectAccount, onResumeA
           >
             <strong>{account.alias}</strong>
             <span>{account.keys?.active || 0} API</span>
-            <em className={`dashboard-account-map__balance dashboard-account-map__balance--${balanceStatus}`}>{balanceLabel}</em>
+            <em className={`dashboard-account-map__balance dashboard-account-map__balance--${balanceStatus}`}>
+              <span>{dashboardBalanceLabel}</span>
+              {balanceDisplay.detail && <small>{balanceDisplay.detail}</small>}
+            </em>
           </button>
         );
       })}
@@ -361,9 +371,12 @@ function AccountTopologyMap({ accounts, liveStatuses, onSelectAccount, onResumeA
   );
 }
 
+function getDashboardBalanceDisplay(account) {
+  return getAccountBalanceDisplay(account);
+}
+
 function getDashboardBalanceLabel(account) {
-  if (account.status === 'error' || account.pendingVerification) return '—';
-  return formatRemainingCurrency(account.credits?.remaining);
+  return getDashboardBalanceDisplay(account).label;
 }
 
 function FleetHealthPanel({ fleetHealth, accountsCount, totals }) {
@@ -503,8 +516,9 @@ function getDashboardActivity(accounts, liveStatuses = {}, cooldownMap = {}) {
     const alias = account.alias || account.email || 'account';
     const sessionStatus = liveStatuses[account.id] ?? account.sessionStatus ?? 'none';
     const lockedKeys = (account.keys?.list || []).filter((key) => cooldownMap[key.hash] && cooldownMap[key.hash] > now);
-    const remaining = account.credits?.remaining ?? 0;
-    const total = account.credits?.total ?? 0;
+    const balanceDisplay = getDashboardBalanceDisplay(account);
+    const remaining = balanceDisplay.credits?.remaining ?? 0;
+    const total = balanceDisplay.credits?.total ?? 0;
     const pct = total > 0 ? (remaining / total) * 100 : 0;
     const syncTimestamp = getSyncTimestamp(account);
     const syncLabel = syncTimestamp == null ? 'no sync' : formatRelativeSyncLabel(syncTimestamp);
