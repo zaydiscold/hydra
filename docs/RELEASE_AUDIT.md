@@ -3816,3 +3816,37 @@ items by itself.
   it stayed at four processes and zero profiles, with `14.1%` aggregate CPU
   and `507.91 MB` RSS. This supersedes the rejected hot full-rate moon/meteor
   candidates that sampled around `40%` CPU.
+- 2026-06-03 `1.5.14` reduced-duty ambient motion package proof: after the
+  user asked for the lower-right planet moons and shooting-star meteors to keep
+  moving indefinitely, the first rebuilt Easter/space package still showed a
+  warm settled compositor tail (`17.6%` at `+45s`, `14.1%` at `+90s`). Source
+  now keeps the same hidden Easter egg and diagonal meteor geometry but lowers
+  the settled recurring strike loop from `1800ms` to `4800ms`, and lowers the
+  decorative planet moon cadence from `184/132/244` orbit steps to
+  `40/32/48`. Verification passed `npm run test:ui-static` (`49/49`),
+  `npm run lint -- --max-warnings=0`, `git diff --check`, `npm run
+  electron:build:mac-arm64`, `npm run electron:smoke -- --app
+  release/mac-arm64/Hydra.app`, strict deep `codesign --verify --deep
+  --strict --verbose=2`, bundle version `1.5.14`, and bundled asset
+  inspection. The packaged assets contain `App.settledMeteorLoop`, the
+  `4800` interval, `App.easterMeteorVolley`, `meteorVolleyA`, `meteorVolleyB`,
+  `moonOrbitLinear`, and `--moon-orbit-steps:40/32/48`; they do not contain
+  `App.meteorPulse`, `App.planetOrbitStep`, `planetOrbitPhaseRef`,
+  `meteorPulseFall`, `app-shell--meteor-pulse`, or the old
+  `--moon-orbit-steps:184/132/244`. The local ARM zip SHA-256 is
+  `62a9c4dffa43124ccdbc339c8d40bec8de8cf43255818c27a6925ad9eee7068c`.
+  Evidence is under
+  `/private/tmp/hydra-v1514-space-duty-profile-20260603T075537Z`. Before
+  rebuilding, native quit reduced the stale running `1.5.13` package from four
+  Hydra-owned processes at `11.5%` CPU to zero processes and zero stale
+  profiles. The rebuilt `1.5.14` LaunchServices run had a transient `+45s`
+  compositor tail at `36.8%` CPU, then a five-minute zero-interaction idle
+  profile (`11` samples every `30s`) averaged `0.127%` CPU with `0.0-0.8%`
+  range, zero stale Hydra Playwright profiles throughout, and RSS falling from
+  `395.47 MB` to `276.23 MB`. A post-idle doctor sample reported three
+  Hydra-owned processes at `0.0%` CPU and `278.75 MB` RSS; native quit then
+  reduced Hydra-owned processes and stale profiles to zero. Raw broad
+  `ps -ax -o pid,ppid,stat,%cpu,%mem,rss,etime,command | grep -iE
+  'chrome|chromium|playwright|electron|hydra'` inventories were captured
+  before native quit, after native quit, after launch, at `+45s`, for every
+  idle sample, post-idle, and after final quit.

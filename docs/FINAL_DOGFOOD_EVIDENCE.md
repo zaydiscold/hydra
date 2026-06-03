@@ -2522,3 +2522,21 @@ This evidence file is not release-complete by itself. The release remains not co
   `+90s` sample stayed at four processes and zero profiles, with `14.1%`
   aggregate CPU and `507.91 MB` RSS. This supersedes the rejected hot full-rate
   moon/meteor candidates that sampled around `40%` CPU.
+- `1.5.14` reduced-duty ambient motion checkpoint: the pushed Easter/space
+  package was source-aligned to `1.5.14` and rebuilt after the `1.5.13`
+  LaunchServices samples still showed a warm settled compositor tail. The
+  hidden five-click Easter mode remains, `P` still triggers tracked
+  `meteorVolleyA` / `meteorVolleyB` strikes after arming, and the accepted
+  diagonal meteor geometry remains; the settled recurring meteor loop now idles
+  `4800ms` between one-shot strikes, and the lower-right planet moons use
+  lower-frequency `40/32/48` stepped orbit cadence. Verification passed UI
+  static contracts, lint, diff hygiene, macOS ARM package build, package smoke,
+  strict deep codesign, bundle version `1.5.14`, and bundled asset inspection.
+  The local ARM zip SHA-256 is
+  `62a9c4dffa43124ccdbc339c8d40bec8de8cf43255818c27a6925ad9eee7068c`.
+  Evidence is under
+  `/private/tmp/hydra-v1514-space-duty-profile-20260603T075537Z`. The final
+  five-minute no-interaction idle profile averaged `0.127%` CPU
+  (`0.0-0.8%` range), held zero stale Hydra Playwright profiles throughout,
+  and moved RSS from `395.47 MB` to `276.23 MB`; native quit reduced
+  Hydra-owned processes and stale profiles to zero.

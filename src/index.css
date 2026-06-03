@@ -4125,7 +4125,7 @@ select:-webkit-autofill {
   --moon-orbit-start: -18deg;
   --moon-orbit-end: 342deg;
   --moon-orbit-duration: 18.4s;
-  --moon-orbit-steps: 184;
+  --moon-orbit-steps: 40;
   --moon-orbit-tilt: -18deg;
   --moon-orbit-squash: 0.82;
   --moon-orbit-delay: -2.5s;
@@ -4154,7 +4154,7 @@ select:-webkit-autofill {
   --moon-orbit-start: 42deg;
   --moon-orbit-end: -318deg;
   --moon-orbit-duration: 13.2s;
-  --moon-orbit-steps: 132;
+  --moon-orbit-steps: 32;
   --moon-orbit-tilt: 24deg;
   --moon-orbit-squash: 0.76;
   --moon-orbit-delay: -6s;
@@ -4166,7 +4166,7 @@ select:-webkit-autofill {
   --moon-orbit-start: -132deg;
   --moon-orbit-end: 228deg;
   --moon-orbit-duration: 30.5s;
-  --moon-orbit-steps: 244;
+  --moon-orbit-steps: 48;
   --moon-orbit-tilt: -34deg;
   --moon-orbit-squash: 0.84;
   --moon-orbit-delay: -11s;

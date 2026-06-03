@@ -216,7 +216,7 @@ test('heavy ambient chrome settles while lightweight space accents keep moving',
   assert.doesNotMatch(app, /setTrackedTimeout\('App\.meteorPulse'/);
   assert.doesNotMatch(app, /scheduleMeteorPulse/);
   assert.doesNotMatch(app, /app-shell--meteor-pulse/);
-  assert.match(app, /useVisibleRecurringTask\('App\.settledMeteorLoop', runSettledMeteorBurst, 1800, \{ enabled: !ambientMotion \}\)/);
+  assert.match(app, /useVisibleRecurringTask\('App\.settledMeteorLoop', runSettledMeteorBurst, 4800, \{ enabled: !ambientMotion \}\)/);
   assert.match(app, /setTrackedTimeout\('App\.settledMeteorWindow'/);
   assert.match(app, /setTrackedTimeout\('App\.easterMeteorVolley'/);
   assert.match(app, /event\.key\?\.toLowerCase\(\) !== 'p'/);
@@ -952,9 +952,9 @@ test('1.5 desktop operator polish stays wired to real controls', () => {
   assert.doesNotMatch(css, /transition:\s*transform 360ms linear/);
   assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-end:\s*-318deg;/);
   assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-end:\s*228deg;/);
-  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*18\.4s;[\s\S]*?--moon-orbit-steps:\s*184;[\s\S]*?--moon-orbit-squash:\s*0\.82;/);
-  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*13\.2s;[\s\S]*?--moon-orbit-steps:\s*132;[\s\S]*?--moon-radius:\s*112px;/);
-  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*30\.5s;[\s\S]*?--moon-orbit-steps:\s*244;[\s\S]*?--moon-radius:\s*186px;/);
+  assert.match(css, /\.planet-moon-orbit\s*\{[\s\S]*?--moon-orbit-duration:\s*18\.4s;[\s\S]*?--moon-orbit-steps:\s*40;[\s\S]*?--moon-orbit-squash:\s*0\.82;/);
+  assert.match(css, /\.planet-moon-orbit--inner\s*\{[\s\S]*?--moon-orbit-duration:\s*13\.2s;[\s\S]*?--moon-orbit-steps:\s*32;[\s\S]*?--moon-radius:\s*112px;/);
+  assert.match(css, /\.planet-moon-orbit--outer\s*\{[\s\S]*?--moon-orbit-duration:\s*30\.5s;[\s\S]*?--moon-orbit-steps:\s*48;[\s\S]*?--moon-radius:\s*186px;/);
   assert.match(cssRuleBlock(css, '@keyframes moonOrbitLinear {'), /translateX\(var\(--moon-radius\)\)/);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.planet-moon\s*\{[\s\S]*?animation:\s*none;/);
 

@@ -963,7 +963,7 @@ export default function App() {
   }, [authState, refreshUpstreamHealth]);
 
   useVisibleRecurringTask('App.upstreamHealth', refreshUpstreamHealth, 30_000, { enabled: authState === 'app' });
-  useVisibleRecurringTask('App.settledMeteorLoop', runSettledMeteorBurst, 1800, { enabled: !ambientMotion });
+  useVisibleRecurringTask('App.settledMeteorLoop', runSettledMeteorBurst, 4800, { enabled: !ambientMotion });
 
   // ── Listen for main-process navigation (e.g. Cmd+, → Preferences) ──
   // onNavigate returns an unsubscribe — without calling it on cleanup, every

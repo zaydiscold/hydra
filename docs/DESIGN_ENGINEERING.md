@@ -74,9 +74,9 @@ The Jupiter-like sidebar planet is intentionally decorative, but it still has to
 feel alive. The current accepted treatment is CSS-only and indefinite: each
 small moon runs an indefinite `moonOrbitLinear` transform around a larger
 outside radius, while the guide ring stays decorative and static. The orbit
-uses uniform `steps(...)` cadence rather than full-rate linear interpolation;
-the moons keep moving at a predictable speed, but the browser does not have to
-repaint the decorative planet at 60fps forever. Paint containment is
+uses coarse uniform `steps(...)` cadence rather than full-rate linear
+interpolation; the moons keep moving at a predictable speed, but the browser
+does not have to repaint the decorative planet at 60fps forever. Paint containment is
 intentionally not used on the orbit ring because it clips moons at the track
 edge. There is no
 React timeout, interval, RAF, or CSS-variable phase writer for the moons. The
@@ -90,7 +90,7 @@ screen diagonally. Avoid changing it to `translate3d(...) rotate(...)`; that
 makes the movement fall mostly straight down. Startup can run continuous
 ambient meteors, but the settled shell keeps the diagonal shower alive with a
 visibility-aware `App.settledMeteorLoop`. That loop fires one short
-`meteorBurstFall` window, then idles briefly before the next strike. This keeps
+`meteorBurstFall` window, then idles for a few seconds before the next strike. This keeps
 the shower recurring indefinitely without six permanent compositor layers. The
 old `App.meteorPulse` scheduler must stay absent. Star twinkle is opacity-only;
 the star layer itself no longer shifts.
