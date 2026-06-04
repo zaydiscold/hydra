@@ -205,19 +205,13 @@ export async function getManagementKey(keyId) {
  * @returns {Object|null} Best key with decrypted value, or null if none
  */
 export async function getBestManagementKey(accountId) {
-  // First try to find an active key that was recently used
-  let key = await prisma.managementKey.findFirst({
+  // ⚡ Bolt: SQLite treats NULLs as smaller than all other values.
+  // In a DESC sort, NULLs are placed last. This means orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }]
+  // perfectly handles both used and unused keys in a single query, avoiding the fallback query.
+  const key = await prisma.managementKey.findFirst({
     where: { accountId, status: 'active' },
     orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }]
   });
-  
-  // If no used key, get the newest active key
-  if (!key) {
-    key = await prisma.managementKey.findFirst({
-      where: { accountId, status: 'active' },
-      orderBy: { createdAt: 'desc' }
-    });
-  }
   
   if (!key) return null;
 
@@ -231,6 +225,42 @@ export async function getBestManagementKey(accountId) {
     lastUsedAt: key.lastUsedAt,
     createdAt: key.createdAt
   };
+}
+
+/**
+ * ⚡ Bolt: Get the best management key for multiple accounts in a single batch query.
+ * Grouped by accountId.
+ * @param {string[]} accountIds
+ * @returns {Map<string, Object>} Map of accountId to best key
+ */
+export async function getBestManagementKeys(accountIds) {
+  if (!accountIds || accountIds.length === 0) return new Map();
+
+  const keys = await prisma.managementKey.findMany({
+    where: {
+      accountId: { in: accountIds },
+      status: 'active'
+    },
+    orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }]
+  });
+
+  const bestKeys = new Map();
+  for (const key of keys) {
+    if (!bestKeys.has(key.accountId)) {
+      bestKeys.set(key.accountId, {
+        id: key.id,
+        accountId: key.accountId,
+        key: decrypt(key.encryptedKey),
+        name: key.name,
+        status: key.status,
+        metadata: key.metadata ? JSON.parse(key.metadata) : null,
+        lastUsedAt: key.lastUsedAt,
+        createdAt: key.createdAt
+      });
+    }
+  }
+
+  return bestKeys;
 }
 
 /**
