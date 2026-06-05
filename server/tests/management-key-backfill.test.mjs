@@ -44,7 +44,7 @@ mock.module(DB_SPEC, {
 mock.module(CODEC_SPEC, {
   exports: {
     encrypt: (value) => `enc:${value}`,
-    decrypt: (value) => String(value).startsWith('enc:') ? String(value).slice(4) : String(value),
+    decrypt: (value) => String(value).startsWith('enc:') ? String(value).slice(4) : String(value)
   },
 });
 

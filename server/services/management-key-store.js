@@ -205,19 +205,14 @@ export async function getManagementKey(keyId) {
  * @returns {Object|null} Best key with decrypted value, or null if none
  */
 export async function getBestManagementKey(accountId) {
-  // First try to find an active key that was recently used
+  // Try to find an active key that was recently used.
+  // In Prisma/SQLite, NULL values sort last when using 'desc' ordering.
+  // Therefore, this single query will natively return the most recently used key,
+  // or fallback to the newest created key if no keys have been used.
   let key = await prisma.managementKey.findFirst({
     where: { accountId, status: 'active' },
     orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }]
   });
-  
-  // If no used key, get the newest active key
-  if (!key) {
-    key = await prisma.managementKey.findFirst({
-      where: { accountId, status: 'active' },
-      orderBy: { createdAt: 'desc' }
-    });
-  }
   
   if (!key) return null;
 
