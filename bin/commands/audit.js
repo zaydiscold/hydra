@@ -556,7 +556,7 @@ function buildAudit() {
         && electronWindows.includes('Eng.update(engine,physicsStep)')
         && !electronWindows.includes('Run.create')
         && !electronWindows.includes('Run.run')
-        && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
+        && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/100')
         && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=15000')
         && electronWindows.includes('HYDRA_SPLASH_EXIT_MS=9800')
         && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=5200')

@@ -344,7 +344,7 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /hydraSplashTiltGravityX\*2\.2/);
   assert.match(windowsJs, /hydraSplashLeanX\+= \(hydraSplashTiltGravityX-hydraSplashLeanX\)\*0\.08/);
   assert.match(windowsJs, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
-  assert.match(windowsJs, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
+  assert.match(windowsJs, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/100/);
   assert.match(windowsJs, /const physicsStep=hydraSplashExitStartedAt\?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS/);
   assert.match(windowsJs, /while\(hydraSplashPhysicsCarry>=physicsStep&&steps<2\)\{Eng\.update\(engine,physicsStep\)/);
   assert.match(windowsJs, /window\.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics/);
@@ -363,7 +363,8 @@ test('splash owns one throttled physics and render loop', () => {
   assert.match(windowsJs, /const stems=11/);
   assert.match(windowsJs, /baseFontSize\*\(0\.903\+Math\.random\(\)\*1\.092\)/);
   assert.match(windowsJs, /const wave=\.5\+\.5\*Math\.sin/);
-  assert.match(windowsJs, /ctx\.shadowBlur=4\+portalRatio\*8\+wave\*3/);
+  // Glyphs draw via cached sprites (glow baked once), not per-frame shadowBlur.
+  assert.match(windowsJs, /ctx\.drawImage\(sp\.c,-sp\.w\/2,-sp\.h\/2,sp\.w,sp\.h\)/);
   assert.match(windowsJs, /const delay=24\+Math\.random\(\)\*86\+\(Math\.random\(\)<0\.14\?Math\.random\(\)\*110:0\)/);
   assert.match(windowsJs, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
   assert.match(windowsJs, /Welcome, /);

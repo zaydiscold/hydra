@@ -50,7 +50,14 @@ export function createSplashWindow() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
-    focusable: false,  // can't steal focus from the user's other apps during splash
+    // macOS GPU-composites a transparent window smoothly whether or not it
+    // holds focus, so there it stays non-focusable (never steals focus). On
+    // Windows, Chromium throttles the animation loop of an unfocused/background
+    // window, so the splash must be focusable and brought forward (below) to
+    // render at full frame rate — matching how it behaves on macOS. It remains
+    // click-through via setIgnoreMouseEvents, so the first click drops straight
+    // to whatever is behind it.
+    focusable: process.platform === 'win32',
     icon: ICON_PATH,
     webPreferences: {
       preload: SPLASH_PRELOAD_PATH,
@@ -59,7 +66,13 @@ export function createSplashWindow() {
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      backgroundThrottling: true,
+      // The splash is intentionally focusable:false (never steals focus). On
+      // Windows, Chromium throttles requestAnimationFrame on a window it treats
+      // as backgrounded/unfocused, which makes the matter.js splash animation
+      // visibly framey (smooth on macOS, janky on Windows). Disable throttling
+      // for the splash's ~15s lifetime so it renders at full frame rate. The
+      // main window keeps default throttling for idle efficiency.
+      backgroundThrottling: false,
     },
   });
   // Make the window transparent to mouse clicks — the user can interact with
@@ -629,7 +642,7 @@ export function createSplashWindow() {
     + 'if(window.hydraSplash&&window.hydraSplash.onUpdateProgress){window.hydraSplash.onUpdateProgress(updateSplashProgress);}'
     + 'const items=' + itemsJson + ';'
     + 'const cvs=document.getElementById("field");if(!cvs)return;'
-    + 'const ctx=cvs.getContext("2d");'
+    + 'const ctx=cvs.getContext("2d",{desynchronized:true,alpha:true});'
     // Canvas covers the full splash window (position:fixed/inset:0). Backing
     // store sized to devicePixelRatio so glyphs stay crisp on Retina.
     + 'function size(){'
@@ -645,6 +658,13 @@ export function createSplashWindow() {
     // ─── matter.js handles + engine ──────────────────────────────────────
     + 'const M=Matter,Eng=M.Engine,Wld=M.World,Bod=M.Bodies,Body=M.Body,Comp=M.Composite,Evt=M.Events;'
     + 'const engine=Eng.create({enableSleeping:true,positionIterations:8,velocityIterations:6});'
+    // PERF: the dominant splash cost is matter.js collision detection sweeping
+    // ALL ~550 letter bodies every frame. enableSleeping only helps if bodies
+    // actually sleep — but constant new-word impacts keep resetting their sleep
+    // counters. Raise the motion tolerance and lower the per-body frame count so
+    // a settled pile drops out of the broadphase sooner. Sleeping bodies render
+    // at their resting transform (no visual change); they wake on contact.
+    + 'M.Sleeping._motionSleepThreshold=0.16;'
     // intro gravity. Matter.js gravity is dimensionless × scale; this keeps the
     // Pica-style real-gravity feel but drops faster so the light-wave phase can
     // breathe without making the full splash longer.
@@ -700,7 +720,7 @@ export function createSplashWindow() {
     +   'const lane=Math.random(),showerRng=lane<.32?Math.pow(Math.random(),1.8):lane>.68?1-Math.pow(Math.random(),1.8):Math.random();'
     +   'const x=Math.max(minX,Math.min(maxX,minX+showerRng*(maxX-minX)+tiltBias));'
     +   'const body=Bod.rectangle(x,-bh*0.6,bw,bh,{'
-    +     'restitution:0.16,friction:0.62,frictionAir:0.012,density:0.0014,chamfer:{radius:5},'
+    +     'restitution:0.16,friction:0.62,frictionAir:0.012,density:0.0014,chamfer:{radius:5},sleepThreshold:30,'
     +     'label:"hword",'
     +     'plugin:{hydra:{kind:"word",text:text,color:color,fontSize:fontSize,weight:weight}}'
     +   '});'
@@ -733,7 +753,7 @@ export function createSplashWindow() {
     +     'cursor+=cw;'
     +     'const wx=px+lxLocal*cos;const wy=py+lxLocal*sin;'
     +     'const letter=Bod.rectangle(wx,wy,cw,fontSize*1.08,{'
-    +       'restitution:0.18,friction:0.74,frictionAir:0.015,density:0.0011,chamfer:{radius:3},'
+    +       'restitution:0.18,friction:0.74,frictionAir:0.015,density:0.0011,chamfer:{radius:3},sleepThreshold:30,'
     +       'angle:pa,label:"hletter",'
     +       'plugin:{hydra:{kind:"letter",text:ch,color:color,fontSize:fontSize,weight:weight}}'
     +     '});'
@@ -809,7 +829,7 @@ export function createSplashWindow() {
     + 'window.addEventListener("beforeunload",function(){disposeHydraSplash("beforeunload");},{once:true});'
     + 'hydraSplashSetTimeout(function(){disposeHydraSplash("timeout");},HYDRA_SPLASH_DISPOSE_MS);'
     // ─── Render — draw each body as a rotated glyph at its world transform.
-    + 'const HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45,HYDRA_SPLASH_RENDER_FRAME_MS=1000/30;'
+    + 'const HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45,HYDRA_SPLASH_RENDER_FRAME_MS=1000/100;'
     + 'let hydraSplashLastFrame=0,hydraSplashPhysicsCarry=0,hydraSplashLastRender=0;'
     + 'function hydraSplashPortalRatio(now){return hydraSplashExitStartedAt?Math.min(1,(now-hydraSplashExitStartedAt)/HYDRA_SPLASH_PORTAL_MS):0;}'
     + 'function drawHydraPortal(now,ratio){'
@@ -820,6 +840,31 @@ export function createSplashWindow() {
     +   'for(let r=0;r<4;r++){const radius=base*(0.74+r*.12+Math.sin(spin*2+r)*.018),dash=10+r*7;ctx.save();ctx.translate(cx,cy);ctx.rotate(spin*(r%2?1:-1)*(1+r*.28));ctx.strokeStyle=ringColors[r];ctx.lineWidth=1.1+r*.72;ctx.setLineDash([dash,12+r*5]);ctx.lineDashOffset=-spin*80*(r+1);ctx.beginPath();ctx.ellipse(0,0,radius,radius*(.78+r*.045),0,0,Math.PI*2);ctx.stroke();ctx.restore();}'
     +   'for(let a=0;a<18;a++){const angle=spin*(1.4+a*.045)+(a/18)*Math.PI*2,rad=base*(.67+(a%5)*.075);ctx.fillStyle=ringColors[a%ringColors.length];ctx.beginPath();ctx.arc(cx+Math.cos(angle)*rad,cy+Math.sin(angle)*rad*.82,1.2+(a%3)*.75,0,Math.PI*2);ctx.fill();}'
     +   'ctx.restore();'
+    + '}'
+    // ─── Glyph sprite cache ──────────────────────────────────────────────
+    // Per-frame ctx.font + fillText (+ portal shadowBlur) for every body is the
+    // dominant render cost — font string re-parse and software glyph
+    // rasterization for hundreds of bodies, every frame. Instead, rasterize each
+    // unique glyph/word ONCE (color + glow baked in) into an offscreen canvas
+    // and drawImage() it each frame. drawImage is far cheaper than fillText and
+    // stays crisp because the sprite is rendered at devicePixelRatio. This is
+    // what lets the splash hold frame rate without a discrete GPU (and run even
+    // smoother with one) — no loss of visual fidelity.
+    + 'const HYDRA_SPRITE_CACHE=new Map();'
+    + 'const HYDRA_SPRITE_DPR=Math.min(devicePixelRatio||1,2);'
+    + 'function hydraGlyphSprite(text,color,fontSize,weight){'
+    +   'const key=text+"|"+color+"|"+fontSize+"|"+weight;'
+    +   'let s=HYDRA_SPRITE_CACHE.get(key);if(s)return s;'
+    +   'const pad=Math.ceil(fontSize*0.7);'
+    +   'const c=document.createElement("canvas");const t=c.getContext("2d");'
+    +   't.font=fontFor(fontSize,weight);'
+    +   'const w=Math.ceil(t.measureText(text).width)+pad*2,h=Math.ceil(fontSize*1.4)+pad*2;'
+    +   'c.width=Math.max(1,Math.ceil(w*HYDRA_SPRITE_DPR));c.height=Math.max(1,Math.ceil(h*HYDRA_SPRITE_DPR));'
+    +   't.scale(HYDRA_SPRITE_DPR,HYDRA_SPRITE_DPR);'
+    +   't.font=fontFor(fontSize,weight);t.textAlign="center";t.textBaseline="middle";'
+    +   't.shadowColor=color;t.shadowBlur=Math.max(2,fontSize*0.2);'
+    +   't.fillStyle=color;t.fillText(text,w/2,h/2);'
+    +   's={c:c,w:w,h:h};HYDRA_SPRITE_CACHE.set(key,s);return s;'
     + '}'
     + 'function render(now){'
     +   'if(hydraSplashDisposed)return;'
@@ -860,14 +905,17 @@ export function createSplashWindow() {
     +   'for(let i=0;i<all.length;i++){const b=all[i];'
     +     'if(b.isStatic||!b.plugin||!b.plugin.hydra)continue;'
     +     'const m=b.plugin.hydra;'
+    // Skip bodies outside the viewport (spawning above the top, or flown past
+    // the edges during the portal lift). They are not visible, so drawing them
+    // is wasted blit work — pure perf, no visual change.
+    +     'const bx=b.position.x,by=b.position.y;'
+    +     'if(bx<-160||bx>W()+160||by<-160||by>H()+160)continue;'
     +     'ctx.save();'
-    +     'ctx.translate(b.position.x,b.position.y);'
+    +     'ctx.translate(bx,by);'
     +     'ctx.rotate(b.angle);'
-    +     'if(portalRatio){const wave=.5+.5*Math.sin((now-hydraSplashExitStartedAt)*.009-b.position.x*.021-b.position.y*.012);ctx.globalAlpha=.66+wave*.30;const depthScale=.9+wave*.18;ctx.scale(depthScale,depthScale);if(i%5===0){ctx.shadowColor=m.color;ctx.shadowBlur=4+portalRatio*8+wave*3;}}'
-    +     'ctx.fillStyle=m.color;'
-    +     'ctx.font=fontFor(m.fontSize,m.weight);'
-    +     'ctx.textAlign="center";ctx.textBaseline="middle";'
-    +     'ctx.fillText(m.text,0,0);'
+    +     'if(portalRatio){const wave=.5+.5*Math.sin((now-hydraSplashExitStartedAt)*.009-b.position.x*.021-b.position.y*.012);ctx.globalAlpha=.66+wave*.30;const depthScale=.9+wave*.18;ctx.scale(depthScale,depthScale);}'
+    +     'const sp=hydraGlyphSprite(m.text,m.color,m.fontSize,m.weight);'
+    +     'ctx.drawImage(sp.c,-sp.w/2,-sp.h/2,sp.w,sp.h);'
     +     'ctx.restore();'
     +   '}'
     + '}'
@@ -876,6 +924,19 @@ export function createSplashWindow() {
     + '</body></html>';
 
   win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(splashHTML));
+  // On Windows, force the splash to the foreground once it paints so Chromium
+  // keeps its requestAnimationFrame loop at full speed (an unfocused window gets
+  // throttled → visibly janky physics). The window is click-through, so this
+  // does not trap the user: the first click passes to the app behind and the
+  // splash naturally yields focus. No-op on macOS/Linux where it composites
+  // smoothly while non-focusable.
+  if (process.platform === 'win32') {
+    win.once('ready-to-show', () => {
+      win.showInactive();
+      win.moveTop();
+      win.focus();
+    });
+  }
   win.once('closed', () => { setSplashWindow(null); });
   setSplashWindow(win);
   // Return the window so callers can reference it without re-reading state.
@@ -903,7 +964,12 @@ export function createMainWindow({ show = false } = {}) {
     // region — see src/App.jsx AppChrome.
     ...(isMac
       ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 12 } }
-      : { frame: true }),
+      // Windows/Linux: drop the native OS title bar so only Hydra's own
+      // renderer-drawn window chrome (the minimize / maximize / close controls
+      // in src/App.jsx, wired to window:minimize/maximize/close IPC) shows.
+      // With frame:true the native caption bar AND our custom controls both
+      // render — a redundant, off-brand double set of window buttons on Windows.
+      : { frame: false }),
     icon: ICON_PATH,
     backgroundColor: '#0a0014',
     webPreferences: {

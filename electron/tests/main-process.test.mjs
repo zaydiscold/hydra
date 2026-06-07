@@ -122,12 +122,13 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
 
     // We hide the OS title bar but keep native traffic lights inset at a
     // pixel position that matches src/index.css `.app-chrome--mac` left pad.
-    // Renderer draws its own slim drag strip (see src/App.jsx AppChrome
-    // mac branch). Non-mac platforms keep the native frame.
+    // Renderer draws its own window chrome (see src/App.jsx AppChrome). macOS
+    // hides the title bar inset; Windows/Linux go fully frameless so the native
+    // caption bar doesn't duplicate the renderer's own min/max/close controls.
     assert.match(windows, /const isMac = process\.platform === 'darwin'/);
     assert.match(windows, /titleBarStyle: 'hiddenInset'/);
     assert.match(windows, /trafficLightPosition: \{ x: 14, y: 12 \}/);
-    assert.match(windows, /: \{ frame: true \}/);
+    assert.match(windows, /: \{ frame: false \}/);
   });
 
   it('loads Vite URL in dev and a localhost URL in prod', () => {
@@ -381,7 +382,10 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /const stems=11/);
     assert.match(windows, /\.vines \.node/);
     assert.match(windows, /const wave=\.5\+\.5\*Math\.sin/);
-    assert.match(windows, /if\(i%5===0\)\{ctx\.shadowColor=m\.color;ctx\.shadowBlur=4\+portalRatio\*8\+wave\*3;\}/);
+    // Glyphs render via the cached-sprite drawImage path (per-frame font+fillText
+    // +shadowBlur was the splash perf bottleneck; sprites bake the glow once).
+    assert.match(windows, /const sp=hydraGlyphSprite\(m\.text,m\.color,m\.fontSize,m\.weight\)/);
+    assert.match(windows, /ctx\.drawImage\(sp\.c,-sp\.w\/2,-sp\.h\/2,sp\.w,sp\.h\)/);
     assert.match(windows, /function drawHydraPortal\(now,ratio\)/);
     assert.match(windows, /ctx\.globalCompositeOperation="lighter"/);
     assert.match(windows, /ctx\.createRadialGradient\(cx,cy,short\*0\.045,cx,cy,base\*1\.36\)/);
@@ -401,7 +405,7 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(windows, /window\.removeEventListener\("resize",size\)/);
     assert.match(windows, /window\.addEventListener\("beforeunload",function\(\)\{disposeHydraSplash\("beforeunload"\);\},\{once:true\}\)/);
     assert.match(windows, /hydraSplashSetTimeout\(function\(\)\{disposeHydraSplash\("timeout"\);\},HYDRA_SPLASH_DISPOSE_MS\)/);
-    assert.match(windows, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/30/);
+    assert.match(windows, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/100/);
     assert.match(windows, /if\(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS\)return/);
     assert.match(windows, /window\.GravitySensor\|\|window\.Accelerometer/);
     assert.match(windows, /hydraSplashTiltSensor\.start\(\)/);

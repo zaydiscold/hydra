@@ -217,7 +217,7 @@ test('electron package smoke validates the packaged app shell without launching 
   assert.match(script, /function assertPackagedMacChromeContract/, 'smoke must validate packaged macOS titlebar source');
   assert.match(script, /titleBarStyle: 'hiddenInset'/, 'smoke must require packaged macOS hiddenInset titlebar');
   assert.match(script, /trafficLightPosition: \{ x: 14, y: 12 \}/, 'smoke must keep macOS traffic lights clear of renderer chrome');
-  assert.match(script, /frame: true/, 'smoke must keep non-macOS windows framed');
+  assert.match(script, /frame: false/, 'smoke must require non-macOS windows be frameless (renderer-drawn chrome)');
   assert.match(script, /macOS Info\.plist/, 'smoke must require macOS Info.plist');
   assert.match(script, /CFBundleExecutable must be Hydra/, 'smoke must verify the macOS bundle executable name');
   assert.match(script, /CFBundlePackageType must be APPL/, 'smoke must verify the macOS bundle package type');

@@ -4,7 +4,7 @@
   "version": "1.5.15",
   "type": "module",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=24"
   },
   "bin": {
     "hydra": "bin/hydra.mjs"
@@ -19,11 +19,11 @@
     "build": "vite build",
     "electron:prepare": "node scripts/prepare-electron-resources.mjs",
     "electron:build": "npm run build && npm run electron:prepare && electron-builder",
-    "electron:build:mac-arm64": "npm run build && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:prepare && electron-builder --mac zip --arm64",
-    "electron:build:mac-x64": "npm run build && HYDRA_BUILD_TARGET=darwin-x64 npm run electron:prepare && electron-builder --mac zip --x64",
-    "electron:build:dmg": "npm run build && HYDRA_BUILD_TARGET=darwin-arm64 npm run electron:prepare && electron-builder --mac dmg --arm64",
-    "electron:build:win": "npm run build && HYDRA_BUILD_TARGET=win32-x64 npm run electron:prepare && electron-builder --win nsis --x64",
-    "electron:build:linux": "npm run build && HYDRA_BUILD_TARGET=linux-x64 npm run electron:prepare && electron-builder --linux AppImage --x64",
+    "electron:build:mac-arm64": "node scripts/electron-build.mjs darwin-arm64 --mac zip --arm64",
+    "electron:build:mac-x64": "node scripts/electron-build.mjs darwin-x64 --mac zip --x64",
+    "electron:build:dmg": "node scripts/electron-build.mjs darwin-arm64 --mac dmg --arm64",
+    "electron:build:win": "node scripts/electron-build.mjs win32-x64 --win nsis --x64",
+    "electron:build:linux": "node scripts/electron-build.mjs linux-x64 --linux AppImage --x64",
     "electron:smoke": "node scripts/smoke-electron-package.mjs",
     "electron:smoke:win-launch": "node scripts/smoke-windows-launch.mjs",
     "electron:open:mac-arm64": "node scripts/open-packaged-app.mjs release/mac-arm64/Hydra.app",

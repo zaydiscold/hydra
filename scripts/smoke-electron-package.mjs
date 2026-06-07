@@ -204,8 +204,8 @@ function assertPackagedMacChromeContract(resourcesDir) {
   if (!windowsSource.includes('trafficLightPosition: { x: 14, y: 12 }')) {
     throw new Error('[electron-smoke] packaged macOS main window must keep traffic lights clear of renderer chrome');
   }
-  if (!windowsSource.includes('frame: true')) {
-    throw new Error('[electron-smoke] packaged non-macOS main window must keep a framed window');
+  if (!windowsSource.includes('frame: false')) {
+    throw new Error('[electron-smoke] packaged non-macOS main window must be frameless (renderer draws its own chrome)');
   }
 }
 

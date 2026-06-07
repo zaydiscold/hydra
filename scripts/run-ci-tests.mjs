@@ -6,6 +6,7 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -16,7 +17,10 @@ const childEnv = {
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true',
   HYDRA_DATA_DIR: '.hydra-ci-data',
   JWT_SECRET: 'ci-test-secret-32-characters-long',
-  XDG_CACHE_HOME: '/private/tmp/hydra-xdg-cache',
+  // Cache dir under the OS temp path so this resolves on every platform.
+  // Previously hardcoded to the macOS-only '/private/tmp/...', which is a
+  // bogus path on Windows/Linux.
+  XDG_CACHE_HOME: join(tmpdir(), 'hydra-xdg-cache'),
   ...process.env,
 };
 
