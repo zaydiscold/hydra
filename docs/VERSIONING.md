@@ -16,7 +16,10 @@ desktop density, stronger proximity navigation, Pool Manager ergonomics, Bulk
 Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 
 Tracked `package.json` and `package-lock.json` now target the `1.6.x` lane. The
-current release is `1.6.0`, a minor that adds splash hold-to-skip (hold Spacebar
+current release is `1.6.1` — a patch fixing a 1.6.0 ship blocker (the
+`User.authDisabled` column shipped without a migration, breaking packaged
+fresh installs and upgrades; now migrated + guarded by a coverage test). It
+carries the `1.6.0` features: splash hold-to-skip (hold Spacebar
 or the Skip pill for 3s) and a unified disable-auth feature — the
 `HYDRA_DISABLE_AUTH` env var for headless/always-on servers plus a lockout-safe
 Settings toggle (disabling blanks the password; re-enabling forces a new one).
@@ -112,7 +115,9 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`1.6.0` is the current minor lane: splash hold-to-skip and unified disable-auth
+`1.6.1` is the current patch lane: fixes the missing `User.authDisabled`
+migration from 1.6.0 (packaged-install schema heal) plus a migration-coverage
+guard. `1.6.0` was the minor lane: splash hold-to-skip and unified disable-auth
 (env var + lockout-safe Settings toggle). `1.5.15` remains the patch lane for
 hidden meteor control, settled space-animation idle repair, and release-page
 alignment. `1.5.10` remains

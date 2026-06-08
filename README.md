@@ -263,10 +263,11 @@ runtime lane.
 
 Versioning is documented in [docs/VERSIONING.md](docs/VERSIONING.md). Incremental
 source/doc hardening commits use `[skip-bump]`; the performance tranche shipped
-first as `v1.1.0`, and the current release lane is `1.6.0` — splash hold-to-skip
-and a unified disable-auth feature (the `HYDRA_DISABLE_AUTH` env var for headless
-servers plus a lockout-safe Settings toggle) — on top of the `1.5.15` ambient
-graphics work.
+first as `v1.1.0`, and the current release lane is `1.6.1` — a patch fixing a
+1.6.0 packaged-install schema bug (the `User.authDisabled` column needed a
+migration) — carrying the `1.6.0` features: splash hold-to-skip and a unified
+disable-auth feature (the `HYDRA_DISABLE_AUTH` env var for headless servers plus
+a lockout-safe Settings toggle), on top of the `1.5.15` ambient graphics work.
 Remaining manual dogfood evidence stays explicit in the audit.
 
 ## Docs Index
