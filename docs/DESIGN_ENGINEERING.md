@@ -76,10 +76,12 @@ moon runs `moonOrbitLinear` around a larger outside radius during the short
 startup ambient window, while the guide ring stays decorative and static. Once
 the shell settles, the moons switch to a
 visibility-aware `App.planetMoonStep` phase update every few seconds with a
-short transform transition. That keeps the planet visibly alive without a
-permanent GPU animation. Paint containment is intentionally not used on the
-orbit ring because it clips moons at the track edge. There is no timeout,
-interval, RAF, or full-rate CSS animation running forever for the moons. The
+short transform transition. The settled cadence is deliberately low-duty:
+one phase update every 10.8 seconds and a 420 ms transform transition, so the
+decorative planet remains alive without keeping a frequent compositor window hot.
+Paint containment is intentionally not used on the orbit ring because it clips
+moons at the track edge. There is no interval, RAF, or full-rate CSS animation
+running forever for the moons. The
 paths are deliberately larger than the planet body so the moons read as
 orbiting around the planet instead of twitching inside it.
 
@@ -89,17 +91,21 @@ order, so the travel happens through the rotated local axis and crosses the
 screen diagonally. Avoid changing it to `translate3d(...) rotate(...)`; that
 makes the movement fall mostly straight down. Startup can run continuous
 ambient meteors, but the settled shell does not run automatic meteor strikes
-because the packaged GPU profile showed a hot idle tail. Easter mode keeps the
-richer volley effect because it is user-triggered and temporary. The
+because the packaged GPU profile showed a hot idle tail. The hidden meteor
+control keeps the richer volley effect because it is user-triggered and
+temporary. The
 old `App.meteorPulse` scheduler must stay absent. Star twinkle is opacity-only;
 the star layer itself no longer shifts.
 
-There is a small hidden space-mode Easter egg, but it shares the same rendering
-budget. Five clicks on the lower-right planet, or five clicks on the Hydra
-sidebar logo, arms Easter egg mode. Once armed, pressing `P` triggers a short
-meteor volley using alternating `meteorVolleyA` / `meteorVolleyB` keyframes so
-repeated presses restart cleanly. The key handler ignores text inputs,
-textareas, selects, contenteditable regions, and modifier chords.
+There is a small hidden space-control Easter egg, but it shares the same
+rendering budget. Five clicks on the lower-right planet, or five clicks on the
+Hydra sidebar logo, unlocks the secret meteor control. Once unlocked, pressing
+`P` or the `METEOR` chip triggers a short meteor volley using alternating
+`meteorVolleyA` / `meteorVolleyB` keyframes so repeated presses restart cleanly.
+Rapid presses inside the combo window raise the volley intensity: the meteors
+move faster, draw longer contrails, and add a one-shot layer shake. The key
+handler ignores text inputs, textareas, selects, contenteditable regions, and
+modifier chords.
 
 ## Proximity Fields
 

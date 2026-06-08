@@ -18,7 +18,7 @@ Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 Tracked `package.json` and `package-lock.json` now target the `1.5.x` lane. The
 current patch target is `1.5.15`, which keeps the Generator, Touch ID, routing,
 and splash fixes intact while smoothing the ambient space graphics: hidden
-meteor Easter mode, startup-only ambient shooting stars, low-frequency settled
+meteor control, startup-only ambient shooting stars, low-frequency settled
 planet-moon motion, opacity-only star twinkle, and clearer planet-moon orbit
 styling.
 
@@ -109,7 +109,7 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`1.5.15` is the current patch lane for hidden meteor Easter mode, settled
+`1.5.15` is the current patch lane for hidden meteor control, settled
 space-animation idle repair, and current release-page alignment. `1.5.10` remains
 the concise release-page and ambient-motion repair lane. `1.5.8` remains the
 Account Generator security-handoff, browser-backed OTP recovery, automatic
