@@ -41,6 +41,16 @@ const configSchema = z.object({
   VAULT_KEY: optionalHexSecret,
   HYDRA_PROXY_SECRET: optionalHexSecret,
   HYDRA_RESET_LEGACY_STORAGE: z.boolean().default(false),
+  /**
+   * Headless/boot escape hatch. When true, dashboard auth (`requireUnlocked`)
+   * is bypassed so the `/api/*` dashboard is reachable without a password —
+   * intended for always-on, start-on-boot deployments where no operator is
+   * present to unlock. The `/v1` proxy is UNAFFECTED: it still requires its
+   * master `sk-` key. DANGER off a trusted network: only enable when the
+   * server is reachable solely over loopback or a private overlay (e.g.
+   * Tailscale serve → 127.0.0.1). Default false.
+   */
+  HYDRA_DISABLE_AUTH: z.boolean().default(false),
   RATE_LIMIT_WINDOW: z.coerce.number().default(15 * 60 * 1000),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   /**
@@ -105,6 +115,7 @@ try {
     VAULT_KEY: process.env.VAULT_KEY,
     HYDRA_PROXY_SECRET: process.env.HYDRA_PROXY_SECRET,
     HYDRA_RESET_LEGACY_STORAGE: parseBoolean(process.env.HYDRA_RESET_LEGACY_STORAGE),
+    HYDRA_DISABLE_AUTH: parseBoolean(process.env.HYDRA_DISABLE_AUTH),
     RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW,
     RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX,
     PROXY_RATE_LIMIT_WINDOW: process.env.PROXY_RATE_LIMIT_WINDOW,
@@ -132,6 +143,16 @@ try {
 }
 
 export const config = parsedConfig;
+
+if (config.HYDRA_DISABLE_AUTH) {
+  // Loud, unmissable: this turns off the dashboard password. Surfaced at every
+  // boot so an always-on deployment never silently runs unguarded off-tailnet.
+  console.warn(
+    '[hydra][SECURITY] HYDRA_DISABLE_AUTH=1 — dashboard password gating is OFF. ' +
+    'Only safe behind loopback or a trusted overlay (Tailscale serve → 127.0.0.1). ' +
+    'The /v1 proxy still requires its master sk- key.',
+  );
+}
 // Rotated per FAPI call — Clerk fingerprints device strings at scale (10+ accounts same UA = risk)
 const _USER_AGENTS = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',

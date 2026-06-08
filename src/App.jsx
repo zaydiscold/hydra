@@ -809,8 +809,8 @@ export default function App() {
       return nextState;
     };
     const renderAuthPayload = (payload) => {
-      // Server wraps response: { success, data: { setup, authenticated }, timestamp }
-      const { setup, authenticated, error, needsRestart } = payload || {};
+      // Server wraps response: { success, data: { setup, authenticated, authDisabled }, timestamp }
+      const { setup, authenticated, error, needsRestart, authDisabled } = payload || {};
 
       if (needsRestart) {
         return transitionAuthState('restart', 'Hydra requires a restart to regenerate local secrets after a reset.');
@@ -820,7 +820,10 @@ export default function App() {
         return transitionAuthState('offline', 'Hydra backend is unavailable or storage is unreadable. Please restart the server.');
       }
 
-      if (authenticated) return transitionAuthState('app');
+      // authDisabled: password protection is off, so skip the login screen and
+      // open straight into the app. The backend's requireUnlocked serves these
+      // requests via the bypass identity; no token is needed.
+      if (authenticated || authDisabled) return transitionAuthState('app');
       return transitionAuthState(setup ? 'login' : 'setup');
     };
 

@@ -277,6 +277,12 @@ export const login = (password) =>
 export const logout = () => request('/auth/logout', { method: 'POST' });
 export const changePassword = (currentPassword, newPassword) =>
   request('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
+// Turn password protection off (verifies current password) / back on (creates a
+// new password — never reuses the disabled one, so you can't lock yourself out).
+export const disableAuth = (currentPassword) =>
+  request('/auth/disable', { method: 'POST', body: { currentPassword } });
+export const enableAuth = (newPassword) =>
+  request('/auth/enable', { method: 'POST', body: { newPassword }, skipAuth: true });
 export const nukeApp = (password) =>
   request('/auth/nuke', { method: 'POST', body: { password, confirm: 'NUKE_HYDRA' }, skipAuth: true });
 export const shutdownServer = () =>

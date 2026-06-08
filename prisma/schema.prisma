@@ -16,6 +16,12 @@ model User {
   username     String    @unique
   passwordHash String
   tokenVersion Int       @default(0)
+  // When true the dashboard password gate is OFF: requireUnlocked falls back to
+  // the admin identity without a login. Disabling blanks passwordHash to an
+  // unusable sentinel; re-enabling forces a brand-new password so a forgotten
+  // old one can never lock the operator out. The /v1 proxy (master sk- key) is
+  // unaffected. See server/services/auth.js disableAuth/enableAuth.
+  authDisabled Boolean   @default(false)
   accounts     Account[]
   createdAt    DateTime  @default(now())
 }

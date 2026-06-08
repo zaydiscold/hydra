@@ -40,6 +40,7 @@ test('setup status treats local password setup as complete before accounts exist
     setup: false,
     hasUser: false,
     hasAccounts: false,
+    authDisabled: false,
     needsFirstAccount: false,
     bootstrapRequired: false,
   });
@@ -51,6 +52,7 @@ test('setup status treats local password setup as complete before accounts exist
     setup: true,
     hasUser: true,
     hasAccounts: false,
+    authDisabled: false,
     needsFirstAccount: true,
     bootstrapRequired: false,
   });

@@ -22,6 +22,14 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(1, 'New password must be at least 1 character'),
 });
 
+const disableAuthSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+});
+
+const enableAuthSchema = z.object({
+  newPassword: z.string().min(1, 'New password must be at least 1 character'),
+});
+
 class AuthController extends BaseController {
   async getStatus(req, res) {
     const {
@@ -29,6 +37,7 @@ class AuthController extends BaseController {
       error,
       hasUser = false,
       hasAccounts = false,
+      authDisabled = false,
       needsFirstAccount = false,
       bootstrapRequired = false,
     } = await auth.getSetupStatus();
@@ -42,6 +51,7 @@ class AuthController extends BaseController {
       needsRestart,
       hasUser,
       hasAccounts,
+      authDisabled,
       needsFirstAccount,
       bootstrapRequired,
     });
@@ -116,6 +126,33 @@ class AuthController extends BaseController {
       await auth.changePassword(req.user.id, currentPassword, newPassword);
       clearAuthTokenCookie(res);
       return this.success(res, { success: true, message: 'Password changed. Please log in again.' });
+    } catch (err) {
+      return this.error(res, err.message, 400);
+    }
+  }
+
+  // Turn OFF password protection. Requires the current password; afterwards the
+  // dashboard opens without a login (the /v1 proxy sk- key still applies).
+  async disableProtection(req, res) {
+    try {
+      const { currentPassword } = this.validate(req.body, disableAuthSchema);
+      await auth.disableAuth(currentPassword);
+      clearAuthTokenCookie(res);
+      return this.success(res, { success: true, authDisabled: true, message: 'Password protection disabled.' });
+    } catch (err) {
+      return this.error(res, err.message, 400);
+    }
+  }
+
+  // Turn password protection back ON by creating a brand-new password (no reuse
+  // of the disabled one — prevents lockout). Reachable while disabled via the
+  // bypass identity, or while logged in.
+  async enableProtection(req, res) {
+    try {
+      const { newPassword } = this.validate(req.body, enableAuthSchema);
+      await auth.enableAuth(newPassword);
+      clearAuthTokenCookie(res);
+      return this.success(res, { success: true, authDisabled: false, message: 'Password protection enabled. Please log in.' });
     } catch (err) {
       return this.error(res, err.message, 400);
     }

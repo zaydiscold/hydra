@@ -12,6 +12,9 @@ mock.module(new URL('../services/auth.js', import.meta.url).href, {
       validateCalls.push(token);
       return token === 'valid-cookie-token' ? { id: 'user-1', username: 'admin' } : null;
     },
+    // requireUnlocked falls back to this identity when password gating is off.
+    // authDisabled:false keeps protection ON for these cookie/token tests.
+    getBypassUser: async () => ({ id: 'user-1', username: 'admin', tokenVersion: 0, authDisabled: false }),
   },
 });
 

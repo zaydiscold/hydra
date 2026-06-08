@@ -1,5 +1,6 @@
-import { validateToken } from '../services/auth.js';
+import { validateToken, getBypassUser } from '../services/auth.js';
 import { logger } from '../services/logger.js';
+import { config } from '../config.js';
 
 export const AUTH_TOKEN_COOKIE = 'hydra_token';
 const AUTH_TOKEN_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
@@ -63,10 +64,21 @@ export function clearAuthTokenCookie(res) {
 export async function requireUnlocked(req, res, next) {
   const user = await validateRequestAuth(req);
 
-  if (!user) {
-    return res.status(401).json({ error: 'Not authenticated' });
+  if (user) {
+    req.user = user;
+    return next();
   }
 
-  req.user = user;
-  next();
+  // No valid session. Fall back to the bypass admin identity when password
+  // gating has been turned off — either via the deployment env flag
+  // (HYDRA_DISABLE_AUTH, headless/always-on) or the persisted Settings toggle
+  // (User.authDisabled, interactive). A valid session above always wins. /v1
+  // proxy auth (master sk- key) is a separate gate, unaffected by either.
+  const bypass = await getBypassUser();
+  if (config.HYDRA_DISABLE_AUTH || bypass.authDisabled) {
+    req.user = bypass;
+    return next();
+  }
+
+  return res.status(401).json({ error: 'Not authenticated' });
 }

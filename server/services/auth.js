@@ -10,6 +10,11 @@ import { getDataDir } from '../lib/data-dir.js';
 const SALT_ROUNDS = 12;
 const ADMIN_USERNAME = 'admin';
 const DATA_DIR = getDataDir();
+// Written into passwordHash when the operator disables password protection. It
+// is not a bcrypt hash, so bcrypt.compare() against it always returns false —
+// no password can satisfy a disabled account. Re-enabling overwrites it with a
+// fresh hash, so a forgotten old password can never lock the operator out.
+const DISABLED_PASSWORD_SENTINEL = 'auth-disabled-no-password';
 let restartRequired = false;
 
 // IMPORTANT: The admin password is stored as a bcrypt hash (SALT_ROUNDS=12) in
@@ -42,16 +47,21 @@ function buildNukeTransaction() {
 
 export async function getSetupStatus() {
   try {
-    const [userCount, accountCount] = await Promise.all([
-      prisma.user.count(),
+    const [adminUser, accountCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { username: ADMIN_USERNAME },
+        select: { authDisabled: true },
+      }),
       prisma.account.count(),
     ]);
-    const hasUser = userCount > 0;
+    const hasUser = !!adminUser;
     const hasAccounts = accountCount > 0;
     return {
       setup: hasUser,
       hasUser,
       hasAccounts,
+      // When true the frontend skips the login screen — password gating is off.
+      authDisabled: !!adminUser?.authDisabled,
       needsFirstAccount: hasUser && !hasAccounts,
       bootstrapRequired: false,
     };
@@ -144,6 +154,56 @@ export async function changePassword(userId, currentPassword, newPassword) {
   return true;
 }
 
+/**
+ * Turn OFF dashboard password protection. Requires the current password (proves
+ * the operator owns the account), then blanks passwordHash to an unusable
+ * sentinel and flips authDisabled on. tokenVersion is bumped so any live
+ * sessions are invalidated. Only valid once a real password exists (post-setup).
+ * The /v1 proxy (master sk- key) is unaffected.
+ */
+export async function disableAuth(currentPassword) {
+  const user = await prisma.user.findUnique({ where: { username: ADMIN_USERNAME } });
+  if (!user) throw new Error('Set up a password before disabling protection');
+  if (user.authDisabled) return true; // already off — idempotent
+
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!ok) throw new Error('Current password is incorrect');
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      authDisabled: true,
+      passwordHash: DISABLED_PASSWORD_SENTINEL,
+      tokenVersion: { increment: 1 },
+    },
+  });
+  return true;
+}
+
+/**
+ * Turn password protection back ON by creating a BRAND-NEW password. There is
+ * deliberately no "reuse the old password" path — re-enabling always sets a
+ * fresh hash, so an operator who forgot the disabled password can never lock
+ * themselves out. Bumps tokenVersion to invalidate the bypass session.
+ */
+export async function enableAuth(newPassword) {
+  if (!newPassword || newPassword.length < 1) throw new Error('New password must be at least 1 character');
+
+  const user = await prisma.user.findUnique({ where: { username: ADMIN_USERNAME } });
+  if (!user) throw new Error('Complete setup before enabling protection');
+
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      authDisabled: false,
+      tokenVersion: { increment: 1 },
+    },
+  });
+  return true;
+}
+
 function generateToken(user) {
   return jwt.sign(
     {
@@ -154,6 +214,24 @@ function generateToken(user) {
     config.JWT_SECRET,
     { expiresIn: config.HYDRA_MASTER_JWT_TTL }
   );
+}
+
+/**
+ * Identity used when HYDRA_DISABLE_AUTH bypasses dashboard auth. Returns the
+ * real admin user when present (so downstream id-scoped queries still resolve),
+ * otherwise a synthetic admin identity so a headless request can proceed.
+ */
+export async function getBypassUser() {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { username: ADMIN_USERNAME },
+      select: { id: true, username: true, tokenVersion: true, authDisabled: true },
+    });
+    if (user) return user;
+  } catch (err) {
+    logger.warn(`[AUTH] getBypassUser fell back to synthetic identity: ${err.message}`);
+  }
+  return { id: 'headless-admin', username: ADMIN_USERNAME, tokenVersion: 0, authDisabled: false };
 }
 
 export async function validateToken(token) {

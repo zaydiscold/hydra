@@ -30,6 +30,11 @@ export default function Settings({ addToast }) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  // Password-protection toggle. authDisabled === null while we load the state.
+  const [authDisabled, setAuthDisabled] = useState(null);
+  const [disableCurrentPassword, setDisableCurrentPassword] = useState('');
+  const [enableNewPassword, setEnableNewPassword] = useState('');
+  const [protectionLoading, setProtectionLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [lanUrls, setLanUrls] = useState([]);
   const [copied, setCopied] = useState(false);
@@ -165,6 +170,61 @@ export default function Settings({ addToast }) {
     } finally {
       setProxySaving(false);
     }
+  }
+
+  // Load the current password-protection state once on mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.getAuthStatus();
+        const payload = res?.data ?? res ?? {};
+        if (!cancelled) setAuthDisabled(!!payload.authDisabled);
+      } catch (err) {
+        console.warn('[SETTINGS] Failed to load password-protection state:', err.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleDisableProtection(e) {
+    e.preventDefault();
+    if (!disableCurrentPassword) {
+      setErrors(prev => ({ ...prev, disablePassword: 'Current password is required' }));
+      return;
+    }
+    setErrors(prev => ({ ...prev, disablePassword: null }));
+    setProtectionLoading(true);
+    try {
+      await api.disableAuth(disableCurrentPassword);
+      setAuthDisabled(true);
+      setDisableCurrentPassword('');
+      addToast('Password protection disabled', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+      setErrors(prev => ({ ...prev, disablePassword: err.message }));
+    }
+    setProtectionLoading(false);
+  }
+
+  async function handleEnableProtection(e) {
+    e.preventDefault();
+    if (!enableNewPassword || enableNewPassword.length < 4) {
+      setErrors(prev => ({ ...prev, enablePassword: 'Minimum 4 characters' }));
+      return;
+    }
+    setErrors(prev => ({ ...prev, enablePassword: null }));
+    setProtectionLoading(true);
+    try {
+      await api.enableAuth(enableNewPassword);
+      setAuthDisabled(false);
+      setEnableNewPassword('');
+      addToast('Password protection enabled', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+      setErrors(prev => ({ ...prev, enablePassword: err.message }));
+    }
+    setProtectionLoading(false);
   }
 
   async function handleChangePassword(e) {
@@ -329,7 +389,8 @@ export default function Settings({ addToast }) {
           </SettingsActionGroup>
         </div>
 
-        {/* Password */}
+        {/* Password — hidden while protection is off (there is no password to change) */}
+        {authDisabled !== true && (
         <div className="card settings-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <LockIcon size={15} style={{ color: 'var(--accent-primary)' }} />
@@ -374,6 +435,72 @@ export default function Settings({ addToast }) {
             </p>
           </form>
         </div>
+        )}
+
+        {/* Password protection toggle */}
+        {authDisabled !== null && (
+        <div className="card settings-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <LockIcon size={15} style={{ color: authDisabled ? 'var(--text-tertiary)' : 'var(--accent-primary)' }} />
+            <span style={{ fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Password Protection</span>
+            <span style={{ marginLeft: 'auto', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', color: authDisabled ? 'var(--text-tertiary)' : 'var(--accent-primary)' }}>
+              {authDisabled ? 'OFF' : 'ON'}
+            </span>
+          </div>
+
+          {authDisabled ? (
+            <form onSubmit={handleEnableProtection} noValidate className="settings-password-form">
+              <div className="form-group-compact">
+                <input
+                  type="password"
+                  className={`form-input ${errors.enablePassword ? 'error' : ''}`}
+                  placeholder="Create a new password"
+                  value={enableNewPassword}
+                  onChange={e => {
+                    setEnableNewPassword(e.target.value);
+                    if (errors.enablePassword) setErrors(prev => ({ ...prev, enablePassword: null }));
+                  }}
+                  style={{ fontSize: '0.85rem', padding: '6px 10px' }}
+                />
+                {errors.enablePassword && <p className="field-error">{errors.enablePassword}</p>}
+              </div>
+              <SettingsActionGroup className="settings-card-footer">
+                <button type="submit" data-proximity-target className="btn btn-primary btn-sm settings-action-btn" disabled={protectionLoading}>
+                  {protectionLoading ? <><div className="spinner-sm" /> Enabling…</> : 'Enable Protection'}
+                </button>
+              </SettingsActionGroup>
+              <p style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
+                Hydra currently opens without a password. Re-enabling requires a brand-new password — there is no old one to recover, so you can never lock yourself out.
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={handleDisableProtection} noValidate className="settings-password-form">
+              <div className="form-group-compact">
+                <input
+                  type="password"
+                  className={`form-input ${errors.disablePassword ? 'error' : ''}`}
+                  placeholder="Confirm current password"
+                  value={disableCurrentPassword}
+                  onChange={e => {
+                    setDisableCurrentPassword(e.target.value);
+                    if (errors.disablePassword) setErrors(prev => ({ ...prev, disablePassword: null }));
+                  }}
+                  style={{ fontSize: '0.85rem', padding: '6px 10px' }}
+                />
+                {errors.disablePassword && <p className="field-error">{errors.disablePassword}</p>}
+              </div>
+              <SettingsActionGroup className="settings-card-footer">
+                <button type="submit" data-proximity-target className="btn btn-secondary btn-sm settings-action-btn" disabled={protectionLoading}>
+                  {protectionLoading ? <><div className="spinner-sm" /> Disabling…</> : 'Disable Protection'}
+                </button>
+              </SettingsActionGroup>
+              <p style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
+                Turns off the login prompt so Hydra opens straight in. The /v1 proxy still requires its master key. Only safe on a machine you trust.
+              </p>
+            </form>
+          )}
+        </div>
+        )}
 
       </div>
 

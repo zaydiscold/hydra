@@ -36,6 +36,13 @@ router.post('/logout', AuthController.logout.bind(AuthController));
 // Change password (requires current session)
 router.post('/change-password', requireUnlocked, AuthController.changePassword.bind(AuthController));
 
+// Disable password protection (requires unlocked session + current password)
+router.post('/disable', requireUnlocked, AuthController.disableProtection.bind(AuthController));
+
+// Re-enable password protection by creating a NEW password. Reachable while
+// protection is disabled because requireUnlocked passes via the bypass identity.
+router.post('/enable', requireUnlocked, AuthController.enableProtection.bind(AuthController));
+
 // P6 — Magic link callback (PUBLIC — Clerk redirects browser here after user clicks link)
 // GET /api/auth/magic-callback?linkId=...
 router.get('/magic-callback', async (req, res) => {
