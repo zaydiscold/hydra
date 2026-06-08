@@ -11,6 +11,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -18,12 +19,97 @@ const PRISMA_CLI = fileURLToPath(new URL('../../node_modules/prisma/build/index.
 
 const dataDir = mkdtempSync(join(tmpdir(), 'hydra-api-integration-'));
 const dbPath = join(dataDir, 'hydra.db');
+const upstreamRequests = [];
+
+function sendUpstreamJson(res, status, body, headers = {}) {
+  res.writeHead(status, {
+    'content-type': 'application/json',
+    ...headers,
+  });
+  res.end(JSON.stringify(body));
+}
+
+async function readUpstreamBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  if (chunks.length === 0) return {};
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+const upstreamServer = createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://127.0.0.1');
+
+  if (req.method === 'GET' && url.pathname === '/api/v1/models') {
+    return sendUpstreamJson(res, 200, {
+      object: 'list',
+      data: [
+        {
+          id: 'hydra/synthetic-free:free',
+          name: 'Hydra Synthetic Free',
+          context_length: 8192,
+          pricing: {
+            prompt: '0.000001',
+            completion: '0.000002',
+            request: '0',
+          },
+        },
+      ],
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/v1/chat/completions') {
+    const body = await readUpstreamBody(req);
+    const authorization = String(req.headers.authorization || '');
+    upstreamRequests.push({
+      authorization,
+      model: body?.model,
+      path: url.pathname,
+    });
+
+    if (body?.model === 'hydra/synthetic-failover' && authorization.includes('sk-or-v1-alpha')) {
+      return sendUpstreamJson(res, 429, {
+        error: {
+          message: 'Synthetic key rate limit exceeded',
+          code: 'rate_limit',
+        },
+      }, {
+        'retry-after': '1',
+      });
+    }
+
+    return sendUpstreamJson(res, 200, {
+      id: 'chatcmpl-hydra-synthetic',
+      object: 'chat.completion',
+      model: body?.model || 'hydra/synthetic-free:free',
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: 'ok' },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: {
+        prompt_tokens: 2,
+        completion_tokens: 3,
+        total_tokens: 5,
+        cost: 0.000009,
+      },
+    });
+  }
+
+  return sendUpstreamJson(res, 404, { error: { message: 'not found' } });
+});
+
+await new Promise((resolve) => upstreamServer.listen(0, '127.0.0.1', resolve));
+const upstreamAddress = upstreamServer.address();
+assert.ok(upstreamAddress && typeof upstreamAddress === 'object', 'synthetic upstream must bind to a TCP port');
 
 process.env.NODE_ENV = 'test';
 process.env.HYDRA_DATA_DIR = dataDir;
 process.env.DATABASE_URL = `file:${dbPath}`;
 process.env.JWT_SECRET = 'test-api-integration-jwt-secret-32chars';
 process.env.HYDRA_DISABLE_PROXY_RATELIMIT = '1';
+process.env.OR_BASE = `http://127.0.0.1:${upstreamAddress.port}`;
 delete process.env.LOCAL_STORAGE_KEY;
 delete process.env.VAULT_KEY;
 delete process.env.HYDRA_PROXY_SECRET;
@@ -35,7 +121,18 @@ execFileSync(process.execPath, [PRISMA_CLI, 'db', 'push', '--skip-generate'], {
 });
 
 const serverModule = await import('../index.js');
+const { prisma } = await import('../services/db.js');
 const { recordUpstreamSuccess } = await import('../services/upstream-health.js');
+const {
+  flushRequestLogBuffer,
+  stopRequestLogBuffer,
+} = await import('../services/request-log-buffer.js');
+const {
+  getMasterProxyKey,
+  saveKey,
+  updateKeyPooledStatus,
+} = await import('../services/store.js');
+const { rotationManager } = await import('../services/rotation-manager.js');
 const {
   claimPendingMagicLinkCallback,
   forgetPendingMagicLink,
@@ -58,7 +155,9 @@ before(async () => {
 });
 
 after(async () => {
+  await stopRequestLogBuffer();
   await serverModule.gracefulShutdown('electron-api-integration-test', { exit: false, timeoutMs: 1000 });
+  await new Promise((resolve, reject) => upstreamServer.close((err) => (err ? reject(err) : resolve())));
   rmSync(dataDir, { recursive: true, force: true });
 });
 
@@ -366,6 +465,148 @@ test('proxy routes reject missing Hydra proxy credentials', async () => {
 
   assert.equal(res.status, 401);
   assert.equal(json.error.code, 'invalid_api_key');
+});
+
+test('proxy actively rotates pooled keys and traffic logs preserve attempts and pricing', async () => {
+  const token = await getAuthToken();
+  const headers = {
+    'content-type': 'application/json',
+    authorization: `Bearer ${token}`,
+  };
+
+  const accountAlpha = await getJson('/api/accounts/with-credentials', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      alias: 'synthetic-alpha',
+      email: 'synthetic-alpha@example.test',
+      authMethod: 'otp',
+    }),
+  });
+  assert.equal(accountAlpha.res.status, 201);
+
+  const accountBeta = await getJson('/api/accounts/with-credentials', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      alias: 'synthetic-beta',
+      email: 'synthetic-beta@example.test',
+      authMethod: 'otp',
+    }),
+  });
+  assert.equal(accountBeta.res.status, 201);
+
+  const user = await prisma.user.findFirst();
+  assert.ok(user?.id, 'seeded user must exist before pool setup');
+
+  await saveKey(user.id, accountAlpha.json.data.id, {
+    hash: 'hash-alpha-synthetic',
+    name: 'alpha synthetic key',
+    key: 'sk-or-v1-alpha',
+    limit: null,
+    limitRemaining: 10,
+    isProvisioningKey: false,
+  });
+  await saveKey(user.id, accountBeta.json.data.id, {
+    hash: 'hash-beta-synthetic',
+    name: 'beta synthetic key',
+    key: 'sk-or-v1-beta',
+    limit: null,
+    limitRemaining: 10,
+    isProvisioningKey: false,
+  });
+  await updateKeyPooledStatus(user.id, 'hash-alpha-synthetic', true);
+  await updateKeyPooledStatus(user.id, 'hash-beta-synthetic', true);
+  await prisma.cachedModel.upsert({
+    where: { id: 'hydra/synthetic-failover' },
+    update: {
+      promptPrice: 0.000001,
+      completionPrice: 0.000002,
+      requestPrice: 0,
+    },
+    create: {
+      id: 'hydra/synthetic-failover',
+      name: 'Hydra Synthetic Failover',
+      promptPrice: 0.000001,
+      completionPrice: 0.000002,
+      requestPrice: 0,
+    },
+  });
+  await rotationManager.reload();
+
+  upstreamRequests.length = 0;
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  let proxyResponse;
+  let proxyJson;
+  try {
+    proxyResponse = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${getMasterProxyKey()}`,
+        'content-type': 'application/json',
+        'user-agent': 'curl/8.7.1 hydra-integration',
+      },
+      body: JSON.stringify({
+        model: 'hydra/synthetic-failover',
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 1,
+      }),
+    });
+    proxyJson = await proxyResponse.json();
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.equal(proxyResponse.status, 200);
+  assert.equal(proxyJson.model, 'hydra/synthetic-failover');
+  assert.equal(proxyResponse.headers.get('x-hydra-attempts'), '2');
+  assert.equal(proxyResponse.headers.get('x-hydra-rotated'), 'true');
+  assert.equal(proxyResponse.headers.get('x-hydra-key-hash'), 'hash-bet');
+  assert.deepEqual(
+    upstreamRequests.map((request) => request.authorization),
+    ['Bearer sk-or-v1-alpha', 'Bearer sk-or-v1-beta'],
+  );
+
+  await flushRequestLogBuffer();
+  const traffic = await getJson('/api/pool/traffic', { headers });
+  assert.equal(traffic.res.status, 200);
+  assert.equal(traffic.json.success, true);
+
+  const logs = traffic.json.data.logs.filter((log) => log.model === 'hydra/synthetic-failover');
+  const success = logs.find((log) => log.status === 200);
+  const rateLimited = logs.find((log) => log.status === 429);
+  assert.ok(success, 'successful rotated request must be visible in Traffic logs');
+  assert.ok(rateLimited, 'failed first attempt must be visible in Traffic logs');
+
+  assert.equal(success.keyHash, 'hash-beta-synthetic');
+  assert.equal(success.key.account.alias, 'synthetic-beta');
+  assert.equal(success.attempt, 2);
+  assert.equal(success.outcome, 'served');
+  assert.equal(success.promptTokens, 2);
+  assert.equal(success.completionTokens, 3);
+  assert.equal(success.totalCost, 0.000009);
+  assert.equal(success.costSource, 'openrouter_usage');
+  assert.equal(success.inputCost, 0.000002);
+  assert.equal(success.outputCost, 0.000006);
+  assert.equal(success.estimatedCost, 0.000008);
+  assert.equal(success.pricing.promptPerToken, 0.000001);
+  assert.equal(success.pricing.completionPerToken, 0.000002);
+
+  assert.equal(rateLimited.keyHash, 'hash-alpha-synthetic');
+  assert.equal(rateLimited.key.account.alias, 'synthetic-alpha');
+  assert.equal(rateLimited.attempt, 1);
+  assert.equal(rateLimited.outcome, 'key_rate_limited');
+  assert.equal(rateLimited.totalCost, null);
+  assert.equal(rateLimited.costSource, null);
+
+  assert.equal(traffic.json.data.routing.totalPooled, 2);
+  assert.equal(traffic.json.data.routing.activeCooldowns, 1);
+  assert.equal(traffic.json.data.routing.available, 1);
+  assert.equal(traffic.json.data.routing.maxKeyAttempts, 8);
+
+  rotationManager.cooldowns.clear();
+  rotationManager.failureCounts.clear();
 });
 
 test('embedded shutdown endpoint requires auth before confirmation token', async () => {
