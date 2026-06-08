@@ -54,10 +54,12 @@ test('Electron pins HYDRA_DATA_DIR before server import', () => {
   assert.doesNotMatch(envSrc, /statfsSync\(userData\);[\s\S]{0,260}catch \{\s*\/\/ statfsSync may not be available everywhere/);
   assert.doesNotMatch(envSrc, /copyFileSync\(dbPath, dbPath \+ '\.corrupt'\); \} catch \{ \/\* best effort \*\/ \}/);
   assert.doesNotMatch(envSrc, /unlinkSync\(dbPath\); \} catch \{ \/\* best effort \*\/ \}/);
+  assert.match(mainSrc, /setupEnvironment\(app\)/);
   assert.match(mainSrc, /await ensurePackagedRuntimeState\(\)/);
   assert.ok(
-    mainSrc.indexOf('await ensurePackagedRuntimeState()') < mainSrc.indexOf("import('../server/index.js')"),
-    'Electron must set runtime env before importing the server',
+    mainSrc.indexOf('setupEnvironment(app)') < mainSrc.indexOf("import('../server/index.js')") &&
+      mainSrc.indexOf('await ensurePackagedRuntimeState()') < mainSrc.indexOf("import('../server/index.js')"),
+    'Electron must set runtime env and packaged state before importing the server',
   );
 });
 
