@@ -674,8 +674,8 @@ export default function App() {
   const [authError, setAuthError] = useState(null);
   const [ambientMotion, setAmbientMotion] = useState(true);
   const [planetMoonStep, setPlanetMoonStep] = useState(0);
-  const [easterMode, setEasterMode] = useState(false);
-  const [meteorVolley, setMeteorVolley] = useState({ active: false, variant: 'a', count: 0 });
+  const [secretMeteorMode, setSecretMeteorMode] = useState(false);
+  const [meteorVolley, setMeteorVolley] = useState({ active: false, variant: 'a', count: 0, intensity: 0 });
   const [uiDensity, setUiDensity] = useState(getStoredUiDensity);
   const [toasts, setToasts] = useState([]);
   const [shutdownConfirm, setShutdownConfirm] = useState(false);
@@ -685,7 +685,9 @@ export default function App() {
   const authStateRef = useRef(authState);
   const authBootstrapRef = useRef(0);
   const upstreamHealthInFlightRef = useRef(false);
-  const easterClickCountRef = useRef(0);
+  const secretMeteorClickCountRef = useRef(0);
+  const meteorVolleyComboRef = useRef(0);
+  const meteorVolleyLastAtRef = useRef(0);
   const meteorVolleyTimerRef = useRef(null);
   const { setOwnedTimeout } = useOwnedTimeouts('App.toasts');
   const navigate = useNavigate();
@@ -752,6 +754,13 @@ export default function App() {
   }, []);
 
   const triggerMeteorVolley = useCallback(() => {
+    const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    const combo = now - meteorVolleyLastAtRef.current < 620
+      ? Math.min(4, meteorVolleyComboRef.current + 1)
+      : 1;
+    meteorVolleyLastAtRef.current = now;
+    meteorVolleyComboRef.current = combo;
+
     if (meteorVolleyTimerRef.current) {
       clearTrackedTimeout(meteorVolleyTimerRef.current);
       meteorVolleyTimerRef.current = null;
@@ -761,31 +770,33 @@ export default function App() {
       active: true,
       variant: prev.variant === 'a' ? 'b' : 'a',
       count: prev.count + 1,
+      intensity: combo,
     }));
 
-    meteorVolleyTimerRef.current = setTrackedTimeout('App.easterMeteorVolley', () => {
+    meteorVolleyTimerRef.current = setTrackedTimeout('App.secretMeteorVolley', () => {
       meteorVolleyTimerRef.current = null;
-      setMeteorVolley((prev) => ({ ...prev, active: false }));
-    }, 1750);
+      meteorVolleyComboRef.current = 0;
+      setMeteorVolley((prev) => ({ ...prev, active: false, intensity: 0 }));
+    }, combo >= 3 ? 1450 : 1750);
   }, []);
 
-  const handleEasterTriggerClick = useCallback(() => {
-    if (easterMode) {
+  const handleSecretMeteorUnlockClick = useCallback(() => {
+    if (secretMeteorMode) {
       triggerMeteorVolley();
       return;
     }
 
-    easterClickCountRef.current += 1;
-    const remaining = 5 - easterClickCountRef.current;
+    secretMeteorClickCountRef.current += 1;
+    const remaining = 5 - secretMeteorClickCountRef.current;
 
     if (remaining <= 0) {
-      setEasterMode(true);
-      addToast('Easter egg mode armed. Press P for meteor volleys.', 'success', { durationMs: 6000 });
+      setSecretMeteorMode(true);
+      addToast('Secret meteor control unlocked. Press P to call strikes.', 'success', { durationMs: 6000 });
       triggerMeteorVolley();
     } else if (remaining <= 2) {
       addToast(`${remaining} more planet tap${remaining === 1 ? '' : 's'}.`, 'info', { durationMs: 1500 });
     }
-  }, [addToast, easterMode, triggerMeteorVolley]);
+  }, [addToast, secretMeteorMode, triggerMeteorVolley]);
 
   const checkAuth = useCallback(async () => {
     const bootstrapId = ++authBootstrapRef.current;
@@ -896,7 +907,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!easterMode) return undefined;
+    if (!secretMeteorMode) return undefined;
 
     const handleMeteorHotkey = (event) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -912,7 +923,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleMeteorHotkey);
     return () => window.removeEventListener('keydown', handleMeteorHotkey);
-  }, [easterMode, triggerMeteorVolley]);
+  }, [secretMeteorMode, triggerMeteorVolley]);
 
   const refreshUpstreamHealth = useCallback(async (signal) => {
     if (authState !== 'app' || authStateRef.current !== 'app' || upstreamHealthInFlightRef.current) return;
@@ -943,7 +954,7 @@ export default function App() {
   }, [authState, refreshUpstreamHealth]);
 
   useVisibleRecurringTask('App.upstreamHealth', refreshUpstreamHealth, 30_000, { enabled: authState === 'app' });
-  useVisibleRecurringTask('App.planetMoonStep', advancePlanetMoons, 2800, { enabled: !ambientMotion });
+  useVisibleRecurringTask('App.planetMoonStep', advancePlanetMoons, 10800, { enabled: !ambientMotion });
 
   // ── Listen for main-process navigation (e.g. Cmd+, → Preferences) ──
   // onNavigate returns an unsubscribe — without calling it on cleanup, every
@@ -1131,7 +1142,7 @@ export default function App() {
     <ErrorBoundary>
       <div
         ref={appShellRef}
-        className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}${easterMode ? ' app-shell--easter-mode' : ''}${meteorVolley.active ? ` app-shell--meteor-volley app-shell--meteor-volley-${meteorVolley.variant}` : ''}`}
+        className={`app-shell app-shell--density-${uiDensity}${ambientMotion ? ' app-shell--ambient-motion' : ' app-shell--motion-settled'}${secretMeteorMode ? ' app-shell--secret-meteor-mode' : ''}${meteorVolley.active ? ` app-shell--meteor-volley app-shell--meteor-volley-${meteorVolley.variant} app-shell--meteor-volley-intensity-${meteorVolley.intensity}` : ''}`}
       >
         <AppChrome />
         <AppVersionStamp />
@@ -1139,7 +1150,7 @@ export default function App() {
         {/* Brutalist Space Background Assets (Now global) */}
         <div className="starfield" />
         <div className="nebula-glow" />
-        <div className="meteor-container">
+        <div className="meteor-container" key={meteorVolley.count}>
           <div className="meteor" />
           <div className="meteor" />
           <div className="meteor" />
@@ -1147,7 +1158,19 @@ export default function App() {
           <div className="meteor" />
           <div className="meteor" />
         </div>
-        <button type="button" className="planet planet-1" style={planetMoonStyle} onClick={handleEasterTriggerClick} aria-label="Decorative planet">
+        {secretMeteorMode && (
+          <button
+            type="button"
+            className="secret-meteor-control"
+            onClick={triggerMeteorVolley}
+            title="Meteor volley (P)"
+            aria-label="Launch meteor volley"
+          >
+            <span>METEOR</span>
+            <kbd>P</kbd>
+          </button>
+        )}
+        <button type="button" className="planet planet-1" style={planetMoonStyle} onClick={handleSecretMeteorUnlockClick} aria-label="Decorative planet">
           <span className="planet-moon-orbit planet-moon-orbit--primary" aria-hidden="true"><span className="planet-moon planet-moon--primary" /></span>
           <span className="planet-moon-orbit planet-moon-orbit--inner" aria-hidden="true"><span className="planet-moon planet-moon--ember" /></span>
           <span className="planet-moon-orbit planet-moon-orbit--outer" aria-hidden="true"><span className="planet-moon planet-moon--ice" /></span>
@@ -1180,7 +1203,7 @@ export default function App() {
           >
             <button type="button" className="sidebar-logo"
               onClick={() => {
-                handleEasterTriggerClick();
+                handleSecretMeteorUnlockClick();
                 navigate('/');
               }}
               title="Go to Dashboard"
