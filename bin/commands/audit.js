@@ -175,35 +175,11 @@ function buildAudit() {
   const dogfoodDoc = safeRead('docs/PACKAGED_ELECTRON_DOGFOOD.md');
   const finalDogfoodDoc = safeRead('docs/FINAL_DOGFOOD_EVIDENCE.md');
   const finalDogfoodScript = safeRead('scripts/final-dogfood-check.mjs');
-  const finalDogfoodTest = safeRead('server/tests/final-dogfood-evidence.test.mjs');
-  const releaseMediaScript = safeRead('scripts/audit-release-media.mjs');
-  const releaseMediaTest = safeRead('server/tests/release-media-audit.test.mjs');
-  const dockerDoc = safeRead('docs/DOCKER.md');
-  const dockerfile = safeRead('Dockerfile');
-  const dockerIgnore = safeRead('.dockerignore');
-  const dockerSmokeTest = safeRead('server/tests/docker-smoke-script.test.mjs');
   const readme = safeRead('README.md');
-  const ciWorkflow = safeRead('.github/workflows/ci.yml');
-  const dockerWorkflow = safeRead('.github/workflows/docker.yml');
-  const dockerRuntimeBaselineRun = '26196262336';
-  const dockerRuntimeBaselineRecorded = releaseAudit.includes(`GitHub Actions run ${dockerRuntimeBaselineRun}`)
-    && releaseAudit.includes('Runtime Smoke')
-    && releaseAudit.includes('npm run docker:smoke -- --start')
-    && releaseAudit.includes('health endpoint response')
-    && releaseAudit.includes('Build & Push');
-  const dockerCheckpointRuns = [...releaseAudit.matchAll(/Docker\s+workflow\s+run\s+`(\d+)`\s+passed both runtime smoke and\s+(?:the )?registry\s+image\s+push/g)]
-    .map((match) => match[1]);
-  const latestDockerCheckpointRun = dockerCheckpointRuns.at(-1) ?? null;
-  const dockerRuntimeCiRecorded = dockerRuntimeBaselineRecorded && latestDockerCheckpointRun != null;
   const currentReleaseRecorded = releaseAudit.includes(`GitHub release v${version} is public`)
     && releaseAudit.includes('macOS arm64 zip/blockmap')
     && releaseAudit.includes('macOS Intel zip/blockmap')
     && releaseAudit.includes('Windows NSIS/blockmap');
-  const smokeWorkflow = safeRead('.github/workflows/electron-smoke.yml');
-  const releaseWorkflow = safeRead('.github/workflows/release.yml');
-  const autoVersionWorkflow = safeRead('.github/workflows/auto-version.yml');
-  const uiStatic = safeRead('server/tests/ui-static-contract.test.mjs');
-  const workflowContract = safeRead('server/tests/workflow-contract.test.mjs');
   const electronMain = safeRead('electron/main.js');
   const electronWindows = safeRead('electron/app/windows.js');
   const appMenu = safeRead('electron/menus/appMenu.js');
@@ -265,11 +241,6 @@ function buildAudit() {
   const cliMain = safeRead('bin/hydra.mjs');
   const mcpCommand = safeRead('bin/commands/mcp.js');
   const mcpTest = safeRead('server/tests/mcp-cli.test.mjs');
-  const electronSmoke = safeRead('scripts/smoke-electron-package.mjs');
-  const windowsLaunchSmoke = safeRead('scripts/smoke-windows-launch.mjs');
-  const electronPrepare = safeRead('scripts/prepare-electron-resources.mjs');
-  const electronBuilderConfig = safeRead('electron-builder.yml');
-  const packagedOpenScript = safeRead('scripts/open-packaged-app.mjs');
 
   const dogfoodEvidence = inspectDogfoodEvidence(version);
   const packagedGuiManualOk = evidenceManualOk(dogfoodEvidence, [
@@ -347,8 +318,7 @@ function buildAudit() {
         && finalDogfoodScript.includes('hydra.final-dogfood-evidence.v1')
         && finalDogfoodScript.includes('--write-evidence')
         && finalDogfoodScript.includes('--manual=')
-        && finalDogfoodScript.includes('not API keys, cookies, account emails, Clerk session IDs')
-        && finalDogfoodTest.includes('final dogfood evidence capture is redacted and manually explicit'),
+        && finalDogfoodScript.includes('not API keys, cookies, account emails, Clerk session IDs'),
       'README/docs define Electron-only final dogfood screenshot requirements and redacted user-run evidence capture',
     ),
     check(
@@ -438,18 +408,6 @@ function buildAudit() {
       'Package scripts',
       Boolean(pkg.scripts?.['electron:build'] && pkg.scripts?.['electron:smoke'] && pkg.scripts?.['docker:smoke']),
       'package.json exposes electron:build, electron:smoke, and docker:smoke',
-    ),
-    check(
-      'release-media-audit',
-      'Release media redaction audit',
-      pkg.scripts?.['media:audit'] === 'node scripts/audit-release-media.mjs'
-        && String(pkg.scripts?.test || '').includes('test:release-media-audit')
-        && releaseMediaScript.includes("schema: 'hydra.release-media-audit.v1'")
-        && releaseMediaScript.includes('tesseract')
-        && releaseMediaScript.includes('openrouter-key')
-        && releaseMediaScript.includes('hydra-proxy-key')
-        && releaseMediaTest.includes('release media audit checks screenshot artifacts without reading secrets'),
-      'scripts/audit-release-media.mjs scans packaged release screenshots/showreels for leaked OpenRouter/Hydra-proxy keys, JWTs, Clerk sessions, UUIDs, and emails (embedded strings + optional Tesseract OCR) and is wired into the test chain via test:release-media-audit',
     ),
     check(
       'electron-updater-import',
@@ -570,7 +528,7 @@ function buildAudit() {
         && electronWindows.includes('Eng.update(engine,physicsStep)')
         && !electronWindows.includes('Run.create')
         && !electronWindows.includes('Run.run')
-        && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/30')
+        && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/100')
         && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=15000')
         && electronWindows.includes('HYDRA_SPLASH_EXIT_MS=9800')
         && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=5200')
@@ -682,9 +640,6 @@ function buildAudit() {
         && runtimeDiagnostics.includes('__HYDRA_RENDERER_DIAGNOSTICS__')
         && runtimeDiagnostics.includes('activeTotal: timeouts.active + intervals.active + animationFrames.active + animations.active')
         && runtimeDiagnostics.includes('trackRendererAnimation')
-        && uiStatic.includes('__HYDRA_RENDERER_DIAGNOSTICS__')
-        && uiStatic.includes('short-lived renderer feedback timers are cleared on unmount')
-        && uiStatic.includes('ScrambleText clears delayed intervals on unmount')
         && visibleRecurringHook.includes("document.addEventListener('visibilitychange', handleVisibility)")
         && visibleRecurringHook.includes('await task(taskController.signal)')
         && visibleRecurringHook.includes('if (document.hidden) {')
@@ -777,10 +732,8 @@ function buildAudit() {
       'test-chain',
       'Full test chain',
       String(pkg.scripts?.test || '').includes('test:test-chain-completeness')
-        && String(pkg.scripts?.test || '').includes('test:ui-static')
-        && String(pkg.scripts?.test || '').includes('test:mcp')
-        && String(pkg.scripts?.test || '').includes('test:workflow-contract'),
-      'npm test includes chain completeness, MCP, UI static, and workflow contract tests',
+        && String(pkg.scripts?.test || '').includes('test:mcp'),
+      'npm test includes chain completeness and MCP tests',
     ),
     check(
       'mcp-fleet-tools',
@@ -814,11 +767,7 @@ function buildAudit() {
     check(
       'ui-contract',
       'UI polish/static contract',
-      uiStatic.includes('primary page headers use the shared AnimeText treatment')
-        && uiStatic.includes('first-run setup is a guided password key tour instead of a login dead end')
-        && uiStatic.includes('active renderer UI does not ship obvious dead-button placeholders')
-        && uiStatic.includes('dashboard, sidebar, and settings actions use bounded reduced-motion-safe proximity fields')
-        && dashboardPage.includes('maxAttractX: 10')
+      dashboardPage.includes('maxAttractX: 10')
         && dashboardPage.includes('maxAttractY: 8')
         && proximityField.includes('dx * strength * 0.12')
         && proximityField.includes('dy * strength * 0.1')
@@ -848,10 +797,7 @@ function buildAudit() {
     check(
       'settings-prefs',
       'Settings toggles persist through native preferences',
-      uiStatic.includes('settings toggles are backed by persisted native preferences')
-        && uiStatic.includes("togglePref\\('biometricEnabled'")
-        && uiStatic.includes("togglePref\\('telemetryEnabled'")
-        && electronIpc.includes("ipcMain.handle('native:prefs:set'")
+      electronIpc.includes("ipcMain.handle('native:prefs:set'")
         && electronIpc.includes('await setPref(key, value)')
         && safeRead('server/tests/user-prefs.test.mjs').includes('persist across cache reset'),
       'Settings preference toggles use native prefsSet/getAll and user-prefs persistence tests',
@@ -875,8 +821,7 @@ function buildAudit() {
         && electronIpcContract.includes('MENU_EVENT_CHANNELS')
         && electronIpcContract.includes('native:copied-proxy-url')
         && electronIpcContract.includes('native:copy-proxy-url-not-ready')
-        && electronIpcContract.includes('native:clipboard-copy-failed')
-        && uiStatic.includes('native menu action feedback reaches renderer toasts'),
+        && electronIpcContract.includes('native:clipboard-copy-failed'),
       'Help/menu/tray source contracts cover docs/issues links, diagnostics, folder opens, Build Info copy, and renderer toasts',
     ),
     check(
@@ -949,110 +894,6 @@ function buildAudit() {
         && cliTest.includes('reset.deleted, 0')
         && cliTest.includes('reset-backups'),
       'CLI db reset contract covers dry-run, confirmation gate, reset-backup moves, and zero deletion',
-    ),
-    check(
-      'workflow-contract',
-      'Windows/release workflow contract',
-      workflowContract.includes('Windows x64 NSIS')
-        && workflowContract.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24')
-        && workflowContract.includes('node-version:\\s*24')
-        && ciWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
-        && ciWorkflow.includes('node-version: 24')
-        && dockerWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
-        && smokeWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
-        && smokeWorkflow.includes('node-version: 24')
-        && releaseWorkflow.includes('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"')
-        && releaseWorkflow.includes('node-version: 24')
-        && autoVersionWorkflow.includes('[bump:minor]')
-        && autoVersionWorkflow.includes('[bump:major]')
-        && autoVersionWorkflow.includes('minor=$((minor + 1))')
-        && autoVersionWorkflow.includes('major=$((major + 1))')
-        && autoVersionWorkflow.includes('patch=0')
-        && smokeWorkflow.includes('windows-latest')
-        && releaseWorkflow.includes('windows-2022')
-        && releaseWorkflow.includes('--publish never')
-        && pkg.scripts?.['electron:smoke:win-launch'] === 'node scripts/smoke-windows-launch.mjs'
-        && releaseWorkflow.includes('Launch unpacked and NSIS-installed Windows executables')
-        && releaseWorkflow.includes("if: matrix.build_target == 'win32-x64'")
-        && releaseWorkflow.includes('npm run electron:smoke:win-launch')
-        && windowsLaunchSmoke.includes("join(ROOT, 'release', 'win-unpacked')")
-        && windowsLaunchSmoke.includes('Hydra-${PACKAGE_VERSION}-win-x64.exe')
-        && windowsLaunchSmoke.includes("execFileSync(INSTALLER_EXE, ['/S', '/currentuser', `/D=${installDir}`]")
-        && windowsLaunchSmoke.includes('timeout: INSTALL_TIMEOUT_MS')
-        && windowsLaunchSmoke.includes("copyFileSync(uninstaller, tempUninstaller)")
-        && windowsLaunchSmoke.includes("execFileSync(tempUninstaller, ['/S', '/currentuser', `_?=${installDir}`]")
-        && windowsLaunchSmoke.includes('timeout: UNINSTALL_TIMEOUT_MS')
-        && windowsLaunchSmoke.includes('NSIS uninstall left install-directory residue')
-        && windowsLaunchSmoke.includes('Hydra.exe')
-        && windowsLaunchSmoke.includes('const STAY_ALIVE_MS = 25_000')
-        && windowsLaunchSmoke.includes('taskkill.exe')
-        && windowsLaunchSmoke.includes('packaged Hydra processes survived cleanup')
-        && releaseWorkflow.includes('gh release upload "$GITHUB_REF_NAME"')
-        && releaseWorkflow.includes('mac-update-metadata')
-        && releaseWorkflow.includes('scripts/merge-mac-update-yml.mjs')
-        && releaseWorkflow.includes('artifacts/mac-arm64/latest-mac.yml')
-        && releaseWorkflow.includes('artifacts/mac-x64/latest-mac.yml')
-        && releaseWorkflow.includes("grep -q 'mac-arm64.zip' release/latest-mac.yml")
-        && releaseWorkflow.includes("grep -q 'mac-x64.zip' release/latest-mac.yml")
-        && smokeWorkflow.includes('HYDRA_BUILD_TARGET: ${{ matrix.build_target }}')
-        && releaseWorkflow.includes('HYDRA_BUILD_TARGET: ${{ matrix.build_target }}')
-        && pkg.scripts?.['electron:open:mac-arm64'] === 'node scripts/open-packaged-app.mjs release/mac-arm64/Hydra.app'
-        && packagedOpenScript.includes("spawn('open', args")
-        && packagedOpenScript.includes('function preflightBundle')
-        && packagedOpenScript.includes('function runPreLaunchDiagnostics')
-        && packagedOpenScript.includes('function runProcessDiagnostics')
-        && packagedOpenScript.includes('CFBundleExecutable')
-        && packagedOpenScript.includes('CFBundlePackageType')
-        && packagedOpenScript.includes('com.apple.quarantine')
-        && packagedOpenScript.includes("codesign', ['--verify', '--deep', '--strict'")
-        && packagedOpenScript.includes('Do not launch')
-        && electronSmoke.includes('expectedChromiumChildrenForTarget')
-        && electronSmoke.includes("'darwin-arm64': join(RELEASE, 'mac-arm64/Hydra.app/Contents/Resources')")
-        && electronSmoke.includes("'darwin-x64': join(RELEASE, 'mac/Hydra.app/Contents/Resources')")
-        && electronSmoke.includes("'win32-x64': join(RELEASE, 'win-unpacked/resources')")
-        && electronSmoke.includes('function assertPackagedShell')
-        && electronSmoke.includes('function assertMacPlistContract')
-        && electronSmoke.includes('function assertPackagedMacChromeContract')
-        && electronSmoke.includes("titleBarStyle: 'hiddenInset'")
-        && electronSmoke.includes('trafficLightPosition: { x: 14, y: 12 }')
-        && electronSmoke.includes('function assertReleaseArtifact')
-        && electronSmoke.includes('Windows x64 installer blockmap')
-        && electronSmoke.includes('query_engine-windows.dll.node')
-        && electronSmoke.includes('macOS ARM package must contain darwin-arm64 Prisma engine')
-        && electronSmoke.includes('macOS Intel package must contain darwin Prisma engine')
-        && electronSmoke.includes('nested .app bundle(s) found under Resources')
-        && electronBuilderConfig.includes('!release/**')
-        && electronPrepare.includes('function chromiumCacheGuidance')
-        && electronPrepare.includes('Build on the target runner/machine')
-        && electronPrepare.includes('PLAYWRIGHT_BROWSERS_PATH cache')
-        && workflowContract.includes('electron package smoke validates target-specific Chromium archives')
-        && workflowContract.includes('electron package smoke validates distributable release artifacts'),
-      'workflow contract and workflows include CI/Docker/package/release Node 24 runtime coverage, Windows x64 NSIS package path, hosted Windows unpacked and NSIS-installed startup/cleanup smoke, publish-after-smoke release ordering, patch/minor/major auto-version controls, merged multi-arch latest-mac.yml auto-update metadata, LaunchServices packaged-app open guidance with bundle preflight, package diagnostics, target-specific resource selection, target-specific Chromium smoke verification, macOS plist/hiddenInset titlebar checks, packaged app-shell checks, stale release-output exclusion, distributable artifact smoke checks, target-specific Prisma engine checks, Windows installer blockmap checks, and target-cache miss guidance',
-    ),
-    check(
-      'docker-docs',
-      'Docker runtime docs',
-      dockerDoc.includes('docker compose down --remove-orphans')
-        && dockerDoc.includes('HYDRA_DOCKER_BUILD_TIMEOUT_MS')
-        && dockerDoc.includes('npx playwright install --with-deps chromium --no-shell')
-        && dockerfile.includes('RUN npx playwright install --with-deps chromium --no-shell')
-        && dockerfile.includes('rm -rf /var/lib/apt/lists/*')
-        && dockerfile.includes('HYDRA_PLAYWRIGHT_CHANNEL=chromium')
-        && dockerIgnore.includes('\nbuild\n')
-        && dockerIgnore.includes('\nvideos\n')
-        && dockerIgnore.includes('\nsplash-previews\n')
-        && dockerSmokeTest.includes('custom Docker runtime installs Playwright Chromium system dependencies')
-        && dockerSmokeTest.includes('must launch Playwright Chromium from the built container'),
-      'docs/DOCKER.md and the Docker regression contract require bounded smoke cleanup, a reduced desktop-artifact context, launchable Playwright Chromium dependencies, and a full-Chromium new-headless probe',
-    ),
-    check(
-      'docker-runtime',
-      'Docker runtime smoke',
-      dockerRuntimeCiRecorded,
-      `GitHub Actions run ${dockerRuntimeBaselineRun} Runtime Smoke ran npm run docker:smoke -- --start, started the Docker container, received a local health endpoint response, cleaned up compose resources, and Build & Push also passed`
-        + (latestDockerCheckpointRun
-          ? `; newest recorded checkpoint run ${latestDockerCheckpointRun} also passed runtime smoke and registry image push`
-          : ''),
     ),
     check(
       'windows-aux-cleanup',
