@@ -15,12 +15,15 @@ attempt telemetry, bounded proxy failover, real Command Grid/List/Map modes,
 desktop density, stronger proximity navigation, Pool Manager ergonomics, Bulk
 Import copy/log persistence, Touch ID defaults, and ambient graphics polish.
 
-Tracked `package.json` and `package-lock.json` now target the `1.5.x` lane. The
-current patch target is `1.5.15`, which keeps the Generator, Touch ID, routing,
-and splash fixes intact while smoothing the ambient space graphics: hidden
-meteor control, startup-only ambient shooting stars, low-frequency settled
-planet-moon motion, opacity-only star twinkle, and clearer planet-moon orbit
-styling.
+Tracked `package.json` and `package-lock.json` now target the `1.6.x` lane. The
+current release is `1.6.0`, a minor that adds splash hold-to-skip (hold Spacebar
+or the Skip pill for 3s) and a unified disable-auth feature — the
+`HYDRA_DISABLE_AUTH` env var for headless/always-on servers plus a lockout-safe
+Settings toggle (disabling blanks the password; re-enabling forces a new one).
+It builds on `1.5.15`, which keeps the Generator, Touch ID, routing, and splash
+fixes intact while smoothing the ambient space graphics: hidden meteor control,
+startup-only ambient shooting stars, low-frequency settled planet-moon motion,
+opacity-only star twinkle, and clearer planet-moon orbit styling.
 
 The public `v1.4.2` desktop updater matrix contains macOS arm64, macOS Intel,
 Windows x64 NSIS, Linux x64 AppImage, Windows updater metadata, Linux updater
@@ -109,8 +112,10 @@ GitHub release is still `v1.0.7` failure.
 
 ## Current Performance Release Follow-Up
 
-`1.5.15` is the current patch lane for hidden meteor control, settled
-space-animation idle repair, and current release-page alignment. `1.5.10` remains
+`1.6.0` is the current minor lane: splash hold-to-skip and unified disable-auth
+(env var + lockout-safe Settings toggle). `1.5.15` remains the patch lane for
+hidden meteor control, settled space-animation idle repair, and release-page
+alignment. `1.5.10` remains
 the concise release-page and ambient-motion repair lane. `1.5.8` remains the
 Account Generator security-handoff, browser-backed OTP recovery, automatic
 saved-token Touch ID prompt, and tightened splash baseline. `1.5.7` remains the
