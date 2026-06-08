@@ -176,6 +176,8 @@ function buildAudit() {
   const finalDogfoodDoc = safeRead('docs/FINAL_DOGFOOD_EVIDENCE.md');
   const finalDogfoodScript = safeRead('scripts/final-dogfood-check.mjs');
   const finalDogfoodTest = safeRead('server/tests/final-dogfood-evidence.test.mjs');
+  const releaseMediaScript = safeRead('scripts/audit-release-media.mjs');
+  const releaseMediaTest = safeRead('server/tests/release-media-audit.test.mjs');
   const dockerDoc = safeRead('docs/DOCKER.md');
   const dockerfile = safeRead('Dockerfile');
   const dockerIgnore = safeRead('.dockerignore');
@@ -436,6 +438,18 @@ function buildAudit() {
       'Package scripts',
       Boolean(pkg.scripts?.['electron:build'] && pkg.scripts?.['electron:smoke'] && pkg.scripts?.['docker:smoke']),
       'package.json exposes electron:build, electron:smoke, and docker:smoke',
+    ),
+    check(
+      'release-media-audit',
+      'Release media redaction audit',
+      pkg.scripts?.['media:audit'] === 'node scripts/audit-release-media.mjs'
+        && String(pkg.scripts?.test || '').includes('test:release-media-audit')
+        && releaseMediaScript.includes("schema: 'hydra.release-media-audit.v1'")
+        && releaseMediaScript.includes('tesseract')
+        && releaseMediaScript.includes('openrouter-key')
+        && releaseMediaScript.includes('hydra-proxy-key')
+        && releaseMediaTest.includes('release media audit checks screenshot artifacts without reading secrets'),
+      'scripts/audit-release-media.mjs scans packaged release screenshots/showreels for leaked OpenRouter/Hydra-proxy keys, JWTs, Clerk sessions, UUIDs, and emails (embedded strings + optional Tesseract OCR) and is wired into the test chain via test:release-media-audit',
     ),
     check(
       'electron-updater-import',
