@@ -31,15 +31,17 @@ function fsyncDataDirBestEffort() {
     fsyncSync(fd);
   } catch (error) {
     // Directory fsync is not consistently supported across platforms and
-    // filesystems. The file itself is still fsynced; directory fsync is a
-    // best-effort durability upgrade for POSIX filesystems.
-    logger.warn(`[SECRETS] Directory fsync skipped for ${DATA_DIR}: ${error?.message || error}`);
+    // filesystems (e.g. EPERM on Windows). The file itself is still fsynced;
+    // directory fsync is a best-effort durability upgrade for POSIX filesystems,
+    // so a failure here is expected on Windows and not warn-worthy (it spammed
+    // a warning on every secrets write).
+    logger.debug(`[SECRETS] Directory fsync skipped for ${DATA_DIR}: ${error?.message || error}`);
   } finally {
     if (fd !== null) {
       try {
         closeSync(fd);
       } catch (error) {
-        logger.warn(`[SECRETS] Directory fsync handle close failed for ${DATA_DIR}: ${error?.message || error}`);
+        logger.debug(`[SECRETS] Directory fsync handle close failed for ${DATA_DIR}: ${error?.message || error}`);
       }
     }
   }
