@@ -19,6 +19,11 @@ const state = {
   // activate / second-instance / tray-respawn handlers so they don't race-spawn
   // main while the splash is still up. Cleared once main is shown.
   bootingSplash: true,
+  // Resolves the moment the user completes a hold-to-skip on the splash. The
+  // SPLASH_MIN_VISIBLE_MS wait in main.js races this promise so a full 3s hold
+  // short-circuits the remaining splash lifetime and reveals main immediately.
+  // createSplashWindow installs the resolver; the wait clears it after use.
+  splashSkipResolve: null,
 };
 export const trackedChildren = new Set();
 
@@ -35,6 +40,7 @@ export const getForceQuit = () => get('forceQuit');
 export const getClosePromptPending = () => get('closePromptPending');
 export const getShuttingDown = () => get('shuttingDown');
 export const getBootingSplash = () => get('bootingSplash');
+export const getSplashSkipResolve = () => get('splashSkipResolve');
 
 export const setMainWindow = set('mainWindow');
 export const setSplashWindow = set('splashWindow');
@@ -46,3 +52,4 @@ export const setForceQuit = set('forceQuit');
 export const setClosePromptPending = set('closePromptPending');
 export const setShuttingDown = set('shuttingDown');
 export const setBootingSplash = set('bootingSplash');
+export const setSplashSkipResolve = set('splashSkipResolve');

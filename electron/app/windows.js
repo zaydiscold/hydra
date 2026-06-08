@@ -4,7 +4,7 @@
  * Splash: clean brand grid with model names, subtle animation.
  * Main window: navigation guards + security options.
  */
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { isDev, ICON_PATH, isAllowedLocalUiUrl } from './env.js';
 import {
   getMainWindow, getWindowURL, getForceQuit, getShuttingDown,
-  setSplashWindow, setMainWindow,
+  setSplashWindow, setMainWindow, getSplashSkipResolve,
 } from './state.js';
 import { openExternalUrl } from './windowActions.js';
 
@@ -77,7 +77,75 @@ export function createSplashWindow() {
   });
   // Make the window transparent to mouse clicks — the user can interact with
   // whatever's behind the splash. The splash purely visual, not interactive.
+  // The lone exception is the hold-to-skip pill, which momentarily re-enables
+  // mouse events for itself via splash:set-interactive (handled below) so a
+  // press can land without the splash ever taking OS focus.
   win.setIgnoreMouseEvents(true);
+
+  // ─── HOLD-TO-SKIP WIRING (main side) ──────────────────────────────────────
+  //
+  // The splash is intentionally focusable:false on macOS (it must NEVER steal
+  // OS focus from whatever the user is doing on boot), so its renderer never
+  // receives key events directly. before-input-event on the splash webContents
+  // DOES fire for an unfocused window and delivers BOTH keyDown and keyUp, so
+  // we use it to forward Spacebar press/release state into the splash document.
+  // The renderer owns the actual 3s ring-fill RAF loop (see
+  // __HYDRA_SPLASH_HOLD__); we only translate keyboard state to a boolean here.
+  const forwardSpaceHold = (holding) => {
+    if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+    win.webContents
+      .executeJavaScript(
+        `window.__HYDRA_SPLASH_HOLD__ && window.__HYDRA_SPLASH_HOLD__(${holding ? 'true' : 'false'})`,
+        true,
+      )
+      .catch((err) => {
+        console.warn(`[electron] splash hold forward failed: ${err?.message || err}`);
+      });
+  };
+  win.webContents.on('before-input-event', (_event, input) => {
+    // input.code is layout-independent ("Space"); input.key is " ". Match
+    // either so the mechanic works regardless of keyboard layout. Ignore
+    // auto-repeat keyDowns — the renderer's hold state is already latched.
+    const isSpace = input.code === 'Space' || input.key === ' ';
+    if (!isSpace) return;
+    if (input.type === 'keyDown') {
+      if (input.isAutoRepeat) return;
+      forwardSpaceHold(true);
+    } else if (input.type === 'keyUp') {
+      forwardSpaceHold(false);
+    }
+  });
+
+  // splash:skip — the renderer completed a full 3s hold. Resolve the
+  // SPLASH_MIN_VISIBLE_MS race in main.js so the splash dismisses early through
+  // its normal teardown/reveal-main path (NOT a parallel teardown). One-shot:
+  // the resolver clears itself after firing.
+  const onSplashSkip = (event) => {
+    if (event.sender !== win.webContents) return;  // only this splash may skip
+    const resolve = getSplashSkipResolve();
+    if (typeof resolve === 'function') {
+      console.warn('[electron] splash:skip requested — dismissing splash early');
+      resolve('skip');
+    }
+  };
+  ipcMain.on('splash:skip', onSplashSkip);
+
+  // splash:set-interactive — toggle click-through so the Skip pill hit area can
+  // take a real mouse press while the rest of the splash stays transparent to
+  // the mouse. forward:true keeps mouse-move events flowing to the renderer so
+  // hover/leave still fire even while clicks pass through.
+  const onSplashSetInteractive = (event, interactive) => {
+    if (event.sender !== win.webContents || win.isDestroyed()) return;
+    win.setIgnoreMouseEvents(!interactive, { forward: true });
+  };
+  ipcMain.on('splash:set-interactive', onSplashSetInteractive);
+
+  // Detach the IPC listeners when the splash goes away so a later splash (or a
+  // stray late message) can never reach a destroyed window.
+  win.webContents.once('destroyed', () => {
+    ipcMain.removeListener('splash:skip', onSplashSkip);
+    ipcMain.removeListener('splash:set-interactive', onSplashSetInteractive);
+  });
 
   // SPLASH WORD LIST — labs / models / HuggingFace standouts / bio research.
   // Curated 2026-05 to reflect current frontier (Opus 4.5, Llama 4, Grok 4,
@@ -453,6 +521,37 @@ export function createSplashWindow() {
     + '.update-strip.is-active{opacity:1;transform:translateY(0)}'
     + '.update-strip__fill{display:block;width:100%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#67e8f9,#a855f7,#ec4899);box-shadow:0 0 12px rgba(103,232,249,.55);transform-origin:left center;transform:scaleX(0);transition:transform 180ms ease}'
     + '.splash-version{position:absolute;right:18px;bottom:14px;z-index:5;font-size:10px;font-weight:700;letter-spacing:.08em;color:rgba(235,225,255,.46);text-transform:uppercase;text-shadow:0 1px 12px rgba(0,0,0,.55);pointer-events:none;user-select:none}'
+    // ─── HOLD-TO-SKIP affordance — game-style "hold to skip cutscene" ────
+    // A small pill anchored bottom-left, mirroring the bottom-right version
+    // tag. A circular SVG ring wraps a "Skip" label; holding Spacebar OR
+    // press-holding the pill fills the ring over exactly 3s (the fill is
+    // driven entirely by the renderer RAF loop below — see HYDRA_SKIP_HOLD_MS).
+    // The pill is the only interactive region on an otherwise click-through
+    // splash: it flips on `pointer-events` for itself and the renderer asks
+    // the main process to momentarily disable window click-through while the
+    // cursor is over it, so a real mouse press can land without the splash
+    // ever taking OS focus.
+    + '.skip{position:absolute;left:18px;bottom:12px;z-index:6;display:flex;align-items:center;gap:9px;'
+    + 'padding:6px 12px 6px 8px;border-radius:999px;cursor:pointer;pointer-events:auto;user-select:none;'
+    + 'background:rgba(10,6,22,.42);border:1px solid rgba(168,85,247,.26);'
+    + 'box-shadow:0 6px 22px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06);'
+    + 'backdrop-filter:blur(8px) saturate(135%);-webkit-backdrop-filter:blur(8px) saturate(135%);'
+    + 'opacity:0;transform:translateY(4px);transition:opacity 420ms ease,transform 420ms ease,border-color 200ms ease,box-shadow 200ms ease}'
+    + '.skip.is-ready{opacity:.86;transform:translateY(0)}'
+    + '.skip:hover{opacity:1;border-color:rgba(168,85,247,.5)}'
+    + '.skip.is-holding{opacity:1;border-color:rgba(236,72,153,.66);box-shadow:0 8px 26px rgba(168,85,247,.34),inset 0 1px 0 rgba(255,255,255,.1)}'
+    // Ring: two stacked SVG circles. The track is a faint full ring; the
+    // progress arc is stroke-dashoffset-driven and starts at 12 o'clock
+    // (rotated -90deg). The renderer sets `--skip-fill` (0..1) every frame.
+    + '.skip__ring{position:relative;width:24px;height:24px;flex:0 0 auto}'
+    + '.skip__ring svg{width:24px;height:24px;transform:rotate(-90deg);display:block}'
+    + '.skip__track{fill:none;stroke:rgba(255,255,255,.16);stroke-width:2.4}'
+    + '.skip__arc{fill:none;stroke:url(#skipArc);stroke-width:2.4;stroke-linecap:round;'
+    // C = 2πr with r=10 → ~62.83. dashoffset = C*(1-fill) drains as fill rises.
+    + 'stroke-dasharray:62.83;stroke-dashoffset:calc(62.83 * (1 - var(--skip-fill,0)));'
+    + 'filter:drop-shadow(0 0 4px rgba(168,85,247,.55))}'
+    + '.skip__label{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(235,225,255,.82)}'
+    + '.skip__hint{font-family:inherit;font-size:9px;font-weight:600;letter-spacing:.06em;color:rgba(190,170,235,.5)}'
     + '@media(prefers-reduced-motion:reduce){canvas#field,.hex,.vines{display:none}.bar::after{animation:none;transform:scaleX(1)}.update-strip,.update-strip__fill{transition:none}}'
     + '</style></head><body data-studio="frostbyte-zayd-cold">'
     + '<div class="outer">'
@@ -508,6 +607,21 @@ export function createSplashWindow() {
     +   '</div>'
     + '</div>'
     + '</div>' // /.card
+    // ─── Hold-to-skip pill — bottom-left, mirrors the version tag. The ring
+    // wraps the "Skip" label; the renderer fills the arc over 3s of held
+    // Spacebar / press. The gradient def is inline so the arc keeps its
+    // brand colors inside the self-contained data: URL.
+    + '<div class="skip" id="skip-pill" role="button" aria-label="Hold to skip splash">'
+    +   '<div class="skip__ring">'
+    +     '<svg viewBox="0 0 24 24">'
+    +       '<defs><linearGradient id="skipArc" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a855f7"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs>'
+    +       '<circle class="skip__track" cx="12" cy="12" r="10"/>'
+    +       '<circle class="skip__arc" id="skip-arc" cx="12" cy="12" r="10"/>'
+    +     '</svg>'
+    +   '</div>'
+    +   '<div class="skip__label">Skip</div>'
+    +   '<div class="skip__hint">Hold</div>'
+    + '</div>'
     // Canvas is a SIBLING of .outer — pinned to the viewport, stacking above
     // .outer (z-index:3) but below the root-level brand .card (z-index:4).
     // Letters fall in front of background atmosphere
@@ -640,6 +754,64 @@ export function createSplashWindow() {
     + '}'
     + '}'
     + 'if(window.hydraSplash&&window.hydraSplash.onUpdateProgress){window.hydraSplash.onUpdateProgress(updateSplashProgress);}'
+    // ─── HOLD-TO-SKIP — game-style "hold to skip cutscene" ────────────────
+    // The ring fills over exactly HYDRA_SKIP_HOLD_MS (3000ms) of continuous
+    // hold. Holding Spacebar (delivered keydown/keyup by the main process via
+    // before-input-event → __HYDRA_SPLASH_HOLD__, since the splash is
+    // focusable:false and cannot receive key events itself) OR press-holding
+    // the Skip pill both feed the SAME hold state. A dedicated requestAnimation
+    // Frame loop integrates real elapsed time so the fill rate is frame-rate
+    // independent: pressing adds progress, releasing drains it ~2.4× faster so
+    // the reset reads as a smooth snap-back rather than a slow unwind. At 1.0
+    // we fire window.hydraSplash.requestSkip() exactly once and the main
+    // process tears the splash down early through its normal dismissal path.
+    + 'const HYDRA_SKIP_HOLD_MS=3000,HYDRA_SKIP_RELEASE_MS=1250;'
+    + 'const skipPill=document.getElementById("skip-pill"),skipArc=document.getElementById("skip-arc");'
+    + 'let hydraSkipFill=0,hydraSkipHolding=false,hydraSkipFired=false,hydraSkipRaf=0,hydraSkipLast=0;'
+    // Reveal the pill shortly after the splash paints so it does not flash in
+    // before the brand intro reads. Pure affordance timing, not load-bearing.
+    + 'if(skipPill)hydraSplashSetTimeout(function(){skipPill.classList.add("is-ready");},900);'
+    + 'function hydraSkipApplyFill(){if(skipPill)skipPill.style.setProperty("--skip-fill",hydraSkipFill.toFixed(4));}'
+    + 'function hydraSkipFire(){'
+    +   'if(hydraSkipFired)return;hydraSkipFired=true;hydraSkipHolding=false;'
+    +   'hydraSkipFill=1;hydraSkipApplyFill();'
+    +   'if(skipPill){skipPill.classList.remove("is-holding");skipPill.classList.add("is-ready");}'
+    +   'try{if(window.hydraSplash&&window.hydraSplash.requestSkip)window.hydraSplash.requestSkip();}catch(err){console.warn("[hydra-splash] skip request failed:",err&&err.message?err.message:err);}'
+    + '}'
+    + 'function hydraSkipTick(now){'
+    +   'if(hydraSplashDisposed||hydraSkipFired){hydraSkipRaf=0;return;}'
+    +   'if(!hydraSkipLast)hydraSkipLast=now;'
+    +   'const dt=Math.min(now-hydraSkipLast,1000/15);hydraSkipLast=now;'
+    +   'if(hydraSkipHolding){hydraSkipFill+=dt/HYDRA_SKIP_HOLD_MS;}else{hydraSkipFill-=dt/HYDRA_SKIP_RELEASE_MS;}'
+    +   'if(hydraSkipFill<=0){hydraSkipFill=0;hydraSkipApplyFill();hydraSkipRaf=0;return;}'  // settled empty — stop the loop
+    +   'if(hydraSkipFill>=1){hydraSkipApplyFill();hydraSkipFire();return;}'
+    +   'hydraSkipApplyFill();hydraSkipRaf=requestAnimationFrame(hydraSkipTick);'
+    + '}'
+    + 'function hydraSkipEnsureLoop(){if(!hydraSkipRaf&&!hydraSkipFired&&!hydraSplashDisposed){hydraSkipLast=0;hydraSkipRaf=requestAnimationFrame(hydraSkipTick);}}'
+    + 'function hydraSkipSetHold(holding){'
+    +   'if(hydraSkipFired||hydraSplashDisposed)return;'
+    +   'holding=Boolean(holding);if(holding===hydraSkipHolding)return;hydraSkipHolding=holding;'
+    +   'if(skipPill)skipPill.classList.toggle("is-holding",holding);'
+    +   'hydraSkipEnsureLoop();'
+    + '}'
+    // Spacebar bridge: the main process forwards keydown/keyup here. Guarded so
+    // a stray non-boolean payload cannot wedge the hold state.
+    + 'window.__HYDRA_SPLASH_HOLD__=function(holding){hydraSkipSetHold(holding);};'
+    // Skip pill mouse hold. The splash is click-through by default, so the
+    // renderer asks the main process (setInteractive) to disable click-through
+    // while the cursor is over the pill — only then does pointerdown land. On
+    // pointerleave / pointerup we re-enable click-through so the rest of the
+    // splash stays transparent to the mouse and never traps the user.
+    + 'if(skipPill){'
+    +   'const setInteractive=function(on){try{if(window.hydraSplash&&window.hydraSplash.setInteractive)window.hydraSplash.setInteractive(on);}catch(err){}};'
+    +   'skipPill.addEventListener("pointerenter",function(){setInteractive(true);});'
+    +   'skipPill.addEventListener("pointerleave",function(){hydraSkipSetHold(false);setInteractive(false);});'
+    +   'skipPill.addEventListener("pointerdown",function(ev){ev.preventDefault();hydraSkipSetHold(true);});'
+    +   'window.addEventListener("pointerup",function(){if(hydraSkipHolding)hydraSkipSetHold(false);});'
+    // Belt-and-suspenders: a left-button mousedown ON the pill also arms the
+    // hold even if pointer events are coalesced oddly under click-through.
+    +   'skipPill.addEventListener("mousedown",function(ev){if(ev.button===0){ev.preventDefault();hydraSkipSetHold(true);}});'
+    + '}'
     + 'const items=' + itemsJson + ';'
     + 'const cvs=document.getElementById("field");if(!cvs)return;'
     + 'const ctx=cvs.getContext("2d",{desynchronized:true,alpha:true});'
@@ -819,6 +991,7 @@ export function createSplashWindow() {
     +   'if(hydraSplashDisposed)return hydraSplashRefreshDiagnostics();hydraSplashDisposed=true;'
     +   'while(hydraSplashTimers.length){const id=hydraSplashTimers.pop();clearTimeout(id);clearInterval(id);}'
     +   'if(hydraSplashRaf)cancelAnimationFrame(hydraSplashRaf);hydraSplashRaf=0;'
+    +   'if(hydraSkipRaf)cancelAnimationFrame(hydraSkipRaf);hydraSkipRaf=0;'
     +   'window.removeEventListener("resize",size);window.removeEventListener("resize",rebuildWalls);window.removeEventListener("deviceorientation",onHydraSplashDeviceOrientation);window.removeEventListener("devicemotion",onHydraSplashDeviceMotion);if(hydraSplashTiltSensor&&typeof hydraSplashTiltSensor.stop==="function"){try{hydraSplashTiltSensor.stop();}catch(err){hydraSplashDiagnostics.tilt.error=(err&&err.name?err.name:"SensorStopError")+(err&&err.message?": "+err.message:"");}}hydraSplashTiltSensor=null;'
     +   'try{Eng.clear(engine);Wld.clear(engine.world,false);hydraSplashDiagnostics.matterCleared=true;}catch(err){console.warn("[hydra-splash] dispose failed:",err&&err.message?err.message:err);}'
     +   'hydraSplashDiagnostics.disposed=true;hydraSplashDiagnostics.disposeReason=reason;hydraSplashDiagnostics.disposedAt=Date.now();hydraSplashDiagnostics.bodyCount=0;hydraSplashDiagnostics.dynamicBodyCount=0;hydraSplashRefreshDiagnostics();'

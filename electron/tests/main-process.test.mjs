@@ -375,6 +375,48 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     assert.match(surface, /timer\.unref\?\.\(\)/);
   });
 
+  it('splash exposes a hold-to-skip affordance wired through to early dismissal', () => {
+    const windows = readFileSync(WINDOWS_JS, 'utf-8');
+    const splashPreload = readFileSync(SPLASH_PRELOAD_JS, 'utf-8');
+    const main = readFileSync(MAIN_JS, 'utf-8');
+
+    // Visible Skip affordance + circular progress ring live in the inlined
+    // splash markup/CSS/SVG.
+    assert.match(windows, /class="skip" id="skip-pill"/, 'splash must render a visible Skip button');
+    assert.match(windows, /class="skip__label">Skip/, 'Skip button must be labelled "Skip"');
+    assert.match(windows, /class="skip__ring"/, 'splash must render the circular progress ring container');
+    assert.match(windows, /circle class="skip__arc" id="skip-arc"/, 'ring must have a dash-offset-driven progress arc');
+    assert.match(windows, /stroke-dashoffset:calc\(62\.83 \* \(1 - var\(--skip-fill,0\)\)\)/, 'ring fill must be driven by the --skip-fill custom property');
+
+    // Exactly-3-second hold mechanic, driven by the renderer RAF loop.
+    assert.match(windows, /const HYDRA_SKIP_HOLD_MS=3000/, 'hold must fill the ring over exactly 3 seconds');
+    assert.match(windows, /hydraSkipFill\+=dt\/HYDRA_SKIP_HOLD_MS/, 'holding must integrate elapsed time into the ring fill');
+    assert.match(windows, /hydraSkipFill-=dt\/HYDRA_SKIP_RELEASE_MS/, 'releasing must smoothly drain the ring back to empty');
+    assert.match(windows, /requestAnimationFrame\(hydraSkipTick\)/, 'ring fill must run on a requestAnimationFrame loop');
+    assert.match(windows, /if\(hydraSkipRaf\)cancelAnimationFrame\(hydraSkipRaf\)/, 'splash dispose must cancel the skip RAF loop');
+
+    // Spacebar handler: forwarded from the main process before-input-event
+    // (the splash is focusable:false and cannot receive keys itself).
+    assert.match(windows, /win\.webContents\.on\('before-input-event'/, 'main must capture splash input via before-input-event');
+    assert.match(windows, /input\.code === 'Space' \|\| input\.key === ' '/, 'before-input-event must match the Spacebar');
+    assert.match(windows, /input\.type === 'keyDown'/, 'spacebar keydown must start the hold');
+    assert.match(windows, /input\.type === 'keyUp'/, 'spacebar keyup must release the hold');
+    assert.match(windows, /window\.__HYDRA_SPLASH_HOLD__/, 'main must forward Spacebar state into the splash renderer');
+
+    // splash:skip IPC: wired through preload, sent on full hold, handled in
+    // main, and dismisses the splash via the existing timed-lifetime path.
+    assert.match(splashPreload, /requestSkip: \(\) => \{/, 'preload must expose a requestSkip bridge');
+    assert.match(splashPreload, /ipcRenderer\.send\(SKIP_CHANNEL\)/, 'preload requestSkip must send the splash:skip channel');
+    assert.match(splashPreload, /SKIP_CHANNEL = 'splash:skip'/, 'preload must define the splash:skip channel');
+    assert.match(windows, /window\.hydraSplash\.requestSkip\(\)/, 'renderer must call requestSkip on a completed hold');
+    assert.match(windows, /ipcMain\.on\('splash:skip', onSplashSkip\)/, 'main must handle the splash:skip channel');
+    assert.match(windows, /getSplashSkipResolve\(\)/, 'splash:skip must resolve the splash-visible-duration race');
+    // The skip resolver is the SAME wait main.js uses for the timed lifetime,
+    // so a hold reuses the normal teardown/reveal-main path (no parallel one).
+    assert.match(main, /setSplashSkipResolve\(\(reason\) => \{/, 'main must register the splash skip resolver against the visible-duration wait');
+    assert.match(main, /clearTimeout\(timer\);/, 'a completed hold must short-circuit the remaining splash lifetime');
+  });
+
   it('Electron log tee write and close failures remain visible without recursion', () => {
     const surface = readFileSync(resolve(APP_DIR, 'env.js'), 'utf-8');
 

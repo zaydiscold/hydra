@@ -18,7 +18,7 @@ import {
 import {
   getMainWindow, getSplashWindow, getWindowURL, getForceQuit, getShuttingDown, getGracefulShutdown, getTray,
   setMainWindow, setSplashWindow, setWindowURL, setExpressPort, setForceQuit, setGracefulShutdown, setShuttingDown, setTray,
-  trackedChildren, setBootingSplash, getBootingSplash,
+  trackedChildren, setBootingSplash, getBootingSplash, setSplashSkipResolve,
 } from './app/state.js';
 import { openExternalUrl, showAndFocusMainWindow } from './app/windowActions.js';
 import { createSplashWindow, createMainWindow } from './app/windows.js';
@@ -628,7 +628,21 @@ app.whenReady().then(async () => {
     const SPLASH_MIN_VISIBLE_MS = 15000;
     const splashElapsed = Date.now() - splashStartedAt;
     if (splashElapsed < SPLASH_MIN_VISIBLE_MS) {
-      await new Promise(resolve => setTimeout(resolve, SPLASH_MIN_VISIBLE_MS - splashElapsed));
+      // HOLD-TO-SKIP: race the remaining timed lifetime against a user
+      // skip. createSplashWindow's splash:skip handler calls the resolver we
+      // register here, so a completed 3s hold short-circuits the wait and
+      // reveals main immediately through the SAME teardown path below. The
+      // timer wins on the normal (un-skipped) boot. unref so a pending timer
+      // never keeps the process alive on its own.
+      await new Promise((resolve) => {
+        const timer = setTimeout(() => { setSplashSkipResolve(null); resolve('timeout'); }, SPLASH_MIN_VISIBLE_MS - splashElapsed);
+        timer.unref?.();
+        setSplashSkipResolve((reason) => {
+          clearTimeout(timer);
+          setSplashSkipResolve(null);
+          resolve(reason || 'skip');
+        });
+      });
     }
 
     // Phase 1: destroy splash (synchronous). After this line the splash
