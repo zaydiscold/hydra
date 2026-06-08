@@ -11,6 +11,7 @@ import { throwIfAborted } from '../lib/abort.js';
 import {
   backfillLegacyManagementKey,
   getBestManagementKey,
+  getBestManagementKeys,
   storeManagementKey,
 } from './management-key-store.js';
 
@@ -251,10 +252,10 @@ export async function revokeSessionsByClerkSessionId(clerkSessionId, reason = 'c
   return { matched, revoked };
 }
 
-async function canonicalizeManagementKeyState(account) {
+async function canonicalizeManagementKeyState(account, preloadedBestKey = undefined) {
   const config = readConfig(account);
   const legacyManagementKey = typeof config.managementKey === 'string' ? config.managementKey.trim() : '';
-  let bestManagementKey = await getBestManagementKey(account.id);
+  let bestManagementKey = preloadedBestKey !== undefined ? preloadedBestKey : await getBestManagementKey(account.id);
 
   if (legacyManagementKey) {
     try {
@@ -450,8 +451,12 @@ export async function getAccounts(userId, { includePending = false } = {}) {
   const accounts = await prisma.account.findMany({ where: { userId } });
   await backfillLegacyPlaceholderAliases(userId, accounts);
 
+  // ⚡ Bolt: Batch fetch best management keys to avoid N+1 query problem
+  const bestKeysMap = await getBestManagementKeys(accounts.map(a => a.id));
+
   const shaped = await Promise.all(accounts.map(async (account) => {
-    const { config, managementKey } = await canonicalizeManagementKeyState(account);
+    const preloadedBestKey = bestKeysMap.get(account.id) || null;
+    const { config, managementKey } = await canonicalizeManagementKeyState(account, preloadedBestKey);
     const { plain, decryptFailed } = readSessionPlainResult(account);
     return shapeAccountMetadata(account, config, managementKey, plain, decryptFailed);
   }));
@@ -520,9 +525,13 @@ export async function getAllAccountsWithKeys(userId, { includePending = false } 
   const accounts = await prisma.account.findMany({ where: { userId } });
   await backfillLegacyPlaceholderAliases(userId, accounts);
 
+  // ⚡ Bolt: Batch fetch best management keys to avoid N+1 query problem
+  const bestKeysMap = await getBestManagementKeys(accounts.map(a => a.id));
+
   const hydrated = await Promise.all(accounts.map(async (account) => {
     try {
-      const { config, managementKey } = await canonicalizeManagementKeyState(account);
+      const preloadedBestKey = bestKeysMap.get(account.id) || null;
+      const { config, managementKey } = await canonicalizeManagementKeyState(account, preloadedBestKey);
       // Exploit #14: Cookie stacking — normalize clientCookies array for hydrated accounts
       const clientCookiesStack = normalizeClientCookies(config);
       const latestClientCookie = getLatestClientCookie(config);
