@@ -34,22 +34,28 @@ export function enrichRequestLogPricing(log, pricing = {}) {
   const promptPrice = optionalNonNegativeNumber(pricing?.promptPrice);
   const completionPrice = optionalNonNegativeNumber(pricing?.completionPrice);
   const requestPrice = optionalNonNegativeNumber(pricing?.requestPrice);
+  const status = Number(log?.status);
+  const canEstimateCatalogCost = (status >= 200 && status < 300)
+    || promptTokens !== null
+    || completionTokens !== null
+    || optionalNonNegativeNumber(log?.totalCost) !== null;
   const inputCost = promptTokens !== null && promptPrice !== null
     ? promptTokens * promptPrice
     : null;
   const outputCost = completionTokens !== null && completionPrice !== null
     ? completionTokens * completionPrice
     : null;
-  const estimatedCost = inputCost !== null || outputCost !== null || requestPrice !== null
+  const estimatedCost = canEstimateCatalogCost && (inputCost !== null || outputCost !== null || requestPrice !== null)
     ? (inputCost ?? 0) + (outputCost ?? 0) + (requestPrice ?? 0)
     : null;
+  const upstreamTotalCost = optionalNonNegativeNumber(log?.totalCost);
 
   return {
     ...log,
     inputCost,
     outputCost,
     estimatedCost,
-    totalCost: optionalNonNegativeNumber(log?.totalCost) ?? estimatedCost,
+    totalCost: upstreamTotalCost ?? estimatedCost,
     costSource: log?.costSource || (estimatedCost === null ? null : 'catalog_estimate'),
     pricing: {
       promptPerToken: promptPrice,

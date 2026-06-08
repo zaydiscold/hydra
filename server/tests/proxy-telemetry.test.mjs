@@ -54,6 +54,7 @@ test('request log pricing preserves exact OpenRouter total and calculates in/out
 
 test('request log pricing falls back to catalog estimate when upstream omits cost', () => {
   const enriched = enrichRequestLogPricing({
+    status: 200,
     promptTokens: 10,
     completionTokens: 20,
     totalCost: null,
@@ -67,6 +68,26 @@ test('request log pricing falls back to catalog estimate when upstream omits cos
   assertClose(enriched.outputCost, 0.00004);
   assertClose(enriched.totalCost, 0.00005);
   assert.equal(enriched.costSource, 'catalog_estimate');
+});
+
+test('failed attempts without usage stay unpriced even when a catalog row exists', () => {
+  const enriched = enrichRequestLogPricing({
+    status: 429,
+    promptTokens: null,
+    completionTokens: null,
+    totalCost: null,
+    costSource: null,
+  }, {
+    promptPrice: 0.000001,
+    completionPrice: 0.000002,
+    requestPrice: 0,
+  });
+
+  assert.equal(enriched.inputCost, null);
+  assert.equal(enriched.outputCost, null);
+  assert.equal(enriched.estimatedCost, null);
+  assert.equal(enriched.totalCost, null);
+  assert.equal(enriched.costSource, null);
 });
 
 test('usage accounting stores an exact total only when upstream supplies one', () => {
