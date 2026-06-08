@@ -3,7 +3,6 @@
 <p align="center">
   <a href="https://github.com/zaydiscold/hydra/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/zaydiscold/hydra/actions/workflows/ci.yml/badge.svg?branch=master"></a>
   <a href="https://github.com/zaydiscold/hydra/actions/workflows/release.yml"><img alt="Desktop Release" src="https://github.com/zaydiscold/hydra/actions/workflows/release.yml/badge.svg"></a>
-  <a href="https://github.com/zaydiscold/hydra/actions/workflows/docker.yml"><img alt="Docker Runtime" src="https://github.com/zaydiscold/hydra/actions/workflows/docker.yml/badge.svg?branch=master"></a>
   <a href="https://github.com/zaydiscold/hydra/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/zaydiscold/hydra"></a>
 </p>
 

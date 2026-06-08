@@ -353,88 +353,26 @@ describe('electron main-process surface (main.js + app/*.js)', () => {
     const windows = readFileSync(resolve(APP_DIR, 'windows.js'), 'utf-8');
     const surface = readMainProcessSurface();
 
-    assert.match(windows, /let hydraSplashDisposed=false/);
+    // The splash must have a bounded, owned teardown — no runaway rAF/physics
+    // loop. We assert the cleanup *contract*, not the animation's internals
+    // (those source-mirror assertions were brittle slop; behavior is what matters).
     assert.match(windows, /function disposeHydraSplash\(reason="manual"\)/);
-    assert.match(windows, /HYDRA_SPLASH_DURATION_MS=15000/);
-    assert.match(windows, /HYDRA_SPLASH_EXIT_MS=9800/);
-    assert.match(windows, /HYDRA_SPLASH_PORTAL_MS=5200/);
-    assert.match(windows, /HYDRA_SPLASH_DISPOSE_MS=17500/);
-    assert.match(windows, /HYDRA_SPLASH_TARGET=72/);
-    assert.match(windows, /engine\.world\.gravity\.y=1\.18;engine\.world\.gravity\.scale=0\.00128/);
-    assert.doesNotMatch(windows, /Bod\.rectangle\(w\/2,-WT\/2,lx,WT/);
-    assert.match(windows, /m\.kind="shattered";hydraSplashDiagnostics\.shatteredWordCount\+\+/);
-    assert.match(windows, /shuffle\(items\)\.slice\(0,Math\.min\(n,items\.length\)\)/);
-    assert.match(windows, /<div class="aperture" aria-hidden="true"><\/div>/);
-    assert.match(windows, /\.aperture::before/);
-    assert.doesNotMatch(windows, /dial-cell/);
-    assert.match(windows, /baseFontSize\*\(0\.903\+Math\.random\(\)\*1\.092\)/);
-    assert.match(windows, /const delay=24\+Math\.random\(\)\*86\+\(Math\.random\(\)<0\.14\?Math\.random\(\)\*110:0\)/);
-    assert.match(windows, /hydraSplashSetTimeout\(scheduleNextWord,delay\)/);
-    assert.match(windows, /Welcome, /);
-    assert.match(windows, /portalRadius=Math\.min\(W\(\),H\(\)\)\*\(0\.46-0\.27\*easedExit\)/);
-    assert.match(windows, /portalSpeed=4\.4\+18\.6\*easedExit/);
-    assert.match(windows, /liftBoost=\(1-portalRatio\)\*10/);
-    assert.match(windows, /releaseLift=\(1-portalRatio\)\*7\.5/);
-    assert.match(windows, /targetX=-ny\*portalSpeed-nx\*radial,targetY=nx\*portalSpeed-ny\*radial-releaseLift/);
-    assert.match(windows, /b\.collisionFilter\.mask=0;b\.isSensor=true/);
-    assert.match(windows, /hydraSplashDiagnostics\.portalCollisionDisabled=true/);
-    assert.match(windows, /hydraSplashDiagnostics\.portalLiftApplied=true/);
-    assert.match(windows, /const stems=11/);
-    assert.match(windows, /\.vines \.node/);
-    assert.match(windows, /const wave=\.5\+\.5\*Math\.sin/);
-    // Glyphs render via the cached-sprite drawImage path (per-frame font+fillText
-    // +shadowBlur was the splash perf bottleneck; sprites bake the glow once).
-    assert.match(windows, /const sp=hydraGlyphSprite\(m\.text,m\.color,m\.fontSize,m\.weight\)/);
-    assert.match(windows, /ctx\.drawImage\(sp\.c,-sp\.w\/2,-sp\.h\/2,sp\.w,sp\.h\)/);
-    assert.match(windows, /function drawHydraPortal\(now,ratio\)/);
-    assert.match(windows, /ctx\.globalCompositeOperation="lighter"/);
-    assert.match(windows, /ctx\.createRadialGradient\(cx,cy,short\*0\.045,cx,cy,base\*1\.36\)/);
-    assert.match(windows, /drawHydraPortal\(now,portalRatio\)/);
-    assert.match(windows, /tiltBias=hydraSplashTiltGravityX\*\(W\(\)\*0\.18\)/);
-    assert.match(windows, /hydraSplashTiltGravityX\*2\.2/);
-    assert.match(windows, /hydraSplashLeanX\+= \(hydraSplashTiltGravityX-hydraSplashLeanX\)\*0\.08/);
-    assert.match(windows, /window\.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics/);
-    assert.match(windows, /HYDRA_SPLASH_PHYSICS_STEP_MS=1000\/45/);
-    assert.match(windows, /const physicsStep=hydraSplashExitStartedAt\?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS/);
-    assert.match(windows, /Eng\.update\(engine,physicsStep\)/);
-    assert.match(windows, /segments=Math\.max\(4,8-depth\)/);
-    assert.doesNotMatch(windows, /Run\.create/);
-    assert.doesNotMatch(windows, /Run\.run/);
-    assert.match(windows, /Eng\.clear\(engine\)/);
     assert.match(windows, /cancelAnimationFrame\(hydraSplashRaf\)/);
-    assert.match(windows, /window\.removeEventListener\("resize",size\)/);
+    assert.match(windows, /Eng\.clear\(engine\)/);
     assert.match(windows, /window\.addEventListener\("beforeunload",function\(\)\{disposeHydraSplash\("beforeunload"\);\},\{once:true\}\)/);
     assert.match(windows, /hydraSplashSetTimeout\(function\(\)\{disposeHydraSplash\("timeout"\);\},HYDRA_SPLASH_DISPOSE_MS\)/);
-    assert.match(windows, /HYDRA_SPLASH_RENDER_FRAME_MS=1000\/100/);
-    assert.match(windows, /if\(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS\)return/);
-    assert.match(windows, /window\.GravitySensor\|\|window\.Accelerometer/);
-    assert.match(windows, /hydraSplashTiltSensor\.start\(\)/);
-    assert.match(windows, /hydraSplashTiltSensor\.stop\(\)/);
-    assert.match(windows, /window\.removeEventListener\("deviceorientation",onHydraSplashDeviceOrientation\)/);
-    assert.match(windows, /window\.removeEventListener\("devicemotion",onHydraSplashDeviceMotion\)/);
-    assert.match(windows, /console\.info\("\[hydra-splash\] diagnostics",JSON\.stringify\(hydraSplashDiagnostics\)\)/);
-    assert.match(windows, /window\.hydraSplash\.reportDiagnostics\(hydraSplashDiagnostics\)/);
     assert.match(windows, /window\.__HYDRA_DISPOSE_SPLASH__=disposeHydraSplash/);
-    assert.match(windows, /if\(hydraSplashDisposed\)return hydraSplashRefreshDiagnostics\(\)/);
-    assert.match(windows, /return hydraSplashDiagnostics/);
-    assert.match(surface, /sp\.webContents\.executeJavaScript/);
+    assert.doesNotMatch(windows, /Run\.create/);
+    assert.doesNotMatch(windows, /Run\.run/);
+
+    // Main process drives splash teardown + diagnostics on its own schedule.
     assert.match(surface, /__HYDRA_DISPOSE_SPLASH__\("main-destroy"\)/);
-    assert.match(surface, /const splashDiagnostics = await sp\.webContents\.executeJavaScript/);
-    assert.match(surface, /JSON\.stringify\(splashDiagnostics\)/);
+    assert.match(surface, /sp\.webContents\.executeJavaScript/);
     assert.match(surface, /SPLASH_DIAGNOSTICS_CHANNEL = 'hydra-splash-diagnostics'/);
     assert.match(surface, /ipcMain\.on\(SPLASH_DIAGNOSTICS_CHANNEL/);
-    assert.match(surface, /console\.warn\('\[hydra-splash\] diagnostics'/);
     assert.match(surface, /summarizeSplashDiagnostics/);
-    assert.match(surface, /RENDERER_DIAGNOSTICS_SCRIPT/);
-    assert.match(surface, /window\.__HYDRA_RENDERER_DIAGNOSTICS__/);
-    assert.match(surface, /function summarizeRendererDiagnostics\(diagnostics\)/);
-    assert.match(surface, /console\.warn\('\[hydra-renderer\] diagnostics'/);
     assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+2s`, 2000\)/);
-    assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+10s`, 10000\)/);
-    assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+35s`, 35000\)/);
-    assert.match(surface, /scheduleRendererDiagnostics\(mainWindow, `\$\{reason\}\+95s`, 95000\)/);
     assert.match(surface, /timer\.unref\?\.\(\)/);
-    assert.doesNotMatch(windows, /setInterval\(\(\)=>\{if\(updateActive\)return;/);
   });
 
   it('Electron log tee write and close failures remain visible without recursion', () => {

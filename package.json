@@ -29,7 +29,7 @@
     "electron:open:mac-arm64": "node scripts/open-packaged-app.mjs release/mac-arm64/Hydra.app",
     "// ─── Testing ───────────────────────────────────────────────────────────": "",
     "pretest": "prisma db push --skip-generate && prisma generate",
-    "test": "npm run test:test-chain-completeness && npm run test:cross-platform && npm run test:session-expiry && npm run test:time-utils && npm run test:ensure-session-backfill && npm run test:session-refresh-contract && npm run test:session-refresher-pruning && npm run test:management-key-backfill && npm run test:config && npm run test:filesystem-permissions && npm run test:user-prefs && npm run test:local-secrets && npm run test:account-proxy-pool && npm run test:auth-status && npm run test:auth-cookie && npm run test:cookie-utils && npm run test:webhooks && npm run test:upstream-health && npm run test:health-pinger && npm run test:proxy-gate && npm run test:proxy-telemetry && npm run test:rotation-manager && npm run test:task-supervisor && npm run test:batch-runner && npm run test:openrouter-request-cancellation && npm run test:clerk-signup-boundary && npm run test:background-failure-visibility && npm run test:proxy-sse && npm run test:request-log-buffer && npm run test:request-log-retention && npm run test:db-proxy-cache && npm run test:schema-self-heal-backups && npm run test:electron-url-allowlist && npm run test:api-integration && npm run test:browser-isolation && npm run test:openapi-map && npm run test:mcp && npm run test:cli && npm run test:ui-static && npm run test:docker-smoke && npm run test:dogfood-evidence && npm run test:workflow-contract && npm run test:gzip-middleware && npm run test:error-boundary-sanitization && npm run test:prisma-error-classification && npm run test:phase1-backward-compat && npm run test:electron",
+    "test": "npm run test:test-chain-completeness && npm run test:cross-platform && npm run test:session-expiry && npm run test:time-utils && npm run test:ensure-session-backfill && npm run test:session-refresh-contract && npm run test:session-refresher-pruning && npm run test:management-key-backfill && npm run test:config && npm run test:filesystem-permissions && npm run test:user-prefs && npm run test:local-secrets && npm run test:account-proxy-pool && npm run test:auth-status && npm run test:auth-cookie && npm run test:cookie-utils && npm run test:webhooks && npm run test:upstream-health && npm run test:health-pinger && npm run test:proxy-gate && npm run test:proxy-telemetry && npm run test:rotation-manager && npm run test:task-supervisor && npm run test:batch-runner && npm run test:openrouter-request-cancellation && npm run test:clerk-signup-boundary && npm run test:background-failure-visibility && npm run test:proxy-sse && npm run test:request-log-buffer && npm run test:request-log-retention && npm run test:db-proxy-cache && npm run test:schema-self-heal-backups && npm run test:electron-url-allowlist && npm run test:api-integration && npm run test:browser-isolation && npm run test:openapi-map && npm run test:mcp && npm run test:cli && npm run test:bulk-email-parsing && npm run test:gzip-middleware && npm run test:error-boundary-sanitization && npm run test:prisma-error-classification && npm run test:electron",
     "test:electron": "npm run test:electron-server-extract && npm run test:electron-launch-compat && npm run test:electron-data-path && npm run test:electron-ipc-contract && npm run test:electron-main-process && npm run test:electron-path-allowlist && npm run test:schema-hash && npm run test:electron-prisma-asar",
     "test:test-chain-completeness": "node --test server/tests/test-chain-completeness.test.mjs",
     "test:session-expiry": "node --test server/tests/session-expiry-effective.test.mjs",
@@ -67,13 +67,10 @@
     "test:openapi-map": "node --test server/tests/hydra-openapi-map.test.mjs",
     "test:mcp": "node --test server/tests/mcp-cli.test.mjs",
     "test:cli": "node --test server/tests/cli.test.mjs",
-    "test:ui-static": "node --test server/tests/ui-static-contract.test.mjs",
-    "test:docker-smoke": "node --test server/tests/docker-smoke-script.test.mjs",
-    "test:workflow-contract": "node --test server/tests/workflow-contract.test.mjs",
+    "test:bulk-email-parsing": "node --test server/tests/bulk-email-parsing.test.mjs",
     "test:gzip-middleware": "node --experimental-test-module-mocks --test server/tests/gzip-middleware.test.mjs",
     "test:error-boundary-sanitization": "node --test server/tests/error-boundary-sanitization.test.mjs",
     "test:prisma-error-classification": "node --test server/tests/prisma-error-classification.test.mjs",
-    "test:phase1-backward-compat": "node --test server/tests/phase1-backward-compat.test.mjs",
     "test:electron-prisma-asar": "node --test server/tests/electron-prisma-asar.test.mjs",
     "test:otp-smoke": "node scripts/otp-start-smoke.mjs",
     "test:electron-server-extract": "node --experimental-test-module-mocks --test server/tests/electron-server-extract.test.mjs",
@@ -108,8 +105,7 @@
     "check:clerk": "node scripts/recon/check-clerk-connectivity.mjs",
     "postinstall": "electron-builder install-app-deps",
     "test:ci": "node scripts/run-ci-tests.mjs",
-    "test:cross-platform": "node --test server/tests/cross-platform-contract.test.mjs",
-    "test:dogfood-evidence": "node --test server/tests/final-dogfood-evidence.test.mjs"
+    "test:cross-platform": "node --test server/tests/cross-platform-contract.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",

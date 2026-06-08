@@ -7,15 +7,21 @@ on:
       - master
   workflow_dispatch:
 
+# Don't pile up duplicate runs on rapid pushes to the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: "file:./prisma/ci.db"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  HYDRA_DATA_DIR: ".hydra-ci-data"
+  JWT_SECRET: "ci-test-secret-32-characters-long"
+
 jobs:
   verify:
-    name: lint, test, gate
+    name: lint, test, gate (ubuntu)
     runs-on: ubuntu-22.04
-    env:
-      DATABASE_URL: "file:./prisma/ci.db"
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-      HYDRA_DATA_DIR: ".hydra-ci-data"
-      JWT_SECRET: "ci-test-secret-32-characters-long"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -24,7 +30,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # build before test:ci — test:gzip-middleware reads dist/assets.
       - run: npm run build
       - run: npm run test:ci
       - run: npm run gate
+
+  # Windows is a real target now. This runs the (fast, no-GUI) test suite on
+  # Windows so path/line-ending/native regressions are caught on every PR, not
+  # only at release time. No packaging here — release.yml builds the installer.
+  verify-windows:
+    name: test:ci (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
       - run: npm run build
+      - run: npm run test:ci
