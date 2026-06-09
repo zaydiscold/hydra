@@ -469,6 +469,8 @@ class PoolController extends BaseController {
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       // Fetch latest 100 requests for the log table
+      // ⚡ Bolt: Use existing cached model fetch rather than re-querying the DB
+      // on every traffic dashboard poll.
       const [rawLogs, metrics, modelPrices, routing] = await Promise.all([
         prisma.requestLog.findMany({
           take: 100,
@@ -496,14 +498,7 @@ class PoolController extends BaseController {
           where: { createdAt: { gte: oneDayAgo } },
           _count: { id: true },
         }),
-        prisma.cachedModel.findMany({
-          select: {
-            id: true,
-            promptPrice: true,
-            completionPrice: true,
-            requestPrice: true,
-          },
-        }),
+        modelCatalog.getCachedPoolModels(),
         rotationManager.getStatusAsync(),
       ]);
       const pricesByModel = new Map(modelPrices.map((model) => [model.id, model]));
