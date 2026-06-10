@@ -51,6 +51,12 @@ class PoolController extends BaseController {
     try {
       const allAccounts = await store.getAllAccountsWithKeys(req.user.id);
 
+      // ⚡ Bolt: Fetch all local keys for all accounts in one query instead of N queries
+      const localKeysMap = await store.getLocalKeysForAccounts(
+        req.user.id,
+        allAccounts.map((a) => a.id)
+      );
+
       const accountResults = await Promise.allSettled(
         allAccounts.map(async (account) => {
           throwIfAborted(requestAbort.signal);
@@ -87,7 +93,7 @@ class PoolController extends BaseController {
           }
 
           // Get local DB records to merge isPooled + hasKeyString
-          const localKeys = await store.getLocalKeys(req.user.id, account.id);
+          const localKeys = localKeysMap.get(account.id) || [];
           const localMap = new Map(localKeys.map((k) => [k.hash, k]));
 
           const enrichedKeys = liveKeys.map((k) => {

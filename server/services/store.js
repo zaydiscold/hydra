@@ -1129,6 +1129,35 @@ export async function getLocalKeys(userId, accountId) {
   });
 }
 
+export async function getLocalKeysForAccounts(userId, accountIds) {
+  if (!accountIds || accountIds.length === 0) return new Map();
+
+  const keys = await prisma.key.findMany({
+    where: { accountId: { in: accountIds }, account: { userId } },
+  });
+
+  const map = new Map();
+  for (const accountId of accountIds) {
+    map.set(accountId, []);
+  }
+
+  for (const keyRecord of keys) {
+    let key = null;
+    if (keyRecord.key) {
+      try {
+        key = decrypt(keyRecord.key) || null;
+      } catch (err) {
+        logger.warn(`[STORE] Failed to decrypt local key hash=${keyRecord.hash}: ${err.message}`);
+        key = null;
+      }
+    }
+    const enriched = { ...keyRecord, key };
+    map.get(keyRecord.accountId).push(enriched);
+  }
+
+  return map;
+}
+
 export async function registerKeyString(userId, hash, rawKeyString) {
   const normalizedKey = rawKeyString?.trim();
   if (!normalizedKey) {
