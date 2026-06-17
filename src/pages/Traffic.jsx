@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useTraffic } from '../hooks/useTraffic';
 import AnimeText from '../components/AnimeText';
 import ScrambleText from '../components/ScrambleText';
@@ -41,6 +42,125 @@ function describeRoute(log) {
     detail: descriptions[log.outcome] || 'Legacy log row without route-attempt telemetry.',
   };
 }
+
+// ⚡ Bolt: Extracted table row into memoized component to avoid re-rendering 100 unchanged rows on every background traffic poll.
+const TrafficRow = memo(function TrafficRow({ log }) {
+  const isErr = log.status >= 400;
+  const shortHash = typeof log.keyHash === 'string' ? log.keyHash.slice(0, 8) : 'deleted';
+  const routeName = log.key?.name || (log.keyHash ? 'Archived key' : 'Deleted key');
+  const routeAlias = log.key?.account?.alias || (log.keyHash ? 'Archived account' : 'Deleted account');
+  const at = new Date(log.createdAt);
+  const stamp = at.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' });
+  const route = describeRoute(log);
+  const costPrefix = log.costSource === 'catalog_estimate' ? '~' : '';
+
+  return (
+    <tr>
+      <td className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+        {stamp}
+      </td>
+      <td>
+        <span
+          className={`badge ${isErr ? 'badge-error' : 'badge-success'}`}
+          title={route.detail}
+        >
+          {log.status}
+        </span>
+      </td>
+      <td style={{ minWidth: 118, verticalAlign: 'middle' }} title={route.detail}>
+        <div className="traffic-route-label mono">{route.label}</div>
+        <div className={`traffic-route-outcome traffic-route-outcome--${isErr ? 'error' : 'ok'}`}>
+          {log.outcome || 'legacy'}
+        </div>
+      </td>
+      <td
+        className="mono"
+        style={{
+          fontSize: '0.8rem',
+          maxWidth: 220,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          verticalAlign: 'middle'
+        }}
+        title={log.model}
+      >
+        {log.model}
+      </td>
+      <td style={{ fontSize: '0.82rem', fontWeight: 600, verticalAlign: 'middle' }}>
+        {routeAlias}
+      </td>
+      <td style={{ verticalAlign: 'middle' }}>
+        <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{routeName}</div>
+        <div
+          className="mono"
+          style={{
+            fontSize: '0.68rem',
+            color: 'var(--text-tertiary)',
+            marginTop: 2,
+            userSelect: 'text',
+            cursor: 'text'
+          }}
+        >
+          {shortHash}
+        </div>
+      </td>
+      <td style={{ verticalAlign: 'middle' }}>
+        {log.clientHint ? (
+          <span className="badge badge-info" style={{ fontSize: '0.7rem', textTransform: 'lowercase' }}>
+            {log.clientHint}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>—</span>
+        )}
+      </td>
+      <td
+        className="mono"
+        style={{
+          fontSize: '0.8rem',
+          textAlign: 'right',
+          color: log.latencyMs > 5000 ? 'var(--status-warning)' : 'inherit',
+          verticalAlign: 'middle'
+        }}
+      >
+        {log.latencyMs}ms
+      </td>
+      <td
+        className="mono"
+        style={{
+          fontSize: '0.8rem',
+          textAlign: 'right',
+          color: 'var(--text-tertiary)',
+          verticalAlign: 'middle'
+        }}
+      >
+        {(log.promptTokens !== null && log.completionTokens !== null) ? `${log.promptTokens}/${log.completionTokens}` : '—'}
+      </td>
+      <td
+        className="mono"
+        style={{
+          minWidth: 132,
+          fontSize: '0.72rem',
+          textAlign: 'right',
+          color: 'var(--text-secondary)',
+          verticalAlign: 'middle'
+        }}
+        title={log.costSource === 'openrouter_usage'
+          ? `OpenRouter reported ${formatUsd(log.totalCost)} total usage. Input and output splits use the cached catalog rate.`
+          : log.costSource === 'catalog_estimate'
+            ? 'Estimated from cached OpenRouter per-token model prices.'
+            : 'Refresh the OpenRouter model catalog in Pool Manager to estimate pricing.'}
+      >
+        {log.inputCost !== null || log.outputCost !== null ? (
+          <>
+            <div>{costPrefix}{formatUsd(log.inputCost)} / {costPrefix}{formatUsd(log.outputCost)}</div>
+            <div className="traffic-cost-total">{formatUsd(log.totalCost)} total</div>
+          </>
+        ) : '—'}
+      </td>
+    </tr>
+  );
+});
 
 export default function Traffic({ addToast }) {
   const { data, loading, refreshing, fetchTraffic } = useTraffic({ addToast });
@@ -190,122 +310,9 @@ export default function Traffic({ addToast }) {
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log) => {
-                  const isErr = log.status >= 400;
-                  const shortHash = typeof log.keyHash === 'string' ? log.keyHash.slice(0, 8) : 'deleted';
-                  const routeName = log.key?.name || (log.keyHash ? 'Archived key' : 'Deleted key');
-                  const routeAlias = log.key?.account?.alias || (log.keyHash ? 'Archived account' : 'Deleted account');
-                  const at = new Date(log.createdAt);
-                  const stamp = at.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' });
-                  const route = describeRoute(log);
-                  const costPrefix = log.costSource === 'catalog_estimate' ? '~' : '';
-                  return (
-                    <tr key={log.id}>
-                      <td className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-                        {stamp}
-                      </td>
-                      <td>
-                        <span
-                          className={`badge ${isErr ? 'badge-error' : 'badge-success'}`}
-                          title={route.detail}
-                        >
-                          {log.status}
-                        </span>
-                      </td>
-                      <td style={{ minWidth: 118, verticalAlign: 'middle' }} title={route.detail}>
-                        <div className="traffic-route-label mono">{route.label}</div>
-                        <div className={`traffic-route-outcome traffic-route-outcome--${isErr ? 'error' : 'ok'}`}>
-                          {log.outcome || 'legacy'}
-                        </div>
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          fontSize: '0.8rem',
-                          maxWidth: 220,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          verticalAlign: 'middle'
-                        }}
-                        title={log.model}
-                      >
-                        {log.model}
-                      </td>
-                      <td style={{ fontSize: '0.82rem', fontWeight: 600, verticalAlign: 'middle' }}>
-                        {routeAlias}
-                      </td>
-                      <td style={{ verticalAlign: 'middle' }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{routeName}</div>
-                        <div
-                          className="mono"
-                          style={{
-                            fontSize: '0.68rem',
-                            color: 'var(--text-tertiary)',
-                            marginTop: 2,
-                            userSelect: 'text',
-                            cursor: 'text'
-                          }}
-                        >
-                          {shortHash}
-                        </div>
-                      </td>
-                      <td style={{ verticalAlign: 'middle' }}>
-                        {log.clientHint ? (
-                          <span className="badge badge-info" style={{ fontSize: '0.7rem', textTransform: 'lowercase' }}>
-                            {log.clientHint}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>—</span>
-                        )}
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          fontSize: '0.8rem',
-                          textAlign: 'right',
-                          color: log.latencyMs > 5000 ? 'var(--status-warning)' : 'inherit',
-                          verticalAlign: 'middle'
-                        }}
-                      >
-                        {log.latencyMs}ms
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          fontSize: '0.8rem',
-                          textAlign: 'right',
-                          color: 'var(--text-tertiary)',
-                          verticalAlign: 'middle'
-                        }}
-                      >
-                        {(log.promptTokens !== null && log.completionTokens !== null) ? `${log.promptTokens}/${log.completionTokens}` : '—'}
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          minWidth: 132,
-                          fontSize: '0.72rem',
-                          textAlign: 'right',
-                          color: 'var(--text-secondary)',
-                          verticalAlign: 'middle'
-                        }}
-                        title={log.costSource === 'openrouter_usage'
-                          ? `OpenRouter reported ${formatUsd(log.totalCost)} total usage. Input and output splits use the cached catalog rate.`
-                          : log.costSource === 'catalog_estimate'
-                            ? 'Estimated from cached OpenRouter per-token model prices.'
-                            : 'Refresh the OpenRouter model catalog in Pool Manager to estimate pricing.'}
-                      >
-                        {log.inputCost !== null || log.outputCost !== null ? (
-                          <>
-                            <div>{costPrefix}{formatUsd(log.inputCost)} / {costPrefix}{formatUsd(log.outputCost)}</div>
-                            <div className="traffic-cost-total">{formatUsd(log.totalCost)} total</div>
-                          </>
-                        ) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {logs.map((log) => (
+                  <TrafficRow key={log.id} log={log} />
+                ))}
               </tbody>
             </table>
           </div>
