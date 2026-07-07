@@ -26,6 +26,9 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
       if (immediate) pendingImmediate = true;
       clear();
       if (cancelled || document.hidden) return;
+      // Also pause when the window is visible but unfocused (another app/window
+      // is active); visibilitychange only covers minimize/occlusion, not focus.
+      if (typeof document.hasFocus === 'function' && !document.hasFocus()) return;
       // A run is in flight; its finally reschedules and honors pendingImmediate.
       // Returning here (not arming a 0ms timer) avoids a hide/show busy-spin.
       if (running) return;
@@ -62,8 +65,17 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
       }
       else schedule(true);
     };
+    const handleBlur = () => {
+      clear();
+      abort();
+    };
+    const handleFocus = () => schedule(true);
 
     document.addEventListener('visibilitychange', handleVisibility);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('blur', handleBlur);
+      window.addEventListener('focus', handleFocus);
+    }
     schedule();
 
     return () => {
@@ -71,6 +83,10 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
       clear();
       abort();
       document.removeEventListener('visibilitychange', handleVisibility);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('blur', handleBlur);
+        window.removeEventListener('focus', handleFocus);
+      }
     };
   }, [delayMs, enabled, owner, task]);
 }
