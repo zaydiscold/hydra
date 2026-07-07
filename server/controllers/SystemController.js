@@ -61,7 +61,12 @@ class SystemController extends BaseController {
   async getHealth(req, res) {
     const requestAbort = bindRequestAbort(req, res, 'system health request');
     try {
-      if (shouldProbeUpstream()) {
+      // When we're not confirmed-online, re-probe on every health poll (client
+      // polls every 30s) so the OFFLINE banner recovers as soon as connectivity
+      // returns instead of waiting out the full 60s throttle used when healthy.
+      const currentUpstream = getUpstreamHealth();
+      const upstreamProbeIntervalMs = currentUpstream.status === 'online' ? 60_000 : 10_000;
+      if (shouldProbeUpstream({ minIntervalMs: upstreamProbeIntervalMs })) {
         await probeOpenRouterReachability({ signal: requestAbort.signal });
       }
       const pool = await rotationManager.getStatusAsync();

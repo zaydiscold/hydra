@@ -7,6 +7,7 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
 
     let cancelled = false;
     let running = false;
+    let pendingImmediate = false;
     let timer = null;
     let controller = null;
 
@@ -21,9 +22,14 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
       controller = null;
     };
 
-    const schedule = () => {
+    const schedule = (immediate = false) => {
+      if (immediate) pendingImmediate = true;
       clear();
       if (cancelled || document.hidden) return;
+      // A run is in flight; its finally reschedules and honors pendingImmediate.
+      // Returning here (not arming a 0ms timer) avoids a hide/show busy-spin.
+      if (running) return;
+      const delay = pendingImmediate ? 0 : delayMs;
       timer = setTrackedTimeout(owner, async () => {
         timer = null;
         if (cancelled || document.hidden || running) {
@@ -31,6 +37,7 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
           return;
         }
 
+        pendingImmediate = false;
         running = true;
         const taskController = new AbortController();
         controller = taskController;
@@ -45,7 +52,7 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
           running = false;
           schedule();
         }
-      }, delayMs);
+      }, delay);
     };
 
     const handleVisibility = () => {
@@ -53,7 +60,7 @@ export function useVisibleRecurringTask(owner, task, delayMs, { enabled = true }
         clear();
         abort();
       }
-      else schedule();
+      else schedule(true);
     };
 
     document.addEventListener('visibilitychange', handleVisibility);

@@ -16,7 +16,16 @@ function isoNow() {
 function normalizeError(err) {
   if (!err) return 'Unknown upstream error';
   if (err.name === 'AbortError') return 'OpenRouter connectivity check timed out';
-  return err.message || String(err);
+  const base = err.message || String(err);
+  // undici collapses low-level failures into a generic "fetch failed" TypeError,
+  // stashing the real reason (ENOTFOUND, ECONNREFUSED, cert/TLS errors, connect
+  // timeouts) on err.cause. Surface it so the OFFLINE banner is diagnosable.
+  const cause = err.cause;
+  if (cause) {
+    const detail = cause.code || cause.message || (typeof cause === 'string' ? cause : '');
+    if (detail && !base.includes(detail)) return `${base} (${detail})`;
+  }
+  return base;
 }
 
 export function recordUpstreamSuccess({ statusCode } = {}) {
