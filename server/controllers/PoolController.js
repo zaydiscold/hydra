@@ -16,6 +16,11 @@ import { enrichRequestLogPricing, getProxyMaxKeyAttempts } from '../services/pro
 const _liveKeysCache = new Map(); // accountId → { keys, expiresAt }
 const LIVE_KEYS_TTL_MS = 2 * 60 * 1000;
 
+// Cache for Traffic metrics query — 15s TTL.
+// Reduces DB load on the frequently-polled getTraffic endpoint.
+const _metricsCache = { data: null, expiresAt: 0 };
+const METRICS_TTL_MS = 15 * 1000;
+
 function getCachedLiveKeys(accountId) {
   const entry = _liveKeysCache.get(accountId);
   if (!entry || Date.now() > entry.expiresAt) { _liveKeysCache.delete(accountId); return null; }
@@ -471,6 +476,23 @@ class PoolController extends BaseController {
       // Fetch latest 100 requests for the log table
       // ⚡ Bolt: Use existing cached model fetch rather than re-querying the DB
       // on every traffic dashboard poll.
+
+      const now = Date.now();
+      let metricsPromise;
+      if (_metricsCache.data && now < _metricsCache.expiresAt) {
+        metricsPromise = Promise.resolve(_metricsCache.data);
+      } else {
+        metricsPromise = prisma.requestLog.groupBy({
+          by: ['status'],
+          where: { createdAt: { gte: oneDayAgo } },
+          _count: { id: true },
+        }).then(metrics => {
+          _metricsCache.data = metrics;
+          _metricsCache.expiresAt = Date.now() + METRICS_TTL_MS;
+          return metrics;
+        });
+      }
+
       const [rawLogs, metrics, modelPrices, routing] = await Promise.all([
         prisma.requestLog.findMany({
           take: 100,
@@ -492,12 +514,8 @@ class PoolController extends BaseController {
             key: { select: { name: true, account: { select: { alias: true } } } },
           },
         }),
-        // Calculate basic stats for the last 24h.
-        prisma.requestLog.groupBy({
-          by: ['status'],
-          where: { createdAt: { gte: oneDayAgo } },
-          _count: { id: true },
-        }),
+        // Calculate basic stats for the last 24h (cached 15s)
+        metricsPromise,
         modelCatalog.getCachedPoolModels(),
         rotationManager.getStatusAsync(),
       ]);

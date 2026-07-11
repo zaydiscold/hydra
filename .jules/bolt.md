@@ -1,3 +1,6 @@
 ## 2026-06-08 - [Avoid Re-Querying Static DB Data if Cache Exists]
 **Learning:** In applications using frequent polling (like a live traffic dashboard), direct database queries for static or slow-changing data (like model catalogs/prices) can cause unnecessary DB load. The application already maintained an in-memory cache for models `getCachedPoolModels()`, but `getTraffic` was directly querying the DB using `prisma.cachedModel.findMany` instead of utilizing the cache.
 **Action:** Always check if a caching layer or service already exists for lookup/reference data before writing direct database queries, especially on high-frequency endpoints.
+## 2026-06-08 - [Traffic Metrics Caching]
+**Learning:** Frequent polling of the traffic dashboard caused unnecessary repeated DB queries for calculating metrics using `prisma.requestLog.groupBy`.
+**Action:** Implemented a short-lived (15s) in-memory cache to store these metrics. Short TTLs are perfect for live dashboards to significantly reduce DB load without noticeable staleness.
