@@ -241,7 +241,9 @@ export async function getBestManagementKeys(accountIds) {
       accountId: { in: accountIds },
       status: 'active'
     },
-    orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }]
+    orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }],
+    // ⚡ Bolt: Leverage database distinct to avoid fetching unnecessary rows over the engine boundary.
+    distinct: ['accountId']
   });
 
   const bestKeys = new Map();
