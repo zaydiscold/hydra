@@ -241,23 +241,23 @@ export async function getBestManagementKeys(accountIds) {
       accountId: { in: accountIds },
       status: 'active'
     },
-    orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }]
+    orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }],
+    distinct: ['accountId']
   });
 
   const bestKeys = new Map();
   for (const key of keys) {
-    if (!bestKeys.has(key.accountId)) {
-      bestKeys.set(key.accountId, {
-        id: key.id,
-        accountId: key.accountId,
-        key: decrypt(key.encryptedKey),
-        name: key.name,
-        status: key.status,
-        metadata: key.metadata ? JSON.parse(key.metadata) : null,
-        lastUsedAt: key.lastUsedAt,
-        createdAt: key.createdAt
-      });
-    }
+    // ⚡ Bolt: No need to check if map has accountId as we use distinct in the DB query
+    bestKeys.set(key.accountId, {
+      id: key.id,
+      accountId: key.accountId,
+      key: decrypt(key.encryptedKey),
+      name: key.name,
+      status: key.status,
+      metadata: key.metadata ? JSON.parse(key.metadata) : null,
+      lastUsedAt: key.lastUsedAt,
+      createdAt: key.createdAt
+    });
   }
 
   return bestKeys;
