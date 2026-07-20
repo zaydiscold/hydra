@@ -241,23 +241,24 @@ export async function getBestManagementKeys(accountIds) {
       accountId: { in: accountIds },
       status: 'active'
     },
-    orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }]
+    // ⚡ Bolt: Pushed deduplication to DB using `distinct` to reduce Node.js memory overhead.
+    // In PostgreSQL, `distinct` fields must appear first in `orderBy`.
+    orderBy: [{ accountId: 'asc' }, { lastUsedAt: 'desc' }, { createdAt: 'desc' }],
+    distinct: ['accountId']
   });
 
   const bestKeys = new Map();
   for (const key of keys) {
-    if (!bestKeys.has(key.accountId)) {
-      bestKeys.set(key.accountId, {
-        id: key.id,
-        accountId: key.accountId,
-        key: decrypt(key.encryptedKey),
-        name: key.name,
-        status: key.status,
-        metadata: key.metadata ? JSON.parse(key.metadata) : null,
-        lastUsedAt: key.lastUsedAt,
-        createdAt: key.createdAt
-      });
-    }
+    bestKeys.set(key.accountId, {
+      id: key.id,
+      accountId: key.accountId,
+      key: decrypt(key.encryptedKey),
+      name: key.name,
+      status: key.status,
+      metadata: key.metadata ? JSON.parse(key.metadata) : null,
+      lastUsedAt: key.lastUsedAt,
+      createdAt: key.createdAt
+    });
   }
 
   return bestKeys;
