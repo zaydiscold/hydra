@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useOwnedTimeouts } from '../hooks/useOwnedTimeouts';
 
 export default function RegisterKeyModal({ hash, name, onClose, onConfirm }) {

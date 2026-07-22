@@ -4,3 +4,6 @@
 ## 2026-07-20 - [Prisma Distinct requires matching OrderBy on PostgreSQL]
 **Learning:** When using `distinct` combined with `orderBy` in Prisma, PostgreSQL translates this into a `DISTINCT ON` SQL clause. This strictly requires that the distinct field(s) be the first argument(s) in the `orderBy` array.
 **Action:** Always prepend the `distinct` column(s) to the `orderBy` array when using Prisma deduplication to avoid fatal runtime errors in PostgreSQL environments.
+## 2026-07-22 - [Avoid N+1 queries when mapping related lists]
+**Learning:** Resolving DB N+1 queries manually mapped in code (like `localMap = new Map()`) per loop item is highly inefficient and creates significant latency as account sizes grow.
+**Action:** When a controller requires related data (like `keys`) for a list of items (`accounts`), push this to a batched lookup method in the service layer using `where: { <foreign_key>: { in: <ids> } }`, returning a Map or grouping to prevent redundant query overhead.

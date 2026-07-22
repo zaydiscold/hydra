@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePools } from '../hooks/usePools';
 import { useOwnedTimeouts } from '../hooks/useOwnedTimeouts';

@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { parseEmailEntries } from '../utils/auth';
 import DevBackendHint from '../components/DevBackendHint';
 

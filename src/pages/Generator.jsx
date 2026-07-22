@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '../api';
 import AnimeText from '../components/AnimeText';
 import { clearTrackedTimeout, setTrackedTimeout } from '../lib/runtimeDiagnostics.js';

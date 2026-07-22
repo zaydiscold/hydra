@@ -1,4 +1,5 @@
-import React from 'react';
+import { Component } from 'react';
+
 import { isElectron, native, tryNative } from '../lib/native';
 
 // Generate a short correlation ID for error tracking without exposing internals
@@ -10,7 +11,7 @@ function nextCorrelationId() {
   return `${ts}-${rand}-${_correlationCounter}`;
 }
 
-export default class ErrorBoundary extends React.Component {
+export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null, correlationId: null };

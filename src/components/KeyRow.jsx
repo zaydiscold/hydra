@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react';
+import { memo, useState } from 'react';
 import ScrambleText from './ScrambleText';
 import {
   KeyIcon,

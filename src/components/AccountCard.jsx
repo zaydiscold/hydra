@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import AuthBadge from './AuthBadge';
 import { timeAgo } from '../utils/time';
 import { formatCurrency, getBalanceStatus } from '../utils/format';

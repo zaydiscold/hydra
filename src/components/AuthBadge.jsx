@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 
 // Auth method badge — identifies how the account logs in (OTP, PASS, MAGIC LINK, etc.)
 // Dims when the session is not active so it's clear the method isn't currently signed in.
