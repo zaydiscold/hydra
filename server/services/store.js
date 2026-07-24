@@ -1129,6 +1129,39 @@ export async function getLocalKeys(userId, accountId) {
   });
 }
 
+/**
+ * ⚡ Bolt: Fetch local keys for all accounts of a user in a single query
+ * to avoid N+1 query issues during batch processing.
+ */
+export async function getAllLocalKeys(userId) {
+  const keys = await prisma.key.findMany({
+    where: { account: { userId } },
+  });
+
+  const accountKeysMap = new Map();
+
+  for (const keyRecord of keys) {
+    let key = null;
+    if (keyRecord.key) {
+      try {
+        key = decrypt(keyRecord.key) || null;
+      } catch (err) {
+        logger.warn(`[STORE] Failed to decrypt local key hash=${keyRecord.hash}: ${err.message}`);
+        key = null;
+      }
+    }
+
+    const processedKey = { ...keyRecord, key };
+
+    if (!accountKeysMap.has(keyRecord.accountId)) {
+      accountKeysMap.set(keyRecord.accountId, []);
+    }
+    accountKeysMap.get(keyRecord.accountId).push(processedKey);
+  }
+
+  return accountKeysMap;
+}
+
 export async function registerKeyString(userId, hash, rawKeyString) {
   const normalizedKey = rawKeyString?.trim();
   if (!normalizedKey) {

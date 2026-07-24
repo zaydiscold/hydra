@@ -4,3 +4,6 @@
 ## 2026-07-20 - [Prisma Distinct requires matching OrderBy on PostgreSQL]
 **Learning:** When using `distinct` combined with `orderBy` in Prisma, PostgreSQL translates this into a `DISTINCT ON` SQL clause. This strictly requires that the distinct field(s) be the first argument(s) in the `orderBy` array.
 **Action:** Always prepend the `distinct` column(s) to the `orderBy` array when using Prisma deduplication to avoid fatal runtime errors in PostgreSQL environments.
+## 2026-07-24 - [Fix N+1 query in PoolController by batching local keys fetch]
+**Learning:** In endpoints that iterate over accounts (like `PoolController.getPoolData`), querying related data (like local keys) per account inside the loop creates an N+1 query problem. This can cause high database load and latency as the number of accounts grows.
+**Action:** Always fetch dependent data for all items in a single query beforehand and group it into an in-memory `Map` or hash table for O(1) lookups during iteration.
