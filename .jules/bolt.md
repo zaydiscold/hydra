@@ -4,3 +4,6 @@
 ## 2026-07-20 - [Prisma Distinct requires matching OrderBy on PostgreSQL]
 **Learning:** When using `distinct` combined with `orderBy` in Prisma, PostgreSQL translates this into a `DISTINCT ON` SQL clause. This strictly requires that the distinct field(s) be the first argument(s) in the `orderBy` array.
 **Action:** Always prepend the `distinct` column(s) to the `orderBy` array when using Prisma deduplication to avoid fatal runtime errors in PostgreSQL environments.
+## 2026-07-26 - [N+1 query problem inside Promise.allSettled loop]
+**Learning:** Performing database queries inside parallel loops like `Promise.allSettled` over multiple entities (e.g. accounts) can cause N+1 query problems and significantly impact backend performance, especially when there are many entities.
+**Action:** Extract database lookups inside parallel promise loops into a single batch query executed before the loop. Index the batch results into a `Map` by entity ID for O(1) lookups inside the loop.
