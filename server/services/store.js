@@ -1107,6 +1107,28 @@ export async function getPooledKeys(userId) {
     .filter((keyRecord) => keyRecord.keyString);
 }
 
+export async function getAllLocalKeysForUser(userId) {
+  const keys = await prisma.key.findMany({
+    where: { account: { userId } },
+  });
+
+  return keys.map((keyRecord) => {
+    let key = null;
+    if (keyRecord.key) {
+      try {
+        key = decrypt(keyRecord.key) || null;
+      } catch (err) {
+        logger.warn(`[STORE] Failed to decrypt local key hash=${keyRecord.hash}: ${err.message}`);
+        key = null;
+      }
+    }
+    return {
+      ...keyRecord,
+      key,
+    };
+  });
+}
+
 export async function getLocalKeys(userId, accountId) {
   const keys = await prisma.key.findMany({
     where: { accountId, account: { userId } },
