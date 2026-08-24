@@ -7,6 +7,7 @@
  */
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readRuntimePortStateSync } from './runtime-port.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
@@ -19,11 +20,13 @@ let initialized = false;
  * raw CLI we default to the dev DB at the repo root.
  */
 function pinEnv() {
+  const runtimeState = readRuntimePortStateSync({ root: REPO_ROOT });
+  const runtimeDataDir = runtimeState?.path ? dirname(runtimeState.path) : null;
   if (!process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = `file:${resolve(REPO_ROOT, 'data', 'hydra.db')}`;
+    process.env.DATABASE_URL = `file:${resolve(runtimeDataDir || resolve(REPO_ROOT, 'data'), 'hydra.db')}`;
   }
   if (!process.env.HYDRA_DATA_DIR) {
-    process.env.HYDRA_DATA_DIR = resolve(REPO_ROOT, 'data');
+    process.env.HYDRA_DATA_DIR = runtimeDataDir || resolve(REPO_ROOT, 'data');
   }
 }
 

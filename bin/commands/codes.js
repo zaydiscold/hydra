@@ -46,12 +46,13 @@ function usage() {
 
   hydra codes preflight <code> [--all | --account <id> ... | <id> ...]
   hydra codes redeem <code> --account <id> --yes
+  hydra codes redeem <code> --all --yes
   hydra codes bulk <file> --account <id> --yes
 
 Flags:
   --json        Machine-readable output
-  --all         Preflight every stored account
-  --account ID  Select an account; may be repeated
+  --all         Select every stored account (required explicitly for live bulk redeem)
+  --account ID  Select an account by ID prefix, alias, or email; may be repeated
   --yes         Required for live redemption actions
 `);
 }
@@ -68,7 +69,13 @@ function resolveAccountIds(argv, code, accounts) {
   }
 
   return [...ids].map((value) => {
-    const match = accounts.find((account) => account.id === value || account.id.startsWith(value));
+    const needle = String(value).toLowerCase();
+    const match = accounts.find((account) => (
+      account.id === value
+      || account.id.startsWith(value)
+      || String(account.alias || '').toLowerCase() === needle
+      || String(account.email || '').toLowerCase() === needle
+    ));
     return match?.id || value;
   });
 }
@@ -134,12 +141,15 @@ async function runPreflight(argv, user, services) {
   else status('warn', `${result.blocked.length} account${result.blocked.length === 1 ? '' : 's'} blocked; fix auth before redeeming`);
 }
 
-async function runRedeem(argv, user) {
+async function runRedeem(argv, user, services) {
   const wantJson = hasFlag(argv, '--json');
   const code = positional(argv)[1];
-  const accountId = valuesFor(argv, '--account')[0] || positional(argv)[2];
-  if (!code || !accountId) {
-    process.stderr.write(`${c.err('✗')} redeem requires <code> and --account <id>\n`);
+  const requestedAccountIds = valuesFor(argv, '--account');
+  const positionalAccountId = positional(argv)[2];
+  if (positionalAccountId) requestedAccountIds.push(positionalAccountId);
+  const selectingAll = hasFlag(argv, '--all');
+  if (!code || (!selectingAll && requestedAccountIds.length === 0)) {
+    process.stderr.write(`${c.err('✗')} redeem requires <code> and --account <id>, or --all\n`);
     usage();
     process.exitCode = 1;
     return;
@@ -150,10 +160,44 @@ async function runRedeem(argv, user) {
     return;
   }
 
-  const { redeemCode } = await import('../../server/services/dashboard-api.js');
-  const result = await redeemCode(user.id, accountId, code);
-  if (wantJson) json({ accountId, code, result });
-  else status(result?.success === false ? 'warn' : 'ok', result?.message || `Redeemed ${code} on ${accountId}`);
+  const accounts = await services.store.getAccounts(user.id);
+  const accountIds = resolveAccountIds(
+    selectingAll ? ['--all'] : requestedAccountIds.flatMap((id) => ['--account', id]),
+    code,
+    accounts,
+  );
+  const { preflightRedeemAccounts, redeemCode, bulkRedeemCode } = await import('../../server/services/dashboard-api.js');
+  const preflight = await preflightRedeemAccounts(user.id, accountIds);
+  if (!preflight.allReady) {
+    const names = preflight.blocked.map((row) => row.alias || row.accountId.slice(0, 8)).join(', ');
+    const error = `Redemption preflight blocked ${preflight.blocked.length} account(s): ${names}`;
+    if (wantJson) json({ code, accountIds, preflight, error });
+    else process.stderr.write(`${c.err('✗')} ${error}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (accountIds.length === 1) {
+    const result = await redeemCode(user.id, accountIds[0], code);
+    if (wantJson) json({ code, accountId: accountIds[0], preflight, result });
+    else status(result?.success === false ? 'warn' : 'ok', result?.message || `Redeemed ${code} on ${accountIds[0]}`);
+    return;
+  }
+
+  const results = await bulkRedeemCode(user.id, accountIds, code);
+  if (wantJson) {
+    json({ code, accountIds, preflight, results });
+    return;
+  }
+  table(results.map((row) => ({
+    account: row.alias || row.accountId,
+    status: row.success === false ? c.err('failed') : c.ok('ok'),
+    message: row.message || row.error || '',
+  })), [
+    { key: 'account', label: 'ACCOUNT' },
+    { key: 'status', label: 'STATUS' },
+    { key: 'message', label: 'MESSAGE' },
+  ]);
 }
 
 async function runBulk(argv, user) {
@@ -182,7 +226,7 @@ async function runBulk(argv, user) {
   for (const assignment of assignments) {
     try {
       const result = await redeemCode(user.id, assignment.accountId, assignment.code);
-      results.push({ ...assignment, ok: true, result });
+      results.push({ ...assignment, ok: result?.success === true, result });
     } catch (err) {
       const classified = classifyRedeemFailure?.(err.message, err) || {};
       results.push({ ...assignment, ok: false, error: err.message, errorCode: classified.errorCode });
@@ -217,7 +261,7 @@ export async function run(argv) {
     const services = await loadServices();
     const user = await resolveUser();
     if (action === 'preflight') return await runPreflight(argv, user, services);
-    if (action === 'redeem') return await runRedeem(argv, user);
+    if (action === 'redeem') return await runRedeem(argv, user, services);
     if (action === 'bulk') return await runBulk(argv, user);
     process.stderr.write(`${c.err('✗')} unknown codes command: ${action}\n`);
     usage();

@@ -524,23 +524,24 @@ function buildAudit() {
       goalDoc.includes('Primary focus for the next 4-5 hours: performance and efficiency release')
         && releaseAudit.includes('performance and efficiency pass')
         && electronWindows.includes('HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45')
-        && electronWindows.includes('const physicsStep=hydraSplashExitStartedAt?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS')
+        && electronWindows.includes('const physicsStep=hydraSplashExitStartedAt?HYDRA_SPLASH_PORTAL_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS')
         && electronWindows.includes('Eng.update(engine,physicsStep)')
         && !electronWindows.includes('Run.create')
         && !electronWindows.includes('Run.run')
-        && electronWindows.includes('HYDRA_SPLASH_RENDER_FRAME_MS=1000/100')
+        && electronWindows.includes('HYDRA_SPLASH_INTRO_FRAME_MS=1000/45')
+        && electronWindows.includes('HYDRA_SPLASH_PORTAL_FRAME_MS=1000/30')
         && electronWindows.includes('HYDRA_SPLASH_DURATION_MS=15000')
         && electronWindows.includes('HYDRA_SPLASH_EXIT_MS=9800')
         && electronWindows.includes('HYDRA_SPLASH_PORTAL_MS=5200')
         && electronWindows.includes('engine.world.gravity.y=1.18;engine.world.gravity.scale=0.00128')
-        && electronWindows.includes('baseFontSize*(0.903+Math.random()*1.092)')
+        && electronWindows.includes('baseFontSize*(0.82+Math.random()*0.38)')
         && electronWindows.includes('const wave=.5+.5*Math.sin')
         && electronWindows.includes('function drawHydraPortal')
         && electronWindows.includes('ctx.globalCompositeOperation="lighter"')
         && electronWindows.includes('segments=Math.max(4,8-depth)')
         && electronWindows.includes('const stems=11')
         && electronWindows.includes('.vines .node')
-        && electronWindows.includes('HYDRA_SPLASH_TARGET=72')
+        && electronWindows.includes('HYDRA_SPLASH_TARGET=44')
         && !electronWindows.includes('Bod.rectangle(w/2,-WT/2,lx,WT')
         && electronWindows.includes('m.kind="shattered";hydraSplashDiagnostics.shatteredWordCount++')
         && electronWindows.includes('shuffle(items).slice(0,Math.min(n,items.length))')
@@ -726,7 +727,7 @@ function buildAudit() {
         && cliTest.includes('stale-profile cleanup moves Hydra profile dirs to a reversible backup')
         && playwrightIsolationTest.includes('cleanupEphemeralProfileDir removes only Hydra-owned ephemeral profile dirs')
         && backgroundFailureTest.includes('cleanupEphemeralProfileDir\\(profileDir\\)'),
-      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, the front animation is tightened to 15s with a unique 72-word shower, approximately 5% larger glyph sizing, faster Pica-style intro gravity, denser neuron branches, one-shot parent shattering, no top-edge ceiling overlap, and a staged 5.2s collision-free portal orbit with a canvas-owned light wave; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit, duplicate start/OTP submissions are gated, browser signup surfaces manual verification, and OTP-page submission is explicit; ordinary proxy fetches abort and stop retrying when their clients disconnect; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
+      'Splash Matter/render loops are finite and throttled through one owned Engine.update/render loop, with a 44-word body budget, restrained glyph sizing, 45 FPS intro and 30 FPS portal caps, faster Pica-style intro gravity, denser neuron branches, one-shot parent shattering, no top-edge ceiling overlap, and a staged 5.2s collision-free portal orbit with a canvas-owned light wave; Playwright launch profile dirs are removed after browser automation paths; task expiry, request-log flushing/retention, health pings, session refresh, magic-link cleanup, renderer polling, and bulk magic-link polling avoid permanent/overlapping idle intervals; Generator late-start responses are cleaned after route exit, duplicate start/OTP submissions are gated, browser signup surfaces manual verification, and OTP-page submission is explicit; ordinary proxy fetches abort and stop retrying when their clients disconnect; renderer runtime diagnostics expose owned timers/RAFs/Anime.js effects; hydra doctor reports stale profiles/process CPU/RAM and can move stale profiles into a reversible backup; focused performance contracts cover the changes',
     ),
     check(
       'test-chain',
@@ -760,7 +761,7 @@ function buildAudit() {
         && cliMain.includes('build/electron/chromium.zip')
         && cliMain.includes('Contents/Resources/chromium.zip')
         && cliMain.includes('release/win-unpacked/resources/chromium.zip')
-        && cliTest.includes('hydra top-level system commands default to the same repo data dir as service commands')
+        && cliTest.includes('hydra top-level system commands follow the active runtime data dir consistently')
         && cliTest.includes('hydra doctor recognizes packaged Chromium zip resources'),
       'hydra doctor/data-dir/logs default to the same repo runtime as service commands and doctor detects packaged Chromium zip resources',
     ),

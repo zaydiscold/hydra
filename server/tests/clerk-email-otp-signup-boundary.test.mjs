@@ -67,3 +67,30 @@ test('existing-account OTP helper stops before direct Clerk sign_up preparation'
     globalThis.fetch = originalFetch;
   }
 });
+
+test('unknown-account Clerk errors normalize to the browser-signup boundary', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return { headers: { 'set-cookie': ['__client=test-client-cookie; Path=/'] }, async text() { return ''; } };
+    }
+    return {
+      headers: {},
+      async json() {
+        return { errors: [{ long_message: "Couldn't find your account." }] };
+      },
+    };
+  };
+
+  try {
+    await assert.rejects(startEmailOTP('new-account@example.test'), (err) => {
+      assert.equal(err.code, 'SIGNUP_INTERACTIVE_REQUIRED');
+      return true;
+    });
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

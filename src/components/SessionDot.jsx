@@ -18,6 +18,10 @@ const SessionDot = memo(function SessionDot({ status, hasManagementKey, hasCrede
       label: 'Clerk dashboard session expired — re-authenticate for dashboard actions',
       glow: false,
     },
+    stale: {
+      color: 'var(--status-warning)',
+      label: 'Session age is unverified — try silent refresh before signing in',
+    },
     error: {
       color: 'var(--status-error)',
       label: 'Session data in vault could not be decrypted — check vault / Nuclear Reset',

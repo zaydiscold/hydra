@@ -80,7 +80,13 @@ function syncReadiness(account) {
   };
 }
 
-async function runSync(argv, { store, user, wantJson }) {
+/**
+ * Live-sync balances/key metadata via stored management keys.
+ * Exported so `hydra balance --refresh` reuses this exact path instead of
+ * duplicating the OpenRouter snapshot logic. `quiet` suppresses the table for
+ * callers that render their own output.
+ */
+export async function runSync(argv, { store, user, wantJson, quiet = false }) {
   if (hasFlag(argv, 'help') || hasFlag(argv, '--help') || hasFlag(argv, '-h')) {
     usage();
     return;
@@ -199,8 +205,9 @@ async function runSync(argv, { store, user, wantJson }) {
 
   if (wantJson) {
     json(report);
-    return;
+    return report;
   }
+  if (quiet) return report;
 
   table(results.map((row) => ({
     account: row.account,
@@ -215,6 +222,7 @@ async function runSync(argv, { store, user, wantJson }) {
     { key: 'balance', label: 'BALANCE', align: 'right', fmt: fmtBalance },
     { key: 'message', label: 'MESSAGE' },
   ]);
+  return report;
 }
 
 async function runPurge(argv, { store, user, wantJson }) {
@@ -382,7 +390,8 @@ export async function run(argv) {
     ]);
 
     const healthy = accounts.filter(a => a.sessionStatus === 'active').length;
-    const total = accounts.reduce((s, a) => s + (a.credits?.remaining ?? 0), 0);
+    // Unknown balances are excluded rather than counted as $0.00.
+    const total = accounts.reduce((s, a) => s + (typeof a.credits?.remaining === 'number' ? a.credits.remaining : 0), 0);
     process.stdout.write('\n');
     process.stdout.write(c.dim(`  ${accounts.length} account${accounts.length === 1 ? '' : 's'} · ${healthy} healthy · ${fmtBalance(total)} total live balance\n`));
   } finally {

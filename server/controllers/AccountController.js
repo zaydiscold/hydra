@@ -443,11 +443,12 @@ export class AccountController extends BaseController {
           const refreshed = await clerkAuth.refreshSession(cookieInput244, session.sessionCookie, {
             signal: requestAbort.signal,
           });
-          if (refreshed?.sessionToken) {
+          const refreshedSession = refreshed?.sessionCookie ?? refreshed?.sessionToken;
+          if (refreshedSession) {
             const liveStack = store.removeDeadClientCookies(session.clientCookies, refreshed.deadClientCookies);
             await store.updateAccountSession(
               req.user.id, req.params.id,
-              refreshed.sessionToken,
+              refreshedSession,
               refreshed.clientCookie ?? latestClientCookie(session),
               refreshed.sessionExpiry ?? null,
               { replaceClientCookies: liveStack },
@@ -1153,13 +1154,14 @@ export class AccountController extends BaseController {
         return this.error(res, 'Silent refresh failed — use Sign In to re-authenticate', 400);
       }
 
-      if (!refreshed?.sessionToken) {
+      const refreshedSession = refreshed?.sessionCookie ?? refreshed?.sessionToken;
+      if (!refreshedSession) {
         return this.error(res, 'Silent refresh failed — use Sign In to re-authenticate', 400);
       }
 
       await store.updateAccountSession(
         req.user.id, req.params.id,
-        refreshed.sessionToken,
+        refreshedSession,
         refreshed.clientCookie ?? latestClientCookie(session),
         refreshed.sessionExpiry ?? null,
         { replaceClientCookies: store.removeDeadClientCookies(session.clientCookies, refreshed.deadClientCookies) },

@@ -6,7 +6,7 @@ import http from 'node:http';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const PRISMA_CLI = fileURLToPath(new URL('../../node_modules/prisma/build/index.js', import.meta.url));
@@ -538,11 +538,21 @@ test('hydra serve and stop help are side-effect-light lifecycle commands', () =>
   assert.match(serveHelp, /Hydra serve/);
   assert.match(serveHelp, /server\/standalone\.js/);
   assert.match(serveHelp, /does not open Chrome, Vite, or Electron/);
+  assert.match(serveHelp, /--background/);
 
   const stopHelp = runHydra(['stop', 'help']);
   assert.match(stopHelp, /Hydra stop/);
   assert.match(stopHelp, /POST \/api\/shutdown/);
   assert.match(stopHelp, /HYDRA_TOKEN/);
+});
+
+test('hydra serve background mode follows the active runtime vault and rejects a failed bootstrap', () => {
+  const source = readFileSync(join(ROOT, 'bin/commands/serve.js'), 'utf-8');
+  assert.match(source, /readRuntimePortStateSync\(\{ root \}\)/);
+  assert.match(source, /HYDRA_DATA_DIR: dataDir/);
+  assert.match(source, /DATABASE_URL: databaseUrl/);
+  assert.match(source, /detached: background/);
+  assert.match(source, /background server exited during startup/);
 });
 
 test('hydra unlock help and missing-password path are side-effect-light', () => {
@@ -676,12 +686,15 @@ test('hydra doctor reads the packaged runtime port instead of assuming 3001', as
   }
 });
 
-test('hydra top-level system commands default to the same repo data dir as service commands', () => {
+test('hydra top-level system commands follow the active runtime data dir consistently', () => {
   const doctor = JSON.parse(runHydra(['doctor', '--json'], { HYDRA_DATA_DIR: undefined }));
   const dataDir = runHydra(['data-dir'], { HYDRA_DATA_DIR: undefined }).trim();
 
-  assert.equal(doctor.dataDir, join(ROOT, 'data'));
-  assert.equal(dataDir, join(ROOT, 'data'));
+  assert.equal(doctor.dataDir, dataDir);
+  assert.ok([
+    join(ROOT, 'data'),
+    join(homedir(), 'Library', 'Application Support', 'Hydra'),
+  ].includes(dataDir));
 });
 
 test('hydra doctor recognizes packaged Chromium zip resources', () => {
@@ -1180,7 +1193,18 @@ test('hydra codes help is side-effect-light', () => {
   assert.match(out, /Hydra codes/);
   assert.match(out, /codes preflight/);
   assert.match(out, /codes redeem/);
+  assert.match(out, /codes redeem <code> --all --yes/);
+  assert.match(out, /ID prefix, alias, or email/);
   assert.match(out, /--yes/);
+});
+
+test('hydra codes redeem supports explicitly confirmed all-account redemption with a live preflight', () => {
+  const source = readFileSync(join(ROOT, 'bin/commands/codes.js'), 'utf-8');
+  assert.match(source, /async function runRedeem\(argv, user, services\)/);
+  assert.match(source, /redeem requires <code> and --account <id>, or --all/);
+  assert.match(source, /const \{ preflightRedeemAccounts, redeemCode, bulkRedeemCode \}/);
+  assert.match(source, /await preflightRedeemAccounts\(user\.id, accountIds\)/);
+  assert.match(source, /await bulkRedeemCode\(user\.id, accountIds, code\)/);
 });
 
 test('hydra codes bulk is confirmation-gated and handles per-account redemption failures', () => {
@@ -1196,6 +1220,7 @@ test('hydra codes bulk is confirmation-gated and handles per-account redemption 
   assert.match(source, /const \{ redeemCode, classifyRedeemFailure \} = await import\('\.\.\/\.\.\/server\/services\/dashboard-api\.js'\)/);
   assert.match(source, /for \(const assignment of assignments\)/);
   assert.match(source, /await redeemCode\(user\.id, assignment\.accountId, assignment\.code\)/);
+  assert.match(source, /results\.push\(\{ \.\.\.assignment, ok: result\?\.success === true, result \}\)/);
   assert.match(source, /classifyRedeemFailure\?\.\(err\.message, err\)/);
   assert.match(source, /results\.push\(\{ \.\.\.assignment, ok: false, error: err\.message, errorCode: classified\.errorCode \}\)/);
   assert.match(source, /json\(\{ file, accountIds, codes, results \}\)/);

@@ -79,6 +79,7 @@ export function useBulkAuth(addToast) {
   const [otpCurrentIdx, setOtpCurrentIdx] = useState(0);
   const [otpLog, setOtpLog] = useSessionStorageState('hydra.bulkAuth.otpLog', []);
   const [otpSignInId, setOtpSignInId] = useState('');
+  const [otpIsSignUp, setOtpIsSignUp] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [otpBusy, setOtpBusy] = useState(false);
   const [otpMergeBusy, setOtpMergeBusy] = useState(false);
@@ -591,12 +592,15 @@ export function useBulkAuth(addToast) {
   const handleSendOtpCode = useCallback(async (current) => {
     if (!current) return;
     resetErrors();
+    setOtpIsSignUp(false);
     setOtpBusy(true);
     try {
       const res = await api.startOTP(current.id, current.email);
       setOtpSignInId(res?.data?.signInId ?? res?.signInId ?? '');
-      appendOtpLog(`OTP sent → ${current.email}`);
-      addToast?.('Check email for the 6-digit code', 'info');
+      const isSignUp = Boolean(res?.data?.isSignUp ?? res?.isSignUp);
+      setOtpIsSignUp(isSignUp);
+      appendOtpLog(`${isSignUp ? 'signup code sent' : 'OTP sent'} → ${current.email}`);
+      addToast?.(isSignUp ? 'New OpenRouter account: check email for the 6-digit code' : 'Check email for the 6-digit code', 'info');
     } catch (err) {
       setLocalError(api.formatApiErrorMessage(err));
       setErrorCopyCommand(err.hydraCopyCommand ?? '');
@@ -613,6 +617,7 @@ export function useBulkAuth(addToast) {
     appendOtpLog(`verification submitted → ${current.email}`);
     try {
       const res = await api.verifyOTPQuiet(current.id, otpSignInId, code, {
+        isSignUp: otpIsSignUp,
         autoProvision: otpProvisionEnabled,
         keyName: otpKeyName,
       });
@@ -621,6 +626,7 @@ export function useBulkAuth(addToast) {
       setOtpQueue((q) => q.map((item, i) => (i === otpCurrentIdx ? { ...item, verified: true } : item)));
       addToast?.(`${current.email} verified`, 'success');
       setOtpSignInId('');
+      setOtpIsSignUp(false);
       setOtpCode('');
       
       // Auto-provision if enabled
@@ -640,7 +646,7 @@ export function useBulkAuth(addToast) {
     } finally {
       setOtpBusy(false);
     }
-  }, [addToast, appendOtpLog, otpQueue.length, otpSignInId, otpCurrentIdx, otpKeyName, otpProvisionEnabled, resetErrors, startOtpProvisionPolling]);
+  }, [addToast, appendOtpLog, otpIsSignUp, otpQueue.length, otpSignInId, otpCurrentIdx, otpKeyName, otpProvisionEnabled, resetErrors, startOtpProvisionPolling]);
 
   const handleProvisionOtpKey = useCallback(async (current, silent = false) => {
     if (!current) return;
@@ -697,6 +703,7 @@ export function useBulkAuth(addToast) {
     resetErrors();
     setOtpMergeBusy(true);
     setOtpSignInId('');
+    setOtpIsSignUp(false);
     setOtpCode('');
     try {
       const res = await api.getAccounts(lifecycleAbortRef.current?.signal, { includePending: true });
@@ -772,6 +779,7 @@ export function useBulkAuth(addToast) {
     otpCurrentIdx, setOtpCurrentIdx,
     otpLog,
     otpSignInId,
+    otpIsSignUp,
     otpCode, setOtpCode,
     otpBusy,
     otpMergeBusy,

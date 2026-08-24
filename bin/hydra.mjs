@@ -44,6 +44,8 @@ function runNpmDev() {
 
 function getDataDir() {
   if (process.env.HYDRA_DATA_DIR) return resolve(process.env.HYDRA_DATA_DIR);
+  const runtime = resolveRuntimePortCandidateSync({ root });
+  if (runtime.state?.path) return dirname(runtime.state.path);
   return resolve(root, 'data');
 }
 
@@ -443,7 +445,9 @@ if (sub === 'help' || sub === '-h' || sub === '--help') {
     hydra status              Fleet overview: account count, healthy, balance
     hydra accounts            List every account with health, balance, age
     hydra account <id>        Show redacted account details
-    hydra balance [id]        Total live balance, or balance for one account
+    hydra balance [id]        Total balance from last sync, or one account
+    hydra balance --refresh   Sync live from OpenRouter, then print the total
+    hydra accounts sync --yes Pull live balances/keys via management keys
     hydra accounts purge      Dry-run or delete inert placeholder accounts
     hydra keys                List stored management keys
     hydra session <id>        Show stored session readiness for one account

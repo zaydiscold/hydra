@@ -6,6 +6,9 @@
 export function accountNeedsSession(sessionStatus) {
   if (sessionStatus === 'error') return true;
   if (sessionStatus === 'expired' || sessionStatus === 'none') return true;
+  // "stale" is only an age/probe signal. Silent refresh should be attempted;
+  // it does not justify forcing the user through OTP.
+  if (sessionStatus === 'stale') return false;
   if (sessionStatus === 'unknown') return false; // probe in flight — don't force re-auth yet
   return false;
 }

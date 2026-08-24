@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import { isOtpAuthMethod } from '../utils/authMethod';
 
@@ -19,17 +20,22 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
   const [password, setPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [signInId, setSignInId] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
   const [otpMode, setOtpMode] = useState(OTP_MODE.email);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [signupRequired, setSignupRequired] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setStep(initialStepForAccount(account));
     setPassword('');
     setOtpCode('');
     setSignInId('');
+    setIsSignUp(false);
     setOtpMode(OTP_MODE.email);
     setErrors({});
+    setSignupRequired(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when identity or sign-in path metadata changes, not whole account object
   }, [account.id, account.authMethod, account.passwordOnFile]);
 
@@ -40,6 +46,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
       return;
     }
     setErrors({});
+    setSignupRequired(false);
     setLoading(true);
     try {
       await api.loginAccount(account.id, password);
@@ -64,15 +71,20 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
     try {
       const res = await api.startOTP(account.id, account.email);
       const sid = res?.data?.signInId ?? res?.signInId ?? '';
+      const nextIsSignUp = Boolean(res?.data?.isSignUp ?? res?.isSignUp);
       if (!sid) {
         setErrors({ submit: 'Server did not return a sign-in id. Try again or check server logs.' });
         setLoading(false);
         return;
       }
       setSignInId(sid);
+      setIsSignUp(nextIsSignUp);
       setOtpMode(OTP_MODE.email);
       setStep('otp');
     } catch (err) {
+      if (err.code === 'SIGNUP_INTERACTIVE_REQUIRED') {
+        setSignupRequired(true);
+      }
       setErrors({ submit: api.formatApiErrorMessage(err) });
     }
     setLoading(false);
@@ -89,6 +101,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
     try {
       await api.verifyOTP(account.id, signInId, otpCode, {
         totpSecondFactor: otpMode === OTP_MODE.totp2fa,
+        isSignUp,
       });
       onDone('OTP verified — session active');
       onClose();
@@ -101,10 +114,17 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
   function handleOtpBack() {
     setOtpCode('');
     setSignInId('');
+    setIsSignUp(false);
     setOtpMode(OTP_MODE.email);
     setErrors({});
     const otpFirst = isOtpAuthMethod(account.authMethod) || account.passwordOnFile === false;
     setStep(otpFirst ? 'otp_intro' : 'password');
+  }
+
+  function openSignup() {
+    if (account.email) sessionStorage.setItem('hydra.generator.pendingSignupEmail', account.email);
+    onClose();
+    navigate('/generator');
   }
 
   return (
@@ -112,7 +132,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
       <div className="modal animate-spring" onClick={(e) => e.stopPropagation()} data-testid="login-account-modal">
         <div className="modal-header">
           <div>
-            <h3 data-testid="login-account-title">Authenticate — {account.alias}</h3>
+            <h3 data-testid="login-account-title">Connect to OpenRouter</h3>
             <p style={{ color: 'var(--text-tertiary)', fontSize: '0.82rem', marginTop: 2 }}>
               {account.email}
             </p>
@@ -120,15 +140,22 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
           <button type="button" className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
 
+        {signupRequired && (
+          <div className="info-banner" style={{ marginBottom: 'var(--space-md)' }}>
+            <span>This email is new. OpenRouter requires browser verification before it can send the signup code.</span>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={openSignup}>Continue to signup</button>
+          </div>
+        )}
+
         {step === 'otp_intro' && (
           <div data-testid="login-account-otp-intro">
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 'var(--space-md)' }}>
-              We’ll send a 6-digit code to your email to sign in to OpenRouter. Any existing dashboard session in the vault is kept until verification succeeds (a failed or abandoned code does not clear it by itself).
+              Send a one-time code to sign in. New OpenRouter accounts are handed to the browser-backed signup flow when the service requires verification. Any existing vault session stays intact until the code succeeds.
             </p>
             {errors.submit && <p className="form-error" data-testid="login-account-error">{errors.submit}</p>}
             <div className="modal-footer" style={{ flexDirection: 'column', gap: 8 }}>
               <button type="button" className="btn btn-primary btn-full" data-testid="login-account-send-otp" onClick={handleStartOTP} disabled={loading}>
-                {loading ? <><div className="spinner-sm" /> Sending...</> : 'Send verification code'}
+                {loading ? <><div className="spinner-sm" /> Starting...</> : 'Send sign-in code'}
               </button>
               <button type="button" className="btn btn-ghost btn-full" data-testid="login-account-use-password" onClick={() => { setErrors({}); setStep('password'); }} disabled={loading}>
                 Use password instead
@@ -191,7 +218,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
                 data-testid="login-account-otp-submit"
                 disabled={loading || otpCode.length < 6 || !signInId}
               >
-                {loading ? <><div className="spinner-sm" /> Verifying...</> : 'Verify Code'}
+                {loading ? <><div className="spinner-sm" /> Verifying...</> : 'Verify code'}
               </button>
             </div>
           </form>
