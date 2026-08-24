@@ -96,3 +96,26 @@ test('test path suffix checks normalize platform separators first', () => {
   }
   assert.deepEqual(offenders, [], 'path suffix checks with slash literals must normalize separators: ' + offenders.join(', '));
 });
+
+test('Node major is aligned across package, local, CI, and Docker contracts', () => {
+  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const nvmrc = readFileSync(join(ROOT, '.nvmrc'), 'utf8').trim();
+  const ci = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+  const dockerfile = readFileSync(join(ROOT, 'Dockerfile'), 'utf8');
+
+  assert.equal(pkg.engines.node, '>=24');
+  assert.equal(nvmrc, '24');
+  assert.match(ci, /node-version:\s*24/);
+  assert.equal((dockerfile.match(/^FROM node:24-bookworm/gm) || []).length, 2);
+  assert.doesNotMatch(dockerfile, /^FROM node:22-/m);
+});
+
+test('desktop release automation requires an explicit semantic bump marker', () => {
+  const workflow = readFileSync(join(ROOT, '.github/workflows/auto-version.yml'), 'utf8');
+
+  assert.match(workflow, /contains\(github\.event\.head_commit\.message, '\[bump:patch\]'\)/);
+  assert.match(workflow, /contains\(github\.event\.head_commit\.message, '\[bump:minor\]'\)/);
+  assert.match(workflow, /contains\(github\.event\.head_commit\.message, '\[bump:major\]'\)/);
+  assert.match(workflow, /Explicit \[bump:patch\], \[bump:minor\], or \[bump:major\] marker required/);
+  assert.doesNotMatch(workflow, /bump="patch"\s*\n\s*if \[\[/, 'patch must not be the implicit release default');
+});
