@@ -72,6 +72,10 @@ export function clearSnapshotCache() {
 
 class DashboardController extends BaseController {
   async refreshDashboard(req, res) {
+    // An explicit Sync is a recovery action, not just another dashboard read.
+    // Expired/unknown sessions may still have a live Clerk __client cookie and
+    // can often be restored without asking the operator to sign in again.
+    req.forceSessionRefresh = true;
     return this.getDashboard(req, res);
   }
 
@@ -84,6 +88,7 @@ class DashboardController extends BaseController {
         return this.success(res, {
           accounts: [],
           totals: { totalCredits: 0, totalUsed: 0, totalRemaining: 0, totalKeys: 0, totalActiveKeys: 0 },
+          syncedAt: new Date().toISOString(),
         });
       }
 
@@ -106,7 +111,9 @@ class DashboardController extends BaseController {
         accounts.map(async (account) => {
           throwIfAborted(requestAbort.signal);
           const meta = metaById.get(account.id);
-          const needsRefresh = meta?.sessionStatus === 'expiring';
+          const needsRefresh = meta?.sessionStatus === 'expiring'
+            || (req.forceSessionRefresh === true
+              && ['expired', 'stale', 'unknown', 'error'].includes(meta?.sessionStatus));
           if (!needsRefresh) return;
           
           // Exploit #14: Cookie stacking — try all stacked cookies newest-first
@@ -316,6 +323,9 @@ class DashboardController extends BaseController {
         totals,
         liveStatuses: displaySessionStatuses,
         displaySessionStatuses,
+        // Observation time for this completed dashboard pass. Per-account
+        // lastSyncAt is historical account data and must not drive the header.
+        syncedAt: new Date().toISOString(),
       });
 
     } catch (err) {

@@ -734,7 +734,7 @@ export function createSplashWindow() {
     + 'const updateStrip=document.getElementById("update-strip");'
     + 'const updateFill=document.getElementById("update-strip-fill");'
     + 'let phaseIndex=0,updateActive=false;'
-    + 'const HYDRA_SPLASH_DURATION_MS=15000,HYDRA_SPLASH_EXIT_MS=9800,HYDRA_SPLASH_PORTAL_MS=5200,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=4550,HYDRA_SPLASH_DISPOSE_MS=17500,HYDRA_SPLASH_TARGET=72;'
+    + 'const HYDRA_SPLASH_DURATION_MS=15000,HYDRA_SPLASH_EXIT_MS=9800,HYDRA_SPLASH_PORTAL_MS=5200,HYDRA_SPLASH_EXIT_FADE_DELAY_MS=4550,HYDRA_SPLASH_DISPOSE_MS=17500,HYDRA_SPLASH_TARGET=44;'
     + 'let hydraSplashDisposed=false;const hydraSplashTimers=[];let hydraSplashRaf=0,hydraSplashExitStartedAt=0;'
     + 'const hydraSplashDiagnostics={startedAt:Date.now(),durationMs:HYDRA_SPLASH_DURATION_MS,exitMs:HYDRA_SPLASH_EXIT_MS,portalMs:HYDRA_SPLASH_PORTAL_MS,target:HYDRA_SPLASH_TARGET,queueLength:0,shatteredWordCount:0,duplicateShatterSkips:0,timers:0,rafActive:false,disposed:false,disposeReason:null,disposedAt:null,bodyCount:0,dynamicBodyCount:0,peakDynamicBodyCount:0,portalCollisionDisabled:false,portalLiftApplied:false,renderFrames:0,physicsSteps:0,matterCleared:false,tilt:{supported:false,source:"fallback",gravityX:0,sensorApi:null,error:null}};'
     + 'window.__HYDRA_SPLASH_DIAGNOSTICS__=hydraSplashDiagnostics;'
@@ -957,7 +957,7 @@ export function createSplashWindow() {
     +   'const it=queue[spawnIdx++];'
     +   'const isBrand=it.tag==="brand";'
     +   'const baseFontSize=isBrand?(30+Math.floor(Math.random()*10)):(20+Math.floor(Math.random()*8));'
-    +   'const fontSize=Math.max(17,Math.round(baseFontSize*(0.903+Math.random()*1.092)));'
+    +   'const fontSize=Math.max(16,Math.round(baseFontSize*(0.82+Math.random()*0.38)));'
     +   'const weight=isBrand?"800":"600";'
     +   'const color=it.color||PALETTE[hashStr(it.text)%PALETTE.length];'
     +   'spawnWord(it.text,color,fontSize,weight);'
@@ -1002,7 +1002,7 @@ export function createSplashWindow() {
     + 'window.addEventListener("beforeunload",function(){disposeHydraSplash("beforeunload");},{once:true});'
     + 'hydraSplashSetTimeout(function(){disposeHydraSplash("timeout");},HYDRA_SPLASH_DISPOSE_MS);'
     // ─── Render — draw each body as a rotated glyph at its world transform.
-    + 'const HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45,HYDRA_SPLASH_RENDER_FRAME_MS=1000/100;'
+    + 'const HYDRA_SPLASH_PHYSICS_STEP_MS=1000/45,HYDRA_SPLASH_INTRO_FRAME_MS=1000/45,HYDRA_SPLASH_PORTAL_FRAME_MS=1000/30;'
     + 'let hydraSplashLastFrame=0,hydraSplashPhysicsCarry=0,hydraSplashLastRender=0;'
     + 'function hydraSplashPortalRatio(now){return hydraSplashExitStartedAt?Math.min(1,(now-hydraSplashExitStartedAt)/HYDRA_SPLASH_PORTAL_MS):0;}'
     + 'function drawHydraPortal(now,ratio){'
@@ -1054,11 +1054,12 @@ export function createSplashWindow() {
     // Dense collision response is already disabled once portal entry starts.
     // Step that non-colliding orbit at the 30 Hz paint cadence instead of the
     // 45 Hz falling-letter cadence, and steer only when a frame is painted.
-    +   'const physicsStep=hydraSplashExitStartedAt?HYDRA_SPLASH_RENDER_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS;'
+    +   'const renderFrameMs=hydraSplashExitStartedAt?HYDRA_SPLASH_PORTAL_FRAME_MS:HYDRA_SPLASH_INTRO_FRAME_MS;'
+    +   'const physicsStep=hydraSplashExitStartedAt?HYDRA_SPLASH_PORTAL_FRAME_MS:HYDRA_SPLASH_PHYSICS_STEP_MS;'
     +   'while(hydraSplashPhysicsCarry>=physicsStep&&steps<2){Eng.update(engine,physicsStep);hydraSplashPhysicsCarry-=physicsStep;steps++;}'
     +   'hydraSplashDiagnostics.physicsSteps+=steps;'
     +   'if(steps>=2)hydraSplashPhysicsCarry=0;'
-    +   'if(now-hydraSplashLastRender<HYDRA_SPLASH_RENDER_FRAME_MS)return;'
+    +   'if(now-hydraSplashLastRender<renderFrameMs)return;'
     +   'hydraSplashLastRender=now;'
     +   'ctx.clearRect(0,0,W(),H());'
     +   'const all=Comp.allBodies(engine.world);'

@@ -107,7 +107,9 @@ function canUseBrowserOtpOverride(status, checkpoint, browserBacked) {
 }
 
 export default function Generator({ addToast }) {
-  const [emailTemplate, setEmailTemplate] = useState('');
+  const pendingSignupEmail = sessionStorage.getItem('hydra.generator.pendingSignupEmail') || '';
+  const [emailLocalPart, setEmailLocalPart] = useState(() => pendingSignupEmail.split('@')[0] || '');
+  const [emailDomain, setEmailDomain] = useState(() => pendingSignupEmail.split('@')[1] || localStorage.getItem('hydra.generator.emailDomain') || '');
   const [password, setPassword] = useState('HydraGen2026!');
   const [taskId, setTaskId] = useState(null);
   const [status, setStatus] = useState('idle');
@@ -119,6 +121,10 @@ export default function Generator({ addToast }) {
   const [starting, setStarting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [focusingBrowser, setFocusingBrowser] = useState(false);
+  const cleanLocalPart = emailLocalPart.trim().replace(/@.*$/, '');
+  const cleanDomain = emailDomain.trim().replace(/^@+/, '').toLowerCase();
+  const emailTemplate = cleanLocalPart && cleanDomain ? `${cleanLocalPart}@${cleanDomain}` : '';
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTemplate);
 
   const activeTaskRef = useRef(null);
   const completedToastRef = useRef(false);
@@ -127,6 +133,10 @@ export default function Generator({ addToast }) {
   const lifecycleClosedRef = useRef(false);
   const startInFlightRef = useRef(false);
   const verifyInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (pendingSignupEmail) sessionStorage.removeItem('hydra.generator.pendingSignupEmail');
+  }, [pendingSignupEmail]);
 
   useEffect(() => {
     activeTaskRef.current = taskId && !isTerminalStatus(status) ? taskId : null;
@@ -285,13 +295,13 @@ export default function Generator({ addToast }) {
   const handleStart = async () => {
     if (startInFlightRef.current) return;
     const email = emailTemplate.trim();
-    if (!email) return;
+    if (!emailValid || !email) return;
     startInFlightRef.current = true;
     setStarting(true);
     try {
       setError(null);
       setOtp('');
-      setEmailTemplate(email);
+      localStorage.setItem('hydra.generator.emailDomain', cleanDomain);
       setCreatedAccount(null);
       setCheckpoint(null);
       completedToastRef.current = false;
@@ -390,17 +400,32 @@ export default function Generator({ addToast }) {
           <div className="card generator-card shine-sweep animate-spring stagger-delay-0">
             <div className="generator-card-title">New account</div>
             <div className="generator-form-grid">
-              <div className="form-group">
-                <label>Email alias</label>
+              <div className="form-group generator-email-local">
+                <label>Address name</label>
                 <input
-                  type="email"
+                  type="text"
                   className="form-input form-input-mono"
-                  value={emailTemplate}
-                  onChange={e => setEmailTemplate(e.target.value)}
-                  placeholder="alias+1@example.com"
+                  value={emailLocalPart}
+                  onChange={e => setEmailLocalPart(e.target.value.replace(/@.*$/, ''))}
+                  placeholder="account-01"
                   spellCheck={false}
-                  autoComplete="email"
+                  autoComplete="off"
                 />
+              </div>
+              <div className="form-group generator-email-domain">
+                <label>Domain</label>
+                <div className="generator-domain-input">
+                  <span aria-hidden="true">@</span>
+                  <input
+                    type="text"
+                    className="form-input form-input-mono"
+                    value={emailDomain}
+                    onChange={e => setEmailDomain(e.target.value.replace(/^@+/, ''))}
+                    placeholder="example.com"
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </div>
               </div>
               <div className="form-group">
                 <label>Password to assign</label>
@@ -415,9 +440,13 @@ export default function Generator({ addToast }) {
               </div>
             </div>
 
+            <div className={`generator-email-preview ${emailValid ? 'generator-email-preview--valid' : ''}`}>
+              {emailTemplate || 'Enter an address name and reusable domain'}
+            </div>
+
             <button type="button" className="btn btn-primary generator-start-btn"
               onClick={handleStart}
-              disabled={!emailTemplate.trim() || starting}
+              disabled={!emailValid || starting}
             >
               <span className="generator-button-label">
                 <PlusIcon size={20} />
@@ -426,7 +455,7 @@ export default function Generator({ addToast }) {
             </button>
 
             <div className="generator-steps" aria-label="Generator flow">
-              <span>1. Email alias</span>
+              <span>1. Build email</span>
               <span>2. Isolated browser</span>
               <span>3. Email code</span>
               <span>4. Session saved</span>

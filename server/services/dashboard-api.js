@@ -2019,6 +2019,21 @@ async function fillManagementKeyNameAndSubmit(page, keyName, accountId) {
   );
   const altVisible = await submit.first().isVisible({ timeout: 2000 }).catch(() => false);
   if (!altVisible) {
+    if (process.env.HYDRA_PROVISION_DEBUG_DUMP === '1') {
+      try {
+        const allButtons = await scope.locator('button').all();
+        for (const b of allButtons) {
+          const text = await b.innerText().catch(() => '');
+          const visible = await b.isVisible().catch(() => false);
+          const disabled = await b.isDisabled().catch(() => null);
+          provisionStepLog(accountId, `  button: "${text.trim()}" visible=${visible} disabled=${disabled}`);
+        }
+        await page.screenshot({ path: `/tmp/hydra-mgmt-key-debug-${accountId}.png`, fullPage: true });
+        provisionStepLog(accountId, `debug screenshot: /tmp/hydra-mgmt-key-debug-${accountId}.png`);
+      } catch (dumpErr) {
+        provisionStepLog(accountId, `debug dump failed: ${dumpErr.message}`);
+      }
+    }
     throw new Error(
       'Management key form: Save (or fallback submit) button not visible — cannot complete provisioning.',
     );
@@ -2862,9 +2877,9 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, acco
             if (e.redeemErrorKind) throw e;
           }
         }
-        if (retryRes.headers.get('content-type')?.includes('x-component') || retryText.length > 10) {
-          return { success: true, result: { raw: retryText.slice(0, 200) }, source: 'server-action' };
-        }
+        // A non-empty RSC response is not proof of a redemption. Let the
+        // normal fallbacks verify it unless the response contained an
+        // explicit success payload above.
       }
     }
     throw new Error('Server Action hash stale — OpenRouter redeployed. Self-healing failed.');
@@ -2901,12 +2916,13 @@ async function redeemCodeViaServerAction(sessionCookie, clientCookie, code, acco
     }
   }
 
-  // If we got text/x-component but no __kind, treat as unknown success (UI would show it worked)
-  if (res.headers.get('content-type')?.includes('x-component') || text.length > 10) {
-    return { success: true, result: { raw: text.slice(0, 200) }, source: 'server-action' };
-  }
-
-  throw new Error(`Redeem Server Action returned unrecognised response (status=${res.status})`);
+  // Never report a redemption as successful merely because an RSC payload was
+  // non-empty. A Next.js error payload can be non-empty too; make this path
+  // fall through to the tRPC / browser verifiers unless success is explicit.
+  const err = new Error(`Redeem Server Action returned unrecognised response (status=${res.status})`);
+  err.httpStatus = res.status;
+  err.redeemErrorKind = 'UNRECOGNISED_RESPONSE';
+  throw err;
 }
 
 /** Order: Server Action (fast HTTP) → cached tRPC → tRPC candidates → Playwright fallback */
@@ -3266,7 +3282,12 @@ async function redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientC
 }
 
 export async function bulkRedeemCode(userId, accountIds, code, { signal = null } = {}) {
-  return runInBatches(accountIds, async (id) => {
+  const shuffledAccountIds = [...accountIds];
+  for (let index = shuffledAccountIds.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffledAccountIds[index], shuffledAccountIds[swapIndex]] = [shuffledAccountIds[swapIndex], shuffledAccountIds[index]];
+  }
+  return runInBatches(shuffledAccountIds, async (id) => {
     try {
       const account = await store.getAccountWithKey(userId, id);
       const result = await redeemCode(userId, id, code, { signal });
@@ -3277,7 +3298,11 @@ export async function bulkRedeemCode(userId, accountIds, code, { signal = null }
       const { errorCode, message } = classifyRedeemFailure(err.message, err);
       return { accountId: id, success: false, message, error: message, errorCode };
     }
-  }, { signal });
+  }, {
+    signal,
+    concurrency: 5,
+    delayMs: () => 2_000 + Math.floor(Math.random() * 6_001),
+  });
 }
 
 export async function getUserProfile(sessionCookie, clientCookie, { signal = null } = {}) {

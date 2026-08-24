@@ -92,7 +92,7 @@ const AddAccountModal = memo(function AddAccountModal({ onClose, onAdded }) {
 
         <div className="method-tabs" style={{ marginBottom: 'var(--space-lg)' }}>
           {[
-            { id: 'credentials', icon: <LockIcon size={24} />, title: 'Email + Pass', sub: 'Sign in, then provision control' },
+            { id: 'credentials', icon: <LockIcon size={24} />, title: 'Email account', sub: 'Direct OTP sign-in; browser signup if new' },
             { id: 'bulk',        icon: <DatabaseIcon size={24} />, title: 'Bulk Import', sub: 'Batch paste' },
             { id: 'key',         icon: <KeyIcon size={24} />, title: 'Control Key',   sub: 'Existing management key' },
           ].map(m => (

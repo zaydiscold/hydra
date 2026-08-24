@@ -19,8 +19,9 @@ export async function runInBatches(items, worker, { concurrency = 3, delayMs = 1
     );
     results.push(...chunkResults);
 
-    if (delayMs > 0 && index + concurrency < items.length) {
-      await sleepWithSignal(delayMs, signal, { unref: true });
+    if (index + concurrency < items.length) {
+      const resolvedDelayMs = typeof delayMs === 'function' ? delayMs() : delayMs;
+      if (resolvedDelayMs > 0) await sleepWithSignal(resolvedDelayMs, signal, { unref: true });
     }
   }
 

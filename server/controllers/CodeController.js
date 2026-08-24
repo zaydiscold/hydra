@@ -28,6 +28,26 @@ const preflightSchema = z.object({
   accountIds: z.array(z.string()).min(1, 'accountIds array is required'),
 });
 
+// A redemption is an account-level dashboard action. Keep its burst profile
+// gentle even for a large matrix: five independent accounts at once, then a
+// human-ish randomized pause before the next five.
+const REDEEM_BATCH_SIZE = 5;
+const REDEEM_PAUSE_MIN_MS = 2_000;
+const REDEEM_PAUSE_MAX_MS = 8_000;
+
+function randomRedeemPauseMs() {
+  return REDEEM_PAUSE_MIN_MS + Math.floor(Math.random() * (REDEEM_PAUSE_MAX_MS - REDEEM_PAUSE_MIN_MS + 1));
+}
+
+function shuffleRedemptionAssignments(assignments) {
+  const shuffled = [...assignments];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 async function recordRedemptionAttempt(userId, { code, accountId, accountAlias, success, message, creditsAdded }) {
   let alias = accountAlias;
   if (!alias) {
@@ -105,14 +125,14 @@ class CodeController extends BaseController {
         req.user.id,
         async (task) => {
           const signal = combineAbortSignals(requestAbort.signal, task.abortController.signal);
-          return runInBatches(assignments, async (assignment) => {
+          return runInBatches(shuffleRedemptionAssignments(assignments), async (assignment) => {
             const { accountId, code } = assignment;
             try {
               const account = await store.getAccountWithKey(req.user.id, accountId);
               const result = await dashboardApi.redeemCode(req.user.id, accountId, code, { signal });
               const payload = { accountId, alias: account.alias, code, ...result, status: 'fulfilled' };
               // P16 — log success
-              await recordRedemptionAttempt(req.user.id, { code, accountId, accountAlias: account.alias, success: true, message: result?.message, creditsAdded: result?.creditsAdded ?? null });
+              await recordRedemptionAttempt(req.user.id, { code, accountId, accountAlias: account.alias, success: result?.success === true, message: result?.message, creditsAdded: result?.creditsAdded ?? null });
               return payload;
             } catch (err) {
               throwIfAborted(signal);
@@ -129,7 +149,11 @@ class CodeController extends BaseController {
               await recordRedemptionAttempt(req.user.id, { code, accountId, success: false, message });
               return payload;
             }
-          }, { signal });
+          }, {
+            signal,
+            concurrency: REDEEM_BATCH_SIZE,
+            delayMs: randomRedeemPauseMs,
+          });
         },
         { operation: 'bulk_matrix_redeem', size: assignments.length },
       );

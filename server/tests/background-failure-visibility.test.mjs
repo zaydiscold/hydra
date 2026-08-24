@@ -41,7 +41,9 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /const verifyInFlightRef = useRef\(false\)/);
   assert.match(source, /if \(startInFlightRef\.current\) return/);
   assert.match(source, /const email = emailTemplate\.trim\(\)/);
-  assert.match(source, /setEmailTemplate\(email\)/);
+  assert.match(source, /const emailTemplate = cleanLocalPart && cleanDomain \? `\$\{cleanLocalPart\}@\$\{cleanDomain\}` : ''/);
+  assert.match(source, /localStorage\.setItem\('hydra\.generator\.emailDomain', cleanDomain\)/);
+  assert.match(source, /if \(!emailValid \|\| !email\) return/);
   assert.match(source, /api\.startGeneratorJob\(email, password, 1\)/);
   assert.match(source, /const startedTaskId = payload\.taskId \?\? payload\.jobId \?\? null/);
   assert.match(source, /if \(lifecycleClosedRef\.current\) \{[\s\S]*cleanupLateStartedTask\(startedTaskId\)/);
@@ -54,7 +56,7 @@ test('generator owns late start responses and gates duplicate submissions', () =
   assert.match(source, /api\.submitGeneratorOtpQuiet\(renderedTaskId, otp\)/);
   assert.match(api, /submitGeneratorOtpQuiet = \(taskId, otp\) =>\s*request\(`\/generator\/verify\/\$\{taskId\}`, \{ method: 'POST', body: \{ otp \}, trackLoading: false \}\)/);
   assert.match(source, /if \(lifecycleClosedRef\.current \|\| activeTaskRef\.current !== renderedTaskId\) return/);
-  assert.match(source, /disabled=\{!emailTemplate\.trim\(\) \|\| starting\}/);
+  assert.match(source, /disabled=\{!emailValid \|\| starting\}/);
   assert.match(source, /function isOtpReady\(status, checkpoint\)/);
   assert.match(source, /const otpReady = isOtpReady\(status, checkpoint\)/);
   assert.match(source, /const canSubmitOtp = otpReady \|\| browserOtpOverride/);
@@ -87,6 +89,7 @@ test('redemption history recording does not hide controller-side failures', () =
   assert.match(source, /async function recordRedemptionAttempt/);
   assert.match(source, /Redemption history alias lookup failed for account=\$\{accountId\}: \$\{err\.message\}/);
   assert.match(source, /addRedemptionRecord\(\{ code, accountId, accountAlias: alias, success, message, creditsAdded \}\)/);
+  assert.match(source, /success: result\?\.success === true/);
   assert.doesNotMatch(source, /addRedemptionRecord[\s\S]*?catch \{ \/\* non-fatal \*\/ \}/);
 });
 
@@ -105,11 +108,18 @@ test('code redeemer aborts route-owned work and superseded preflights', () => {
   assert.match(source, /controller\.abort\(\)/);
   assert.match(source, /lifecycleSignal\.addEventListener\('abort', abort, \{ once: true \}\)/);
   assert.match(source, /api\.getAccounts\(signal\)/);
+  assert.match(source, /async function loadAccounts\(signal = lifecycleAbortRef\.current\?\.signal\)/);
+  assert.match(source, /api\.getDashboardQuiet\(signal\)/);
+  assert.match(source, /Dashboard is the fleet's canonical hydrated view/);
+  assert.match(source, /No accounts loaded\./);
+  assert.match(source, /onClick=\{\(\) => loadAccounts\(\)\}/);
   assert.match(source, /quietLoading \? api\.getRedemptionLogsQuiet : api\.getRedemptionLogs/);
   assert.match(source, /getRedemptionLogs\(signal\)/);
   assert.match(source, /api\.preflightRedeemAccountsQuiet\(ids, signal\)/);
   assert.match(source, /api\.preflightRedeemAccounts\(accountIdsToRun, signal\)/);
   assert.match(source, /api\.bulkMatrixRedeem\(assignments, signal\)/);
+  assert.match(source, /const isSuccess = item\?\.success === true/);
+  assert.match(source, /No confirmed redemption result/);
 });
 
 test('account detail aborts account-scoped reads and reloads when route id changes', () => {
@@ -145,6 +155,20 @@ test('account dedup and silent-refresh fallbacks are logged', () => {
   assert.match(source, /Silent refresh failed \(account=\$\{req\.params\.id\}\): \$\{err\.message\}/);
   assert.doesNotMatch(source, /catch \{ \/\* ignore — dedup becomes best-effort \*\/ \}/);
   assert.doesNotMatch(source, /catch \{ \/\* fall through to manual re-auth \*\/ \}/);
+});
+
+test('new OpenRouter emails route from OTP login to the browser-backed signup flow', () => {
+  const controller = readRepoFile('server/controllers/AccountController.js');
+  const modal = readRepoFile('src/components/LoginAccountModal.jsx');
+  const bulkAuth = readRepoFile('src/hooks/useBulkAuth.js');
+  const generator = readRepoFile('src/pages/Generator.jsx');
+
+  assert.doesNotMatch(controller, /allowSignUp: true/);
+  assert.match(modal, /err\.code === 'SIGNUP_INTERACTIVE_REQUIRED'/);
+  assert.match(modal, /Continue to signup/);
+  assert.match(modal, /hydra\.generator\.pendingSignupEmail/);
+  assert.match(generator, /hydra\.generator\.pendingSignupEmail/);
+  assert.match(bulkAuth, /err\.code === 'SIGNUP_INTERACTIVE_REQUIRED'/);
 });
 
 test('pool status and sync-key registration fallbacks are logged', () => {
@@ -206,6 +230,19 @@ test('dashboard reuses hydrated account rows for display metadata and session st
   assert.doesNotMatch(displayStatusBlock, /Promise\.allSettled/);
   assert.doesNotMatch(displayStatusBlock, /pLimit\(CONCURRENCY\)/);
   assert.doesNotMatch(displayStatusBlock, /accounts\.find\(\(account\) => account\.id === snapshot\.id\)/);
+});
+
+test('dashboard surfaces fleet errors and restarts lightweight ambient effects on navigation', () => {
+  const dashboard = readRepoFile('src/pages/Dashboard.jsx');
+  const app = readRepoFile('src/App.jsx');
+  const css = readRepoFile('src/index.css');
+
+  assert.match(dashboard, /FLEET REPAIR · \$\{fleetHealth\.dead\}/);
+  assert.match(dashboard, /FLEET ATTENTION · \$\{fleetHealth\.partial\}/);
+  assert.match(dashboard, /const priority = \{ error: 0, warning: 1, success: 2/);
+  assert.match(app, /\}, \[authState, location\.pathname\]\);/);
+  assert.match(css, /\.app-shell--motion-settled \.planet-moon/);
+  assert.match(css, /calc\(var\(--moon-orbit-duration\) \* 3\.5\)/);
 });
 
 test('debug vampire-mode profile preload fallbacks are logged', () => {
@@ -408,6 +445,8 @@ test('dashboard Playwright automation soft failures are logged', () => {
   assert.match(source, /fetchOptionsWithAutomationProxy/);
   assert.match(source, /tryManagementKeyServerActionReplay\(sessionCookie, clientCookie, keyName, automationRoute, signal\)/);
   assert.match(source, /redeemCodeViaServerAction\(sessionCookie, clientCookie, code, automationRoute, signal\)/);
+  assert.match(source, /Redeem Server Action returned unrecognised response/);
+  assert.doesNotMatch(source, /success: true, result: \{ raw: text\.slice\(0, 200\) \}, source: 'server-action'/);
   assert.match(source, /trpcCall\(route, input, sessionCookie, clientCookie, headerOverrides, \{\s*accountProxy: context\.accountProxy,\s*signal: context\.signal,/);
   assert.match(source, /tryRestApiRedeemCode\(sessionCookie, clientCookie, code, automationRoute, signal\)/);
   assert.match(source, /redeemCodeViaPlaywright\(userId, accountId, sessionCookie, clientCookie, code, automationRoute, signal\)/);

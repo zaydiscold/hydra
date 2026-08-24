@@ -484,7 +484,14 @@ export async function detectAuthMethod(email, { signal = null } = {}) {
   }
 
   if (signInData.errors?.length) {
-    throw new Error(`Clerk error: ${clerkApiErrorText(signInData.errors)}`);
+    // Current OpenRouter/Clerk returns this error instead of a `sign_up`
+    // object for a new identifier. Normalize it so callers route new accounts
+    // to the browser-backed, CAPTCHA-capable signup flow.
+    const errorText = clerkApiErrorText(signInData.errors);
+    if (/couldn['’]t find your account|account not found|identifier.*not found/i.test(errorText)) {
+      return { isSignUp: true, signUpId: null, signInId: null, clientCookie, strategies: [], method: 'otp', emailAddressId: null };
+    }
+    throw new Error(`Clerk error: ${errorText}`);
   }
 
   const signIn = signInData.response || signInData.client?.sign_in;

@@ -310,7 +310,7 @@ async function _runSessionProbe(signal) {
       if (cookieStack.length > 0) {
         try {
           const result = await refreshSession(cookieStack, rawJwt, { signal });
-          status = result ? 'active' : 'expired';
+          status = result ? 'active' : 'stale';
         } catch (err) {
           throwIfAborted(signal);
           logger.warn(`[SESSION_PROBE] Live refresh probe failed for account=${account.id}: ${err.message}`);
@@ -324,10 +324,10 @@ async function _runSessionProbe(signal) {
           `[SESSION_PROBE] ✅ active | alias="${_redactAlias(account.alias)}" sid=${_redactSid(sid)} ` +
           `elapsed=${elapsedHours}h since_login=${trackedSince}`
         );
-      } else if (status === 'expired') {
+      } else if (status === 'stale') {
         logger.warn(
-          `[SESSION_PROBE] 🔴 DEAD | alias="${_redactAlias(account.alias)}" sid=${_redactSid(sid)} ` +
-          `elapsed=${elapsedHours}h — session expired after ${elapsedHours} hours`
+          `[SESSION_PROBE] 🟡 UNVERIFIED | alias="${_redactAlias(account.alias)}" sid=${_redactSid(sid)} ` +
+          `elapsed=${elapsedHours}h — refresh returned no token; expiry is not confirmed`
         );
       } else {
         logger.warn(

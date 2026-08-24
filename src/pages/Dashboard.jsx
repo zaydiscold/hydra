@@ -4,7 +4,6 @@ import { useMetrics } from '../hooks/useMetrics';
 import AccountCard from '../components/AccountCard';
 import AddAccountModal from '../components/AddAccountModal';
 import AnimeText from '../components/AnimeText';
-import { getAccountDashboardCardState } from '../utils/accountDashboardCard';
 import { formatCurrency, getBalanceStatus } from '../utils/format';
 import { getAccountBalanceDisplay } from '../utils/accountBalance';
 import { getCardHealth } from '../utils/cardHealth';
@@ -69,21 +68,23 @@ export default function Dashboard({ onSelectAccount, addToast }) {
   const dashboardView = useMemo(() => {
     const totals = data?.totals || {};
     const accounts = data?.accounts || [];
-    const syncedCount = accounts.filter((account) => {
-      const sessionStatus = liveStatuses[account.id] ?? account.sessionStatus;
-      return getAccountDashboardCardState({ ...account, sessionStatus }).isReady;
-    }).length;
-    const attentionCount = accounts.length - syncedCount;
+    const fleetHealth = getFleetHealth(accounts, liveStatuses);
+    const attentionCount = fleetHealth.partial + fleetHealth.dead;
+    const statusLabel = fleetHealth.dead > 0
+      ? `FLEET REPAIR · ${fleetHealth.dead}`
+      : fleetHealth.partial > 0
+        ? `FLEET ATTENTION · ${fleetHealth.partial}`
+        : accounts.length > 0 ? 'FLEET NOMINAL' : 'FLEET EMPTY';
 
     return {
       accounts,
       totals,
-      fleetHealth: getFleetHealth(accounts, liveStatuses),
+      fleetHealth,
       burnRate: (totals.totalUsed || 0) / 30,
-      lastSyncLabel: getLastSyncLabel(accounts),
+      lastSyncLabel: getLastSyncLabel(accounts, data?.syncedAt),
       activity: getDashboardActivity(accounts, liveStatuses, cooldownMap),
-      statusLabel: attentionCount > 0 ? 'FLEET ATTENTION' : accounts.length > 0 ? 'FLEET NOMINAL' : 'FLEET EMPTY',
-      statusClass: attentionCount > 0 ? 'warning' : accounts.length > 0 ? 'success' : 'neutral',
+      statusLabel,
+      statusClass: fleetHealth.dead > 0 ? 'error' : attentionCount > 0 ? 'warning' : accounts.length > 0 ? 'success' : 'neutral',
     };
   }, [cooldownMap, data, liveStatuses]);
 
@@ -125,7 +126,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           <div>
             <AnimeText as="h1" mode="words" variant="signal" delay={28} style={{ margin: 0 }}>Command</AnimeText>
-            <p style={{ margin: 0, marginTop: 2, color: 'var(--text-secondary)' }}>Fleet health, activity, and account control at a glance</p>
+            <p style={{ margin: 0, marginTop: 2, color: 'var(--text-secondary)' }}>Fleet health and account control</p>
           </div>
           <div className={`fleet-status-pill fleet-status-pill--${statusClass}`}>
             <span />
@@ -141,7 +142,7 @@ export default function Dashboard({ onSelectAccount, addToast }) {
           )}
           <div className="dashboard-command-actions action-proximity-group proximity-field" {...actionProximity}>
             <span className="dashboard-last-sync">last sync {lastSyncText}</span>
-            <button type="button" data-proximity-target className="btn btn-secondary btn-sm" onClick={() => fetchDashboard(true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 92 }}>
+            <button type="button" data-proximity-target className="btn btn-secondary btn-sm" onClick={() => fetchDashboard(true, undefined, false, true)} disabled={refreshing || loading} style={{ gap: 8, minWidth: 92 }}>
               <span className={refreshing ? 'spin-inline' : ''}>↻</span>
               {refreshing ? 'Syncing...' : 'Sync'}
             </button>
@@ -294,7 +295,8 @@ function DashboardAccountListRow({ account, liveStatuses, onSelectAccount, onRes
     ? 'OTP pending'
     : sessionStatus === 'active' || sessionStatus === 'expiring'
       ? account.lastLoginAt ? `live · ${timeAgo(account.lastLoginAt)}` : 'live'
-      : sessionStatus === 'expired' ? 'expired' : 'offline';
+      : sessionStatus === 'stale' ? 'refresh due'
+        : sessionStatus === 'expired' ? 'sign-in needed' : 'offline';
 
   return (
     <button
@@ -479,7 +481,9 @@ function getFleetHealth(accounts, liveStatuses = {}) {
   }, { healthy: 0, partial: 0, dead: 0 });
 }
 
-function getLastSyncLabel(accounts) {
+function getLastSyncLabel(accounts, dashboardSyncedAt) {
+  const dashboardTimestamp = Date.parse(dashboardSyncedAt || '');
+  if (Number.isFinite(dashboardTimestamp)) return formatRelativeSyncLabel(dashboardTimestamp);
   let latest = null;
   for (const account of accounts) {
     const ts = getSyncTimestamp(account);
@@ -529,6 +533,8 @@ function getDashboardActivity(accounts, liveStatuses = {}, cooldownMap = {}) {
       events.push({ tone: 'error', title: 'account needs repair', detail: alias, time: syncLabel });
     } else if (!account.hasManagementKey) {
       events.push({ tone: 'error', title: 'control key missing', detail: alias, time: syncLabel });
+    } else if (sessionStatus === 'stale') {
+      events.push({ tone: 'warning', title: 'silent refresh due', detail: alias, time: syncLabel });
     } else if (sessionStatus === 'expired' || sessionStatus === 'none') {
       events.push({ tone: 'warning', title: 'session needs sign-in', detail: alias, time: syncLabel });
     } else if (lockedKeys.length > 0) {
@@ -540,7 +546,10 @@ function getDashboardActivity(accounts, liveStatuses = {}, cooldownMap = {}) {
     }
   }
 
-  return events.slice(0, 5);
+  const priority = { error: 0, warning: 1, success: 2, info: 3, neutral: 4 };
+  return events
+    .sort((left, right) => (priority[left.tone] ?? 5) - (priority[right.tone] ?? 5))
+    .slice(0, 4);
 }
 
 function formatHeaderSyncLabel(label) {

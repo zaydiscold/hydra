@@ -294,7 +294,10 @@ export default function Vault({ addToast }) {
         if (addToast) addToast('Silent refresh failed — use Sign In to re-authenticate', 'error');
       }
     } catch (err) {
-      if (addToast) addToast(`Silent refresh failed: ${err.message || 'use Sign In to re-authenticate'}`, 'error');
+      const message = err.status === 429
+        ? 'Refresh rate-limited. Wait a moment and retry; OTP is not required.'
+        : `Silent refresh failed: ${err.message || 'use Sign In to re-authenticate'}`;
+      if (addToast) addToast(message, 'error');
     } finally {
       setSilentRefreshingId(null);
     }
@@ -312,6 +315,7 @@ export default function Vault({ addToast }) {
   const statusSource = (account) => liveStatuses?.[account.id] || account.sessionStatus;
   const activeCount = accounts.filter((a) => statusSource(a) === 'active').length;
   const expiredCount = accounts.filter((a) => ['expired', 'none'].includes(statusSource(a))).length;
+  const staleCount = accounts.filter((a) => statusSource(a) === 'stale').length;
   const errorCount = accounts.filter((a) => statusSource(a) === 'error').length;
 
   if (loading && accounts.length === 0) {
@@ -624,7 +628,7 @@ export default function Vault({ addToast }) {
                   style={{ padding: '10px 16px', fontSize: '0.78rem', color: 'var(--text-tertiary)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}
                 >
                   <ShieldIcon size={12} style={{ marginRight: 6, opacity: 0.6 }} />
-                  {accounts.length} accounts · {activeCount} active · {expiredCount} expired{errorCount > 0 ? ` · ${errorCount} errored` : ''}
+                  {accounts.length} accounts · {activeCount} active{staleCount > 0 ? ` · ${staleCount} refresh due` : ''} · {expiredCount} sign-in needed{errorCount > 0 ? ` · ${errorCount} errored` : ''}
                 </td>
                 <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: 'var(--status-success)', fontSize: '0.9rem' }}>
                   {fmtBalance(totalBalance)}

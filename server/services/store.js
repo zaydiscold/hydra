@@ -79,7 +79,12 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
     try {
       const cookieInput = cookieStack;
       result = await refreshSession(cookieInput, sessionCookie, { signal });
-      status = result ? 'active' : 'expired';
+      // A missing fresh JWT is not proof that the underlying Clerk device
+      // session is expired. It may be old but still renewable (we have seen
+      // these survive for months), or Clerk may simply not have emitted a new
+      // token during this probe. Reserve "expired" for a definitive auth
+      // rejection; this probe can only establish active vs unverified.
+      status = result ? 'active' : 'stale';
     } catch (err) {
       throwIfAborted(signal);
       logger.warn(`[SESSION] Live refresh probe failed for account=${accountId || 'unknown'}: ${err.message}`);
@@ -112,7 +117,7 @@ async function getSessionStatusAsync(config, sessionTokenPlain, sessionDecryptFa
 
   // No __client cookie — fall back to direct JWT validation.
   const isValid = await validateSession(sessionCookie, { signal });
-  return isValid ? 'active' : 'expired';
+  return isValid ? 'active' : 'stale';
 }
 
 /**
@@ -158,8 +163,9 @@ function getSessionStatus(config, sessionTokenPlain, sessionDecryptFailed, accou
   const now = Date.now();
   const remainingMs = expiryMs - now;
 
-  // Session expired (realistic TTL, not JWT)
-  if (remainingMs <= 0) return 'expired';
+  // This is a refresh estimate, not a known Clerk session lifetime. Device
+  // sessions routinely outlive it, so crossing it only means "probe now".
+  if (remainingMs <= 0) return 'stale';
 
   // Expiring within 24h — warn user, auto-refresher will try
   if (remainingMs <= SESSION_EXPIRING_SOON_MS) return 'expiring';
@@ -453,19 +459,43 @@ export async function getAccounts(userId, { includePending = false } = {}) {
 
   // ⚡ Bolt: Batch fetch best management keys to avoid N+1 query problem
   const bestKeysMap = await getBestManagementKeys(accounts.map(a => a.id));
+  const keyCountsMap = await getKeyCounts(accounts.map(a => a.id));
 
   const shaped = await Promise.all(accounts.map(async (account) => {
     const preloadedBestKey = bestKeysMap.get(account.id) || null;
     const { config, managementKey } = await canonicalizeManagementKeyState(account, preloadedBestKey);
     const { plain, decryptFailed } = readSessionPlainResult(account);
-    return shapeAccountMetadata(account, config, managementKey, plain, decryptFailed);
+    return shapeAccountMetadata(account, config, managementKey, plain, decryptFailed, keyCountsMap.get(account.id) || null);
   }));
 
   // Hide OTP stub accounts that haven't completed sign-in yet.
   return includePending ? shaped : shaped.filter((a) => !a.pendingVerification);
 }
 
-function shapeAccountMetadata(account, config, managementKey, sessionTokenPlain, sessionDecryptFailed) {
+/**
+ * Batch-count OpenRouter keys per account so account listings can report key
+ * totals without an N+1 query per row.
+ */
+async function getKeyCounts(accountIds) {
+  const counts = new Map();
+  if (!accountIds.length) return counts;
+  const grouped = await prisma.key.groupBy({
+    by: ['accountId', 'disabled'],
+    where: { accountId: { in: accountIds } },
+    _count: { _all: true },
+  });
+  for (const row of grouped) {
+    const entry = counts.get(row.accountId) || { total: 0, active: 0, disabled: 0 };
+    const n = row._count._all;
+    entry.total += n;
+    if (row.disabled) entry.disabled += n;
+    else entry.active += n;
+    counts.set(row.accountId, entry);
+  }
+  return counts;
+}
+
+function shapeAccountMetadata(account, config, managementKey, sessionTokenPlain, sessionDecryptFailed, keyCounts = null) {
   return {
     id: account.id,
     alias: account.alias,
@@ -484,6 +514,15 @@ function shapeAccountMetadata(account, config, managementKey, sessionTokenPlain,
     sessionExpiry: config.sessionExpiry || null,
     events: config.events || [],
     createdAt: account.createdAt,
+    // Persisted from the last live OpenRouter sync (`hydra accounts sync`).
+    // `remaining` stays null when never fetched so callers can tell
+    // "no data yet" apart from a real $0.00 balance.
+    credits: {
+      remaining: Number.isFinite(account.lastKnownBalance) ? account.lastKnownBalance : null,
+      total: Number.isFinite(account.totalCredits) ? account.totalCredits : null,
+      fetchedAt: account.lastKnownBalanceAt || null,
+    },
+    keys: keyCounts || { total: 0, active: 0, disabled: 0 },
     // Accounts in the OTP wizard that haven't verified yet are hidden from the dashboard.
     pendingVerification: !!config.pendingVerification,
   };

@@ -70,8 +70,8 @@
   --radius-lg: 10px;
 
   /* Shadows - Layered glass depth */
-  --shadow-sm: 2px 2px 0px rgba(0, 0, 0, 0.8);
-  --shadow-md: 4px 4px 0px rgba(0, 0, 0, 0.9);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.42);
+  --shadow-md: 0 5px 16px rgba(0, 0, 0, 0.38);
   --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   --shadow-glow: 0 0 15px var(--accent-primary-glow);
   --shadow-success-glow: 0 0 15px rgba(0, 255, 136, 0.3);
@@ -141,9 +141,9 @@ html {
 body {
   font-family: var(--font-sans);
   background:
-    linear-gradient(90deg, rgba(0, 229, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    radial-gradient(ellipse at 18% 0%, rgba(0, 229, 255, 0.10), transparent 34%),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.020) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.016) 1px, transparent 1px),
+    radial-gradient(ellipse at 18% 0%, rgba(0, 229, 255, 0.065), transparent 34%),
     linear-gradient(135deg, #07090b 0%, var(--bg-primary) 48%, #100912 100%);
   background-size: 44px 44px, 44px 44px, auto, auto;
   color: var(--text-primary);
@@ -646,12 +646,12 @@ select:-webkit-autofill {
 }
 
 .sidebar {
-  width: 220px;
+  width: 204px;
   background:
     linear-gradient(180deg, rgba(0, 229, 255, 0.055), transparent 30%),
     rgba(9, 10, 13, 0.96);
   border-right: 1px solid rgba(255, 255, 255, 0.10);
-  padding: var(--space-xl) var(--space-md);
+  padding: 20px 12px;
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -668,7 +668,7 @@ select:-webkit-autofill {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  margin-bottom: var(--space-xl);
+  margin-bottom: 14px;
   padding: 0 var(--space-xs);
   border-bottom: 2px solid var(--border-subtle);
   padding-bottom: var(--space-md);
@@ -751,15 +751,15 @@ select:-webkit-autofill {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: 5px;
   flex: 1;
 }
 
 .nav-link {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
-  padding: 12px var(--space-md);
+  gap: 11px;
+  padding: 9px 11px;
   color: var(--text-secondary);
   text-decoration: none;
   font-weight: 700;
@@ -775,7 +775,7 @@ select:-webkit-autofill {
   outline: none;
   position: relative;
   border-radius: var(--radius-sm);
-  min-height: 44px;
+  min-height: 38px;
 }
 
 .nav-link:hover {
@@ -882,8 +882,8 @@ select:-webkit-autofill {
 
 .main-content {
   flex: 1;
-  margin-left: 220px;
-  padding: var(--space-lg) var(--space-2xl);
+  margin-left: 204px;
+  padding: 18px 26px;
   max-width: 1400px;
   width: min(100%, 1400px);
 }
@@ -1183,6 +1183,11 @@ select:-webkit-autofill {
 .fleet-status-pill--warning {
   color: var(--status-warning);
   border-color: color-mix(in srgb, var(--status-warning) 45%, transparent);
+}
+
+.fleet-status-pill--error {
+  color: var(--status-error);
+  border-color: color-mix(in srgb, var(--status-error) 45%, transparent);
 }
 
 .fleet-status-pill--neutral {
@@ -4005,6 +4010,15 @@ select:-webkit-autofill {
   will-change: auto;
 }
 
+/* Moons stay legible and continuously orbit after the short ambient pass,
+   but at a deliberately slow cadence. Meteors still settle completely. */
+.app-shell--motion-settled .planet-moon {
+  animation: moonOrbitLinear calc(var(--moon-orbit-duration) * 3.5) linear infinite;
+  animation-delay: var(--moon-orbit-delay);
+  transition: none;
+  will-change: transform;
+}
+
 .app-shell--motion-settled.app-shell--meteor-volley.app-shell--meteor-volley-a .meteor,
 .app-shell--motion-settled.app-shell--meteor-volley.app-shell--meteor-volley-b .meteor {
   --meteor-tail-scale: 1.08;
@@ -4809,8 +4823,55 @@ select:-webkit-autofill {
 
 .generator-form-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr);
+  grid-template-columns: minmax(160px, 0.75fr) minmax(210px, 1fr) minmax(220px, 0.8fr);
   gap: var(--space-md);
+}
+
+.generator-domain-input {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.generator-domain-input > span {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-medium);
+  border-right: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: rgba(0, 229, 255, 0.06);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.generator-domain-input .form-input {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.generator-email-preview {
+  min-height: 24px;
+  margin-top: -4px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+
+.generator-email-preview--valid {
+  color: var(--status-success);
+}
+
+.redeemer-ready-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 8px 11px;
+  border: 1px solid rgba(0, 255, 136, 0.24);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 255, 136, 0.055);
+  color: var(--status-success);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .generator-start-btn {

@@ -20,7 +20,7 @@ export function useMetrics({ addToast }) {
   const requestAbortRef = useRef(null);
   const unmountedRef = useRef(false);
 
-  const fetchDashboard = useCallback(async (silent = false, externalSignal, quietLoading = false) => {
+  const fetchDashboard = useCallback(async (silent = false, externalSignal, quietLoading = false, refreshSessions = false) => {
     if (inFlightRef.current || unmountedRef.current) return;
     const controller = new AbortController();
     const forwardAbort = () => controller.abort();
@@ -31,7 +31,9 @@ export function useMetrics({ addToast }) {
     else setLoading(true);
 
     try {
-      const getDashboard = quietLoading ? api.getDashboardQuiet : api.getDashboard;
+      const getDashboard = refreshSessions
+        ? (quietLoading ? api.refreshDashboardQuiet : api.refreshDashboard)
+        : (quietLoading ? api.getDashboardQuiet : api.getDashboard);
       const getPoolSyncStatus = quietLoading ? api.getPoolSyncStatusQuiet : api.getPoolSyncStatus;
       const [res, syncRes] = await Promise.all([
         getDashboard(controller.signal),
@@ -203,7 +205,10 @@ export function useMetrics({ addToast }) {
       return true;
     } catch (err) {
       console.warn(`[METRICS] Silent refresh failed for ${account.id}:`, err.message);
-      addToast(`${account.alias}: silent refresh failed. Sign in again to refresh the session.`, 'warning');
+      const message = err.status === 429
+        ? `${account.alias}: refresh rate-limited. Wait a moment and retry; OTP is not required.`
+        : `${account.alias}: silent refresh failed. Sign in again to refresh the session.`;
+      addToast(message, 'warning');
       return false;
     }
   }, [addToast, fetchDashboard]);

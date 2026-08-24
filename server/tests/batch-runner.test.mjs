@@ -28,6 +28,18 @@ test('batch runner preserves result order across successful chunks', async () =>
   assert.deepEqual(results, [2, 4, 6, 8]);
 });
 
+test('batch runner accepts a fresh delay value for every chunk boundary', async () => {
+  let pauses = 0;
+  const results = await runInBatches(
+    [1, 2, 3],
+    async (value) => value,
+    { concurrency: 1, delayMs: () => { pauses += 1; return 0; } },
+  );
+
+  assert.deepEqual(results, [1, 2, 3]);
+  assert.equal(pauses, 2);
+});
+
 test('batch runner clears its inter-chunk wait and stops future work after abort', async () => {
   const controller = new AbortController();
   const called = [];
@@ -95,9 +107,16 @@ test('bulk account and redemption paths thread request and task cancellation wit
   assert.match(codes, /bindRequestAbort\(req, res, 'bulk code redemption request'\)/);
   assert.match(codes, /bindRequestAbort\(req, res, 'bulk matrix redemption request'\)/);
   assert.match(codes, /bulkRedeemCode\(req\.user\.id, accountIds, code, \{ signal \}\)/);
+  assert.match(codes, /const REDEEM_BATCH_SIZE = 5/);
+  assert.match(codes, /const REDEEM_PAUSE_MIN_MS = 2_000/);
+  assert.match(codes, /const REDEEM_PAUSE_MAX_MS = 8_000/);
+  assert.match(codes, /shuffleRedemptionAssignments\(assignments\)/);
+  assert.match(codes, /delayMs: randomRedeemPauseMs/);
   assert.doesNotMatch(codes, /\{ operation: 'bulk_redeem', size: accountIds\.length, code \}/);
 
   assert.match(dashboard, /bulkRedeemCode\(userId, accountIds, code, \{ signal = null \} = \{\}\)/);
+  assert.match(dashboard, /concurrency: 5/);
+  assert.match(dashboard, /delayMs: \(\) => 2_000 \+ Math\.floor\(Math\.random\(\) \* 6_001\)/);
   assert.match(dashboard, /\}, \{ signal \}\);/);
 
   assert.match(rendererApi, /bulkAddAccounts = \(lines, signal\)/);

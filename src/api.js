@@ -313,6 +313,8 @@ export function hasToken() {
 // Dashboard
 export const getDashboard = (signal) => request('/dashboard', { signal });
 export const getDashboardQuiet = (signal) => request('/dashboard', { signal, trackLoading: false });
+export const refreshDashboard = (signal) => request('/dashboard/refresh', { method: 'POST', signal });
+export const refreshDashboardQuiet = (signal) => request('/dashboard/refresh', { method: 'POST', signal, trackLoading: false });
 
 // Accounts
 export const getAccounts = (signal, { includePending = false } = {}) =>

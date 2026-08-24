@@ -81,6 +81,32 @@ export default function CodeRedemption({ addToast }) {
   const [historyLogs, setHistoryLogs] = useState([]);
   const [historyError, setHistoryError] = useState('');
 
+  function unpackAccounts(response) {
+    const payload = response?.data ?? response;
+    if (Array.isArray(payload)) return payload;
+    return Array.isArray(payload?.accounts) ? payload.accounts : [];
+  }
+
+  async function loadAccounts(signal = lifecycleAbortRef.current?.signal) {
+    if (!signal || signal.aborted) return;
+    const direct = await api.getAccounts(signal);
+    if (signal.aborted) return;
+    let nextAccounts = unpackAccounts(direct);
+
+    // Dashboard is the fleet's canonical hydrated view. If a narrow account
+    // list is temporarily empty during a server restart or cache handoff,
+    // keep Redeemer usable rather than presenting a misleading empty fleet.
+    if (nextAccounts.length === 0) {
+      const dashboard = await api.getDashboardQuiet(signal);
+      if (signal.aborted) return;
+      nextAccounts = unpackAccounts(dashboard);
+    }
+
+    setAccounts(nextAccounts);
+    setSelectedAccountIds(nextAccounts.map((account) => account.id));
+    setSelectAll(nextAccounts.length > 0);
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     lifecycleAbortRef.current = controller;
@@ -117,15 +143,7 @@ export default function CodeRedemption({ addToast }) {
     didInitialLoadRef.current = true;
     const signal = lifecycleAbortRef.current?.signal;
     if (!signal || signal.aborted) return;
-    api.getAccounts(signal)
-      .then(res => {
-        if (signal.aborted) return;
-        const accs = Array.isArray(res.data) ? res.data : [];
-        setAccounts(accs);
-        // Default select all
-        setSelectedAccountIds(accs.map(a => a.id));
-        setSelectAll(true);
-      })
+    loadAccounts(signal)
       .catch(err => {
         if (signal.aborted || err?.name === 'AbortError') return;
         addToast(err.message, 'error');
@@ -277,11 +295,11 @@ export default function CodeRedemption({ addToast }) {
         const bucket = buckets.get(bucketKey);
         if (!bucket || bucket.length === 0) continue;
         const key = bucket.shift();
-        const isFailure = item.success === false;
-        newResults[key] = isFailure
+        const isSuccess = item?.success === true;
+        newResults[key] = !isSuccess
           ? {
               status: STATUS.error,
-              error: item.message || item.error || 'Redemption failed',
+              error: item?.message || item?.error || 'No confirmed redemption result',
               errorCode: item.errorCode,
               result: item,
             }
@@ -351,6 +369,12 @@ export default function CodeRedemption({ addToast }) {
           ✕ {sessionPreflight.blocked.length} blocked: {sessionPreflight.blocked.map(b => b.alias || b.accountId.slice(0, 8)).join(', ')} — no session or password on file
         </div>
       )}
+      {!sessionPreflight.loading && !sessionPreflight.error && selectedAccountIds.length > 0 && sessionPreflight.allReady && (
+        <div className="redeemer-ready-banner">
+          <span>✓ {sessionPreflight.ready.length}/{selectedAccountIds.length} selected accounts logged in and ready</span>
+          <span>Each code will be attempted once per selected account</span>
+        </div>
+      )}
 
       {/* Run summary */}
       {hasResults && (
@@ -402,7 +426,10 @@ export default function CodeRedemption({ addToast }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {accounts.length === 0 ? (
-              <p className="text-muted" style={{ fontSize: '0.85rem' }}>No accounts. Add accounts first.</p>
+              <div className="text-muted" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span>No accounts loaded.</span>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => loadAccounts()} disabled={running}>Reload</button>
+              </div>
             ) : (
               accounts.map((account) => {
                 const accountSuffix = `_${account.id}`;
@@ -479,7 +506,7 @@ export default function CodeRedemption({ addToast }) {
               >
                 {running
                   ? <><div className="spinner-sm" /> Running ({pendingCount} left)…</>
-                  : `Run ${codeList.length > 0 && selectedAccountIds.length > 0 ? `(${codeList.length} × ${selectedAccountIds.length})` : ''}`
+                  : `Redeem ${codeList.length > 0 && selectedAccountIds.length > 0 ? `(${codeList.length} × ${selectedAccountIds.length})` : ''}`
                 }
               </button>
             </div>

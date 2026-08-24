@@ -890,7 +890,10 @@ export default function App() {
       clearTrackedTimeout(timer);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [authState]);
+  // Give each route a short, lightweight ambient pass. This restarts the
+  // meteor field after navigation without keeping those effects alive while
+  // the user is reading a page.
+  }, [authState, location.pathname]);
 
   const advancePlanetMoons = useCallback(() => {
     setPlanetMoonStep((step) => (step + 1) % 120);
