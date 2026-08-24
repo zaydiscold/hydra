@@ -14,6 +14,30 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const HYDRA_BIN = join(ROOT, 'bin/hydra.mjs');
 const MAX_MESSAGE_BYTES = 1024 * 1024;
+const MODERN_PROTOCOL_VERSION = '2026-07-28';
+const LEGACY_PROTOCOL_VERSIONS = Object.freeze([
+  '2025-11-25',
+  '2025-06-18',
+  '2025-03-26',
+  '2024-11-05',
+]);
+const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze([
+  MODERN_PROTOCOL_VERSION,
+  ...LEGACY_PROTOCOL_VERSIONS,
+]);
+const SERVER_INFO_META_KEY = 'io.modelcontextprotocol/serverInfo';
+const PROTOCOL_VERSION_META_KEY = 'io.modelcontextprotocol/protocolVersion';
+const TOOL_LIST_TTL_MS = 60_000;
+const SERVER_INFO = Object.freeze({
+  name: 'hydra-local',
+  version: JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version,
+});
+
+const READ_ONLY_ANNOTATIONS = Object.freeze({
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+});
 
 const tools = [
   {
@@ -24,6 +48,7 @@ const tools = [
       additionalProperties: false,
       properties: {},
     },
+    annotations: READ_ONLY_ANNOTATIONS,
     command: () => ['status', '--json'],
   },
   {
@@ -34,6 +59,7 @@ const tools = [
       additionalProperties: false,
       properties: {},
     },
+    annotations: READ_ONLY_ANNOTATIONS,
     command: () => ['proxy', 'status', '--json'],
   },
   {
@@ -49,6 +75,7 @@ const tools = [
         },
       },
     },
+    annotations: READ_ONLY_ANNOTATIONS,
     command: (input = {}) => input.tag ? ['api-map', '--json', '--tag', String(input.tag)] : ['api-map', '--json'],
   },
   {
@@ -59,6 +86,7 @@ const tools = [
       additionalProperties: false,
       properties: {},
     },
+    annotations: READ_ONLY_ANNOTATIONS,
     command: () => ['audit', '--json'],
   },
   {
@@ -69,11 +97,17 @@ const tools = [
       additionalProperties: false,
       properties: {},
     },
+    annotations: READ_ONLY_ANNOTATIONS,
     command: () => ['doctor', '--json'],
   },
 ];
 
 const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
+
+function publicTool(tool) {
+  const { name, description, inputSchema, annotations } = tool;
+  return { name, description, inputSchema, annotations };
+}
 
 function usage() {
   process.stdout.write(`Hydra MCP
@@ -121,6 +155,7 @@ function jsonText(value) {
         text: `${JSON.stringify(value, null, 2)}\n`,
       },
     ],
+    structuredContent: value,
   };
 }
 
@@ -140,101 +175,244 @@ function response(id, result) {
   return { jsonrpc: '2.0', id, result };
 }
 
-function errorResponse(id, code, message) {
-  return { jsonrpc: '2.0', id, error: { code, message } };
+function errorResponse(id, code, message, data) {
+  return {
+    jsonrpc: '2.0',
+    id: id ?? null,
+    error: {
+      code,
+      message,
+      ...(data === undefined ? {} : { data }),
+    },
+  };
 }
 
-function writeMessage(message) {
-  const body = Buffer.from(JSON.stringify(message), 'utf8');
-  process.stdout.write(`Content-Length: ${body.length}\r\n\r\n`);
-  process.stdout.write(body);
+function protocolVersionFor(message) {
+  return message?.params?._meta?.[PROTOCOL_VERSION_META_KEY] || null;
+}
+
+function isModernRequest(message) {
+  return message?.method === 'server/discover' || protocolVersionFor(message) === MODERN_PROTOCOL_VERSION;
+}
+
+function withModernResultMetadata(result, message) {
+  if (!isModernRequest(message) || !result || typeof result !== 'object' || Array.isArray(result)) {
+    return result;
+  }
+  return {
+    resultType: 'complete',
+    ...result,
+    _meta: {
+      ...(result._meta && typeof result._meta === 'object' ? result._meta : {}),
+      [SERVER_INFO_META_KEY]: SERVER_INFO,
+    },
+  };
+}
+
+function negotiateLegacyProtocolVersion(requested) {
+  return LEGACY_PROTOCOL_VERSIONS.includes(requested)
+    ? requested
+    : LEGACY_PROTOCOL_VERSIONS[0];
+}
+
+function validateRequest(message) {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    return 'JSON-RPC request must be an object';
+  }
+  if (message.jsonrpc !== '2.0') return 'jsonrpc must be "2.0"';
+  if (typeof message.method !== 'string' || message.method.length === 0) {
+    return 'method must be a non-empty string';
+  }
+  if (message.params !== undefined && (
+    message.params === null
+    || typeof message.params !== 'object'
+    || Array.isArray(message.params)
+  )) {
+    return 'params must be an object when provided';
+  }
+  return null;
+}
+
+function validateModernVersion(message) {
+  if (!isModernRequest(message) || message.method === 'server/discover') return null;
+  const version = protocolVersionFor(message);
+  if (!version) return `Modern MCP requests must include params._meta.${PROTOCOL_VERSION_META_KEY}`;
+  if (version !== MODERN_PROTOCOL_VERSION) {
+    return `Unsupported MCP protocol version: ${version}`;
+  }
+  return null;
 }
 
 function handleRequest(message) {
-  if (!message || typeof message !== 'object') return null;
+  const invalid = validateRequest(message);
+  if (invalid) return errorResponse(message?.id, -32600, 'Invalid Request', invalid);
+
   const { id, method, params = {} } = message;
 
-  if (id == null) {
-    return null;
+  // JSON-RPC notifications intentionally receive no response.
+  if (id == null) return null;
+
+  const versionError = validateModernVersion(message);
+  if (versionError) {
+    return errorResponse(id, -32602, 'Invalid params', {
+      message: versionError,
+      supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
+    });
+  }
+
+  if (method === 'server/discover') {
+    return response(id, withModernResultMetadata({
+      supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
+      capabilities: { tools: {} },
+      serverInfo: SERVER_INFO,
+      instructions: 'Hydra exposes read-only local fleet, proxy, API-map, audit, and doctor tools.',
+      ttlMs: TOOL_LIST_TTL_MS,
+      cacheScope: 'private',
+    }, message));
   }
 
   if (method === 'initialize') {
     return response(id, {
-      protocolVersion: params.protocolVersion || '2024-11-05',
+      protocolVersion: negotiateLegacyProtocolVersion(params.protocolVersion),
       capabilities: { tools: {} },
-      serverInfo: {
-        name: 'hydra-local',
-        version: JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version,
-      },
+      serverInfo: SERVER_INFO,
+      instructions: 'Hydra exposes read-only local fleet, proxy, API-map, audit, and doctor tools.',
     });
   }
 
+  if (method === 'ping') {
+    return response(id, withModernResultMetadata({}, message));
+  }
+
   if (method === 'tools/list') {
-    return response(id, {
-      tools: tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
-    });
+    const result = {
+      tools: tools.map(publicTool),
+      ...(isModernRequest(message) ? {
+        ttlMs: TOOL_LIST_TTL_MS,
+        cacheScope: 'private',
+      } : {}),
+    };
+    return response(id, withModernResultMetadata(result, message));
   }
 
   if (method === 'tools/call') {
     const name = params.name;
+    if (typeof name !== 'string' || name.length === 0) {
+      return errorResponse(id, -32602, 'Invalid params', 'tools/call requires a non-empty params.name');
+    }
+    if (params.arguments !== undefined && (
+      params.arguments === null
+      || typeof params.arguments !== 'object'
+      || Array.isArray(params.arguments)
+    )) {
+      return errorResponse(id, -32602, 'Invalid params', 'params.arguments must be an object');
+    }
+
     const tool = toolByName.get(name);
-    if (!tool) return response(id, errorPayload(`Unknown Hydra MCP tool: ${name}`));
+    if (!tool) return response(id, withModernResultMetadata(errorPayload(`Unknown Hydra MCP tool: ${name}`), message));
     try {
       const stdout = runHydra(tool.command(params.arguments || {}));
-      return response(id, jsonText(parseJsonOutput(stdout)));
+      return response(id, withModernResultMetadata(jsonText(parseJsonOutput(stdout)), message));
     } catch (err) {
-      return response(id, errorPayload(err?.message || String(err)));
+      return response(id, withModernResultMetadata(errorPayload(err?.message || String(err)), message));
     }
   }
 
   return errorResponse(id, -32601, `Unsupported method: ${method}`);
 }
 
+function writeMessage(message, framing = 'newline') {
+  const json = JSON.stringify(message);
+  if (framing === 'content-length') {
+    const body = Buffer.from(json, 'utf8');
+    process.stdout.write(`Content-Length: ${body.length}\r\n\r\n`);
+    process.stdout.write(body);
+    return;
+  }
+  process.stdout.write(`${json}\n`);
+}
+
+function parseContentLengthFrame(buffer) {
+  const headerEnd = buffer.indexOf('\r\n\r\n');
+  if (headerEnd < 0) return null;
+
+  const header = buffer.subarray(0, headerEnd).toString('utf8');
+  const match = header.match(/(?:^|\r\n)content-length:\s*(\d+)\s*(?:\r\n|$)/i);
+  if (!match) return { error: 'Malformed MCP compatibility frame without Content-Length' };
+
+  const length = Number(match[1]);
+  if (!Number.isInteger(length) || length < 0 || length > MAX_MESSAGE_BYTES) {
+    return { error: `Invalid MCP compatibility frame length: ${match[1]}` };
+  }
+
+  const bodyStart = headerEnd + 4;
+  const bodyEnd = bodyStart + length;
+  if (buffer.length < bodyEnd) return null;
+  return {
+    raw: buffer.subarray(bodyStart, bodyEnd).toString('utf8'),
+    rest: buffer.subarray(bodyEnd),
+    framing: 'content-length',
+  };
+}
+
+function parseNewlineFrame(buffer) {
+  const newline = buffer.indexOf(0x0a);
+  if (newline < 0) {
+    if (buffer.length > MAX_MESSAGE_BYTES) {
+      return { error: `MCP stdio message exceeded ${MAX_MESSAGE_BYTES} bytes without a newline` };
+    }
+    return null;
+  }
+
+  let body = buffer.subarray(0, newline);
+  if (body.length > 0 && body[body.length - 1] === 0x0d) body = body.subarray(0, body.length - 1);
+  return {
+    raw: body.toString('utf8'),
+    rest: buffer.subarray(newline + 1),
+    framing: 'newline',
+  };
+}
+
+function nextFrame(buffer) {
+  const prefix = buffer.subarray(0, Math.min(buffer.length, 32)).toString('ascii');
+  return /^content-length:/i.test(prefix)
+    ? parseContentLengthFrame(buffer)
+    : parseNewlineFrame(buffer);
+}
+
 function startStdioServer() {
   let buffer = Buffer.alloc(0);
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     process.stdin.on('data', (chunk) => {
       buffer = Buffer.concat([buffer, chunk]);
       while (buffer.length > 0) {
-        const headerEnd = buffer.indexOf('\r\n\r\n');
-        if (headerEnd < 0) return;
-
-        const header = buffer.slice(0, headerEnd).toString('utf8');
-        const match = header.match(/content-length:\s*(\d+)/i);
-        if (!match) {
-          process.stderr.write('[hydra mcp] dropping malformed MCP frame without Content-Length\n');
+        const frame = nextFrame(buffer);
+        if (!frame) return;
+        if (frame.error) {
+          process.stderr.write(`[hydra mcp] ${frame.error}\n`);
+          writeMessage(errorResponse(null, -32700, 'Parse error', frame.error));
           buffer = Buffer.alloc(0);
           return;
         }
 
-        const length = Number(match[1]);
-        if (!Number.isInteger(length) || length < 0 || length > MAX_MESSAGE_BYTES) {
-          process.stderr.write(`[hydra mcp] invalid MCP frame length: ${match[1]}\n`);
-          buffer = Buffer.alloc(0);
-          return;
-        }
-
-        const bodyStart = headerEnd + 4;
-        const bodyEnd = bodyStart + length;
-        if (buffer.length < bodyEnd) return;
-
-        const raw = buffer.slice(bodyStart, bodyEnd).toString('utf8');
-        buffer = buffer.slice(bodyEnd);
+        buffer = frame.rest;
+        if (frame.raw.trim() === '') continue;
 
         let message;
         try {
-          message = JSON.parse(raw);
+          message = JSON.parse(frame.raw);
         } catch (err) {
-          writeMessage(errorResponse(null, -32700, `Parse error: ${err?.message || err}`));
+          writeMessage(errorResponse(null, -32700, 'Parse error', err?.message || String(err)), frame.framing);
           continue;
         }
 
         const reply = handleRequest(message);
-        if (reply) writeMessage(reply);
+        if (reply) writeMessage(reply, frame.framing);
       }
     });
     process.stdin.on('end', resolve);
+    process.stdin.on('error', reject);
     process.stdin.resume();
   });
 }
@@ -245,7 +423,7 @@ export async function run(argv) {
     return;
   }
   if (argv.includes('--list-tools')) {
-    process.stdout.write(`${JSON.stringify({ tools: tools.map(({ command, ...tool }) => tool) }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ tools: tools.map(publicTool) }, null, 2)}\n`);
     return;
   }
   await startStdioServer();
