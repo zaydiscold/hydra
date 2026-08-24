@@ -34,6 +34,17 @@ data/local-secrets.json
 vault.json
 auth.json
 
+# Explicit local credential/session exports
+/session-jwt.txt
+/session-cookies.json
+/account-full.json
+/accounts-dump.json
+/account-dump.json
+/clerk-session.json
+/clerk-cookies.json
+/provision-trace-*.zip
+*.har
+
 # SQLite Database
 *.db
 *.db-journal
