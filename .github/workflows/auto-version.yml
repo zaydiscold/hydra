@@ -1,28 +1,19 @@
 name: Auto-version
 
-# Every push to master that's NOT itself a release-bump commit:
-#   1. Read package.json version
-#   2. Check if a tag for that version already exists on origin
-#   3. If yes (someone already shipped this version), bump patch by default
-#      or bump minor/major when the triggering commit says `[bump:minor]`
-#      or `[bump:major]`
-#   4. Write the new version to package.json + package-lock.json
-#   5. Commit with `[skip-bump]` tag so this workflow doesn't recurse
-#   6. Push the commit + push the matching `vX.Y.Z` tag
-#   7. Dispatch release.yml on that tag ref
+# An ordinary push to master is NOT a release trigger. A release is created only
+# when the triggering commit explicitly contains one of:
+#   [bump:patch]  [bump:minor]  [bump:major]
 #
-# The explicit workflow dispatch is intentional. Tags pushed by the default
-# GITHUB_TOKEN do not reliably trigger another workflow run, so auto-version
-# calls release.yml directly on the tag ref after pushing it.
+# The release job then:
+#   1. Reads package.json version
+#   2. Tags that version if it has not been tagged yet, or applies the requested bump
+#   3. Writes package.json + package-lock.json when a bump is needed
+#   4. Commits with [skip-bump] so the workflow cannot recurse
+#   5. Pushes the matching vX.Y.Z tag
+#   6. Dispatches release.yml on that immutable tag
 #
-# Escape hatch: include `[skip-bump]` in any commit message to skip
-# auto-versioning. The bump commit itself always carries this tag so
-# it doesn't trigger another bump.
-#
-# Release sizing:
-#   - default / `[bump:patch]`: bug fixes, docs, small hardening
-#   - `[bump:minor]`: coherent user-visible feature/performance release
-#   - `[bump:major]`: breaking local data/API/operator-contract change
+# [skip-bump] remains the explicit escape hatch for source, docs, test, and
+# repository-maintenance commits that should never ship a desktop update.
 
 on:
   push:
@@ -40,11 +31,16 @@ concurrency:
 jobs:
   bump-and-tag:
     runs-on: ubuntu-22.04
-    # Skip when the commit that triggered this run is already a bump
-    # commit (carries [skip-bump]) or a Merge-of-a-bump-PR.
+    # Requiring an explicit marker prevents docs, cleanup, merge, and bot commits
+    # from silently becoming public desktop releases.
     if: |
       !contains(github.event.head_commit.message, '[skip-bump]') &&
-      !contains(github.event.head_commit.message, 'chore(release):')
+      !contains(github.event.head_commit.message, 'chore(release):') &&
+      (
+        contains(github.event.head_commit.message, '[bump:patch]') ||
+        contains(github.event.head_commit.message, '[bump:minor]') ||
+        contains(github.event.head_commit.message, '[bump:major]')
+      )
     steps:
       - name: Checkout master with full history
         uses: actions/checkout@v6
@@ -66,10 +62,8 @@ jobs:
           current=$(node -p "require('./package.json').version")
           echo "current=$current"
 
-          # If a tag for the CURRENT package.json version doesn't exist,
-          # ship that one as-is (catches the case where someone manually
-          # bumped package.json but skipped the tag — exactly v1.0.8's
-          # original failure mode).
+          # If package.json was advanced but never tagged, publish that exact
+          # version rather than incrementing it a second time.
           if ! git rev-parse "v$current" >/dev/null 2>&1 \
              && ! git ls-remote --tags origin "v$current" | grep -q "v$current"; then
             echo "next=$current" >> "$GITHUB_OUTPUT"
@@ -78,13 +72,15 @@ jobs:
             exit 0
           fi
 
-          bump="patch"
           if [[ "$COMMIT_MESSAGE" == *"[bump:major]"* ]]; then
             bump="major"
           elif [[ "$COMMIT_MESSAGE" == *"[bump:minor]"* ]]; then
             bump="minor"
           elif [[ "$COMMIT_MESSAGE" == *"[bump:patch]"* ]]; then
             bump="patch"
+          else
+            echo "Explicit [bump:patch], [bump:minor], or [bump:major] marker required." >&2
+            exit 1
           fi
 
           IFS=. read -r major minor patch <<< "$current"
@@ -100,10 +96,6 @@ jobs:
               ;;
             patch)
               patch=$((patch + 1))
-              ;;
-            *)
-              echo "Unknown bump type: $bump" >&2
-              exit 1
               ;;
           esac
           next="${major}.${minor}.${patch}"
@@ -123,7 +115,7 @@ jobs:
           git commit -m "chore(release): v${{ steps.nextver.outputs.next }} [skip-bump]"
           git push origin master
 
-      - name: Tag and push
+      - name: Tag and dispatch release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

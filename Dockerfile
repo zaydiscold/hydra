@@ -3,10 +3,11 @@
 # ============================================================
 # Stage 1: UI Builder
 # Builds the Vite frontend into dist/ on the same Debian family as runtime.
-# Electron 42 tooling requires Node >=22.12, and Prisma generation should not
-# run on Alpine/musl when the runtime is Debian/glibc.
+# Hydra's package engine, .nvmrc, and CI all target Node 24; keeping Docker on
+# the same major prevents build-only and runtime-only behavior differences.
+# Prisma generation should not run on Alpine/musl when runtime is Debian/glibc.
 # ============================================================
-FROM node:22-bookworm AS builder
+FROM node:24-bookworm AS builder
 
 WORKDIR /app
 
@@ -25,15 +26,15 @@ RUN npx prisma generate
 RUN npm run build
 
 # ============================================================
-# Stage 2: Production Runtime (node:22-bookworm)
+# Stage 2: Production Runtime (node:24-bookworm)
 #
 # MIGRATION NOTE (2026-04-21):
 # Was: mcr.microsoft.com/playwright:v1.58.2-jammy (~2.1GB bundled Chromium)
-# Now: node:22-bookworm (~500MB) + on-demand Chromium (~350MB) = ~1.1GB total
+# Now: node:24-bookworm + on-demand Chromium, preserving the glibc runtime
+# while matching Hydra's declared Node 24 engine.
 #
-# Why bookworm: node:*-jammy is not available for the current runtime line.
-# bookworm is
-# Debian 12, glibc-based (not Alpine/musl), so native C++ addons link correctly.
+# Why bookworm: Debian 12 is glibc-based (not Alpine/musl), so native C++
+# addons and Prisma engines link against the expected libc family.
 #
 # Why no tini: Node handles SIGTERM fine. Playwright still installs Chromium's
 # Linux shared-library dependencies explicitly so browser-backed fallbacks are
@@ -41,7 +42,7 @@ RUN npm run build
 #
 # Layer order is load-bearing — npm ci MUST run BEFORE playwright install.
 # ============================================================
-FROM node:22-bookworm AS runtime
+FROM node:24-bookworm AS runtime
 
 WORKDIR /app
 
@@ -59,15 +60,14 @@ ENV NODE_ENV=production \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Install ONLY production dependencies inside the Bookworm environment.
-# This ensures native C++ addons (bcryptjs, sqlite3/Prisma) link against
-# the correct glibc — the #1 cause of crashes in V1 Dockerfile.
+# This ensures native C++ addons and Prisma link against the correct glibc.
 COPY package*.json ./
 # `--ignore-scripts` skips package.json `postinstall: electron-builder install-app-deps`.
 # Docker doesn't need electron-builder rebuilding native modules — Hydra in
 # the container only runs server-side code (Express + Prisma). The legitimate
-# native rebuilds (`npx prisma generate`) are invoked explicitly below.
-# Without --ignore-scripts the build fails with exit code 127 because
-# electron-builder lives in devDependencies which --omit=dev strips out.
+# native generation (`npx prisma generate`) is invoked explicitly below.
+# Without --ignore-scripts the build fails because electron-builder lives in
+# devDependencies which --omit=dev strips out.
 RUN npm ci --omit=dev --ignore-scripts
 
 # Install Chromium and Linux libraries for Playwright fallback
