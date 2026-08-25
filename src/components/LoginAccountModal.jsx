@@ -1,7 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import { isOtpAuthMethod } from '../utils/authMethod';
+import {
+  createAuthOperationGuard,
+  isCompleteOtpCode,
+  normalizeOtpCode,
+} from '../utils/auth';
 
 function initialStepForAccount(account) {
   if (isOtpAuthMethod(account?.authMethod)) return 'otp_intro';
@@ -25,9 +30,21 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [signupRequired, setSignupRequired] = useState(false);
+  const operationGuardRef = useRef(null);
+  if (!operationGuardRef.current) operationGuardRef.current = createAuthOperationGuard();
   const navigate = useNavigate();
 
+  const invalidateOperations = useCallback(() => {
+    operationGuardRef.current?.invalidate();
+  }, []);
+
+  const closeModal = useCallback(() => {
+    invalidateOperations();
+    onClose();
+  }, [invalidateOperations, onClose]);
+
   useEffect(() => {
+    invalidateOperations();
     setStep(initialStepForAccount(account));
     setPassword('');
     setOtpCode('');
@@ -36,8 +53,24 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
     setOtpMode(OTP_MODE.email);
     setErrors({});
     setSignupRequired(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when identity or sign-in path metadata changes, not whole account object
-  }, [account.id, account.authMethod, account.passwordOnFile]);
+    setLoading(false);
+  }, [account.id, account.authMethod, account.passwordOnFile, invalidateOperations]);
+
+  useEffect(() => invalidateOperations, [invalidateOperations]);
+
+  function beginOperation() {
+    const operationId = operationGuardRef.current.begin();
+    setLoading(true);
+    return operationId;
+  }
+
+  function isCurrentOperation(operationId) {
+    return operationGuardRef.current.isCurrent(operationId);
+  }
+
+  function finishOperation(operationId) {
+    if (isCurrentOperation(operationId)) setLoading(false);
+  }
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -47,12 +80,14 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
     }
     setErrors({});
     setSignupRequired(false);
-    setLoading(true);
+    const operationId = beginOperation();
     try {
       await api.loginAccount(account.id, password);
+      if (!isCurrentOperation(operationId)) return;
       onDone('Session established successfully');
-      onClose();
+      closeModal();
     } catch (err) {
+      if (!isCurrentOperation(operationId)) return;
       if (err.message?.includes('NEEDS_2FA') || err.requiresTwoFactor) {
         if (err.signInId) setSignInId(err.signInId);
         setOtpMode(OTP_MODE.totp2fa);
@@ -60,21 +95,23 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
       } else {
         setErrors({ submit: api.formatApiErrorMessage(err) });
       }
+    } finally {
+      finishOperation(operationId);
     }
-    setLoading(false);
   }
 
   async function handleStartOTP(e) {
     e?.preventDefault?.();
     setErrors({});
-    setLoading(true);
+    setSignupRequired(false);
+    const operationId = beginOperation();
     try {
       const res = await api.startOTP(account.id, account.email);
+      if (!isCurrentOperation(operationId)) return;
       const sid = res?.data?.signInId ?? res?.signInId ?? '';
       const nextIsSignUp = Boolean(res?.data?.isSignUp ?? res?.isSignUp);
       if (!sid) {
         setErrors({ submit: 'Server did not return a sign-in id. Try again or check server logs.' });
-        setLoading(false);
         return;
       }
       setSignInId(sid);
@@ -82,36 +119,43 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
       setOtpMode(OTP_MODE.email);
       setStep('otp');
     } catch (err) {
+      if (!isCurrentOperation(operationId)) return;
       if (err.code === 'SIGNUP_INTERACTIVE_REQUIRED') {
         setSignupRequired(true);
       }
       setErrors({ submit: api.formatApiErrorMessage(err) });
+    } finally {
+      finishOperation(operationId);
     }
-    setLoading(false);
   }
 
   async function handleVerifyOTP(e) {
     e.preventDefault();
-    if (!otpCode || otpCode.length < 6) {
+    if (!isCompleteOtpCode(otpCode)) {
       setErrors({ otp: 'Enter the full 6-digit code' });
       return;
     }
     setErrors({});
-    setLoading(true);
+    const operationId = beginOperation();
     try {
       await api.verifyOTP(account.id, signInId, otpCode, {
         totpSecondFactor: otpMode === OTP_MODE.totp2fa,
         isSignUp,
       });
+      if (!isCurrentOperation(operationId)) return;
       onDone('OTP verified — session active');
-      onClose();
+      closeModal();
     } catch (err) {
+      if (!isCurrentOperation(operationId)) return;
       setErrors({ submit: api.formatApiErrorMessage(err) });
+    } finally {
+      finishOperation(operationId);
     }
-    setLoading(false);
   }
 
   function handleOtpBack() {
+    invalidateOperations();
+    setLoading(false);
     setOtpCode('');
     setSignInId('');
     setIsSignUp(false);
@@ -123,12 +167,12 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
 
   function openSignup() {
     if (account.email) sessionStorage.setItem('hydra.generator.pendingSignupEmail', account.email);
-    onClose();
+    closeModal();
     navigate('/generator');
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose} data-testid="login-account-backdrop">
+    <div className="modal-backdrop" onClick={closeModal} data-testid="login-account-backdrop">
       <div className="modal animate-spring" onClick={(e) => e.stopPropagation()} data-testid="login-account-modal">
         <div className="modal-header">
           <div>
@@ -137,7 +181,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
               {account.email}
             </p>
           </div>
-          <button type="button" className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+          <button type="button" className="btn btn-ghost btn-icon" onClick={closeModal} aria-label="Close account sign-in">✕</button>
         </div>
 
         {signupRequired && (
@@ -157,7 +201,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
               <button type="button" className="btn btn-primary btn-full" data-testid="login-account-send-otp" onClick={handleStartOTP} disabled={loading}>
                 {loading ? <><div className="spinner-sm" /> Starting...</> : 'Send sign-in code'}
               </button>
-              <button type="button" className="btn btn-ghost btn-full" data-testid="login-account-use-password" onClick={() => { setErrors({}); setStep('password'); }} disabled={loading}>
+              <button type="button" className="btn btn-ghost btn-full" data-testid="login-account-use-password" onClick={() => { invalidateOperations(); setLoading(false); setErrors({}); setStep('password'); }} disabled={loading}>
                 Use password instead
               </button>
             </div>
@@ -172,7 +216,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
                 value={password} onChange={(e) => {
                   setPassword(e.target.value);
                   if (errors.password) setErrors(prev => ({ ...prev, password: null }));
-                }} autoFocus spellCheck={false} />
+                }} autoFocus autoComplete="current-password" spellCheck={false} />
               {errors.password && <p className="field-error">{errors.password}</p>}
             </div>
             {errors.submit && <p className="form-error" data-testid="login-account-error">{errors.submit}</p>}
@@ -195,17 +239,18 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
               </span>
               <span style={{ fontSize: '0.8rem' }}>
                 {otpMode === OTP_MODE.totp2fa
-                   ? 'Enter the 6-digit code from your authenticator app (TOTP).'
+                  ? 'Enter the 6-digit code from your authenticator app (TOTP).'
                   : '6-digit code sent to your email. Check inbox.'}
               </span>
             </div>
             <div className="form-group">
               <label>OTP Code</label>
               <input type="text" className={`form-input form-input-mono otp-input ${errors.otp ? 'error' : ''}`} data-testid="login-account-otp-input"
-                placeholder="123456" maxLength={6}
+                placeholder="123456" maxLength={6} inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code"
                 value={otpCode} onChange={(e) => {
-                  setOtpCode(e.target.value);
-                  if (errors.otp && e.target.value.length === 6) setErrors(prev => ({ ...prev, otp: null }));
+                  const nextCode = normalizeOtpCode(e.target.value);
+                  setOtpCode(nextCode);
+                  if (errors.otp && isCompleteOtpCode(nextCode)) setErrors(prev => ({ ...prev, otp: null }));
                 }} autoFocus spellCheck={false} />
               {errors.otp && <p className="field-error">{errors.otp}</p>}
             </div>
@@ -216,7 +261,7 @@ export default function LoginAccountModal({ account, onClose, onDone }) {
                 type="submit"
                 className="btn btn-primary"
                 data-testid="login-account-otp-submit"
-                disabled={loading || otpCode.length < 6 || !signInId}
+                disabled={loading || !isCompleteOtpCode(otpCode) || !signInId}
               >
                 {loading ? <><div className="spinner-sm" /> Verifying...</> : 'Verify code'}
               </button>

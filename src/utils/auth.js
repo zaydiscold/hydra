@@ -44,6 +44,38 @@ export function remainingEmailTextAfterUse(text, usedEmails = []) {
   return remaining.join('\n');
 }
 
+export function normalizeOtpCode(value, length = 6) {
+  const maxLength = Number.isInteger(length) && length > 0 ? length : 6;
+  return String(value ?? '').replace(/\D/g, '').slice(0, maxLength);
+}
+
+export function isCompleteOtpCode(value, length = 6) {
+  const maxLength = Number.isInteger(length) && length > 0 ? length : 6;
+  return normalizeOtpCode(value, maxLength).length === maxLength;
+}
+
+/**
+ * Generation guard for async account-auth actions. Starting or invalidating an
+ * operation makes every older completion stale, so a modal that closes or
+ * switches accounts cannot apply a late password/OTP response to the new UI.
+ */
+export function createAuthOperationGuard() {
+  let generation = 0;
+  return {
+    begin() {
+      generation += 1;
+      return generation;
+    },
+    invalidate() {
+      generation += 1;
+      return generation;
+    },
+    isCurrent(operationId) {
+      return operationId === generation;
+    },
+  };
+}
+
 export function clerkErrorHint(message) {
   if (!message) return '';
   const m = message.toLowerCase();
