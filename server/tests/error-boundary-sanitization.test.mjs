@@ -2,6 +2,7 @@
 // Test: ErrorBoundary #57 — correlation ID in production, full stack in dev
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { redactSensitiveText } from '../utils/security.js';
 
 // Since ErrorBoundary is a React class component and we're in a Node test
 // runner, we test the correlation ID generator and sanitization logic
@@ -35,6 +36,43 @@ describe('ErrorBoundary — #57 stack sanitization', () => {
     assert.equal(display.showTrace, false);
     assert.ok(display.details.includes('Error ID:'));
     assert.ok(!display.details.includes('ErrorBoundary'), 'No stack trace in prod');
+  });
+});
+
+describe('shared log credential redaction', () => {
+  it('removes Hydra, generic, OpenRouter, JWT, bearer, and cookie credentials', () => {
+    const secrets = {
+      hydra: `sk-hydra-${'a'.repeat(32)}`,
+      generic: `sk-proj-${'b'.repeat(48)}`,
+      openrouter: `sk-or-v1-${'c'.repeat(48)}`,
+      jwt: `eyJ${'d'.repeat(12)}.${'e'.repeat(16)}.${'f'.repeat(20)}`,
+      bearer: 'opaque-bearer-token-1234567890',
+      cookie: 'session-cookie-value-1234567890',
+    };
+
+    const output = redactSensitiveText([
+      secrets.hydra,
+      secrets.generic,
+      secrets.openrouter,
+      secrets.jwt,
+      `Authorization: Bearer ${secrets.bearer}`,
+      `hydra_token=${secrets.cookie}; Path=/`,
+      `__session=${secrets.cookie}`,
+    ].join('\n'));
+
+    for (const secret of Object.values(secrets)) {
+      assert.equal(output.includes(secret), false, `secret survived redaction: ${secret}`);
+    }
+    assert.match(output, /\[REDACTED_KEY\]/);
+    assert.match(output, /\[REDACTED_JWT\]/);
+    assert.match(output, /Authorization: Bearer \[REDACTED\]/);
+    assert.match(output, /hydra_token=\[REDACTED\]/);
+    assert.match(output, /__session=\[REDACTED\]/);
+  });
+
+  it('leaves ordinary diagnostics readable', () => {
+    const message = 'Hydra proxy started on 127.0.0.1:3001 with 12 pooled keys';
+    assert.equal(redactSensitiveText(message), message);
   });
 });
 

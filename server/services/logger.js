@@ -1,5 +1,6 @@
 import path from 'node:path';
 import winston from 'winston';
+import { redactSensitiveText } from '../utils/security.js';
 
 const { combine, timestamp, printf, colorize } = winston.format;
 const DEFAULT_FILE_MAX_SIZE = 5 * 1024 * 1024;
@@ -15,6 +16,19 @@ const icons = {
   silly: '🎭',
 };
 
+function stringifyLogValue(value) {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function safeLogPayload(message, stack) {
+  return redactSensitiveText(stack || stringifyLogValue(message));
+}
+
 /**
  * Custom log format for Hydra.
  * Dev:  🔍 [debug] 2026-03-25 12:00:00: message
@@ -22,7 +36,7 @@ const icons = {
  */
 const hydraFormat = printf(({ level, message, timestamp, stack }) => {
   const levelIcon = process.env.NODE_ENV === 'production' ? level.toUpperCase() : (icons[level] || level);
-  return `🐉 ${levelIcon} ${timestamp}: ${stack || message}`;
+  return `🐉 ${levelIcon} ${timestamp}: ${safeLogPayload(message, stack)}`;
 });
 
 /**
@@ -54,6 +68,9 @@ function resolveLogLevel() {
  * In production, it logs to the console (standard out) for easy cloud platform capture.
  * When HYDRA_DATA_DIR is set, also writes to a file transport at HYDRA_DATA_DIR/hydra.log.
  * Override log level anytime via LOG_LEVEL env var (e.g. LOG_LEVEL=debug).
+ *
+ * Every transport applies the same final credential-redaction boundary so a
+ * secret embedded in a message or stack cannot survive into persistent logs.
  */
 // stderrLevels: route ALL logger output to stderr. CLI commands stream
 // machine-readable data (e.g. `hydra audit --json`) to stdout, and a
@@ -78,7 +95,7 @@ if (process.env.HYDRA_DATA_DIR) {
     format: combine(
       timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       printf(({ level, message, timestamp, stack }) => {
-        return `${level.toUpperCase()} ${timestamp}: ${stack || message}`;
+        return `${level.toUpperCase()} ${timestamp}: ${safeLogPayload(message, stack)}`;
       })
     ),
   }));
