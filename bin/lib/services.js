@@ -7,7 +7,7 @@
  */
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readRuntimePortStateSync } from './runtime-port.js';
+import { resolveCliDataDir } from './runtime-port.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
@@ -15,18 +15,17 @@ const REPO_ROOT = resolve(__dirname, '..', '..');
 let initialized = false;
 
 /**
- * Pin DATABASE_URL to the dev DB before any service imports happen.
- * Electron-packaged installs would set this via electron/main.js — for the
- * raw CLI we default to the dev DB at the repo root.
+ * Pin DATABASE_URL to the selected vault before any service imports happen.
+ * When the packaged app vault exists, CLI commands use it even when Electron
+ * is closed. An explicit HYDRA_DATA_DIR still selects a separate vault.
  */
 function pinEnv() {
-  const runtimeState = readRuntimePortStateSync({ root: REPO_ROOT });
-  const runtimeDataDir = runtimeState?.path ? dirname(runtimeState.path) : null;
+  const dataDir = resolveCliDataDir({ root: REPO_ROOT });
   if (!process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = `file:${resolve(runtimeDataDir || resolve(REPO_ROOT, 'data'), 'hydra.db')}`;
+    process.env.DATABASE_URL = `file:${resolve(dataDir, 'hydra.db')}`;
   }
   if (!process.env.HYDRA_DATA_DIR) {
-    process.env.HYDRA_DATA_DIR = runtimeDataDir || resolve(REPO_ROOT, 'data');
+    process.env.HYDRA_DATA_DIR = dataDir;
   }
 }
 

@@ -91,6 +91,8 @@ traffic trail that explains what happened.
 - **Operator-friendly desktop polish**: a bounded Command account viewport, true dense List rows, labeled sidebar hover tips, stronger proximity feedback, persisted Bulk Import activity, content-wide density controls, compact redemption layout, and a launch-bounded ambient moon orbit.
 - **Release-oriented quality gates**: linting, Electron packaging checks, API integration tests, UI static contracts, OpenAPI coverage, Docker smoke checks, and Windows path compatibility checks.
 
+The CLI uses the packaged app's existing vault when Hydra is closed, so `hydra accounts` and `hydra balance` refer to the same accounts as the desktop app. Run `hydra data-dir` to see the selected vault. Set `HYDRA_DATA_DIR` and `DATABASE_URL` together when intentionally using a separate development or test vault. Hydra does not merge databases automatically.
+
 ## Install
 
 Use the packaged release artifact for your platform:

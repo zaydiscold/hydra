@@ -6,7 +6,7 @@ import { mkdirSync, openSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { c, json } from '../lib/output.js';
-import { readRuntimePortStateSync } from '../lib/runtime-port.js';
+import { resolveCliDataDir } from '../lib/runtime-port.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..', '..');
@@ -71,12 +71,8 @@ export async function run(argv) {
   }
 
   const background = hasFlag(argv, '--background');
-  // Match manager commands: when Electron has run, its runtime state points
-  // at the real Application Support vault. A closed-window proxy must use the
-  // same accounts and encrypted secrets, not a fresh repo-local database.
-  const runtime = readRuntimePortStateSync({ root });
-  const runtimeDataDir = runtime?.path ? dirname(runtime.path) : null;
-  const dataDir = process.env.HYDRA_DATA_DIR || runtimeDataDir || join(root, 'data');
+  // Match manager commands: use the packaged vault even after Electron exits.
+  const dataDir = resolveCliDataDir({ root });
   const databaseUrl = process.env.DATABASE_URL || `file:${resolve(dataDir, 'hydra.db')}`;
   const logPath = join(dataDir, 'hydra-serve.log');
   if (background) mkdirSync(dataDir, { recursive: true });

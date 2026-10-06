@@ -10,6 +10,7 @@ import { homedir, tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const PRISMA_CLI = fileURLToPath(new URL('../../node_modules/prisma/build/index.js', import.meta.url));
+process.env.RUST_LOG = 'info'; // Prisma SQLite schema engine workaround on macOS (prisma/orm#29355).
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const CLI = join(ROOT, 'bin/hydra.mjs');
@@ -548,7 +549,7 @@ test('hydra serve and stop help are side-effect-light lifecycle commands', () =>
 
 test('hydra serve background mode follows the active runtime vault and rejects a failed bootstrap', () => {
   const source = readFileSync(join(ROOT, 'bin/commands/serve.js'), 'utf-8');
-  assert.match(source, /readRuntimePortStateSync\(\{ root \}\)/);
+  assert.match(source, /resolveCliDataDir\(\{ root \}\)/);
   assert.match(source, /HYDRA_DATA_DIR: dataDir/);
   assert.match(source, /DATABASE_URL: databaseUrl/);
   assert.match(source, /detached: background/);
@@ -694,6 +695,7 @@ test('hydra top-level system commands follow the active runtime data dir consist
   assert.ok([
     join(ROOT, 'data'),
     join(homedir(), 'Library', 'Application Support', 'Hydra'),
+    join(homedir(), 'Library', 'Application Support', 'hydra'),
   ].includes(dataDir));
 });
 

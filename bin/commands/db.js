@@ -7,8 +7,9 @@
  */
 import { existsSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { homedir, platform } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { c, json, status } from '../lib/output.js';
+import { resolveCliDataDir } from '../lib/runtime-port.js';
 
 function hasFlag(argv, flag) {
   return argv.includes(flag);
@@ -28,11 +29,7 @@ No files are deleted. The next Hydra launch will create a fresh database.
 }
 
 function dataDir() {
-  if (process.env.HYDRA_DATA_DIR) return resolve(process.env.HYDRA_DATA_DIR);
-  const p = platform();
-  if (p === 'darwin') return resolve(homedir(), 'Library', 'Application Support', 'Hydra');
-  if (p === 'win32') return resolve(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Hydra');
-  return resolve(homedir(), '.config', 'hydra');
+  return resolveCliDataDir({ root: resolve(dirname(fileURLToPath(import.meta.url)), '../..') });
 }
 
 function dbPathFromEnv() {
