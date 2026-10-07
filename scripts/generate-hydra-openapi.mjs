@@ -5,7 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
-const out = resolve(root, 'openapi/hydra-api.openapi.json');
+// Output path is overridable so freshness tests can regenerate to a scratch file
+// without clobbering the committed artifact. Default is unchanged.
+const out = process.env.HYDRA_OPENAPI_OUT
+  ? resolve(process.env.HYDRA_OPENAPI_OUT)
+  : resolve(root, 'openapi/hydra-api.openapi.json');
 
 const json = {
   type: 'object',
@@ -116,6 +120,8 @@ const routeDefs = [
   op('post', '/api/auth/login', { tag: 'auth', summary: 'Unlock the local Hydra vault', security: [], requestBody: body('Password login payload') }),
   op('post', '/api/auth/logout', { tag: 'auth', summary: 'Clear the current unlock session' }),
   op('post', '/api/auth/change-password', { tag: 'auth', summary: 'Change the local vault password', requestBody: body('Current and replacement password') }),
+  op('post', '/api/auth/disable', { tag: 'auth', summary: 'Disable dashboard password protection', requestBody: body('Current and replacement password') }),
+  op('post', '/api/auth/enable', { tag: 'auth', summary: 'Re-enable dashboard password protection with a new password', requestBody: body('Current and replacement password') }),
   op('post', '/api/auth/nuke', { tag: 'auth', summary: 'Wipe local Hydra data after password confirmation', security: [], requestBody: body('Password plus NUKE_HYDRA confirmation') }),
   op('get', '/api/auth/magic-callback', {
     tag: 'auth',
