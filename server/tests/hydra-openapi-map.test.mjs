@@ -1,7 +1,9 @@
 // @platform all
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -62,4 +64,30 @@ test('Hydra OpenAPI map covers the concrete Express route files', () => {
   }
 
   assert.deepEqual(missing, []);
+});
+
+// The coverage test above reads the COMMITTED artifact, so it can only prove
+// routes are documented -- not that the generator still reproduces that
+// artifact. Without this test the generator can silently drop operations while
+// CI stays green (it once dropped POST /api/auth/disable and /api/auth/enable).
+test('committed OpenAPI artifact matches freshly generated output', () => {
+  const committed = readFileSync(join(ROOT, 'openapi/hydra-api.openapi.json'), 'utf-8');
+  const scratch = mkdtempSync(join(tmpdir(), 'hydra-openapi-'));
+  const target = join(scratch, 'regenerated.json');
+
+  try {
+    execFileSync(process.execPath, [join(ROOT, 'scripts/generate-hydra-openapi.mjs')], {
+      env: { ...process.env, HYDRA_OPENAPI_OUT: target },
+      stdio: 'pipe',
+    });
+    const regenerated = readFileSync(target, 'utf-8');
+    assert.equal(
+      regenerated,
+      committed,
+      'openapi/hydra-api.openapi.json is stale or the generator lost operations. '
+        + 'Run `npm run openapi:hydra` and commit the result.',
+    );
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 });
