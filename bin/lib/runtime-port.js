@@ -21,11 +21,26 @@ export function envPort(env = process.env) {
   };
 }
 
-function platformUserDataDir(env = process.env, platformName = process.platform) {
+export function platformUserDataDir(env = process.env, platformName = process.platform) {
   const home = env.HOME || env.USERPROFILE || homedir();
   if (platformName === 'darwin') return join(home, 'Library', 'Application Support', 'Hydra');
   if (platformName === 'win32') return join(env.APPDATA || join(home, 'AppData', 'Roaming'), 'Hydra');
   return join(env.XDG_CONFIG_HOME || join(home, '.config'), 'Hydra');
+}
+
+export function resolveCliDataDir({ root = process.cwd(), env = process.env, platformName = process.platform } = {}) {
+  if (env.HYDRA_DATA_DIR) return resolve(env.HYDRA_DATA_DIR);
+  const runtime = readRuntimePortStateSync({ root, env });
+  if (runtime?.path) return resolve(runtime.path, '..');
+
+  const home = env.HOME || env.USERPROFILE || homedir();
+  const appDirs = platformName === 'darwin'
+    ? [join(home, 'Library', 'Application Support', 'hydra'), platformUserDataDir(env, platformName)]
+    : [platformUserDataDir(env, platformName)];
+  for (const dir of appDirs) {
+    if (existsSync(join(dir, 'hydra.db')) && existsSync(join(dir, 'local-secrets.json'))) return dir;
+  }
+  return resolve(root, 'data');
 }
 
 export function runtimeStatePaths({ root = process.cwd(), dataDir = null, env = process.env } = {}) {

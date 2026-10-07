@@ -29,6 +29,9 @@ const EMPTY_DB_PATH = resolve(DATA_DIR, 'empty-hydra.db');
 const SCHEMA_PATH = resolve(PROJECT_ROOT, 'prisma/schema.prisma');
 const PRISMA_DIR = dirname(SCHEMA_PATH);
 const PRISMA_CLI = resolve(PROJECT_ROOT, 'node_modules/prisma/build/index.js');
+// Prisma's SQLite schema engine can fail silently on macOS without logging.
+// Keep its known upstream workaround local to this build process.
+process.env.RUST_LOG = 'info';
 
 // Ensure data directory exists
 if (!existsSync(DATA_DIR)) {

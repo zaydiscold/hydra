@@ -17,7 +17,7 @@ import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, re
 import { basename, dirname, join, resolve } from 'node:path';
 import { platform, arch, hostname, totalmem, cpus, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { resolveRuntimePortCandidateSync } from './lib/runtime-port.js';
+import { resolveCliDataDir, resolveRuntimePortCandidateSync } from './lib/runtime-port.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
@@ -43,10 +43,7 @@ function runNpmDev() {
 }
 
 function getDataDir() {
-  if (process.env.HYDRA_DATA_DIR) return resolve(process.env.HYDRA_DATA_DIR);
-  const runtime = resolveRuntimePortCandidateSync({ root });
-  if (runtime.state?.path) return dirname(runtime.state.path);
-  return resolve(root, 'data');
+  return resolveCliDataDir({ root });
 }
 
 function getLogPath() {

@@ -462,7 +462,7 @@ function buildAudit() {
         && dashboardApi.includes('tryRestApiRedeemCode(sessionCookie, clientCookie, code, automationRoute, signal)')
         && dashboardApi.includes('redeemCodeViaPlaywright(userId, accountId, sessionCookie, clientCookie, code, automationRoute, signal)')
         && dashboardApi.includes('syncApiKeysViaPlaywright(sessionCookie, clientCookie, automationRoute)')
-        && String(pkg.scripts?.test || '').includes('test:account-proxy-pool')
+        && String(pkg.scripts?.['test:chain'] || pkg.scripts?.test || '').includes('test:account-proxy-pool')
         && backgroundFailureTest.includes('ProxyAgent')
         && backgroundFailureTest.includes('fetchOptionsWithAutomationProxy')
         && backgroundFailureTest.includes('redeemCodeViaServerAction\\(sessionCookie, clientCookie, code, automationRoute, signal\\)')
@@ -732,8 +732,8 @@ function buildAudit() {
     check(
       'test-chain',
       'Full test chain',
-      String(pkg.scripts?.test || '').includes('test:test-chain-completeness')
-        && String(pkg.scripts?.test || '').includes('test:mcp'),
+      String(pkg.scripts?.['test:chain'] || pkg.scripts?.test || '').includes('test:test-chain-completeness')
+        && String(pkg.scripts?.['test:chain'] || pkg.scripts?.test || '').includes('test:mcp'),
       'npm test includes chain completeness and MCP tests',
     ),
     check(
@@ -757,13 +757,13 @@ function buildAudit() {
     check(
       'cli-runtime-diagnostics',
       'CLI runtime diagnostics are consistent',
-      cliMain.includes("return resolve(root, 'data')")
+      cliMain.includes('return resolveCliDataDir({ root })')
         && cliMain.includes('build/electron/chromium.zip')
         && cliMain.includes('Contents/Resources/chromium.zip')
         && cliMain.includes('release/win-unpacked/resources/chromium.zip')
         && cliTest.includes('hydra top-level system commands follow the active runtime data dir consistently')
         && cliTest.includes('hydra doctor recognizes packaged Chromium zip resources'),
-      'hydra doctor/data-dir/logs default to the same repo runtime as service commands and doctor detects packaged Chromium zip resources',
+      'hydra doctor/data-dir/logs use the same selected vault as service commands and doctor detects packaged Chromium zip resources',
     ),
     check(
       'ui-contract',
